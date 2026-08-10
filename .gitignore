@@ -1,0 +1,47 @@
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- .NET / C# ---
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# --- Node / TypeScript ---
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+.npm/
+.pnpm-store/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# --- Go ---
+/go/bin/
+/go/pkg/
+
+# --- Logs / env / coverage ---
+*.log
+.env
+.env.*
+coverage/
+*.lcov
+
+# --- Claude tooling (local-only) ---
+.claude/
