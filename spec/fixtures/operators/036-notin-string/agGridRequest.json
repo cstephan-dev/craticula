@@ -1,0 +1,31 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "customFilters": {
+    "type": "comparison",
+    "field": "status",
+    "op": "notIn",
+    "values": [
+      {
+        "type": "string",
+        "value": "inactive"
+      },
+      {
+        "type": "string",
+        "value": "archived"
+      }
+    ]
+  }
+}

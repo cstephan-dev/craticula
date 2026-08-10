@@ -1,0 +1,31 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "age": {
+      "filterType": "number",
+      "operator": "AND",
+      "condition1": {
+        "filterType": "number",
+        "type": "notEqual",
+        "filter": 30
+      },
+      "condition2": {
+        "filterType": "number",
+        "type": "notEqual",
+        "filter": 40
+      }
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

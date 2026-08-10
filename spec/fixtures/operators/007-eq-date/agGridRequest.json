@@ -1,0 +1,33 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "birthDate": {
+      "filterType": "date",
+      "operator": "OR",
+      "condition1": {
+        "filterType": "date",
+        "type": "equals",
+        "dateFrom": "1990-05-12",
+        "dateTo": null
+      },
+      "condition2": {
+        "filterType": "date",
+        "type": "equals",
+        "dateFrom": "1991-07-04",
+        "dateTo": null
+      }
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

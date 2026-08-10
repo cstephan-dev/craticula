@@ -1,0 +1,39 @@
+[
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$project": {
+      "_id": 0,
+      "id": "$_id",
+      "orderDate": 1,
+      "customerName": "$customer.name",
+      "totalAmount": 1,
+      "status": 1,
+      "region": 1,
+      "notes": 1
+    }
+  }
+]

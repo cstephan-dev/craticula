@@ -1,0 +1,52 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
+    },
+    {
+      "id": "segment",
+      "displayName": "Segment",
+      "field": "segment"
+    },
+    {
+      "id": "fiscalYear",
+      "displayName": "Fiscal Year",
+      "field": "fiscalYear"
+    },
+    {
+      "id": "product",
+      "displayName": "Product",
+      "field": "product"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "amount",
+      "displayName": "Amount",
+      "field": "amount",
+      "aggFunc": "sum"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [
+    {
+      "type": "string",
+      "value": "EMEA"
+    },
+    {
+      "type": "string",
+      "value": "Enterprise"
+    },
+    {
+      "type": "int64",
+      "value": 2024
+    }
+  ],
+  "filterModel": null,
+  "sortModel": []
+}

@@ -1,0 +1,8 @@
+{
+  "query": {
+    "wildcard": { "department.keyword": { "value": "*art*", "case_insensitive": true } }
+  },
+  "sort": [ { "id": { "order": "asc", "missing": "_last" } } ],
+  "from": 0,
+  "size": 100
+}

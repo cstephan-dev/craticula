@@ -1,0 +1,5 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT * FROM employees WHERE age <> ? OR age IS NULL ORDER BY id ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": [30, 100, 0]
+}

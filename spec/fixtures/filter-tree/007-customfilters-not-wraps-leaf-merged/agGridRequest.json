@@ -1,0 +1,29 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "status": {
+      "filterType": "text",
+      "type": "equals",
+      "filter": "active"
+    }
+  },
+  "sortModel": [],
+  "customFilters": {
+    "type": "not",
+    "node": {
+      "type": "comparison",
+      "field": "region",
+      "op": "eq",
+      "value": {
+        "type": "string",
+        "value": "blocked"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "amount": {
+      "filterType": "number",
+      "operator": "AND",
+      "condition1": {
+        "filterType": "number",
+        "type": "greaterThan",
+        "filter": 50
+      },
+      "condition2": {
+        "filterType": "number",
+        "type": "lessThan",
+        "filter": 500
+      }
+    }
+  },
+  "sortModel": []
+}

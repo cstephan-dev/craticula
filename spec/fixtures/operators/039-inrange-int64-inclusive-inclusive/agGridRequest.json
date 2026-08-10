@@ -1,0 +1,31 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "customFilters": {
+    "type": "comparison",
+    "field": "age",
+    "op": "inRange",
+    "from": {
+      "type": "int64",
+      "value": 18
+    },
+    "to": {
+      "type": "int64",
+      "value": 65
+    },
+    "fromInclusive": true,
+    "toInclusive": true
+  }
+}

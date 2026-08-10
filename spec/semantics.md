@@ -25,11 +25,31 @@ style) is BM-1's concern, not this document's.
 `stringValue`, is **case-insensitive by default** — including the four ordering comparisons
 (`gt`/`gte`/`lt`/`lte`), which fold case in their lexicographic comparison exactly as the
 equality/substring operators fold case in theirs: case sensitivity is a per-field property (SC-3),
-not a per-operator one (see the third "must NOT" below). Per-field, a schema author may opt a field
-into case-sensitive comparison instead. Whichever mode is active, the compiler MUST reach it through
-an index-friendly, backend-native mechanism (`ILIKE`, a case-insensitive collation, an ES/OpenSearch
-case-insensitive query option, or an analyzed sub-field) rather than a function wrapper that defeats
-ordinary indexing.
+not a per-operator one, and — the scope of "not a per-operator one" pinned explicitly here — **not
+a per-context one either**: the identical mechanism governs an `eq`/`in` comparison, an `ORDER BY`/
+`$sort`/`sort` on that field, and a `groupSpec.groupKeys` drill-down match against that field's
+group column. A grid that lets a user filter `region eq "emea"` case-insensitively but then fails to
+drill into the `EMEA` group bucket with that same casing has the identical bug this rule exists to
+prevent, just triggered from the grouping UI instead of the filter UI. Per-field, a schema author may
+opt a field into case-sensitive comparison instead. Whichever mode is active, the compiler MUST reach
+it through an index-friendly, backend-native mechanism — and, critically, **the same class of
+mechanism (collation vs. pattern-match) MUST be used consistently across every context on that
+field**, never one mechanism for filtering and a different one for sorting.
+
+**Two distinct mechanisms, not one — pick per shape, not per whim.** This document previously left
+it ambiguous whether Postgres case-insensitive *equality* (`eq`/`in`/`notIn`, and by extension sort
+and group-key matching) should reuse `ILIKE` (the *substring* mechanism, §SEM-7's territory) or use a
+collation (the *exact-comparison* mechanism, as SQL Server/MySQL already do below). Reusing `ILIKE`
+for exact match turns out to be a trap: `ILIKE`'s pattern-language treats a literal `%`/`_` in the
+*value* as a wildcard, so an exact-match operator silently becomes a widened pattern match unless
+every value is escaped — and MongoDB's `$eq`/`$in` set-membership forms have no `ESCAPE`-clause
+equivalent at all, making that escaping structurally inapplicable to some backends' idiomatic forms.
+The rule, pinned: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort and group-key matching on
+a case-insensitive field, use a case-insensitive COLLATION** (an equality/ordering mechanism, no
+pattern language, nothing to escape). **`contains`/`notContains`/`startsWith`/`endsWith` use `ILIKE`
+or the backend's substring mechanism** (SEM-7 covers `contains` specifically) — a pattern-match
+mechanism is appropriate there because the operator itself is a pattern match; the value's own `%`/
+`_` are escaped there because the position is a pattern, not because the CI requirement demands it.
 
 **Rationale.** AG Grid's in-memory (client-side) row model filters text case-insensitively by
 default. If the SSRM compiler defaults to case-sensitive comparison instead, the exact same filter
@@ -42,50 +62,74 @@ trivial size. This is exactly the class of "broken null/case semantics" bug the 
 statement (§1) calls out as endemic to hand-rolled OData/dynamic-LINQ translations. The rule exists
 so every dialect gets case-insensitivity *and* keeps its index.
 
-**Worked example** — `contains` on `name`, case-insensitive, matching `"Bob Smith"` against pattern
-`"smith"`:
+**Worked example, exact-match family** — `eq` on `name`, case-insensitive, matching `"Smith"`:
+
+- **PostgreSQL** — a case-insensitive **collation** on the comparison, never `ILIKE` (see the
+  mechanism note above). This project's fixtures and reference docs pin one canonical, explicitly
+  host-created ICU collation name for this purpose — `craticula_ci` — rather than each host
+  inventing its own name:
+  ```sql
+  -- One-time host DDL, documented in the per-backend index-guidance page (PERF-4):
+  -- CREATE COLLATION craticula_ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false);
+  WHERE name COLLATE craticula_ci = :v
+  ```
+- **SQL Server / MySQL** — unchanged from before: a case-insensitive collation on the column (or
+  applied inline), so the engine's own comparison semantics do the folding and a plain B-tree index
+  remains usable:
+  ```sql
+  -- SQL Server: column declared/queried with a CI collation
+  WHERE name COLLATE Latin1_General_CI_AS = @v
+  -- MySQL: column already uses a _ci collation (e.g. utf8mb4_0900_ai_ci)
+  WHERE name = :v
+  ```
+- **MongoDB** — a query-level collation with `strength: 2` makes `$eq`/`$in`/`$gt`/`$lt`/`$sort`
+  compare case-insensitively (and can still use a supporting index), which is the mechanism this
+  document means wherever it says "the collation option for CI" (e.g. TRD §5's Mongo row):
+  ```json
+  db.items.find(
+    { name: "Smith" },
+    { collation: { locale: "en", strength: 2 } }
+  )
+  ```
+- **OpenSearch / Elasticsearch** — a term-level query's `case_insensitive` parameter (available on
+  `term`, `wildcard`, `prefix`, and `regexp` since 7.10 — **not** `range`; ordering comparisons on
+  ES/OpenSearch are covered separately below) against a `keyword` field:
+  ```json
+  { "term": { "name.keyword": { "value": "Smith", "case_insensitive": true } } }
+  ```
+
+**Worked example, substring family** — `contains` on `name`, case-insensitive, matching
+`"Bob Smith"` against pattern `"smith"` — this is the pattern-match mechanism, distinct from the
+exact-match family above:
 
 - **PostgreSQL** — `ILIKE`, backed by a `pg_trgm` GIN index (PERF-4 index guidance) rather than a
   functional index on `lower(name)`:
   ```sql
-  WHERE name ILIKE '%' || :pattern || '%'
+  WHERE name ILIKE '%' || :pattern || '%' ESCAPE '\'
   ```
-- **SQL Server / MySQL** — a case-insensitive collation on the column (or applied inline), so the
-  engine's own comparison semantics do the folding and a plain B-tree index remains usable:
-  ```sql
-  -- SQL Server: column declared/queried with a CI collation
-  WHERE name COLLATE Latin1_General_CI_AS LIKE '%' + @pattern + '%'
-  -- MySQL: column already uses a _ci collation (e.g. utf8mb4_0900_ai_ci)
-  WHERE name LIKE CONCAT('%', :pattern, '%')
-  ```
-- **MongoDB** — the index-friendly CI mechanism (a query-level collation) applies to `$eq`/`$in`/
-  sort/range comparisons, not to `$regex`: a collection or query collation with `strength: 2` makes
-  `$eq`/`$in`/`$gt`/`$lt`/`$sort` compare case-insensitively (and can still use a supporting index),
-  which is the mechanism this document means wherever it says "the collation option for CI" (e.g.
-  TRD §5's Mongo row):
-  ```json
-  db.items.find(
-    { name: "smith" },
-    { collation: { locale: "en", strength: 2 } }
-  )
-  ```
-  `contains` specifically has no collation-compatible substring operator in MongoDB — it necessarily
-  compiles to `$regex` with the `"i"` option instead, which is *not* index-friendly the way the SQL
-  `pg_trgm`/collation forms above are; SEM-7 covers that mechanism (and its escaping requirements) in
-  full, since it is really a `contains`-specific concern (substring semantics) rather than a
-  case-sensitivity one.
-- **OpenSearch / Elasticsearch** — a term-level query's `case_insensitive` parameter (available on
-  `term`, `wildcard`, `prefix`, and `regexp` since 7.10 — **not** `range`, whose case-insensitivity
-  question does not arise the same way for the ordering operators; see the third "must NOT" below)
-  against a `keyword` field, so no separate analyzed sub-field or runtime lowercasing is required for
-  this rule specifically (SEM-7 governs the *substring* mechanics of `contains` itself):
+- **MongoDB** — no collation-compatible substring operator exists; `contains` necessarily compiles
+  to `$regex` with the `"i"` option, which is *not* index-friendly the way the collation/`pg_trgm`
+  forms above are — SEM-7 covers this mechanism (and its escaping requirements) in full.
+- **OpenSearch / Elasticsearch** — `wildcard`/`case_insensitive` against the `keyword` sub-field, no
+  separate analyzed sub-field or runtime lowercasing required (SEM-7 governs the substring mechanics
+  themselves):
   ```json
   { "wildcard": { "name.keyword": { "value": "*smith*", "case_insensitive": true } } }
   ```
-  For the ordering operators (`gt`/`gte`/`lt`/`lte`) on a text field, ES/OpenSearch has no
-  `case_insensitive` flag on `range` — case-insensitive ordering there means comparing against a
-  normalized (lowercased) `keyword` sub-field maintained at index time via an analyzer/normalizer,
-  since there is no query-time equivalent.
+
+**Ordering comparisons (`gt`/`gte`/`lt`/`lte`) on OpenSearch/Elasticsearch — the one real gap.**
+Unlike `term`/`wildcard`, a `range` query has no `case_insensitive` parameter in the pinned 7.10-era
+subset, and there is no query-time equivalent. The compiler targets a schema-declared **normalized
+sub-field** (`SC-3`'s `search.normalizedSubField` — a `keyword` sub-field maintained via an
+ICU-folding normalizer *at index time*, distinct from the plain `.keyword` exact-match sub-field
+`search.keywordSubField` used by `term`/`in`/`notIn` above) instead of the raw field:
+```json
+{ "range": { "name.normalized": { "gt": "smith" } } }
+```
+A field that needs case-insensitive ordering on ES/OpenSearch MUST declare
+`search.normalizedSubField`; a field that only needs case-insensitive equality/substring ops does
+not need one. This is a genuine index-time cost (SC-3, PERF-4), not a query-time toggle — document it
+per field, never assume it exists.
 
 **Must NOT.**
 - Must NOT wrap the column/field in a bare `lower()`/`LOWER()`/`toLowerCase` when the dialect offers
@@ -97,7 +141,14 @@ so every dialect gets case-insensitivity *and* keeps its index.
   default; per-field case sensitivity is an explicit schema opt-in (SC-3), never an accidental
   inheritance from the underlying engine.
 - Must NOT apply case-folding inconsistently between the comparison and any related `ORDER BY`/sort
-  on the same field — case sensitivity is a per-field property, not a per-operator one.
+  or `groupSpec.groupKeys` match on the same field — case sensitivity is a per-field property, not a
+  per-operator *or per-context* one.
+- Must NOT use `ILIKE`/pattern-match as the mechanism for `eq`/`neq`/`in`/`notIn`/ordering/sort/
+  group-key matching — that mechanism is a collation. Reserve `ILIKE`/pattern-match for
+  `contains`/`notContains`/`startsWith`/`endsWith`, where the operator itself is a pattern match.
+- Must NOT assume an ES/OpenSearch `range` query can be made case-insensitive at query time — it
+  cannot in the pinned 7.10-era subset; case-insensitive ordering requires a schema-declared
+  `search.normalizedSubField`, index-time cost included.
 
 **Cross-links.** `$defs/binaryOperator`, `$defs/setOperator`, `$defs/stringValue`.
 
@@ -110,7 +161,16 @@ so every dialect gets case-insensitivity *and* keeps its index.
 Boolean negation (never a separately-derived condition that could disagree with it at the edges).
 Negative binary/set operators — `neq`, `notContains`, `notIn` — MUST include NULL-valued rows in
 their match set. A negative comparison compiles as, e.g., `col <> :v OR col IS NULL`, never a bare
-`col <> :v`.
+`col <> :v`. **The same null-inclusive rule applies to a tree-level `$defs/notNode` wrapping any
+child** (`Not(Comparison(...))`, `Not(And(...))`, `Not(Or(...))`, arbitrarily nested) — not just the
+negative *operators* above. AG Grid's client-side row model has no tree-level NOT construct to take
+as a reference point, but its own rationale extends cleanly: a NOT that excludes a NULL/missing row
+just because SQL's three-valued logic happens to do so is the identical bug this rule exists to
+prevent, one syntax level up. Concretely, `Not(Comparison(field, contains, X))` on SQL compiles as
+`NOT (col ILIKE '%'||:v||'%') OR col IS NULL` — the `OR col IS NULL` is mandatory on the *outside* of
+the `NOT`, exactly mirroring `neq`'s own compiled shape — while Mongo's `$nor`/ES's `must_not`
+already include null/missing documents natively for most query types (verify per query type per the
+third "must NOT" below, the same caveat as `neq`'s own worked example).
 
 **Rationale.** AG Grid's in-memory row model filters with plain JavaScript equality, where a missing
 or `null` cell value is simply "not equal" to any concrete filter value — so `neq` in the client-side
@@ -162,9 +222,10 @@ non-SSRM behavior.
   a future operator might compile to (e.g. `range`), so the compiler does not lean on it silently.
 
 **Must NOT.**
-- SQL: must NOT emit a bare `<>`/`NOT IN (...)` for a negative operator without the accompanying
-  `OR col IS NULL` — three-valued logic drops NULLs from a bare comparison, which is the exact bug
-  this rule exists to prevent.
+- SQL: must NOT emit a bare `<>`/`NOT IN (...)` for a negative operator, **or a bare `NOT (...)` for
+  a tree-level `notNode`**, without the accompanying `OR col IS NULL` on the outside — three-valued
+  logic drops NULLs from a bare comparison or a bare `NOT`, which is the exact bug this rule exists
+  to prevent. `NOT (col ILIKE ...)` and `col <> ...` fail identically and need the identical fix.
 - MongoDB: must NOT add a defensive `{ field: { $ne: null } }` guard "to be safe" or "for parity with
   SQL" — that guard would *exclude* null-valued documents from a negative comparison, which is the
   opposite of this rule and a Mongo-specific regression introduced by SQL-shaped intuition.
@@ -226,13 +287,20 @@ compilers rely on it — see "must NOT" below).
   ```
 - **MongoDB** — no native "nulls last" `$sort` behavior (BSON has its own type-ordering rules where
   null sorts before numbers); emulated with a synthetic null-bucket field added upstream in the
-  pipeline, then sorted on the bucket first:
+  pipeline, then sorted on the bucket first — and **removed afterward**, since the bucket is a
+  compiler-internal emulation detail, not part of the row shape the grid should ever see:
   ```json
   [
     { "$addFields": { "__amountNullBucket": { "$cond": [{ "$eq": ["$amount", null] }, 1, 0] } } },
-    { "$sort": { "__amountNullBucket": 1, "amount": 1 } }
+    { "$sort": { "__amountNullBucket": 1, "amount": 1 } },
+    { "$unset": "__amountNullBucket" }
   ]
   ```
+  The `$unset` MUST appear after every `$sort` stage that used a bucket, before the pipeline's final
+  `$skip`/`$limit`/`$group` — a result row carrying `__amountNullBucket` alongside the real fields is
+  a shape divergence from the Postgres/Search results for the identical IR, on top of leaking an
+  implementation detail. If multiple sort keys each need a bucket, unset all of them in one stage
+  (`{ "$unset": ["__amountNullBucket", "__lastNameNullBucket"] }`).
 - **OpenSearch / Elasticsearch** — the sort clause's native `missing` parameter:
   ```json
   { "sort": [ { "amount": { "order": "asc", "missing": "_last" } } ] }
@@ -253,6 +321,12 @@ compilers rely on it — see "must NOT" below).
 - When emulating with a prefix-key trick (MySQL `ISNULL`, the Mongo synthetic bucket), must NOT drop
   the original field as the secondary sort key — the emulation key only resolves null-vs-non-null
   placement, not the relative order of non-null values.
+- Mongo: must NOT leave a synthetic `__<field>NullBucket` key in the pipeline's output — `$unset` it
+  once it has served its `$sort` purpose (see the worked example above).
+- Must NOT leave string-field collation implicit when sorting a case-insensitive field (SEM-1) — the
+  same collation mechanism that governs `eq`/`in` on that field governs its `ORDER BY`/`$sort`/`sort`
+  too, on every backend, or row order (not just null placement) diverges across backends for
+  identical IR.
 
 **Cross-links.** `$defs/sortItem`, `$defs/nullsPosition`, `$defs/sortDirection`.
 
@@ -282,6 +356,19 @@ ships, it will need its own IR shape carrying the target zone explicitly on the 
 compiler quietly reaching into a comparison node's provenance field.) For `inRange`, per-boundary
 inclusivity (`fromInclusive`/`toInclusive`) is carried explicitly on the IR node and the compiler
 MUST read it from there — never assume a fixed default.
+
+**MongoDB representation of `dateValue` (pinned): a plain ISO date string, never a BSON `Date`.**
+MongoDB's `Date` type has no "calendar date, no time-of-day" concept — every BSON `Date` is an
+instant. Storing/comparing a `dateValue` as a BSON `Date` therefore requires silently promoting it to
+*some* midnight instant, and "midnight in which zone?" has no answer for a value that was never an
+instant in the first place — exactly the conflation this rule's own second "must NOT" (below)
+forbids "without that promotion being an explicit, documented adapter decision." Rather than making
+that decision implicitly inside every Mongo compiler, the pinned mechanism sidesteps it: `dateValue`
+compiles to the ISO calendar-date string itself (`"1990-05-12"`), compared as a plain BSON string.
+Lexicographic string comparison on `YYYY-MM-DD` already matches chronological order, so `$gte`/`$lt`
+work correctly with no `Date` promotion, no zone, and no ambiguity. `datetimeValue` (an instant)
+still compiles to a BSON `Date` — extended-JSON's `$date` field requires a full instant string with
+an explicit offset/`Z` (`"2026-01-01T00:00:00Z"`), never a bare calendar date.
 
 > **Not yet pinned — flagged in the TRD, stated here rather than guessed at.** The TRD (§7.4)
 > explicitly marks the *exact* default boundary inclusivity that AG Grid's own simple date filter
@@ -317,10 +404,14 @@ often diverge from what the grid itself shows the user.
   ```sql
   WHERE created_at >= :from AND created_at < :to
   ```
-- **MongoDB** — dates are stored as BSON `Date` (always a UTC instant internally); both local-date
-  and instant fields compare with the operators selected from the inclusivity flags:
+- **MongoDB** — an instant field (`datetimeValue`) compares against BSON `Date` values built from
+  the full instant string (see the pinned representation above); a local-date field (`dateValue`)
+  compares against the plain ISO date string instead, never a `Date`:
   ```json
+  // instant field:
   { "createdAt": { "$gte": { "$date": "2026-01-01T00:00:00Z" }, "$lt": { "$date": "2026-02-01T00:00:00Z" } } }
+  // local-date field:
+  { "createdOn": { "$gte": "2026-01-01", "$lt": "2026-02-01" } }
   ```
 - **OpenSearch / Elasticsearch** — a `range` query choosing `gte`/`gt` and `lt`/`lte` per the
   inclusivity flags, with an explicit `format` (pinning the accepted string shape) — **no**
@@ -355,6 +446,15 @@ often diverge from what the grid itself shows the user.
 - Must NOT present the exact AG Grid boundary-inclusivity default as settled fact in fixtures or
   documentation before it has been verified against a live grid, per the TRD's own "verify and
   freeze" flag on this rule.
+- Must NOT represent a `dateValue` as a MongoDB `Date` — see the pinned representation above; use
+  the plain ISO date string.
+
+**Fixture format note.** A `datetimeValue` fixture's expected artifacts are only reproducible if the
+adapter's resolved value AND the request-context zone it used are both visible in the fixture inputs
+— otherwise a port author must guess the zone the original fixture author assumed. `agGridRequest.json`
+fixtures needing this carry an optional `requestContext: { "zone": "<IANA id>" }` sibling field
+alongside the AG Grid wire shape (the same "documented extension beyond AG Grid's own wire format"
+pattern as `customFilters`, OQ-11) — see `spec/fixtures/README.md`.
 
 **Cross-links.** `$defs/dateValue`, `$defs/datetimeValue`, `$defs/rangeComparisonNode`
 (`fromInclusive`, `toInclusive`), `$defs/typedValue`.
@@ -451,13 +551,18 @@ sort model the UI might ever construct happening to already be unique.
   ```
 - **MongoDB** — the `$sort` document gains the same trailing key (object key order is significant
   and preserved for `$sort`); if `id` can itself be null/missing, it goes through the same
-  null-bucket emulation SEM-3 shows for `lastName`, not a bare `$sort` entry:
+  null-bucket emulation SEM-3 shows for `lastName` — **bucket key before the real field**, matching
+  SEM-3's own canonical order exactly (not the reverse):
   ```json
-  { "$sort": { "lastName": 1, "__lastNameNullBucket": 1, "id": 1, "__idNullBucket": 1 } }
+  { "$sort": { "__lastNameNullBucket": 1, "lastName": 1, "__idNullBucket": 1, "id": 1 } }
   ```
-  (in practice `stableKey` is usually a non-nullable primary/surrogate key, so the `__idNullBucket`
-  stage is frequently a no-op the compiler can only omit if the schema declares `stableKey` NOT
-  NULL — this document does not assume that, so the mechanism is shown in full.)
+  The `__idNullBucket` stage is emitted **unconditionally, with no exception** — `stableKey` is
+  usually a non-nullable primary/surrogate key in practice, making the bucket a runtime no-op, but
+  `grid-schema.schema.json` has no way to *declare* NOT NULL, so there is no schema state a compiler
+  could check to justify skipping it. The same unconditional rule applies everywhere else this
+  document's examples show the marker (SEM-3's own worked example, and every other tiebreaker
+  example in this document) — "the field is probably never null in practice" is never a license to
+  omit the mechanism; the mechanism is what makes it not matter if it turns out to be null.
 - **OpenSearch / Elasticsearch** — the `sort` array, whose element order *is* the tiebreak order,
   gains the mapped `stableKey` field (or its `.keyword` sub-field) as its last element, with its own
   `missing` parameter:
@@ -483,6 +588,11 @@ keyset-paging mode; see the "must NOT" below.
   on `OFFSET`-walking is a separate, narrower rule scoped to the export-streaming fallback path
   (chunking an unpaginated export when a driver can't stream) — it does not apply to, and must not be
   read as banning, ordinary v1 grid paging.
+- Must NOT omit the tiebreaker's null-ordering marker (SQL `NULLS`, Mongo bucket, ES `missing`) on
+  the theory that `stableKey` is "probably never null" — there is no schema state that licenses this
+  omission (see the worked example above); every tiebreaker in every artifact carries the marker,
+  unconditionally, including under `page: none` (EXP-2) and export scopes (EXP-1), which use the
+  identical sort-compilation path as ordinary paged requests.
 
 **Cross-links.** `$defs/sortItem` (the array the compiler appends to), `$defs/fieldName`
 (`stableKey` is resolved through the schema the same way any other IR field reference is),
@@ -582,3 +692,63 @@ deliberately, per field, instead of getting it by accident.
 
 **Cross-links.** `$defs/binaryOperator` (`contains`, `notContains`), `$defs/stringValue` (the value
 being substring-matched), `$defs/fieldName`.
+
+---
+
+## Addendum — aggregation semantics (not numbered SEM-*, since it's beyond the TRD's own §7
+enumeration of SEM-1..SEM-7; pinned here anyway because the conformance fixture suite, #1630,
+needed answers that AR-8/BM-2 don't give and no other document owns)
+
+**AGG-1. `count` aggregates non-null occurrences of the named field — never a row count.** AR-8's
+`aggregation` is `(field, func)`; for `func: "count"`, the field is not decorative — `count` means
+"how many rows have a non-null value for `field`", identically to SQL's `COUNT(field)` (which
+already skips NULLs) and Elasticsearch's `value_count` (which already skips missing). **MongoDB's
+naive `{ "$sum": 1 }` counts every document in the group regardless of the field's value and MUST
+NOT be used** — it silently answers a different question the moment the aggregated field can be
+null. The correct, portable Mongo form is a conditional sum:
+```json
+{ "$sum": { "$cond": [ { "$eq": ["$amount", null] }, 0, 1 ] } }
+```
+If a future host genuinely wants "count of rows in the group" regardless of nullability, that is a
+`count` on the grid's own `stableKey` (never null by SEM-6/BM-2's own tiebreaker guarantee), not a
+different meaning smuggled into `count` on an arbitrary field.
+
+**AGG-2. `aggregation.alias` is set from the AG Grid `ColumnVO.id` whenever it differs from
+`ColumnVO.field`; otherwise it is absent (compiler default applies).** AG Grid's `valueCols` entries
+carry both an `id` (the column's identity in the grid) and a `field` (the data field being
+aggregated) — when a host configures a distinct `id` for an aggregated column (a common pattern for
+disambiguating two aggregations on the same field, e.g. `sum(amount)` and `avg(amount)` both keyed
+off `field: "amount"`), that `id` is the label the grid UI already displays for the column and is the
+only signal available for what the output key should be. The adapter therefore sets
+`aggregation.alias := ColumnVO.id` **if and only if** `ColumnVO.id !== ColumnVO.field`; when they are
+equal (the common case — AG Grid defaults `id` to `field` unless the host overrides it), `alias` is
+left absent and the compiler's own default naming applies. This is a one-line, deterministic rule —
+"is `id` distinct from `field`" — precisely so that every fixture/port computes the identical answer
+from the identical `ColumnVO` shape, rather than each guessing when alias-setting is warranted.
+
+**AGG-3. Group-key drill-down matching (`groupSpec.groupKeys`) follows the group column's own
+case-sensitivity setting (SEM-1) — it is not automatically exact-match.** A `groupKeys` entry is
+compiled into an equality predicate against its group column (BM-2) exactly like any other filter
+value; SEM-1's own rule that case sensitivity is "a per-field property, not a per-operator or
+per-context one" already covers this without further amendment — restated here only because the
+conformance fixture suite needed it made explicit for grouped queries specifically, alongside the
+plain-filter case SEM-1's own worked examples focus on.
+
+**AGG-4. ES/OpenSearch `terms` aggregation ordering (BM-3 set-filter values, and any composite group
+aggregation) is pinned to ascending by key value, not the engine default.** A bare `terms` aggregation
+defaults to doc-count-descending, which would return set-filter values (and, for composite grouping,
+bucket order) in a different order than Postgres's `ORDER BY` or Mongo's `$sort` on the same logical
+request — a user-visible list-order divergence for an operation (BM-3) whose whole purpose is
+presenting a sorted list of distinct values. Compilers MUST set `"order": {"_key": "asc"}`
+explicitly on any `terms` aggregation backing a set-filter-values or grouped-drill-down request.
+
+**AGG-5. Known, accepted divergence: composite-aggregation null-bucket placement on ES/OpenSearch.**
+ES/OpenSearch's composite aggregation `missing_bucket: true` (the mechanism that keeps a null group
+key from being silently dropped, matching AR-8/BM-2's intent) has no `missing_order` control in the
+pinned 7.10-era subset — the null bucket sorts **first** regardless of the sort direction requested,
+while Postgres (`NULLS LAST`/`NULLS FIRST` per SEM-3) and Mongo (the null-bucket emulation) both honor
+the requested direction. This is documented here as an accepted, host-visible divergence (per the
+TRD §15 risk register's own "documented-divergence register" precedent) rather than worked around
+with a client-side reorder, which would defeat server-side paging's whole purpose for the grouped
+case. Fixtures exercising composite null-bucket ordering mark this explicitly rather than silently
+pinning three-way-identical output that ES/OpenSearch cannot actually produce.

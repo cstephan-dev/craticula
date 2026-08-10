@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "quantity": {
+      "filterType": "number",
+      "type": "equals",
+      "filter": "not-a-number"
+    }
+  },
+  "sortModel": []
+}

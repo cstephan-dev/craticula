@@ -1,0 +1,59 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "region": {
+      "filterType": "text",
+      "operator": "OR",
+      "conditions": [
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "west"
+        },
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "east"
+        }
+      ]
+    },
+    "status": {
+      "filterType": "text",
+      "type": "equals",
+      "filter": "active"
+    }
+  },
+  "sortModel": [],
+  "customFilters": {
+    "type": "not",
+    "node": {
+      "type": "and",
+      "nodes": [
+        {
+          "type": "comparison",
+          "field": "quantity",
+          "op": "gte",
+          "value": {
+            "type": "int64",
+            "value": 100
+          }
+        },
+        {
+          "type": "comparison",
+          "field": "quantity",
+          "op": "lte",
+          "value": {
+            "type": "int64",
+            "value": 999
+          }
+        }
+      ]
+    }
+  }
+}

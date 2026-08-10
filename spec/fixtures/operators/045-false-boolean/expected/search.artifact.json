@@ -1,0 +1,17 @@
+{
+  "query": {
+    "term": {
+      "isActive": false
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

@@ -1,0 +1,38 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": false,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "price": {
+      "type": "double",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "price"
+        },
+        "mongo": {
+          "path": "price"
+        },
+        "search": {
+          "field": "price"
+        }
+      }
+    }
+  }
+}

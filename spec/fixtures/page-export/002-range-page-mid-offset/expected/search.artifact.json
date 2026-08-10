@@ -1,0 +1,21 @@
+{
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    {
+      "totalAmount": {
+        "order": "desc",
+        "missing": "_first"
+      }
+    },
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 500,
+  "size": 100
+}

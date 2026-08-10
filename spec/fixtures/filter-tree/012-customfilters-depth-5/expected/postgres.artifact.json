@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM orders WHERE (NOT ((((NOT (status COLLATE craticula_ci = $1) OR status IS NULL)))) OR status IS NULL) ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    "archived",
+    100,
+    0
+  ]
+}

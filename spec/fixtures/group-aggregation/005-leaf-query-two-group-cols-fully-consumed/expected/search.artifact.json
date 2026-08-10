@@ -1,0 +1,40 @@
+{
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "term": {
+            "region.keyword": {
+              "value": "EMEA",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "term": {
+            "segment.keyword": {
+              "value": "Enterprise",
+              "case_insensitive": true
+            }
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "product.keyword": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    },
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

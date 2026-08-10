@@ -1,0 +1,20 @@
+{
+  "query": {
+    "range": {
+      "age": {
+        "gte": 18,
+        "lte": 65
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

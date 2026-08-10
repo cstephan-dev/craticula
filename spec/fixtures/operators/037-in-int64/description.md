@@ -1,0 +1,1 @@
+Proves AR-6's `in` operator on an `int64` field via the Set Filter wire shape. `SetFilterModelValue` is always `(string|null)[]` at the wire level even for a numeric column; SEM-5 requires the adapter to coerce each wire string into the field's declared `int64` type exactly once, before the IR is built — the compiler never sees the original strings.

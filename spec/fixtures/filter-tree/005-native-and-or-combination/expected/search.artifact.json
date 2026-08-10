@@ -1,0 +1,56 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "bool": {
+            "should": [
+              {
+                "term": {
+                  "region.keyword": {
+                    "value": "west",
+                    "case_insensitive": true
+                  }
+                }
+              },
+              {
+                "term": {
+                  "region.keyword": {
+                    "value": "east",
+                    "case_insensitive": true
+                  }
+                }
+              }
+            ],
+            "minimum_should_match": 1
+          }
+        },
+        {
+          "term": {
+            "status.keyword": {
+              "value": "active",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "range": {
+            "quantity": {
+              "gt": 10
+            }
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

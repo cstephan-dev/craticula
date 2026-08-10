@@ -1,0 +1,10 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM orders WHERE (customer_name ILIKE '%' || $1 || '%' ESCAPE '\\' AND (NOT (customer_name ILIKE '%' || $2 || '%' ESCAPE '\\') OR customer_name IS NULL)) ORDER BY id ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "params": [
+    "acme",
+    "test",
+    100,
+    0
+  ]
+}

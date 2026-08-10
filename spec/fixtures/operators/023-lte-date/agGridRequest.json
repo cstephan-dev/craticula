@@ -1,0 +1,23 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "birthDate": {
+      "filterType": "date",
+      "type": "lessThanOrEqual",
+      "dateFrom": "2000-01-01",
+      "dateTo": null
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

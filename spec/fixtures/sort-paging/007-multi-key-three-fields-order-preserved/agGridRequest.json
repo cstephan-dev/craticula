@@ -1,0 +1,15 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    { "colId": "department", "sort": "asc" },
+    { "colId": "age", "sort": "desc" },
+    { "colId": "hireDate", "sort": "asc" }
+  ]
+}

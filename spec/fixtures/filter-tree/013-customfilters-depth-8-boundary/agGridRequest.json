@@ -1,0 +1,49 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [],
+  "customFilters": {
+    "type": "not",
+    "node": {
+      "type": "or",
+      "nodes": [
+        {
+          "type": "and",
+          "nodes": [
+            {
+              "type": "not",
+              "node": {
+                "type": "or",
+                "nodes": [
+                  {
+                    "type": "and",
+                    "nodes": [
+                      {
+                        "type": "not",
+                        "node": {
+                          "type": "comparison",
+                          "field": "region",
+                          "op": "eq",
+                          "value": {
+                            "type": "string",
+                            "value": "blocked"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

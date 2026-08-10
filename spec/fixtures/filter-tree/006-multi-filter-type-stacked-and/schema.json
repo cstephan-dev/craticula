@@ -1,0 +1,39 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "customerName": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "customer_name"
+        },
+        "mongo": {
+          "path": "customerName"
+        },
+        "search": {
+          "field": "customerName",
+          "keywordSubField": "customerName.keyword"
+        }
+      }
+    },
+    "id": {
+      "type": "int64",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    }
+  }
+}

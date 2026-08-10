@@ -1,0 +1,28 @@
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "term": {
+            "segment.keyword": {
+              "value": "Enterprise",
+              "case_insensitive": true
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "region": {
+      "terms": {
+        "field": "region.keyword",
+        "size": 1000,
+        "order": {
+          "_key": "asc"
+        }
+      }
+    }
+  }
+}

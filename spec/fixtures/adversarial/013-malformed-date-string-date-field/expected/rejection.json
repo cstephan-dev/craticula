@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "typeCoercion",
+  "reason": "uncoercible-value",
+  "note": "'2026-13-45' is not a valid calendar date and cannot be coerced into the date type declared for 'createdDate'."
+}

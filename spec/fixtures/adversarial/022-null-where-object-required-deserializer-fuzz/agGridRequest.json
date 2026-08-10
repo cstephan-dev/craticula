@@ -1,0 +1,13 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    null
+  ],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": []
+}

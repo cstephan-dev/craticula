@@ -1,0 +1,54 @@
+{
+  "pipeline": [
+    {
+      "$match": {
+        "region": "EMEA",
+        "segment": "Enterprise",
+        "fiscalYear": 2024
+      }
+    },
+    {
+      "$group": {
+        "_id": "$product",
+        "amount_sum": {
+          "$sum": "$amount"
+        }
+      }
+    },
+    {
+      "$addFields": {
+        "__groupNullBucket": {
+          "$cond": [
+            {
+              "$eq": [
+                "$_id",
+                null
+              ]
+            },
+            1,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "$sort": {
+        "__groupNullBucket": 1,
+        "_id": 1
+      }
+    },
+    {
+      "$unset": "__groupNullBucket"
+    },
+    {
+      "$skip": 0
+    },
+    {
+      "$limit": 100
+    }
+  ],
+  "collation": {
+    "locale": "en",
+    "strength": 2
+  }
+}

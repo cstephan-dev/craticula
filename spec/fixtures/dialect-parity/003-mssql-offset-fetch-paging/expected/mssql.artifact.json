@@ -1,0 +1,5 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT * FROM employees ORDER BY CASE WHEN id IS NULL THEN 1 ELSE 0 END ASC, id ASC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY",
+  "params": [20, 20]
+}

@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "resourceLimits",
+  "reason": "max-in-values-exceeded",
+  "note": "customFilters carries a 'notIn' comparison with 5000 values, far beyond the SEC-3 default max of 1000."
+}

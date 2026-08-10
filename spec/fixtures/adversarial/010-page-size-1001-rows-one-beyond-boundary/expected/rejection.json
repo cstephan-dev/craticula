@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "resourceLimits",
+  "reason": "max-page-size-exceeded",
+  "note": "endRow (1001) - startRow (0) = 1001, one row beyond the SEC-3 default max page size of 1000."
+}

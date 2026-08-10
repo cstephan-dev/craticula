@@ -1,0 +1,61 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "bool": {
+            "must": [
+              {
+                "term": {
+                  "status.keyword": {
+                    "value": "active",
+                    "case_insensitive": true
+                  }
+                }
+              },
+              {
+                "range": {
+                  "quantity": {
+                    "gt": 10
+                  }
+                }
+              },
+              {
+                "term": {
+                  "region.keyword": {
+                    "value": "west",
+                    "case_insensitive": true
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "bool": {
+            "must_not": [
+              {
+                "wildcard": {
+                  "customerName.keyword": {
+                    "value": "*test*",
+                    "case_insensitive": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

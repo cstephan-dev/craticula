@@ -1,0 +1,24 @@
+{
+  "startRow": 200,
+  "endRow": 250,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "totalAmount": {
+      "filterType": "number",
+      "type": "greaterThanOrEqual",
+      "filter": 100
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "exportFormat": "csv",
+  "exportScope": "all"
+}

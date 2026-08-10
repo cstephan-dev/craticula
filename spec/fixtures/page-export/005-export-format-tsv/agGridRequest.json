@@ -1,0 +1,21 @@
+{
+  "startRow": null,
+  "endRow": null,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "region": {
+      "filterType": "set",
+      "values": [
+        "EMEA",
+        "APAC"
+      ]
+    }
+  },
+  "sortModel": [],
+  "exportFormat": "tsv",
+  "exportScope": "all"
+}

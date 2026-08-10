@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/rejection.schema.json",
+  "title": "Expected rejection (adversarial fixture shape)",
+  "description": "SEC-6 requires adversarial fixtures (injection attempts, unknown fields, type confusion, depth bombs) to 'produce clean rejections' — a distinct outcome from the successful expected/<backend>.artifact.json shape. An adversarial fixture case has expected/rejection.json instead of any backend artifact: no backend ever sees a compilable IR, because validation rejects the request before compilation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rejectedAt", "reason"],
+  "properties": {
+    "rejectedAt": {
+      "enum": ["allowlist", "resourceLimits", "typeCoercion", "requestParsing"],
+      "description": "Which validation stage catches this case, in the pinned order from docs/architecture/c4-components-core-ir.md: allowlist -> limits -> coercion -> static injection. 'requestParsing' covers malformed-wire-shape cases that never reach IR validation at all (e.g. a filterModel referencing a nonexistent operator)."
+    },
+    "reason": {
+      "enum": [
+        "unknown-field",
+        "max-depth-exceeded",
+        "max-leaves-exceeded",
+        "max-in-values-exceeded",
+        "max-page-size-exceeded",
+        "uncoercible-value",
+        "unknown-operator",
+        "malformed-request"
+      ],
+      "description": "The specific SEC-3/SEC-6/SEM-5 condition this fixture exercises."
+    },
+    "note": {
+      "type": "string",
+      "description": "Optional free-text clarifying what makes this case adversarial and why it must be rejected rather than silently accepted (SEC-6's 'clean rejection' requirement)."
+    }
+  }
+}

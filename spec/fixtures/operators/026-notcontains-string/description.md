@@ -1,0 +1,1 @@
+Proves AR-6's `notContains` operator on a `string` field: SEM-7's substring-only semantics apply symmetrically to the negative form (negating a `wildcard`, not a `match`), and SEM-2's null-inclusion rule requires NULL-valued rows to remain in the match set for this negative operator.

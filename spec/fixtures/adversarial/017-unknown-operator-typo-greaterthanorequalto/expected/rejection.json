@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "unknown-operator",
+  "note": "'greaterThanOrEqualTo' is not a member of AR-6's closed 17-operator set (the valid member is 'gte' at the IR level)."
+}

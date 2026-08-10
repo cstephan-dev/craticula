@@ -1,0 +1,20 @@
+{
+  "query": {
+    "wildcard": {
+      "productName.keyword": {
+        "value": "*Watch",
+        "case_insensitive": true
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

@@ -1,0 +1,24 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "id" },
+        "mongo": { "path": "id" },
+        "search": { "field": "id" }
+      }
+    },
+    "createdAt": {
+      "type": "datetime",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "created_at" },
+        "mongo": { "path": "createdAt" },
+        "search": { "field": "createdAt" }
+      }
+    }
+  }
+}

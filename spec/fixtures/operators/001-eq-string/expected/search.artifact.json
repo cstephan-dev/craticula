@@ -1,0 +1,35 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "term": {
+            "status.keyword": {
+              "value": "active",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "term": {
+            "status.keyword": {
+              "value": "approved",
+              "case_insensitive": true
+            }
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

@@ -1,0 +1,31 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "customFilters": {
+    "type": "comparison",
+    "field": "birthDate",
+    "op": "inRange",
+    "from": {
+      "type": "date",
+      "value": "1990-01-01"
+    },
+    "to": {
+      "type": "date",
+      "value": "2000-01-01"
+    },
+    "fromInclusive": true,
+    "toInclusive": false
+  }
+}

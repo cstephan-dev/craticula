@@ -1,0 +1,40 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
+    },
+    {
+      "id": "segment",
+      "displayName": "Segment",
+      "field": "segment"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "amountSum",
+      "displayName": "Total Amount",
+      "field": "amount",
+      "aggFunc": "sum"
+    },
+    {
+      "id": "amountAvg",
+      "displayName": "Average Amount",
+      "field": "amount",
+      "aggFunc": "avg"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [
+    {
+      "type": "string",
+      "value": "EMEA"
+    }
+  ],
+  "filterModel": null,
+  "sortModel": []
+}

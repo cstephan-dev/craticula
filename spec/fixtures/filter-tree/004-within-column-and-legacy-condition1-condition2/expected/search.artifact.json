@@ -1,0 +1,32 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "range": {
+            "amount": {
+              "gt": 50
+            }
+          }
+        },
+        {
+          "range": {
+            "amount": {
+              "lt": 500
+            }
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "resourceLimits",
+  "reason": "max-depth-exceeded",
+  "note": "customFilters nests 19 'not' wrappers around one leaf comparison (depth 20), far beyond the SEC-3 default max depth of 8."
+}

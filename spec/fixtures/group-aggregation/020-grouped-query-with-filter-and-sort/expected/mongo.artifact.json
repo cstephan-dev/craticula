@@ -1,0 +1,65 @@
+[
+  {
+    "$match": {
+      "amount": {
+        "$gt": 1000
+      }
+    }
+  },
+  {
+    "$group": {
+      "_id": "$region",
+      "amount_sum": {
+        "$sum": "$amount"
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "__amount_sumNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$amount_sum",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      },
+      "__groupNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__amount_sumNullBucket": -1,
+      "amount_sum": -1,
+      "__groupNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": [
+      "__amount_sumNullBucket",
+      "__groupNullBucket"
+    ]
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

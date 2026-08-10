@@ -1,0 +1,12 @@
+{
+  "setValuesRequest": {
+    "colId": "region",
+    "filterModel": {
+      "segment": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "Enterprise"
+      }
+    }
+  }
+}

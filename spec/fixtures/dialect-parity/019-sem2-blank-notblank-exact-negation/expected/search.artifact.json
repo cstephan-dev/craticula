@@ -1,0 +1,20 @@
+{
+  "query": {
+    "bool": {
+      "must_not": [
+        {
+          "bool": {
+            "should": [
+              { "bool": { "must_not": { "exists": { "field": "lastName" } } } },
+              { "term": { "lastName.keyword": "" } }
+            ],
+            "minimum_should_match": 1
+          }
+        }
+      ]
+    }
+  },
+  "sort": [ { "id": { "order": "asc", "missing": "_last" } } ],
+  "from": 0,
+  "size": 100
+}

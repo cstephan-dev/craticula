@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM items WHERE (is_active <> $1 OR is_active IS NULL) ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    true,
+    100,
+    0
+  ]
+}

@@ -1,0 +1,1 @@
+Proves AR-6's `blank` operator on a `date` field: SEM-2 pins `blank` as `IS NULL` alone for non-text types, exactly as for `int64` (case 031) — the rule is type-category based (text vs. everything else), not per-field.

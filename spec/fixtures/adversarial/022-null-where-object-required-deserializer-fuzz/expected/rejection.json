@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "rowGroupCols[0] is JSON null where a ColumnVO object is required — a null-where-object-required deserializer-fuzzing representative (SEC-6)."
+}

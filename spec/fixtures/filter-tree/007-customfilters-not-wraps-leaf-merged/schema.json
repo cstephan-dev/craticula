@@ -1,0 +1,56 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "region": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "region"
+        },
+        "mongo": {
+          "path": "region"
+        },
+        "search": {
+          "field": "region",
+          "keywordSubField": "region.keyword"
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "status"
+        },
+        "mongo": {
+          "path": "status"
+        },
+        "search": {
+          "field": "status",
+          "keywordSubField": "status.keyword"
+        }
+      }
+    }
+  }
+}

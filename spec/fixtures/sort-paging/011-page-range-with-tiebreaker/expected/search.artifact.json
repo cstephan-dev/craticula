@@ -1,0 +1,9 @@
+{
+  "query": { "match_all": {} },
+  "sort": [
+    { "lastName.normalized": { "order": "asc", "missing": "_last" } },
+    { "id": { "order": "asc", "missing": "_last" } }
+  ],
+  "from": 20,
+  "size": 20
+}

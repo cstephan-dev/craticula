@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "resourceLimits",
+  "reason": "max-in-values-exceeded",
+  "note": "The 'name' set filter carries 1001 values, one beyond the SEC-3 default max of 1000."
+}

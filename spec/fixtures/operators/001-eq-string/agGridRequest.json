@@ -1,0 +1,31 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "status": {
+      "filterType": "text",
+      "operator": "OR",
+      "condition1": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "active"
+      },
+      "condition2": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "approved"
+      }
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

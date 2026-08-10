@@ -1,0 +1,27 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "customerName": {
+      "filterType": "multi",
+      "filterModels": [
+        {
+          "filterType": "text",
+          "type": "contains",
+          "filter": "acme"
+        },
+        {
+          "filterType": "text",
+          "type": "notContains",
+          "filter": "test"
+        }
+      ]
+    }
+  },
+  "sortModel": []
+}

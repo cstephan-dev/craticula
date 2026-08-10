@@ -1,0 +1,19 @@
+{
+  "startRow": null,
+  "endRow": null,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "notes": {
+      "filterType": "text",
+      "type": "equals",
+      "filter": "=1+2"
+    }
+  },
+  "sortModel": [],
+  "exportFormat": "csv",
+  "exportScope": "all"
+}

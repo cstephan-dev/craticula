@@ -1,0 +1,7 @@
+{
+  "query": { "match_all": {} },
+  "sort": [
+    { "createdAt": { "order": "desc", "missing": "_first" } },
+    { "id": { "order": "asc", "missing": "_last" } }
+  ]
+}

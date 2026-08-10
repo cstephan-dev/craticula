@@ -1,0 +1,34 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
+    },
+    {
+      "id": "segment",
+      "displayName": "Segment",
+      "field": "segment"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "amount",
+      "displayName": "amount",
+      "field": "amount",
+      "aggFunc": "min"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [
+    {
+      "type": "string",
+      "value": "EMEA"
+    }
+  ],
+  "filterModel": null,
+  "sortModel": []
+}

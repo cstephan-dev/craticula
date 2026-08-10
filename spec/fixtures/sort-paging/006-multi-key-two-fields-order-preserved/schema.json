@@ -1,0 +1,33 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "id" },
+        "mongo": { "path": "id" },
+        "search": { "field": "id" }
+      }
+    },
+    "department": {
+      "type": "string",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "department" },
+        "mongo": { "path": "department" },
+        "search": { "field": "department", "keywordSubField": "department.keyword", "normalizedSubField": "department.normalized" }
+      }
+    },
+    "salary": {
+      "type": "decimal",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "salary" },
+        "mongo": { "path": "salary" },
+        "search": { "field": "salary" }
+      }
+    }
+  }
+}

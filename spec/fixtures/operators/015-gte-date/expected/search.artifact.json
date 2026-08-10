@@ -1,0 +1,20 @@
+{
+  "query": {
+    "range": {
+      "birthDate": {
+        "gte": "1990-01-01",
+        "format": "strict_date"
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

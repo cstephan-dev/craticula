@@ -1,0 +1,53 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "status.keyword": {
+              "value": "active",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "bool": {
+            "must_not": [
+              {
+                "bool": {
+                  "must": [
+                    {
+                      "term": {
+                        "region.keyword": {
+                          "value": "blocked",
+                          "case_insensitive": true
+                        }
+                      }
+                    },
+                    {
+                      "range": {
+                        "quantity": {
+                          "lt": 0
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}
