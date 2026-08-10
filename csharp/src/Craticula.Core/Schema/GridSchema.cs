@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Craticula.Core.Ir;
 
 namespace Craticula.Core.Schema;
 
@@ -18,10 +19,9 @@ public sealed record GridSchema
     /// <summary>
     /// SC-5: a host-authored IR filter fragment ANDed into every compiled query (the
     /// tenancy/soft-delete hook). The JSON schema $refs into <c>ir.schema.json#/$defs/filterNode</c>,
-    /// but the C# IR AST does not exist yet (see #1631's scope decision 4) — represented as a raw
-    /// <see cref="JsonElement"/> placeholder until a story that walks the IR needs a typed model.
+    /// modeled here as the real <see cref="FilterNode"/> IR AST (#1632).
     /// </summary>
-    public JsonElement? StaticFilter { get; init; }
+    public FilterNode? StaticFilter { get; init; }
 
     /// <summary>SC-2: the exhaustive allowlist, keyed by logical colId. Must be non-empty.</summary>
     public required IReadOnlyDictionary<string, FieldConfig> Fields { get; init; }
@@ -34,13 +34,17 @@ public sealed record GridSchema
     /// (unmapped properties, duplicate keys, null where non-nullable, out-of-range enum values) —
     /// the checks here are the ones that survive valid-shaped-but-still-invalid JSON:
     /// <c>fields</c> non-empty (minProperties:1), no null <see cref="FieldConfig"/> entries,
-    /// <see cref="StableKey"/> non-blank (minLength:1) and present in <see cref="Fields"/>, and
-    /// every <see cref="SqlMapping"/>'s "exactly one of column/qualifiedColumn/expression".
+    /// <see cref="StableKey"/> non-blank (minLength:1) and present in <see cref="Fields"/>,
+    /// every <see cref="SqlMapping"/>'s "exactly one of column/qualifiedColumn/expression", and
+    /// (via <see cref="FilterNodeValidator"/>) every structural invariant of a present
+    /// <see cref="StaticFilter"/> tree.
     /// </summary>
     public static GridSchema Parse(string json)
     {
         var schema = JsonSerializer.Deserialize<GridSchema>(json, GridSchemaJson.Options)
             ?? throw new JsonException("GridSchema JSON deserialized to null.");
+
+        FilterNodeValidator.Validate(schema.StaticFilter);
 
         if (schema.Fields.Count == 0)
         {
