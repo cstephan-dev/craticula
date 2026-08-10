@@ -1,3 +1,4 @@
+using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 
 namespace Craticula.Core.Tests.Schema;
@@ -11,7 +12,7 @@ public class GridSchemaDeserializationTests
       "staticFilter": {
         "type": "comparison",
         "op": "eq",
-        "colId": "tenantId",
+        "field": "tenantId",
         "value": { "type": "int64", "value": 42 }
       },
       "fields": {
@@ -59,7 +60,10 @@ public class GridSchemaDeserializationTests
 
         Assert.Equal(GridSchemaMode.Strict, schema.Mode);
         Assert.Equal("id", schema.StableKey);
-        Assert.NotNull(schema.StaticFilter);
+        var staticFilter = Assert.IsType<ComparisonNode>(schema.StaticFilter);
+        Assert.Equal("tenantId", staticFilter.Field);
+        Assert.Equal(ComparisonOperator.Eq, staticFilter.Op);
+        Assert.Equal(42L, Assert.IsType<Int64Value>(staticFilter.Value).Value);
         Assert.Equal(4, schema.Fields.Count);
     }
 
