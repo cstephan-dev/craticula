@@ -20,16 +20,21 @@ spec doesn't have, the spec changes first, then the port follows.
   is enforced by a runtime validator built in a later work item, not by this schema. The one
   exception is a handful of amplification caps unrelated to SEC-3 (string/identifier `maxLength`,
   `int64` numeric bounds) that exist purely to keep the *shape* well-formed, not to police policy.
+- **`semantics.md`** — the normative semantics document (§7 of the TRD, rules SEM-1..SEM-7: case
+  sensitivity, null handling, null ordering, dates & zones, type coercion, deterministic paging,
+  and `contains` on ES/OpenSearch). Each rule states the normative behavior, the naive alternative
+  it rules out, a worked example per backend family (SQL, MongoDB, OpenSearch/Elasticsearch)
+  reaching the same logical outcome through different backend-native mechanisms, an explicit
+  "must NOT" list, and cross-links into `ir.schema.json`'s `$defs`. Every compiler references this
+  document instead of re-deriving these behaviors on its own. The examples are illustrative, not
+  the enforceable contract — that's what `fixtures/` (below) is for.
 
 ## What's coming (separate, later work items — not covered here)
 
-- **`semantics.md`** — the normative semantics document (§7 of the TRD: case sensitivity, null
-  handling and ordering, date/zone resolution, type coercion, deterministic paging, `contains` on
-  search backends). Each rule there gets conformance fixtures.
 - **`fixtures/`** — the shared, language-agnostic conformance fixture suite (§11, T-1): grid
   request + schema config + expected per-backend artifact (and, for a subset, expected rows
   against seeded data). This is what makes identical semantics across backends *and* across the
   four language implementations (G3, G4) enforceable rather than aspirational.
 
-Both are intentionally out of scope for this change; see the TRD for the full requirements they
+`fixtures/` is intentionally out of scope for this change; see the TRD for the full requirements it
 must satisfy.
