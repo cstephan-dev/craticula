@@ -1,0 +1,8 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM items WHERE (status IS NULL OR status = '') ORDER BY id ASC NULLS LAST LIMIT $1 OFFSET $2",
+  "params": [
+    100,
+    0
+  ]
+}

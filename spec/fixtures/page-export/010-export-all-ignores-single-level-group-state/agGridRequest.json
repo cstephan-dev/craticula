@@ -1,0 +1,26 @@
+{
+  "startRow": null,
+  "endRow": null,
+  "rowGroupCols": [
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "totalAmount",
+      "displayName": "Total Amount",
+      "field": "totalAmount",
+      "aggFunc": "sum"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [],
+  "exportFormat": "csv",
+  "exportScope": "all"
+}

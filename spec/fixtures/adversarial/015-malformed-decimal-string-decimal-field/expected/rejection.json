@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "typeCoercion",
+  "reason": "uncoercible-value",
+  "note": "'12.34.56' is not a valid decimal literal and cannot be coerced into the decimal type declared for 'amount'."
+}

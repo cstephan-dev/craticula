@@ -1,0 +1,23 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "physical": {
+        "sql": { "column": "id" },
+        "mongo": { "path": "id" },
+        "search": { "field": "id" }
+      }
+    },
+    "jobTitle": {
+      "type": "string",
+      "text": { "searchMode": "analyzed" },
+      "physical": {
+        "sql": { "column": "jobTitle" },
+        "mongo": { "path": "jobTitle" },
+        "search": { "field": "jobTitle" }
+      }
+    }
+  }
+}

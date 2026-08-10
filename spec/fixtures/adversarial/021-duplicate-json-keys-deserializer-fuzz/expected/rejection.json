@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "The 'name' filter condition declares the 'filter' key twice with conflicting values — a duplicate-key deserializer-fuzzing representative (SEC-6); a strict deserializer rejects rather than silently picking a winner."
+}

@@ -1,0 +1,42 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "id" },
+        "mongo": { "path": "id" },
+        "search": { "field": "id" }
+      }
+    },
+    "department": {
+      "type": "string",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "department" },
+        "mongo": { "path": "department" },
+        "search": { "field": "department", "keywordSubField": "department.keyword", "normalizedSubField": "department.normalized" }
+      }
+    },
+    "age": {
+      "type": "int64",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "age" },
+        "mongo": { "path": "age" },
+        "search": { "field": "age" }
+      }
+    },
+    "hireDate": {
+      "type": "date",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "hire_date" },
+        "mongo": { "path": "hireDate" },
+        "search": { "field": "hireDate" }
+      }
+    }
+  }
+}

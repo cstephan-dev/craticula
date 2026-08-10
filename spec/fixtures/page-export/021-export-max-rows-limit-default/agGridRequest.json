@@ -1,0 +1,18 @@
+{
+  "startRow": null,
+  "endRow": null,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "exportFormat": "csv",
+  "exportScope": "all"
+}

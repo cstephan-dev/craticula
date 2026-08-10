@@ -1,0 +1,19 @@
+[
+  {
+    "$addFields": {
+      "__hireDateNullBucket": { "$cond": [{ "$eq": ["$hireDate", null] }, 1, 0] },
+      "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
+    }
+  },
+  {
+    "$sort": {
+      "__hireDateNullBucket": 1,
+      "hireDate": 1,
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  { "$unset": ["__hireDateNullBucket", "__idNullBucket"] },
+  { "$skip": 0 },
+  { "$limit": 100 }
+]

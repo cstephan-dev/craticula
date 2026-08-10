@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "allowlist",
+  "reason": "unknown-field",
+  "note": "colId \"amount'); DROP TABLE users; --\" referenced by filterModel is absent from GridSchema.fields. No spec document defines a separate wire-shape check ahead of the allowlist lookup; a spec-faithful port simply finds this colId is not in the allowlist, identically to 001-003."
+}

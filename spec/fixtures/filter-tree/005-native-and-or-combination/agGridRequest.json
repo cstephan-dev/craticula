@@ -1,0 +1,38 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "region": {
+      "filterType": "text",
+      "operator": "OR",
+      "conditions": [
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "west"
+        },
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "east"
+        }
+      ]
+    },
+    "status": {
+      "filterType": "text",
+      "type": "equals",
+      "filter": "active"
+    },
+    "quantity": {
+      "filterType": "number",
+      "type": "greaterThan",
+      "filter": 10
+    }
+  },
+  "sortModel": []
+}

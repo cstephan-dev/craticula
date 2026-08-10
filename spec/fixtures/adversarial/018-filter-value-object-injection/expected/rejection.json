@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "The 'name' text filter's value is a nested object ({\"$ne\": null}) instead of the expected scalar string, attempting to smuggle an operator through the value slot."
+}

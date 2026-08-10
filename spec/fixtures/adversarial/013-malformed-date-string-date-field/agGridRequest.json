@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "createdDate": {
+      "filterType": "date",
+      "type": "equals",
+      "dateFrom": "2026-13-45"
+    }
+  },
+  "sortModel": []
+}

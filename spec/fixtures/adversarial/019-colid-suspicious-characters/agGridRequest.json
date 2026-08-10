@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "amount'); DROP TABLE users; --": {
+      "filterType": "number",
+      "type": "equals",
+      "filter": 5
+    }
+  },
+  "sortModel": []
+}

@@ -1,0 +1,1 @@
+Proves AR-6's `eq` operator on a local `date` field (AR-7's date-vs-datetime distinction, SEM-4) — an exact calendar-date match, no time-of-day or zone component involved. Also exercises AG-1's legacy `condition1`/`condition2`/`operator` combined form (two `eq` conditions ORed) — the third of the fixtures pinning legacy-form parsing alongside 001/004.

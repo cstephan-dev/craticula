@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/search-artifact.schema.json",
+  "title": "OpenSearch/Elasticsearch Query DSL artifact (fixture expected/ shape)",
+  "description": "One shared artifact per fixture for both OpenSearch and Elasticsearch, per OQ-7's resolution (one compiler, one shared 7.10-era DSL subset). Deliberately lightweight: catches gross shape mistakes only, no Search compiler exists yet to check this semantically.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query": { "type": "object", "description": "The bool/term/wildcard/range/... query tree." },
+    "sort": { "type": "array" },
+    "size": { "type": "integer", "minimum": 0 },
+    "from": { "type": "integer", "minimum": 0 },
+    "search_after": { "type": "array" },
+    "aggs": { "type": "object" },
+    "track_total_hits": {}
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "range": {
+            "totalAmount": {
+              "gte": 100
+            }
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 200,
+  "size": 50
+}

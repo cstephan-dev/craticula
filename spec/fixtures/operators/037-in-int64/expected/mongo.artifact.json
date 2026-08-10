@@ -1,0 +1,40 @@
+[
+  {
+    "$match": {
+      "age": {
+        "$in": [
+          30,
+          40
+        ]
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

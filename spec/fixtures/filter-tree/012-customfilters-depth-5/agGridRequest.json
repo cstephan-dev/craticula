@@ -1,0 +1,36 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [],
+  "customFilters": {
+    "type": "not",
+    "node": {
+      "type": "and",
+      "nodes": [
+        {
+          "type": "or",
+          "nodes": [
+            {
+              "type": "not",
+              "node": {
+                "type": "comparison",
+                "field": "status",
+                "op": "eq",
+                "value": {
+                  "type": "string",
+                  "value": "archived"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

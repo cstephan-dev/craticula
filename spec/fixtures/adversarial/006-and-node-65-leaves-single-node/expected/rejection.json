@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "resourceLimits",
+  "reason": "max-leaves-exceeded",
+  "note": "A single 'and' node carries 65 leaf comparisons, one beyond the SEC-3 default max of 64."
+}

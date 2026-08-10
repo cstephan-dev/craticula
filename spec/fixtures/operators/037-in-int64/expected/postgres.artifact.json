@@ -1,0 +1,12 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM items WHERE age = ANY($1) ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    [
+      30,
+      40
+    ],
+    100,
+    0
+  ]
+}

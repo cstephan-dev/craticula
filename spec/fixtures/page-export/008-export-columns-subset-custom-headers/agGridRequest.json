@@ -1,0 +1,27 @@
+{
+  "startRow": null,
+  "endRow": null,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [],
+  "exportFormat": "csv",
+  "exportScope": "all",
+  "exportColumns": [
+    {
+      "colId": "customerName",
+      "header": "Customer"
+    },
+    {
+      "colId": "totalAmount",
+      "header": "Total"
+    },
+    {
+      "colId": "orderDate",
+      "header": "Order Date"
+    }
+  ]
+}

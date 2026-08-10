@@ -1,0 +1,50 @@
+[
+  {
+    "$addFields": {
+      "__totalAmountNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$totalAmount",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      },
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__totalAmountNullBucket": -1,
+      "totalAmount": -1,
+      "__idNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": [
+      "__totalAmountNullBucket",
+      "__idNullBucket"
+    ]
+  },
+  {
+    "$skip": 500
+  },
+  {
+    "$limit": 100
+  }
+]

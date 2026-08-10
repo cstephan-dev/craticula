@@ -1,0 +1,26 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "region": {
+      "filterType": "text",
+      "operator": "OR",
+      "condition1": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "west"
+      },
+      "condition2": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "east"
+      }
+    }
+  },
+  "sortModel": []
+}

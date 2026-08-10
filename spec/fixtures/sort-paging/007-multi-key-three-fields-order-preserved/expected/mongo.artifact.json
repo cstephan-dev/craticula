@@ -1,0 +1,28 @@
+{
+  "pipeline": [
+    {
+      "$addFields": {
+        "__departmentNullBucket": { "$cond": [{ "$eq": ["$department", null] }, 1, 0] },
+        "__ageNullBucket": { "$cond": [{ "$eq": ["$age", null] }, 1, 0] },
+        "__hireDateNullBucket": { "$cond": [{ "$eq": ["$hireDate", null] }, 1, 0] },
+        "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
+      }
+    },
+    {
+      "$sort": {
+        "__departmentNullBucket": 1,
+        "department": 1,
+        "__ageNullBucket": -1,
+        "age": -1,
+        "__hireDateNullBucket": 1,
+        "hireDate": 1,
+        "__idNullBucket": 1,
+        "id": 1
+      }
+    },
+    { "$unset": ["__departmentNullBucket", "__ageNullBucket", "__hireDateNullBucket", "__idNullBucket"] },
+    { "$skip": 0 },
+    { "$limit": 100 }
+  ],
+  "collation": { "locale": "en", "strength": 2 }
+}

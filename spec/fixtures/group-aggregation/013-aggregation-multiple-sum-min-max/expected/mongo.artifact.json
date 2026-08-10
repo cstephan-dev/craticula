@@ -1,0 +1,47 @@
+[
+  {
+    "$group": {
+      "_id": "$region",
+      "amount_sum": {
+        "$sum": "$amount"
+      },
+      "amount_min": {
+        "$min": "$amount"
+      },
+      "amount_max": {
+        "$max": "$amount"
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "__groupNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__groupNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": "__groupNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

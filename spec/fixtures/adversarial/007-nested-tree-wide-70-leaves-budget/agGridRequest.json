@@ -1,0 +1,656 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [],
+  "customFilters": {
+    "type": "or",
+    "nodes": [
+      {
+        "type": "and",
+        "nodes": [
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 0
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 2
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 3
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 4
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 5
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 6
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 7
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 8
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 9
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 10
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 11
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 12
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 13
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 14
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 15
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 16
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 17
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 18
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 19
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 20
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 21
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 22
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 23
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 24
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 25
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 26
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 27
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 28
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 29
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 30
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 31
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 32
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 33
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 34
+            }
+          }
+        ]
+      },
+      {
+        "type": "and",
+        "nodes": [
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1000
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1001
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1002
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1003
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1004
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1005
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1006
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1007
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1008
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1009
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1010
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1011
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1012
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1013
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1014
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1015
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1016
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1017
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1018
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1019
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1020
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1021
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1022
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1023
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1024
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1025
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1026
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1027
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1028
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1029
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1030
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1031
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1032
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1033
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "quantity",
+            "op": "eq",
+            "value": {
+              "type": "int64",
+              "value": 1034
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

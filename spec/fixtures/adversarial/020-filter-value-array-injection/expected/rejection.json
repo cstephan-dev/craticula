@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "The 'name' text filter's value is an array (['a','b','c']) instead of the single scalar string a binary 'equals' condition requires."
+}

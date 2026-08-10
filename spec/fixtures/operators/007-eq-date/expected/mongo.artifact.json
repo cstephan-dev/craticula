@@ -1,0 +1,42 @@
+[
+  {
+    "$match": {
+      "$or": [
+        {
+          "birthDate": "1990-05-12"
+        },
+        {
+          "birthDate": "1991-07-04"
+        }
+      ]
+    }
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

@@ -1,0 +1,74 @@
+{
+  "pipeline": [
+    {
+      "$match": {
+        "region": "EMEA",
+        "segment": "Enterprise"
+      }
+    },
+    {
+      "$addFields": {
+        "__productNullBucket": {
+          "$cond": [
+            {
+              "$eq": [
+                "$product",
+                null
+              ]
+            },
+            1,
+            0
+          ]
+        },
+        "__idNullBucket": {
+          "$cond": [
+            {
+              "$eq": [
+                "$id",
+                null
+              ]
+            },
+            1,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "$sort": {
+        "__productNullBucket": 1,
+        "product": 1,
+        "__idNullBucket": 1,
+        "id": 1
+      }
+    },
+    {
+      "$unset": [
+        "__productNullBucket",
+        "__idNullBucket"
+      ]
+    },
+    {
+      "$skip": 0
+    },
+    {
+      "$limit": 100
+    },
+    {
+      "$project": {
+        "id": 1,
+        "region": 1,
+        "segment": 1,
+        "product": 1,
+        "fiscalYear": 1,
+        "amount": 1,
+        "quantity": 1,
+        "_id": 0
+      }
+    }
+  ],
+  "collation": {
+    "locale": "en",
+    "strength": 2
+  }
+}

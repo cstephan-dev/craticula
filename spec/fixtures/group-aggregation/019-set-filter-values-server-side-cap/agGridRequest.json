@@ -1,0 +1,7 @@
+{
+  "setValuesRequest": {
+    "colId": "region",
+    "filterModel": {},
+    "limit": 50000
+  }
+}

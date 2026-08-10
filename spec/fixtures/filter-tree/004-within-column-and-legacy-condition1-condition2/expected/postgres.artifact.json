@@ -1,0 +1,10 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM orders WHERE (amount > $1 AND amount < $2) ORDER BY id ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "params": [
+    50,
+    500,
+    100,
+    0
+  ]
+}

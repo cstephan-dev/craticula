@@ -1,0 +1,5 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM employees WHERE age <> $1 OR age IS NULL ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [30, 100, 0]
+}

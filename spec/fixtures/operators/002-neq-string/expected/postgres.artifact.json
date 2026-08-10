@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM items WHERE (status COLLATE craticula_ci <> $1 OR status IS NULL) ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    "inactive",
+    100,
+    0
+  ]
+}

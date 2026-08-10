@@ -1,0 +1,14 @@
+{
+  "size": 0,
+  "aggs": {
+    "region": {
+      "terms": {
+        "field": "region.keyword",
+        "size": 1000,
+        "order": {
+          "_key": "asc"
+        }
+      }
+    }
+  }
+}

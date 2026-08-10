@@ -1,0 +1,20 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [],
+  "customFilters": {
+    "type": "comparison",
+    "field": "department",
+    "op": "notIn",
+    "values": [
+      { "type": "string", "value": "SALES" },
+      { "type": "string", "value": "SUPPORT" }
+    ]
+  }
+}

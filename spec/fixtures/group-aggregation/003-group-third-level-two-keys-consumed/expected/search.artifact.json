@@ -1,0 +1,49 @@
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "term": {
+            "region.keyword": {
+              "value": "EMEA",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "term": {
+            "segment.keyword": {
+              "value": "Enterprise",
+              "case_insensitive": true
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "product": {
+      "composite": {
+        "size": 100,
+        "sources": [
+          {
+            "product": {
+              "terms": {
+                "field": "product.keyword",
+                "missing_bucket": true
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "amount_sum": {
+          "sum": {
+            "field": "amount"
+          }
+        }
+      }
+    }
+  }
+}

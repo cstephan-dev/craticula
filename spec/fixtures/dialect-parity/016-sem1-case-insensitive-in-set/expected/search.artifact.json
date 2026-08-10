@@ -1,0 +1,14 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        { "term": { "lastName.keyword": { "value": "smith", "case_insensitive": true } } },
+        { "term": { "lastName.keyword": { "value": "jones", "case_insensitive": true } } }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [ { "id": { "order": "asc", "missing": "_last" } } ],
+  "from": 0,
+  "size": 100
+}

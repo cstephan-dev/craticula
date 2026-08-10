@@ -1,0 +1,7 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT DISTINCT \"region\" FROM \"sales_fact\" ORDER BY \"region\" ASC NULLS LAST LIMIT $1",
+  "params": [
+    1000
+  ]
+}

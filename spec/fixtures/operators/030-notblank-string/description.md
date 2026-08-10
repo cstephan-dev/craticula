@@ -1,0 +1,1 @@
+Proves AR-6's `notBlank` operator on a `string` field: SEM-2 requires `notBlank` to be `blank`'s exact Boolean negation, never independently re-derived (e.g. never hand-written as `IS NOT NULL AND <> ''` separately) — this fixture's artifacts negate the compiled `blank` condition directly.

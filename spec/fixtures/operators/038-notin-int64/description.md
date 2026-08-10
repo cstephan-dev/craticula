@@ -1,0 +1,1 @@
+Proves AR-6's `notIn` operator on an `int64` field, with SEM-2's null-inclusion rule applying. As with case 036, AG Grid's Set Filter has no native exclude-mode wire shape, so this fixture uses the `customFilters` (OQ-11) extension point — see the category README.

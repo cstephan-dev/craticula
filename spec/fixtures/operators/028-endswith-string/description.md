@@ -1,0 +1,1 @@
+Proves AR-6's `endsWith` operator on a `string` field, case-insensitive by default (SEM-1), anchored substring match (`wildcard` with a leading `*` against the `.keyword` sub-field on Search, `LIKE '%val'`-equivalent on SQL).

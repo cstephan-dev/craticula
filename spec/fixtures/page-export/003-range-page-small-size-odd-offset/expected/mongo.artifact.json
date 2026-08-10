@@ -1,0 +1,33 @@
+[
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$skip": 42
+  },
+  {
+    "$limit": 3
+  }
+]

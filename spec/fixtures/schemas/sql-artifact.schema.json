@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/sql-artifact.schema.json",
+  "title": "SQL compilation artifact (fixture expected/ shape)",
+  "description": "Deliberately lightweight: this catches gross authoring mistakes in a hand-written expected artifact (no SQL compiler exists yet to check these semantically, per #1630's context.md). It does not validate the SQL text itself, only the artifact's outer shape (AR-4: parameterized SQL text + ordered/named parameter list).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dialect", "sql", "params"],
+  "properties": {
+    "dialect": {
+      "enum": ["postgres", "mssql", "mysql", "sqlite"],
+      "description": "Which of the four v1 SQL dialects this artifact targets (§5) — Oracle is community-tested/OQ-6-open and excluded from this fixture suite for now."
+    },
+    "sql": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The parameterized SQL text. Must never contain a literal user value inlined as text (SEC-2) — only identifiers/keywords and parameter placeholders."
+    },
+    "params": {
+      "type": "array",
+      "description": "Ordered parameter values, one per placeholder in 'sql', in the placeholder's positional/named order. Each entry is the literal driver-bound value (a JSON string/number/boolean/null), not a tagged typedValue — by this stage the value has left the IR and become a query parameter.",
+      "items": {}
+    }
+  }
+}

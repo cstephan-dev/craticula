@@ -1,0 +1,35 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "term": {
+            "region.keyword": {
+              "value": "west",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "term": {
+            "region.keyword": {
+              "value": "east",
+              "case_insensitive": true
+            }
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

@@ -1,0 +1,11 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "sortable": true,
+      "physical": { "sql": { "column": "id" } }
+    }
+  }
+}

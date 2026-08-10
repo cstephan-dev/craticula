@@ -1,0 +1,37 @@
+{
+  "size": 0,
+  "aggs": {
+    "region": {
+      "composite": {
+        "size": 100,
+        "sources": [
+          {
+            "region": {
+              "terms": {
+                "field": "region.keyword",
+                "missing_bucket": true
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "amount_sum": {
+          "sum": {
+            "field": "amount"
+          }
+        },
+        "amount_min": {
+          "min": {
+            "field": "amount"
+          }
+        },
+        "amount_max": {
+          "max": {
+            "field": "amount"
+          }
+        }
+      }
+    }
+  }
+}

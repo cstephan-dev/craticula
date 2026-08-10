@@ -1,0 +1,22 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "physical": {
+        "sql": { "column": "id" },
+        "mongo": { "path": "id" },
+        "search": { "field": "id" }
+      }
+    },
+    "department": {
+      "type": "string",
+      "physical": {
+        "sql": { "column": "department" },
+        "mongo": { "path": "department" },
+        "search": { "field": "department", "keywordSubField": "department.keyword" }
+      }
+    }
+  }
+}

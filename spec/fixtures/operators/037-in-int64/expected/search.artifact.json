@@ -1,0 +1,20 @@
+{
+  "query": {
+    "terms": {
+      "age": [
+        30,
+        40
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

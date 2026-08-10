@@ -1,0 +1,19 @@
+[
+  {
+    "$addFields": {
+      "__salaryNullBucket": { "$cond": [{ "$eq": ["$salary", null] }, 1, 0] },
+      "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
+    }
+  },
+  {
+    "$sort": {
+      "__salaryNullBucket": -1,
+      "salary": -1,
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  { "$unset": ["__salaryNullBucket", "__idNullBucket"] },
+  { "$skip": 0 },
+  { "$limit": 100 }
+]

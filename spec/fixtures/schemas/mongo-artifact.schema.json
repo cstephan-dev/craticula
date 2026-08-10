@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/mongo-artifact.schema.json",
+  "title": "MongoDB aggregation pipeline artifact (fixture expected/ shape)",
+  "description": "Deliberately lightweight: a MongoDB aggregation pipeline is an ordered array of single-key stage objects ($match, $sort, $skip, $limit, $group, $addFields, ...). This schema only enforces the array-of-single-key-stage-object shape, not any one stage's internal correctness — no Mongo compiler exists yet to check that semantically. Extended by #1630's dialect-parity category to optionally carry MongoDB's query-level 'collation' option alongside the pipeline (SEM-1's CI mechanism for $eq/$in/sort/range): collation is a find()/aggregate() command-level option, not a pipeline stage, so it cannot be expressed as an element of the bare array below. Most fixtures still use the bare-array form unchanged; only fixtures whose Mongo mechanism specifically needs a non-default collation use the wrapper-object form.",
+  "oneOf": [
+    {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "description": "A single pipeline stage: exactly one operator key (e.g. '$match'), per the Mongo aggregation pipeline convention."
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pipeline"],
+      "properties": {
+        "pipeline": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 1,
+            "description": "A single pipeline stage: exactly one operator key (e.g. '$match'), per the Mongo aggregation pipeline convention."
+          }
+        },
+        "collation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["locale", "strength"],
+          "properties": {
+            "locale": { "type": "string", "minLength": 1 },
+            "strength": { "type": "integer", "minimum": 1, "maximum": 5, "description": "SEM-1 pins strength 2 for case-insensitive comparison." }
+          },
+          "description": "The query-level collation option (SEM-1): applies to $eq/$in/$gt/$gte/$lt/$lte/$sort in this pipeline, never to a $regex stage (contains has no collation-compatible operator, per SEM-1/SEM-7)."
+        }
+      }
+    }
+  ]
+}

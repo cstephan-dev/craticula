@@ -1,0 +1,29 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "quantity",
+      "displayName": "Quantity",
+      "field": "quantity",
+      "aggFunc": "count"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [
+    {
+      "type": "string",
+      "value": "EMEA"
+    }
+  ],
+  "filterModel": null,
+  "sortModel": []
+}

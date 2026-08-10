@@ -1,0 +1,19 @@
+{
+  "query": {
+    "range": {
+      "price": {
+        "gte": 9.99
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

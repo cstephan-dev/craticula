@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "resourceLimits",
+  "reason": "max-leaves-exceeded",
+  "note": "Two 'and' branches of 35 leaves each (35 <= 64 per node) sum to 70 leaves tree-wide, past the SEC-3 default of 64 — proving the budget is tree-wide, not per-node."
+}

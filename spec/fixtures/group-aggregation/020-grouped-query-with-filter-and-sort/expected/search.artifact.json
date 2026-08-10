@@ -1,0 +1,56 @@
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "range": {
+            "amount": {
+              "gt": 1000
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "region": {
+      "composite": {
+        "size": 100,
+        "sources": [
+          {
+            "region": {
+              "terms": {
+                "field": "region.keyword",
+                "missing_bucket": true
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "amount_sum": {
+          "sum": {
+            "field": "amount"
+          }
+        },
+        "sortByAmount": {
+          "bucket_sort": {
+            "sort": [
+              {
+                "amount_sum": {
+                  "order": "desc"
+                }
+              },
+              {
+                "_key": {
+                  "order": "asc"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

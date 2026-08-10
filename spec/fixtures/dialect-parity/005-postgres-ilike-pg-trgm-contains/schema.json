@@ -1,0 +1,14 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "physical": { "sql": { "column": "id" } }
+    },
+    "lastName": {
+      "type": "string",
+      "physical": { "sql": { "column": "lastName" } }
+    }
+  }
+}

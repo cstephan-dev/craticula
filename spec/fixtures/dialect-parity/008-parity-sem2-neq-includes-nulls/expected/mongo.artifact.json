@@ -1,0 +1,12 @@
+[
+  { "$match": { "$or": [ { "age": { "$ne": 30 } }, { "age": null } ] } },
+  {
+    "$addFields": {
+      "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
+    }
+  },
+  { "$sort": { "__idNullBucket": 1, "id": 1 } },
+  { "$unset": "__idNullBucket" },
+  { "$skip": 0 },
+  { "$limit": 100 }
+]

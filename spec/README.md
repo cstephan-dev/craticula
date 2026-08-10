@@ -22,19 +22,22 @@ spec doesn't have, the spec changes first, then the port follows.
   `int64` numeric bounds) that exist purely to keep the *shape* well-formed, not to police policy.
 - **`semantics.md`** — the normative semantics document (§7 of the TRD, rules SEM-1..SEM-7: case
   sensitivity, null handling, null ordering, dates & zones, type coercion, deterministic paging,
-  and `contains` on ES/OpenSearch). Each rule states the normative behavior, the naive alternative
+  and `contains` on ES/OpenSearch; plus an addendum pinning aggregation semantics the TRD's own
+  SEM-1..7 enumeration doesn't cover). Each rule states the normative behavior, the naive alternative
   it rules out, a worked example per backend family (SQL, MongoDB, OpenSearch/Elasticsearch)
   reaching the same logical outcome through different backend-native mechanisms, an explicit
   "must NOT" list, and cross-links into `ir.schema.json`'s `$defs`. Every compiler references this
   document instead of re-deriving these behaviors on its own. The examples are illustrative, not
   the enforceable contract — that's what `fixtures/` (below) is for.
-
-## What's coming (separate, later work items — not covered here)
-
+- **`grid-schema.schema.json`** — the `GridSchema` config shape (SC-1..SC-5: field allowlist mode,
+  per-field type/physical-mapping/text-options, `stableKey`, the SC-5 static filter hook). Authored
+  ahead of the actual `GridSchema` model/validator (a later Feature #1617 story), which conforms to
+  this shape rather than the reverse — the same spec-first ordering as `ir.schema.json` vs. its
+  eventual compiler implementations.
 - **`fixtures/`** — the shared, language-agnostic conformance fixture suite (§11, T-1): grid
-  request + schema config + expected per-backend artifact (and, for a subset, expected rows
-  against seeded data). This is what makes identical semantics across backends *and* across the
-  four language implementations (G3, G4) enforceable rather than aspirational.
-
-`fixtures/` is intentionally out of scope for this change; see the TRD for the full requirements it
-must satisfy.
+  request + schema config + expected per-backend artifact, per case. This is what makes identical
+  semantics across backends *and* across the four language implementations (G3, G4) enforceable
+  rather than aspirational. See `fixtures/README.md` for the format, backend-coverage policy, and
+  category index. Execution-equality fixtures (`dataset.json`/`expectedRows.json`, T-1b) are
+  deferred until integration containers exist (a later Feature #1624 story) — fabricating expected
+  rows without a real database to derive them from would invent data, not capture it.

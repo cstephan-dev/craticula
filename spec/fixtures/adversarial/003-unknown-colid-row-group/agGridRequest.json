@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "regionHidden",
+      "displayName": "Region Hidden",
+      "field": "regionHidden"
+    }
+  ],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": []
+}

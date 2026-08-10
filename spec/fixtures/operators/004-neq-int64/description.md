@@ -1,0 +1,1 @@
+Proves AR-6's `neq` operator on an `int64` field, each individual condition honoring SEM-2's null-inclusion rule (`<> :v OR IS NULL`, so a NULL `age` still matches both conditions and therefore the `AND`). Also exercises AG-1's legacy `condition1`/`condition2`/`operator` combined form (two `neq` conditions ANDed) — one of the fixtures pinning legacy-form parsing.

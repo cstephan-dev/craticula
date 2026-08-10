@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [],
+  "customFilters": {
+    "type": "comparison",
+    "field": "lastName",
+    "op": "gt",
+    "value": { "type": "string", "value": "Smith" }
+  }
+}

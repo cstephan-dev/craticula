@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "unknown-operator",
+  "note": "'regex' is not a member of AR-6's closed 17-operator set; SEC-5 excludes regex-based operators from v1 entirely."
+}

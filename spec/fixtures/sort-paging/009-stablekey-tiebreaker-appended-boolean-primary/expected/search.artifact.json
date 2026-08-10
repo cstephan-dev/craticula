@@ -1,0 +1,9 @@
+{
+  "query": { "match_all": {} },
+  "sort": [
+    { "isActive": { "order": "desc", "missing": "_first" } },
+    { "id": { "order": "asc", "missing": "_last" } }
+  ],
+  "from": 0,
+  "size": 100
+}

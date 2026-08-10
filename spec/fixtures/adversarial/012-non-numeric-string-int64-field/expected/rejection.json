@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "typeCoercion",
+  "reason": "uncoercible-value",
+  "note": "'not-a-number' cannot be coerced into the int64 type declared for 'quantity'."
+}

@@ -1,0 +1,5 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT * FROM employees ORDER BY salary DESC NULLS FIRST, id ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": [100, 0]
+}

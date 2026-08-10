@@ -1,0 +1,13 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "employeeCode": { "filterType": "text", "type": "equals", "filter": "AB-100" }
+  },
+  "sortModel": []
+}

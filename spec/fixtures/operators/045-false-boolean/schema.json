@@ -1,0 +1,38 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": false,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "isActive": {
+      "type": "boolean",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "is_active"
+        },
+        "mongo": {
+          "path": "isActive"
+        },
+        "search": {
+          "field": "isActive"
+        }
+      }
+    }
+  }
+}

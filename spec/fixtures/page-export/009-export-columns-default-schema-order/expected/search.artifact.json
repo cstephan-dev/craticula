@@ -1,0 +1,13 @@
+{
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ]
+}

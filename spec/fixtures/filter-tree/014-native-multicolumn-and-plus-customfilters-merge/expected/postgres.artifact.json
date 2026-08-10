@@ -1,0 +1,12 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM orders WHERE ((status COLLATE craticula_ci = $1 AND quantity > $2 AND region COLLATE craticula_ci = $3) AND (NOT (customer_name ILIKE '%' || $4 || '%' ESCAPE '\\') OR customer_name IS NULL)) ORDER BY id ASC NULLS LAST LIMIT $5 OFFSET $6",
+  "params": [
+    "active",
+    10,
+    "west",
+    "test",
+    100,
+    0
+  ]
+}

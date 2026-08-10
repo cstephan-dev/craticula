@@ -1,0 +1,26 @@
+{
+  "query": {
+    "bool": {
+      "must_not": [
+        {
+          "term": {
+            "status.keyword": {
+              "value": "archived",
+              "case_insensitive": true
+            }
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

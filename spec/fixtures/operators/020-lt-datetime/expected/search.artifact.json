@@ -1,0 +1,20 @@
+{
+  "query": {
+    "range": {
+      "createdAt": {
+        "lt": "2026-02-01T00:00:00Z",
+        "format": "strict_date_optional_time"
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

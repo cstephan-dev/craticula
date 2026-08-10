@@ -1,0 +1,17 @@
+[
+  {
+    "$addFields": {
+      "__createdAtNullBucket": { "$cond": [{ "$eq": ["$createdAt", null] }, 1, 0] },
+      "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
+    }
+  },
+  {
+    "$sort": {
+      "__createdAtNullBucket": -1,
+      "createdAt": -1,
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  { "$unset": ["__createdAtNullBucket", "__idNullBucket"] }
+]

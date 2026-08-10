@@ -1,0 +1,64 @@
+{
+  "query": {
+    "bool": {
+      "must_not": [
+        {
+          "bool": {
+            "should": [
+              {
+                "bool": {
+                  "must": [
+                    {
+                      "bool": {
+                        "must_not": [
+                          {
+                            "bool": {
+                              "should": [
+                                {
+                                  "bool": {
+                                    "must": [
+                                      {
+                                        "bool": {
+                                          "must_not": [
+                                            {
+                                              "term": {
+                                                "region.keyword": {
+                                                  "value": "blocked",
+                                                  "case_insensitive": true
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "minimum_should_match": 1
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "minimum_should_match": 1
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

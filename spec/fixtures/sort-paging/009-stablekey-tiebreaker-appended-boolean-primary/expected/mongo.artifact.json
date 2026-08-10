@@ -1,0 +1,19 @@
+[
+  {
+    "$addFields": {
+      "__isActiveNullBucket": { "$cond": [{ "$eq": ["$isActive", null] }, 1, 0] },
+      "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
+    }
+  },
+  {
+    "$sort": {
+      "__isActiveNullBucket": -1,
+      "isActive": -1,
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  { "$unset": ["__isActiveNullBucket", "__idNullBucket"] },
+  { "$skip": 0 },
+  { "$limit": 100 }
+]

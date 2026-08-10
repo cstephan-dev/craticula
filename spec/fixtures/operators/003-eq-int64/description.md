@@ -1,0 +1,1 @@
+Proves AR-6's `eq` operator on an `int64` field (AR-7's typed-value distinction from string/boolean/date) — a plain, non-case-sensitive equality comparison since case sensitivity (SEM-1) only applies to `stringValue`.
