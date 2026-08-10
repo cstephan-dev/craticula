@@ -45,3 +45,6 @@ coverage/
 
 # --- Claude tooling (local-only) ---
 .claude/
+
+# --- Reference clones (local-only) ---
+github/
