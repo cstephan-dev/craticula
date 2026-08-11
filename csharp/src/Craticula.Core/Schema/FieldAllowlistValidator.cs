@@ -1,3 +1,5 @@
+using Craticula.Core.Ir;
+
 namespace Craticula.Core.Schema;
 
 /// <summary>
@@ -12,7 +14,9 @@ public static class FieldAllowlistValidator
     /// Checks <paramref name="colIds"/> against <paramref name="schema"/>'s field allowlist.
     /// In <see cref="GridSchemaMode.Strict"/>, throws <see cref="UnknownFieldException"/> naming
     /// every unlisted colId found (all of them, not just the first). In
-    /// <see cref="GridSchemaMode.Lenient"/>, returns the allowed/stripped split without throwing.
+    /// <see cref="GridSchemaMode.Lenient"/>, returns the allowed/stripped split without throwing —
+    /// callers walking a <see cref="Ir.FilterNode"/> tree must then apply that split via
+    /// <see cref="Strip"/>; this method alone never mutates a tree.
     /// </summary>
     public static AllowlistResult Validate(GridSchema schema, IEnumerable<string> colIds)
     {
@@ -42,5 +46,69 @@ public static class FieldAllowlistValidator
         }
 
         return new AllowlistResult(allowed, stripped);
+    }
+
+    /// <summary>
+    /// SC-1's Lenient-mode companion to <see cref="Validate"/>: removes every
+    /// <see cref="Ir.ComparisonNode"/> referencing a colId in <paramref name="strippedFields"/> from
+    /// <paramref name="node"/>. A <see cref="Ir.CompositeFilterNode"/> that loses all its children
+    /// this way disappears too (returns <see langword="null"/>, not an empty node — an
+    /// <c>ir.schema.json</c> composite requires <c>minItems:1</c>); one that loses down to a single
+    /// child is unwrapped rather than left as a spurious 1-child And/Or (matching
+    /// <see cref="FilterTreeMerge"/>'s own "no spurious single-child wrapper" convention). A
+    /// <see cref="Ir.NotNode"/> whose wrapped condition disappears entirely also disappears — "the
+    /// unknown condition silently vanishes" (SC-1) must not turn into "the unknown condition's
+    /// negation now matches everything", which is what leaving a dangling <c>Not(nothing)</c> or
+    /// substituting an always-false sentinel would do. Only meaningful in
+    /// <see cref="GridSchemaMode.Lenient"/> — <see cref="Validate"/> already throws before this could
+    /// run in <see cref="GridSchemaMode.Strict"/> whenever there is anything to strip.
+    /// </summary>
+    public static FilterNode? Strip(FilterNode? node, IReadOnlyCollection<string> strippedFields)
+    {
+        if (node is null || strippedFields.Count == 0)
+        {
+            return node;
+        }
+
+        var strippedSet = strippedFields as IReadOnlySet<string> ?? new HashSet<string>(strippedFields);
+        return StripNode(node, strippedSet);
+    }
+
+    private static FilterNode? StripNode(FilterNode node, IReadOnlySet<string> strippedFields)
+    {
+        switch (node)
+        {
+            case CompositeFilterNode composite:
+            {
+                var kept = new List<FilterNode>(composite.Nodes.Count);
+                foreach (var child in composite.Nodes)
+                {
+                    var strippedChild = StripNode(child, strippedFields);
+                    if (strippedChild is not null)
+                    {
+                        kept.Add(strippedChild);
+                    }
+                }
+
+                return kept.Count switch
+                {
+                    0 => null,
+                    1 => kept[0],
+                    _ => composite with { Nodes = kept }
+                };
+            }
+
+            case NotNode not:
+            {
+                var inner = StripNode(not.Node, strippedFields);
+                return inner is null ? null : not with { Node = inner };
+            }
+
+            case ComparisonNode comparison:
+                return strippedFields.Contains(comparison.Field) ? null : comparison;
+
+            default:
+                throw new NotSupportedException($"Unknown FilterNode type '{node.GetType()}'.");
+        }
     }
 }

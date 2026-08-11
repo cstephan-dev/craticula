@@ -235,11 +235,17 @@ public static class FilterNodeValidator
         }
     }
 
-    private static string Truncate(string value) => value.Length <= 32 ? value : value[..32] + "...";
+    /// <summary>Internal (not private) so <see cref="Craticula.Core.Schema.TypeCoercionValidator"/>
+    /// reuses the same truncation instead of duplicating it — same-assembly precedent already set by
+    /// this file's regex patterns below.</summary>
+    internal static string Truncate(string value) => value.Length <= 32 ? value : value[..32] + "...";
 
     // Patterns copied verbatim from spec/ir.schema.json — see that file for the rationale behind each.
-    private static readonly System.Text.RegularExpressions.Regex DecimalPattern = new(@"^-?[0-9]+(\.[0-9]+)?$");
-    private static readonly System.Text.RegularExpressions.Regex DatePattern = new(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
-    private static readonly System.Text.RegularExpressions.Regex DatetimePattern = new(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$");
+    // internal (not private): Craticula.Core.Schema.TypeCoercionValidator (SEM-5) reuses these same
+    // patterns as the shape check half of coercing a StringValue into decimal/date/datetime, rather
+    // than maintaining a second copy that could drift from ir.schema.json.
+    internal static readonly System.Text.RegularExpressions.Regex DecimalPattern = new(@"^-?[0-9]+(\.[0-9]+)?$");
+    internal static readonly System.Text.RegularExpressions.Regex DatePattern = new(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+    internal static readonly System.Text.RegularExpressions.Regex DatetimePattern = new(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$");
     private static readonly System.Text.RegularExpressions.Regex ZonePattern = new(@"^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$");
 }
