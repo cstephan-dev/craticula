@@ -35,13 +35,7 @@ public static class ResourceLimitsValidator
     public static void Validate(FilterNode? filter, PageSpec page, ResourceLimits limits)
     {
         FilterNodeValidator.Validate(filter);
-
-        if (page is RangePage rangePage && (rangePage.StartRow < 0 || rangePage.EndRow < rangePage.StartRow))
-        {
-            throw new PageSpecValidationException(
-                $"pageSpec.range is malformed: startRow={rangePage.StartRow}, endRow={rangePage.EndRow} " +
-                "(ir.schema.json requires startRow >= 0 and endRow >= startRow).");
-        }
+        PageSpecValidator.Validate(page);
 
         var violations = new List<ResourceLimitViolation>();
 

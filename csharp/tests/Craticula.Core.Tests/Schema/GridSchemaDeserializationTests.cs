@@ -118,7 +118,13 @@ public class GridSchemaDeserializationTests
 
         var quantity = schema.Fields["quantity"];
         Assert.Equal(
-            [AggregationFunc.Sum, AggregationFunc.Avg, AggregationFunc.Min, AggregationFunc.Max, AggregationFunc.Count],
+            [
+                AggregationFunc.Sum,
+                AggregationFunc.Avg,
+                AggregationFunc.Min,
+                AggregationFunc.Max,
+                AggregationFunc.Count
+            ],
             quantity.Aggregatable);
         Assert.False(quantity.Exportable);
     }
