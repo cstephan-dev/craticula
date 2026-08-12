@@ -11,7 +11,10 @@ own framing of the same principle for the rules these fixtures enforce.
 <category>/<NNN-slug>/
   description.md          — what this case proves, which requirement id(s) it backs
   agGridRequest.json       — the raw AG Grid SSRM wire request (IServerSideGetRowsRequest shape)
-  schema.json               — the GridSchema config this request compiles against (see ../grid-schema.schema.json)
+  schema.json               — the GridSchema config this request compiles against (see ../grid-schema.schema.json):
+                              the field allowlist + per-field physical mappings, the SEM-6 stableKey,
+                              and `source` — the table/collection/index the query reads from, which
+                              lives here because no AG Grid request carries one (added in #1638)
   expected/
     postgres.artifact.json   — present only for the backends this case targets (see policy below)
     mssql.artifact.json
@@ -55,6 +58,40 @@ Not populated in this pass. They require a real seeded database to derive expect
 fabricating them without one would be inventing data, not capturing ground truth, which is worse
 than leaving the field absent. They get added to these same fixture directories once integration
 containers exist (a later Feature #1624 story) — this is additive, not a schema change.
+
+## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
+
+Every `expected/*.artifact.json` for a SQL dialect is byte-compared under T-1a, so "correct SQL" is
+not enough — there is exactly one accepted spelling per construct, and it is normative in
+`spec/semantics.md`'s **"Addendum — canonical SQL rendering"** (SQL-0..SQL-4), not here. In short:
+identifiers are **always quoted**, including the table and every alias (`SELECT "region" AS "region"
+FROM "sales_fact"`); a composite `and`/`or` wraps itself and renders its children bare; a SEM-2
+null-inclusive negative is always wrapped; `notContains` renders `NOT ILIKE`, not `NOT (... ILIKE
+...)`; `notBlank` is literally `NOT (<blank>)`; and Postgres set membership is `= ANY($1)` /
+`<> ALL($1)` against **one array parameter**. Read that addendum before authoring or reviewing any
+SQL artifact.
+
+This was not always so. Fixtures authored in #1630 disagreed with each other on all six of those
+points (the suite was written by seven parallel agents with no compiler to check it). #1638 picked
+one form per construct and re-authored the minorities — 144 Postgres artifacts gained quoting, and 9
+had a rendering rewritten (`dialect-parity/008`, `/017`, `/018`, `/019`; `filter-tree/006`;
+`operators/001`, `/004`, `/007`; `page-export/005`) — so the previously-recorded "cross-category
+quoting contradiction" (`ag-grid-majors/README.md`) is **resolved for Postgres**.
+
+Two arms of it are deliberately still open, both scheduled, both recorded where the affected
+artifacts live rather than only here:
+
+- **The 19 `mysql`/`mssql`/`sqlite` artifacts in `dialect-parity/` are still unquoted** — the *rule*
+  is universal, but the quote character (`"` vs `[…]` vs backticks) is each engine's own and is
+  chosen when that engine's `Dialect` is written, i.e. **#1639**. See `spec/semantics.md` SQL-1's
+  "the rule is universal; the fixture suite is not yet" paragraph and `dialect-parity/README.md`.
+- **Two splits survive on the grouped artifacts** — every grouped `ORDER BY` key omits
+  `COLLATE craticula_ci` on a case-insensitive `string` column (all 20 of `group-aggregation/`, plus
+  `ag-grid-majors/004`), and `group-aggregation/003`/`004`/`005` render their drill-down conjunction
+  unwrapped. Both are **#1640**'s to settle, because both turn on BM-2 design calls (bucket identity
+  under a non-deterministic collation; whether the drill-down is a real IR `andNode`). Registered in
+  `group-aggregation/README.md`'s "Known open contradictions" section; a port whose grouped output
+  disagrees with those artifacts should read it before assuming its own bug.
 
 ## Case-insensitivity mechanism policy (SEM-1)
 

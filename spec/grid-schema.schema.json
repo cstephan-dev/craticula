@@ -11,6 +11,11 @@
       "default": "strict",
       "description": "SC-1: Strict throws on an unlisted colId; Lenient silently strips it. Strict is the default per the TRD's own [DEFAULT] marker."
     },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The physical collection every compiled query reads from: the SQL table or view named in FROM, the MongoDB collection, the Search index. Host-declared and never client-influenced — exactly like the per-field 'physical' mappings (SC-4) beside it, which is why it belongs here and not on the wire request: no AG Grid payload carries it and a compiler cannot invent it. Required — a query with no source cannot be emitted at all. Added in #1638: before it existed, every expected artifact in the fixture suite named a table ('FROM employees') that appeared in none of that fixture's inputs, recoverable only from the directory name."
+    },
     "stableKey": {
       "type": "string",
       "minLength": 1,
@@ -29,7 +34,7 @@
       }
     }
   },
-  "required": ["mode", "stableKey", "fields"],
+  "required": ["mode", "source", "stableKey", "fields"],
 
   "$defs": {
 

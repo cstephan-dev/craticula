@@ -17,6 +17,20 @@ public class AgGridRequestParserOperatorsFixtureTests
     private static ComparisonNode ParseSingleNativeComparison(string fixtureDir) =>
         Assert.IsType<ComparisonNode>(AgGridRequestParser.Parse(LoadRequest(fixtureDir)).NativeFilter);
 
+    /// <summary>Parses with the fixture's own <c>schema.json</c> supplied — needed by the handful of
+    /// cases whose IR shape depends on the field's declared type (the boolean Set Filter convention
+    /// below; date wire values elsewhere).</summary>
+    private static ComparisonNode ParseSingleNativeComparisonWithSchema(string fixtureDir)
+    {
+        var options = new AgGridParseOptions
+        {
+            Schema = Craticula.Core.Schema.GridSchema.Parse(
+                File.ReadAllText(RepoPaths.Fixture("operators", fixtureDir, "schema.json")))
+        };
+
+        return Assert.IsType<ComparisonNode>(AgGridRequestParser.Parse(LoadRequest(fixtureDir), options).NativeFilter);
+    }
+
     // ---- Single bare condition -> single ComparisonNode, value from 'filter'/'dateFrom' -----------
 
     [Theory]
@@ -155,28 +169,38 @@ public class AgGridRequestParserOperatorsFixtureTests
         Assert.Equal(["30", "40"], comparison.Values!.Select(v => Assert.IsType<StringValue>(v).Value));
     }
 
-    [Fact]
-    public void Fixture044_True_Boolean_Set_Selection_Parses_As_In_Not_Unary_True()
+    [Theory]
+    [InlineData("044-true-boolean", ComparisonOperator.True)]
+    [InlineData("045-false-boolean", ComparisonOperator.False)]
+    public void Boolean_Set_Selection_Becomes_The_Unary_Operator_When_The_Schema_Declares_The_Field_Boolean(
+        string fixtureDir, ComparisonOperator expected)
     {
-        // The parser itself never rewrites a boolean Set Filter selection into AR-6's dedicated
-        // 'true' unary operator (see the plan's Key design decision #1 and
-        // AgGridRequestParserSetConditionTests) — that would-be translation is a documented gap for
-        // a later semantic/compiler stage, same precedent as the SortItem tiebreaker gap in #1634.
-        var comparison = ParseSingleNativeComparison("044-true-boolean");
+        // spec/fixtures/operators/README.md: "the adapter compiles a boolean column's single-value
+        // Set Filter selection to the dedicated unary true/false operators (see 044/045), never to
+        // generic eq/neq". #1635 deferred this as "a later semantic stage"; #1638 established there
+        // is no later stage that could do it — a compiler sees only `in ["true"]` and cannot tell it
+        // apart from a genuine one-element set — and both fixtures' Postgres artifacts pin
+        // `"is_active" = $1` with a boolean param, not `= ANY($1)` with a one-element array.
+        var comparison = ParseSingleNativeComparisonWithSchema(fixtureDir);
 
         Assert.Equal("isActive", comparison.Field);
-        Assert.Equal(ComparisonOperator.In, comparison.Op);
-        Assert.Equal("true", Assert.IsType<StringValue>(comparison.Values![0]).Value);
+        Assert.Equal(expected, comparison.Op);
+        Assert.Null(comparison.Values);
+        Assert.Null(comparison.Value);
     }
 
-    [Fact]
-    public void Fixture045_False_Boolean_Set_Selection_Parses_As_In()
+    [Theory]
+    [InlineData("044-true-boolean", "true")]
+    [InlineData("045-false-boolean", "false")]
+    public void The_Same_Selection_Stays_An_In_When_No_Schema_Says_The_Field_Is_Boolean(string fixtureDir, string wireValue)
     {
-        var comparison = ParseSingleNativeComparison("045-false-boolean");
+        // The rewrite is schema-gated on purpose: `values: ["true"]` against a STRING column is an
+        // ordinary set membership on the literal text "true", so without a declared type the parser
+        // must not guess. Absent a schema its behavior is unchanged from #1635.
+        var comparison = ParseSingleNativeComparison(fixtureDir);
 
-        Assert.Equal("isActive", comparison.Field);
         Assert.Equal(ComparisonOperator.In, comparison.Op);
-        Assert.Equal("false", Assert.IsType<StringValue>(comparison.Values![0]).Value);
+        Assert.Equal(wireValue, Assert.IsType<StringValue>(comparison.Values![0]).Value);
     }
 
     // ---- customFilters-only fixtures (no native filterModel path exists for these) -----------------

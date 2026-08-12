@@ -45,7 +45,12 @@ public class SemanticsResolverSortPagingFixtureTests
     private sealed record PostgresOrderByKey(string Column, bool HasCollation, string Direction, string NullsPosition);
 
     private static readonly Regex OrderByClausePattern = new(@"ORDER BY (.+?)(?: LIMIT| OFFSET|$)");
-    private static readonly Regex OrderByKeyPattern = new(@"^(\S+?)(?: COLLATE craticula_ci)? (ASC|DESC) NULLS (LAST|FIRST)$");
+
+    /// <summary>The double quotes around the column are <b>required</b>, not tolerated: SQL-1 in
+    /// <c>spec/semantics.md</c>'s canonical-rendering addendum makes identifier quoting mandatory in
+    /// every Postgres artifact, so a fixture that drops them should fail this parse rather than be
+    /// silently accepted.</summary>
+    private static readonly Regex OrderByKeyPattern = new(@"^""([^""]+)""(?: COLLATE craticula_ci)? (ASC|DESC) NULLS (LAST|FIRST)$");
 
     /// <summary>
     /// The real oracle this class's own doc comment claims: parses <c>expected/postgres.artifact.json</c>'s

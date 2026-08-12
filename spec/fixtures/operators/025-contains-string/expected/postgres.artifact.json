@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM items WHERE product_name ILIKE '%' || $1 || '%' ESCAPE '\\' ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT * FROM \"items\" WHERE \"product_name\" ILIKE '%' || $1 || '%' ESCAPE '\\' ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "art",
     100,

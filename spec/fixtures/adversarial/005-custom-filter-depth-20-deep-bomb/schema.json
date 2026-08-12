@@ -1,5 +1,6 @@
 {
   "mode": "strict",
+  "source": "items",
   "stableKey": "id",
   "fields": {
     "id": {

@@ -168,8 +168,11 @@ for `today` can be a different calendar day entirely (025 shows two such answers
 - **Every case's IR is one `comparison` node**: `{ op: "inRange", field, from, to, fromInclusive:
   true, toInclusive: false }`. There is no `customFilters` anywhere in this category — unlike
   `operators/039-043`, a preset *does* have a native wire path, and exercising it is the whole point.
-- **Postgres**: `WHERE (<col> >= $1 AND <col> < $2)`, positional `$N` placeholders, `ORDER BY id ASC
-  NULLS LAST`, `LIMIT $3 OFFSET $4` with `params` `[from, to, 100, 0]`. The `>=`/`<` pair is the
+- **Postgres**: `WHERE ("<col>" >= $1 AND "<col>" < $2)`, positional `$N` placeholders, `ORDER BY
+  "id" ASC NULLS LAST`, `LIMIT $3 OFFSET $4` with `params` `[from, to, 100, 0]`. Identifiers are
+  always quoted, including the table — see `spec/semantics.md`'s "Addendum — canonical SQL
+  rendering" (SQL-1); all 26 artifacts here were re-authored to it in #1638, a quoting-only change
+  with no rendering rewrite. The `>=`/`<` pair is the
   literal rendering of the node's explicit inclusivity flags — never `BETWEEN`, whose SQL semantics
   are inclusive on both ends and would silently pull in a whole extra day (SEM-4's own third named
   failure mode).

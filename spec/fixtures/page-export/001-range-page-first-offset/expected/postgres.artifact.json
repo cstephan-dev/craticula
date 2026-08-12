@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT id, order_date AS orderDate, customer_name AS customerName, total_amount AS totalAmount, status, region, notes FROM orders ORDER BY order_date ASC NULLS LAST, id ASC NULLS LAST LIMIT $1 OFFSET $2",
+  "sql": "SELECT \"id\", \"order_date\" AS \"orderDate\", \"customer_name\" AS \"customerName\", \"total_amount\" AS \"totalAmount\", \"status\", \"region\", \"notes\" FROM \"orders\" ORDER BY \"order_date\" ASC NULLS LAST, \"id\" ASC NULLS LAST LIMIT $1 OFFSET $2",
   "params": [
     50,
     0

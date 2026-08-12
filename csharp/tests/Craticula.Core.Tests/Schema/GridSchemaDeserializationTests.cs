@@ -8,6 +8,7 @@ public class GridSchemaDeserializationTests
     private const string Json = """
     {
       "mode": "strict",
+      "source": "items",
       "stableKey": "id",
       "staticFilter": {
         "type": "comparison",
@@ -59,6 +60,7 @@ public class GridSchemaDeserializationTests
         var schema = GridSchema.Parse(Json);
 
         Assert.Equal(GridSchemaMode.Strict, schema.Mode);
+        Assert.Equal("items", schema.Source);
         Assert.Equal("id", schema.StableKey);
         var staticFilter = Assert.IsType<ComparisonNode>(schema.StaticFilter);
         Assert.Equal("tenantId", staticFilter.Field);
@@ -134,6 +136,7 @@ public class GridSchemaDeserializationTests
     {
         const string minimalJson = """
         {
+          "source": "items",
           "stableKey": "id",
           "fields": {
             "id": { "type": "int64" }

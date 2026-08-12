@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM employees WHERE (department ILIKE $1 || '%' ESCAPE '\\' AND department COLLATE craticula_ci = ANY($2)) ORDER BY salary DESC NULLS FIRST, id ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "sql": "SELECT * FROM \"employees\" WHERE (\"department\" ILIKE $1 || '%' ESCAPE '\\' AND \"department\" COLLATE craticula_ci = ANY($2)) ORDER BY \"salary\" DESC NULLS FIRST, \"id\" ASC NULLS LAST LIMIT $3 OFFSET $4",
   "params": [
     "Eng",
     [

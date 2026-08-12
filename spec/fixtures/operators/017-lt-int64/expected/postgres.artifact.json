@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM items WHERE age < $1 ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT * FROM \"items\" WHERE \"age\" < $1 ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     65,
     100,

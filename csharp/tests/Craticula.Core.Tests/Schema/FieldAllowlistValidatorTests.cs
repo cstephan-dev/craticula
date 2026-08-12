@@ -15,6 +15,7 @@ public class FieldAllowlistValidatorTests
     private static GridSchema MakeSchema(GridSchemaMode mode) => new()
     {
         Mode = mode,
+        Source = "items",
         StableKey = "id",
         Fields = new Dictionary<string, FieldConfig>
         {

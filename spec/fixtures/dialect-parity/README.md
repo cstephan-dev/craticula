@@ -85,6 +85,31 @@ confusing to bolt onto a field reused elsewhere in this category.
   is a pattern match. `015`'s ordering-comparison (`gt`) case uses the same `craticula_ci` name for
   consistency, and Search's case-insensitive-ordering sub-field is declared via
   `physical.search.normalizedSubField` (not an overload of `keywordSubField`).
+- **Four artifacts in this category were re-authored in #1638 to the canonical SQL renderings**
+  (`spec/semantics.md`, "Addendum — canonical SQL rendering"), because this category held every one
+  of the suite's rendering minorities: `008` gained the mandatory parentheses around its
+  null-inclusive disjunction (`("age" <> $1 OR "age" IS NULL)`, SQL-2); `017` moved the negation
+  into the operator (`"lastName" NOT ILIKE ...`, SQL-3) and gained the same wrap; `018` moved from
+  `NOT IN ($1, $2)` with two scalar parameters to `<> ALL($1)` with one array parameter (SQL-4) and
+  gained the wrap; `019`'s `notBlank` became the literal negation of `blank`'s own compiled text,
+  `NOT (("lastName" IS NULL OR "lastName" = ''))` (SQL-2). All 16 Postgres artifacts also gained
+  identifier quoting — which matters most *here*, since this category is the one that declares
+  camelCase physical columns (`lastName`, `employeeCode`, `jobTitle`) that unquoted PostgreSQL would
+  fold to lowercase.
+- **`008`'s `mysql`/`mssql`/`sqlite` artifacts gained the SQL-2 wrap too, and that was not optional.**
+  Parenthesisation is *structural*: a query builder emits it and the `Dialect` interface has no say
+  in it, so the previously bare `WHERE age <> ? OR age IS NULL` was unsatisfiable by construction on
+  every dialect, not merely unusual. Do not "restore" it when re-authoring these three for #1639.
+- **The 19 `mysql`/`mssql`/`sqlite` artifacts are still UNQUOTED, and that is a known gap, not a
+  rule.** SQL-1 ("always quote") is universal and explicitly forbids quoting conditionally — the
+  deferral is not about *whether* to quote but about *which character*: `"` on SQLite, `[…]` on SQL
+  Server, backticks (or `"` under `ANSI_QUOTES`) on MySQL. Picking each is part of writing that
+  engine's `Dialect`, i.e. **#1639**, which re-authors these 19 as it goes. Until then `006`-`010`'s
+  six-artifact parity sets are temporarily mixed (quoted Postgres, unquoted others), and a port that
+  quotes them and disagrees with the fixture is right while the fixture is stale — the opposite of
+  T-1's usual reading, which is exactly why it is written down. (Contrast their `IN (...)` in-list
+  form and their `ISNULL`/`CASE WHEN` null-ordering emulations, which genuinely *are* each dialect's
+  own business rather than a deferred application of a universal rule.)
 - **Every fixture's compiled statement includes SEM-6's `stableKey` tiebreaker and its own
   null-ordering marker (`NULLS LAST`/Mongo bucket/ES `missing`), unconditionally** — every
   `agGridRequest.json` in this category carries `startRow`/`endRow`, and every `schema.json`

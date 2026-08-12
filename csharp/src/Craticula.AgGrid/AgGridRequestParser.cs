@@ -429,7 +429,7 @@ public static class AgGridRequestParser
             "text" => ParseTextCondition(field, condition),
             "number" => ParseNumberCondition(field, condition),
             "date" => ParseDateCondition(field, condition, context),
-            "set" => ParseSetCondition(field, condition),
+            "set" => ParseSetCondition(field, condition, context),
             _ => throw UnknownOperator(field, filterType, type: null)
         };
     }
@@ -688,7 +688,35 @@ public static class AgGridRequestParser
         }
     }
 
-    private static ComparisonNode ParseSetCondition(string field, JsonElement condition)
+    /// <summary>
+    /// Parses a <c>set</c> condition into <see cref="ComparisonOperator.In"/> — with ONE documented
+    /// exception, below.
+    ///
+    /// <para><b>A boolean column's single-value selection becomes AR-6's unary <c>true</c>/<c>false</c>.</b>
+    /// AG Grid core has no dedicated boolean filter type (<c>iSetFilter.ts</c>: <c>SetFilterModel</c>
+    /// is the only wire shape available for any column type), so <c>spec/fixtures/README.md</c> pins
+    /// the modeling convention — a boolean column is filtered as <c>{filterType:"set",
+    /// values:["true"]}</c> — and <c>spec/fixtures/operators/README.md</c> pins the adapter's side of
+    /// it: "the adapter compiles a boolean column's single-value Set Filter selection to the
+    /// dedicated unary <c>true</c>/<c>false</c> operators (see 044/045), never to generic
+    /// <c>eq</c>/<c>neq</c>". #1635 left this as a deliberate documented gap for "a later semantic
+    /// stage"; #1638 found there is no such stage — a compiler receiving <c>in ["true"]</c> emits
+    /// <c>= ANY($1)</c> against a one-element array where <c>operators/044</c>'s and
+    /// <c>filter-tree/001</c>'s artifacts pin <c>= $1</c>, and no layer downstream of the adapter has
+    /// the AG Grid knowledge to tell a boolean set selection apart from a genuine one-element
+    /// <c>in</c>. So the rewrite lands here, where the spec says it belongs.</para>
+    ///
+    /// <para>Gated on the field being declared <see cref="FieldType.Boolean"/> in
+    /// <see cref="AgGridParseOptions.Schema"/>: without that, <c>values:["true"]</c> on a
+    /// <em>string</em> column is a perfectly ordinary set membership against the literal text
+    /// <c>"true"</c>, and rewriting it would be a silent semantic change. Absent a schema the parser
+    /// keeps its previous behavior exactly (the same fallback <see cref="ResolveDateWireValue"/>
+    /// uses), so this is strictly additive. The two literals are matched ordinally and exactly, as
+    /// <c>spec/fixtures/README.md</c> spells them — accepting <c>"TRUE"</c> too would be a
+    /// port-divergence risk for no known input. A two-value <c>["true","false"]</c> selection has no
+    /// unary operator that can express it and stays an <c>in</c>.</para>
+    /// </summary>
+    private static ComparisonNode ParseSetCondition(string field, JsonElement condition, DateResolutionContext context)
     {
         if (!condition.TryGetProperty("values", out var valuesEl) || valuesEl.ValueKind == JsonValueKind.Null)
         {
@@ -718,7 +746,34 @@ public static class AgGridRequestParser
             values.Add(new StringValue { Value = element.GetString()! });
         }
 
+        if (BooleanSelectionOperator(field, values, context) is { } unaryOp)
+        {
+            return new ComparisonNode { Field = field, Op = unaryOp };
+        }
+
         return new ComparisonNode { Field = field, Op = ComparisonOperator.In, Values = values };
+    }
+
+    /// <summary>AR-6's unary operator a boolean column's single-value Set Filter selection maps to,
+    /// or <see langword="null"/> when this is an ordinary set membership — see
+    /// <see cref="ParseSetCondition"/> for the convention and its gating.</summary>
+    private static ComparisonOperator? BooleanSelectionOperator(
+        string field, IReadOnlyList<TypedValue> values, DateResolutionContext context)
+    {
+        if (values.Count != 1
+            || context.Options.Schema is not { } schema
+            || !schema.Fields.TryGetValue(field, out var fieldConfig)
+            || fieldConfig.Type != FieldType.Boolean)
+        {
+            return null;
+        }
+
+        return ((StringValue)values[0]).Value switch
+        {
+            "true" => ComparisonOperator.True,
+            "false" => ComparisonOperator.False,
+            _ => null
+        };
     }
 
     private static AgGridRequestParseException InRangeNotSupported(string field) => new(

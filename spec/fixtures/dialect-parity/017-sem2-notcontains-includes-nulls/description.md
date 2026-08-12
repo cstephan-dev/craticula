@@ -6,9 +6,12 @@ negated substring match is simultaneously governed by all three rules at once (S
 null-inclusion, SEM-1's CI default, SEM-7's substring mechanism), and this fixture deliberately
 composes them to prove they layer correctly rather than conflict.
 
-- **Postgres**: `NOT (lastName ILIKE '%' || $1 || '%' ESCAPE '\') OR lastName IS NULL` — the
-  `ESCAPE` clause stays attached to the `ILIKE` expression itself, **inside** the negation, never
-  floating loose at the end of the `WHERE` clause.
+- **Postgres**: `("lastName" NOT ILIKE '%' || $1 || '%' ESCAPE '\' OR "lastName" IS NULL)` — the
+  negation is carried by the **negated operator** `NOT ILIKE`, not by an outer `NOT (...)` wrapper,
+  matching how every other negative operator renders (`neq` → `<>`, `notIn` → `<> ALL`); the
+  `ESCAPE` clause stays attached to the `NOT ILIKE` expression itself, never floating loose at the
+  end of the `WHERE` clause; and the whole null-inclusive disjunction is parenthesised, per
+  `spec/semantics.md`'s "Canonical SQL rendering" section.
 - **MongoDB**: `$not` wrapping the case-insensitive `$regex`, composed with the same `$or`
   null-inclusion form SEM-2 pins for every negative operator.
 - **Search**: a `bool`/`should` composing a negated `wildcard` (case-insensitive) with the

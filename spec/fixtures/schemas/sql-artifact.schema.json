@@ -18,7 +18,7 @@
     },
     "params": {
       "type": "array",
-      "description": "Ordered parameter values, one per placeholder in 'sql', in the placeholder's positional/named order. Each entry is the literal driver-bound value (a JSON string/number/boolean/null), not a tagged typedValue — by this stage the value has left the IR and become a query parameter.",
+      "description": "Ordered parameter values, one per placeholder in 'sql', in the placeholder's positional/named order. Each entry is the literal driver-bound value, not a tagged typedValue — by this stage the value has left the IR and become a query parameter. Usually a JSON string/number/boolean/null, but ALSO legitimately an array: SQL-4 (spec/semantics.md) binds a Postgres set membership as ONE array parameter ('\"status\" = ANY($1)' with params [[\"active\",\"pending\"]]), where dialects rendering 'IN (...)' bind N scalars instead. A decimal is a numeric STRING, never a JSON number (AR-7) — it and a double are otherwise the same wire shape. 'items: {}' is therefore deliberate: no per-entry validation here, because only the field's declared type distinguishes the legal shapes.",
       "items": {}
     }
   }

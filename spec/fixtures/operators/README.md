@@ -41,6 +41,14 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   out (a literal `%`/`_` in the value would silently become a wildcard). `contains`/`notContains`/
   `startsWith`/`endsWith` (025-028) are the only cases that use `ILIKE` (with an explicit `ESCAPE`
   clause), because the operator itself is a pattern match there.
+- **Rendering (quoting, parenthesisation, negated operators, set parameterization) is normative in
+  `spec/semantics.md`'s "Addendum — canonical SQL rendering", not decided per category.** Three
+  fixtures here were re-authored to it in #1638: `001` and `007` wrapped each `OR` leaf instead of
+  the composite (`(a) OR (b)` → `(a OR b)`), and `004` did the same *and* double-wrapped each leaf
+  (`((a)) AND ((b))` → `((a) AND (b))`, where each `(a)` is the SEM-2 null-inclusive leaf's own
+  mandatory wrap). All 47 also gained identifier quoting. `026`'s `NOT ILIKE` and `035`-`038`'s
+  `= ANY($1)`/`<> ALL($1)` were already the canonical forms and are unchanged — this category is
+  where two of the four canonical renderings came from.
 - **Boolean fields have no native `eq`/`neq`/`in`/`notIn` wire path.** Confirmed against the
   `github/ag-grid` clone's `iSetFilter.ts`: `SetFilterModel` is the only wire shape available for any
   column type (AG Grid core has no dedicated boolean filter), and the adapter compiles a boolean

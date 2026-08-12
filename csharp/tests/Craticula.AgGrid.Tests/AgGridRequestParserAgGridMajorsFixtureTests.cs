@@ -346,7 +346,7 @@ public class AgGridRequestParserAgGridMajorsFixtureTests
 
     /// <summary>
     /// The fixture's Postgres <c>ORDER BY</c> terms, split on commas — e.g.
-    /// <c>["salary DESC NULLS FIRST", "id ASC NULLS LAST"]</c>. This is the fixture's own independent
+    /// <c>["\"salary\" DESC NULLS FIRST", "\"id\" ASC NULLS LAST"]</c>. This is the fixture's own independent
     /// statement of SEM-3 null placement: it was hand-authored from the spec, not produced by the
     /// parser, so it can contradict the parser and fail the test.
     /// </summary>

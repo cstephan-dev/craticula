@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM employees WHERE (department COLLATE craticula_ci = $1 OR department COLLATE craticula_ci = $2 OR department COLLATE craticula_ci = $3) ORDER BY id ASC NULLS LAST LIMIT $4 OFFSET $5",
+  "sql": "SELECT * FROM \"employees\" WHERE (\"department\" COLLATE craticula_ci = $1 OR \"department\" COLLATE craticula_ci = $2 OR \"department\" COLLATE craticula_ci = $3) ORDER BY \"id\" ASC NULLS LAST LIMIT $4 OFFSET $5",
   "params": [
     "Engineering",
     "Design",

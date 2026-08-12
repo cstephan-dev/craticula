@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM orders WHERE (NOT ((((NOT ((((NOT (region COLLATE craticula_ci = $1) OR region IS NULL)))) OR region IS NULL)))) OR region IS NULL) ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT * FROM \"orders\" WHERE (NOT ((((NOT ((((NOT (\"region\" COLLATE craticula_ci = $1) OR \"region\" IS NULL)))) OR \"region\" IS NULL)))) OR \"region\" IS NULL) ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "blocked",
     100,

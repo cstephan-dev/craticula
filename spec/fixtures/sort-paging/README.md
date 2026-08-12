@@ -35,8 +35,10 @@ inventing a new domain per case.
 
 ## Notes on artifact construction
 
-- **Postgres**: native `ORDER BY <col> ASC|DESC NULLS LAST|FIRST` per key, comma-separated, ending
-  in the tiebreaker's own `id ASC NULLS LAST`. A `string`-typed sort key (`lastName`, `department` —
+- **Postgres**: native `ORDER BY "<col>" ASC|DESC NULLS LAST|FIRST` per key, comma-separated, ending
+  in the tiebreaker's own `"id" ASC NULLS LAST`. Identifiers are always quoted, including the table
+  — see `spec/semantics.md`'s "Addendum — canonical SQL rendering" (SQL-1); all 12 artifacts here
+  were re-authored to it in #1638, a quoting-only change with no rendering rewrite. A `string`-typed sort key (`lastName`, `department` —
   cases 001, 004, 006, 007, 010, 011) additionally carries `COLLATE craticula_ci` on its own key,
   per SEM-1's "same collation mechanism across every context on that field" (the identical
   collation `eq`/`in` would use, not `ILIKE`) — the `id` tiebreaker never needs this since

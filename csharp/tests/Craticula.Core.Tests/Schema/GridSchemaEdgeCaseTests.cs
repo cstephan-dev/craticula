@@ -15,7 +15,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Unknown_Top_Level_Property()
     {
         const string json = """
-        { "mode": "strict", "stableKey": "id", "fields": { "id": { "type": "int64" } }, "bogus": true }
+        { "mode": "strict", "source": "items", "stableKey": "id", "fields": { "id": { "type": "int64" } }, "bogus": true }
         """;
 
         Assert.Throws<JsonException>(() => GridSchema.Parse(json));
@@ -25,7 +25,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Duplicate_Json_Property()
     {
         const string json = """
-        { "stableKey": "id", "stableKey": "other", "fields": { "id": { "type": "int64" } } }
+        { "source": "items", "stableKey": "id", "stableKey": "other", "fields": { "id": { "type": "int64" } } }
         """;
 
         Assert.Throws<JsonException>(() => GridSchema.Parse(json));
@@ -35,7 +35,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Null_For_Required_NonNullable_Property()
     {
         const string json = """
-        { "stableKey": "id", "fields": null }
+        { "source": "items", "stableKey": "id", "fields": null }
         """;
 
         Assert.Throws<JsonException>(() => GridSchema.Parse(json));
@@ -45,7 +45,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Out_Of_Range_Mode_Value()
     {
         const string json = """
-        { "mode": 3, "stableKey": "id", "fields": { "id": { "type": "int64" } } }
+        { "mode": 3, "source": "items", "stableKey": "id", "fields": { "id": { "type": "int64" } } }
         """;
 
         Assert.Throws<JsonException>(() => GridSchema.Parse(json));
@@ -61,7 +61,7 @@ public class GridSchemaEdgeCaseTests
         // semantic intent as "strict", so mis-cased-but-recognizable input resolving correctly is
         // a convenience, not a security hole the way silent integer coercion would be.
         const string json = """
-        { "mode": "STRICT", "stableKey": "id", "fields": { "id": { "type": "int64" } } }
+        { "mode": "STRICT", "source": "items", "stableKey": "id", "fields": { "id": { "type": "int64" } } }
         """;
 
         var schema = GridSchema.Parse(json);
@@ -73,7 +73,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Empty_Fields_Map()
     {
         const string json = """
-        { "stableKey": "id", "fields": {} }
+        { "source": "items", "stableKey": "id", "fields": {} }
         """;
 
         Assert.Throws<GridSchemaValidationException>(() => GridSchema.Parse(json));
@@ -83,7 +83,31 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Blank_StableKey()
     {
         const string json = """
-        { "stableKey": "", "fields": { "id": { "type": "int64" } } }
+        { "source": "items", "stableKey": "", "fields": { "id": { "type": "int64" } } }
+        """;
+
+        Assert.Throws<GridSchemaValidationException>(() => GridSchema.Parse(json));
+    }
+
+    [Fact]
+    public void Rejects_Absent_Source()
+    {
+        // `source` is required in grid-schema.schema.json and `required` on the record, so this is
+        // caught by the deserializer rather than by a Parse invariant — pinned because a compiler
+        // with no FROM target cannot emit a query at all, and silently defaulting one would let a
+        // misconfigured host read the wrong table.
+        const string json = """
+        { "stableKey": "id", "fields": { "id": { "type": "int64" } } }
+        """;
+
+        Assert.Throws<JsonException>(() => GridSchema.Parse(json));
+    }
+
+    [Fact]
+    public void Rejects_Blank_Source()
+    {
+        const string json = """
+        { "source": "   ", "stableKey": "id", "fields": { "id": { "type": "int64" } } }
         """;
 
         Assert.Throws<GridSchemaValidationException>(() => GridSchema.Parse(json));
@@ -93,7 +117,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_StableKey_Absent_From_Fields()
     {
         const string json = """
-        { "stableKey": "notAField", "fields": { "id": { "type": "int64" } } }
+        { "source": "items", "stableKey": "notAField", "fields": { "id": { "type": "int64" } } }
         """;
 
         Assert.Throws<GridSchemaValidationException>(() => GridSchema.Parse(json));
@@ -103,7 +127,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Sql_Mapping_With_Zero_Of_Three_Shapes_Set()
     {
         const string json = """
-        { "stableKey": "id", "fields": { "id": { "type": "int64", "physical": { "sql": {} } } } }
+        { "source": "items", "stableKey": "id", "fields": { "id": { "type": "int64", "physical": { "sql": {} } } } }
         """;
 
         Assert.Throws<GridSchemaValidationException>(() => GridSchema.Parse(json));
@@ -113,7 +137,7 @@ public class GridSchemaEdgeCaseTests
     public void Rejects_Sql_Mapping_With_Multiple_Shapes_Set()
     {
         const string json = """
-        { "stableKey": "id", "fields": { "id": {
+        { "source": "items", "stableKey": "id", "fields": { "id": {
           "type": "int64", "physical": { "sql": { "column": "id", "expression": "1=1" } }
         } } }
         """;
@@ -125,7 +149,7 @@ public class GridSchemaEdgeCaseTests
     public void FieldAllowlistValidator_Defaults_To_Deny_When_Mode_Is_Not_Explicitly_Lenient()
     {
         var schema = GridSchema.Parse("""
-        { "mode": "strict", "stableKey": "id", "fields": { "id": { "type": "int64" } } }
+        { "mode": "strict", "source": "items", "stableKey": "id", "fields": { "id": { "type": "int64" } } }
         """);
 
         Assert.Throws<UnknownFieldException>(
