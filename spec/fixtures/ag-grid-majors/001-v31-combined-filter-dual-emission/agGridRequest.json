@@ -1,0 +1,48 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "department": {
+      "filterType": "text",
+      "operator": "OR",
+      "condition1": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "Engineering"
+      },
+      "condition2": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "Design"
+      },
+      "conditions": [
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "Engineering"
+        },
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "Design"
+        },
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "Research"
+        }
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

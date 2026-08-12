@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "unknown-operator",
+  "note": "AG Grid's native 'inRange' condition carries its two bounds and nothing else: {type:'inRange', dateFrom, dateTo} (or {filter, filterTo} for a number column). There is no fromInclusive/toInclusive signal anywhere on the wire, in any supported major, so every inclusivity combination is byte-identical and the adapter cannot know which one the user's grid means. SEM-4 forbids inventing one and presenting it as the AG Grid default, so this is rejected rather than guessed — even though a stock grid emits exactly this the moment a user picks 'In range' in the filter UI, which makes this the most ordinary request the adapter deliberately refuses. The IR's rangeComparisonNode requires both flags explicitly; a host that needs a range sends it through the customFilters extension with the flags it intends (see operators/039-043). Do NOT 'fix' this by defaulting to inclusive/inclusive: the failure mode is silent and off-by-one at the boundary, on every row a user filters."
+}

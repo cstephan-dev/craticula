@@ -1,0 +1,43 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "department",
+      "displayName": "Department",
+      "field": "department"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "salary",
+      "displayName": "Salary",
+      "field": "salary",
+      "aggFunc": "sum"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "hireDate": {
+      "filterType": "date",
+      "operator": "AND",
+      "conditions": [
+        {
+          "filterType": "date",
+          "type": "greaterThanOrEqual",
+          "dateFrom": "2018-01-01 00:00:00",
+          "dateTo": null
+        },
+        {
+          "filterType": "date",
+          "type": "lessThan",
+          "dateFrom": "2024-01-01 00:00:00",
+          "dateTo": null
+        }
+      ]
+    }
+  },
+  "sortModel": []
+}

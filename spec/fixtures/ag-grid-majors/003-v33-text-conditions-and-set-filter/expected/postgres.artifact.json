@@ -1,0 +1,14 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM employees WHERE ((last_name ILIKE $1 || '%' ESCAPE '\\' OR last_name ILIKE '%' || $2 || '%' ESCAPE '\\') AND department COLLATE craticula_ci = ANY($3)) ORDER BY id ASC NULLS LAST LIMIT $4 OFFSET $5",
+  "params": [
+    "Van",
+    "sen",
+    [
+      "Engineering",
+      "Support"
+    ],
+    100,
+    0
+  ]
+}

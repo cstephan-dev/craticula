@@ -1,0 +1,40 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "lastName": {
+      "filterType": "text",
+      "operator": "OR",
+      "conditions": [
+        {
+          "filterType": "text",
+          "type": "startsWith",
+          "filter": "Van"
+        },
+        {
+          "filterType": "text",
+          "type": "contains",
+          "filter": "sen"
+        }
+      ]
+    },
+    "department": {
+      "filterType": "set",
+      "values": [
+        "Engineering",
+        "Support"
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

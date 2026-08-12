@@ -1,0 +1,33 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "filterType": "join",
+    "type": "AND",
+    "conditions": [
+      {
+        "filterType": "text",
+        "colId": "department",
+        "type": "equals",
+        "filter": "Engineering"
+      },
+      {
+        "filterType": "number",
+        "colId": "salary",
+        "type": "greaterThan",
+        "filter": 60000
+      }
+    ]
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "range": {
+            "hireDate": {
+              "gte": "2026-07-13",
+              "lt": "2026-08-13",
+              "format": "strict_date"
+            }
+          }
+        },
+        {
+          "bool": {
+            "should": [
+              {
+                "term": {
+                  "status.keyword": {
+                    "value": "active",
+                    "case_insensitive": true
+                  }
+                }
+              },
+              {
+                "term": {
+                  "status.keyword": {
+                    "value": "onLeave",
+                    "case_insensitive": true
+                  }
+                }
+              }
+            ],
+            "minimum_should_match": 1
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

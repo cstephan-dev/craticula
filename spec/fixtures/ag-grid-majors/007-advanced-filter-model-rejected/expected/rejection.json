@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "With Advanced Filter enabled, 'filterModel' is an AdvancedFilterModel (a single object with 'filterType' at its root) rather than the colId-keyed FilterModel map every other fixture sends. AG-5 puts Advanced Filter out of scope for v1, so this must be one clean rejection at request parsing — never a partial parse that silently drops conditions, and never an attempt to reinterpret 'filterType'/'type'/'conditions' as if they were column ids."
+}

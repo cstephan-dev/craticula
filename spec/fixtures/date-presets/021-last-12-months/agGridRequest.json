@@ -8,6 +8,8 @@
   "groupKeys": [],
   "filterModel": {
     "hireDate": {
+      "dateFrom": null,
+      "dateTo": null,
       "filterType": "date",
       "type": "last12Months"
     }

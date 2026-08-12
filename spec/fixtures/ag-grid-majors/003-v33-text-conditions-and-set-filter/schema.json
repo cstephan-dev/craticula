@@ -1,0 +1,64 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": false,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "lastName": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "last_name"
+        },
+        "mongo": {
+          "path": "lastName"
+        },
+        "search": {
+          "field": "lastName",
+          "keywordSubField": "lastName.keyword"
+        }
+      },
+      "text": {
+        "caseSensitivity": "insensitive",
+        "searchMode": "substring"
+      }
+    },
+    "department": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "department"
+        },
+        "mongo": {
+          "path": "department"
+        },
+        "search": {
+          "field": "department",
+          "keywordSubField": "department.keyword"
+        }
+      },
+      "text": {
+        "caseSensitivity": "insensitive",
+        "searchMode": "substring"
+      }
+    }
+  }
+}

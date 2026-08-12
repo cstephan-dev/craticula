@@ -1,0 +1,43 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "term": {
+            "department.keyword": {
+              "value": "Engineering",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "term": {
+            "department.keyword": {
+              "value": "Design",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "term": {
+            "department.keyword": {
+              "value": "Research",
+              "case_insensitive": true
+            }
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

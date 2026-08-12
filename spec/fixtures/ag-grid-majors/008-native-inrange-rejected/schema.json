@@ -1,0 +1,38 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": false,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "hireDate": {
+      "type": "date",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "hire_date"
+        },
+        "mongo": {
+          "path": "hireDate"
+        },
+        "search": {
+          "field": "hireDate"
+        }
+      }
+    }
+  }
+}

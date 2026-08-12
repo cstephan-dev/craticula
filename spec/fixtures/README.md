@@ -77,7 +77,15 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
   sortModel: SortModelItem[] }
 ```
 - `ColumnVO` (`iColumnVO.ts`): `{ id, displayName, field?, aggFunc? }`.
-- `SortModelItem` (`iSortModelItem.ts`): `{ colId, sort: "asc"|"desc" }`.
+- `SortModelItem` (`iSortModelItem.ts`): `{ colId, sort: "asc"|"desc" }` in v31-v34. **From v35 it also
+  carries `type?: SortType` (`"absolute"|"default"`)** — optional in the declared type, but the emitter
+  always populates it: v35's `sortService.ts` `collectSortItems` builds `{ sort, type }` with
+  `_normalizeSortType()` returning `"default"` when unset, and v36's `_getSortModel` writes
+  `{ sort, type, colId }`. So a real v35/v36 payload always has three keys. Nothing in the IR consumes
+  it (it selects AG Grid's *client-side* comparator, not a server ordering), so an adapter reads only
+  `colId`/`sort` and ignores it — see `ag-grid-majors/005` and `/006`, which pin exactly that.
+  There is **no null-placement field** on the wire in any major; SEM-3's `nullsPosition` is always
+  derived by the adapter.
 - `filterModel` is a map keyed by `colId`. Per column, either a single condition or a **combined**
   form. Current form (`iSimpleFilter.ts`'s `ICombinedSimpleModel`): `{ filterType, operator:
   "AND"|"OR", conditions: [<condition>, <condition>] }`. **Legacy form** (pre-v29, AG-1 still
@@ -90,8 +98,21 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
     "lessThan"|"lessThanOrEqual"|"greaterThan"|"greaterThanOrEqual"|"inRange"|"blank"|"notBlank",
     filter?: number, filterTo?: number }`.
   - Date condition (`iDateFilter.ts`): same `type` vocabulary as number, plus `dateFrom`/`dateTo`
-    strings (`"YYYY-MM-DD HH:mm:ss"` or `"YYYY-MM-DD"`); **date presets** (AG-2) use a preset
-    `type` (`"today"`, `"last7Days"`, ...) with `dateFrom`/`dateTo` both `undefined`. The preset
+    strings. **The emitted form is `"YYYY-MM-DD hh:mm:ss"`, not `"YYYY-MM-DD"`** — `createCondition`
+    calls `_serialiseDate(value)` and `utils/date.ts` declares
+    `_serialiseDate(date, includeTime = true, separator = '-')`, so v31-v35 always include the time
+    part. The date-only form becomes possible only at v36, which threads an `includeTime` parameter
+    through (`params.includeTime ?? dataTypeSvc.getDateIncludesTimeFlag(cellDataType) ?? true`), so it
+    appears only for a column explicitly configured `includeTime: false` or `cellDataType: 'date'`;
+    v36 can also emit `"YYYY-MM-DDThh:mm:ss"` under `useIsoSeparator: true`. A fixture using the
+    date-only form must say which of those it is modelling.
+    **Date presets** (AG-2) use a preset `type` (`"today"`, `"last7Days"`, ...). Their `dateFrom`/
+    `dateTo` are **present and explicitly `null`**, not absent: `createCondition` returns
+    `{ dateFrom: null, dateTo: null, filterType, type, ...model }` and a preset contributes nothing to
+    `model` (it is in `simpleFilterUtils.ts`'s `zeroInputTypes`), so the real payload is
+    `{"dateFrom":null,"dateTo":null,"filterType":"date","type":"last30Days"}`. AG Grid's own
+    `PresetDateRangeFilterModel` doc comment says they are "always `undefined`" — that prose
+    contradicts the emitter beside it; the fixtures follow the emitter. The preset
     vocabulary (`ISimpleFilterModelPresetType`) is closed and has 22 members, each resolving to a
     half-open `[from, to)` range published in AG Grid's own spec table — the adapter resolves it
     against an injected clock + zone, so no compiler ever sees an unresolved preset. See
@@ -108,13 +129,24 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
   merged into the filter tree by the adapter (see
   `docs/architecture/c4-components-core-ir.md`'s "Custom Filter Merge" component). This is the
   **only** way a fixture can exercise anything the AG Grid wire format itself cannot express: SEC-3
-  depth/leaf-count adversarial cases (AG Grid's own `filterModel` is structurally shallow — a flat
-  per-column map, at most 2 conditions per column), `inRange` boundary inclusivity (AG Grid's
+  **depth** adversarial cases (AG Grid's own `filterModel` is structurally shallow — a flat per-column
+  map whose per-column condition count is bounded by `ISimpleFilterParams.maxNumConditions`, a
+  documented grid option defaulting to `2`, so the native tree is at most `And(columns...)` over
+  `And`/`Or(conditions...)`: three levels, never deeper, whatever `maxNumConditions` is set to),
+  `inRange` boundary inclusivity (AG Grid's
   `inRange` carries no inclusivity flags at all — do not invent an inclusivity default and assert it
   as if it were the AG Grid default; use `customFilters` with explicit flags instead, per SEM-4's own
   "must NOT present the exact AG Grid boundary-inclusivity default as settled fact" rule), and a set
   filter's `notIn` direction (AG Grid's `SetFilterModel` carries only an inclusion list — there is no
   wire-level invert flag).
+  - **Known gap (stated, not covered).** `max-depth-exceeded` is genuinely unreachable from a native
+    `filterModel` — the shape caps out at three levels. `max-leaves-exceeded` is **not**: leaf count
+    is `columns x maxNumConditions`, and a grid configured with a high `maxNumConditions` (or simply
+    with many filtered columns) can breach the limit from a pure `filterModel` with no extension in
+    sight. No adversarial fixture currently covers that path — every SEC-3 leaf-count case routes
+    through `customFilters` — so the leaf limit is pinned only on the extension, not on the wire form
+    a real grid emits. Authoring it is deliberately out of scope of #1637; recorded here so the gap is
+    known rather than implied to be impossible.
 - **`requestContext` (extension, not part of AG Grid's own wire format):** an optional sibling field,
   `{ requestContext: { zone: "<IANA id>", now: "<ISO-8601 instant>" } }`. Required on any fixture
   whose expected artifacts depend on a specific zone resolution or on a specific "current time" —
@@ -142,6 +174,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `page-export/` | AG-3/EXP-2 page spec, EXP-1/EXP-6/EXP-8 export + hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits | ~20 |
 | `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7) | ~20 |
+| `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |
 
 Each category directory has its own `README.md` enumerating its cases and the specific requirement
 each one backs.

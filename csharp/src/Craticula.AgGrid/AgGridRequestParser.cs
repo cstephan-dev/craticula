@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Text.Json;
 using Craticula.Core.Ir;
+using Craticula.Core.Schema;
 
 namespace Craticula.AgGrid;
 
@@ -495,8 +497,10 @@ public static class AgGridRequestParser
             throw InRangeNotSupported(field);
         }
 
-        // AG-2 (#1636): a preset arrives in this very same 'type' slot, with dateFrom/dateTo both
-        // absent (AG Grid's zeroInputTypes). Checked BEFORE the operator switch so the switch's
+        // AG-2 (#1636): a preset arrives in this very same 'type' slot, carrying no bound of its own
+        // (AG Grid's zeroInputTypes) — on the wire that means dateFrom/dateTo are present and
+        // explicitly null, NOT absent, whatever PresetDateRangeFilterModel's doc comment claims.
+        // Either way nothing here reads them. Checked BEFORE the operator switch so the switch's
         // default arm keeps its original meaning — a genuinely unknown condition type — and still
         // rejects it exactly as it did before presets were supported.
         if (DatePresetResolver.TryResolve(type, context.Now, context.Zone, context.Options.FirstDayOfWeek, out var range))
@@ -522,7 +526,102 @@ public static class AgGridRequestParser
             return new ComparisonNode { Field = field, Op = op };
         }
 
-        return new ComparisonNode { Field = field, Op = op, Value = ReadStringValue(condition, "dateFrom", field, "date") };
+        return new ComparisonNode { Field = field, Op = op, Value = ResolveDateWireValue(field, condition, "dateFrom", context) };
+    }
+
+    /// <summary>
+    /// Turns AG Grid's wire date string into the <see cref="TypedValue"/> the field's schema-declared
+    /// type calls for — SEM-4's "resolving one of those strings into a <c>dateValue</c> or
+    /// <c>datetimeValue</c> is exclusively the frontend adapter's job, using BOTH the field's
+    /// schema-declared type and the request context's zone."
+    ///
+    /// <para><b>Why this is needed at all — a real bug #1637's per-major payloads exposed.</b> AG Grid
+    /// serialises a date filter's bound with <c>_serialiseDate(date, includeTime = true)</c>, i.e.
+    /// <c>"YYYY-MM-DD hh:mm:ss"</c>, in EVERY supported major: v31-v35 call it with no override at all,
+    /// and v36 still defaults its new <c>includeTime</c> to <see langword="true"/> (date-only appears
+    /// only for a column explicitly configured <c>cellDataType: 'date'</c> or <c>includeTime: false</c>).
+    /// Emitting that string verbatim left it uncoercible downstream — <c>TypeCoercionValidator</c>
+    /// accepts only a canonical <c>YYYY-MM-DD</c> for a <c>date</c> field and an ISO-8601 instant for a
+    /// <c>datetime</c> one — so the single most ordinary thing a user can do, typing a date into a date
+    /// column's filter, was rejected end-to-end on every major. The suite missed it because the parser's
+    /// own tests stop at <c>Parse</c> (which succeeded, verbatim) and the pre-existing <c>operators/</c>
+    /// date fixtures use a date-only string AG Grid does not actually emit by default.</para>
+    ///
+    /// <para><b>This does not weaken #1635's "the adapter never coerces client values" rule</b> — the
+    /// same distinction <see cref="ResolveDatePreset"/> already draws. Coercing would be picking a type
+    /// for an arbitrary client string; this is decoding a wire format whose grammar AG Grid publishes
+    /// and whose meaning is fixed by the field's declared type. Doing it anywhere else is impossible:
+    /// Core cannot know AG Grid's format without AR-2.1's vendor-neutral layer learning a vendor quirk.</para>
+    ///
+    /// <para>Falls back to the verbatim <see cref="StringValue"/> whenever the type cannot be
+    /// established — no <see cref="AgGridParseOptions.Schema"/> supplied, the field absent from it, or
+    /// a non-date declared type. That keeps every pre-schema caller behaving exactly as before, and
+    /// leaves an unlisted field's fate to <c>FieldAllowlistValidator</c> downstream (where Lenient mode
+    /// can still strip it) rather than deciding it here.</para>
+    /// </summary>
+    private static TypedValue ResolveDateWireValue(
+        string field, JsonElement condition, string propertyName, DateResolutionContext context)
+    {
+        var raw = ReadStringValue(condition, propertyName, field, "date").Value;
+
+        if (context.Options.Schema is not { } schema
+            || !schema.Fields.TryGetValue(field, out var fieldConfig)
+            || fieldConfig.Type is not (FieldType.Date or FieldType.Datetime))
+        {
+            return new StringValue { Value = raw };
+        }
+
+        if (!TryParseAgGridWireDate(raw, out var wallClock, out var hasTime))
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                $"Column '{field}': '{propertyName}' value '{raw}' is not one of AG Grid's date-filter wire " +
+                $"formats ('YYYY-MM-DD' or 'YYYY-MM-DD hh:mm:ss').");
+        }
+
+        if (fieldConfig.Type is FieldType.Datetime)
+        {
+            var instant = DatePresetResolver.LocalDateTimeToInstant(wallClock, context.Zone);
+            return new DatetimeValue
+            {
+                Value = instant.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture),
+                Zone = context.Zone.Id
+            };
+        }
+
+        // FieldType.Date. AG Grid's date picker has no time input, so a date column's bound is always
+        // serialised at midnight — a NON-midnight time against a date-declared field is genuinely
+        // ambiguous (which day did the user mean, in which zone?) and is rejected rather than silently
+        // truncated, per SEM-4's "must NOT conflate dateValue and datetimeValue".
+        if (hasTime && wallClock.TimeOfDay != TimeSpan.Zero)
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                $"Column '{field}' is declared 'date', but '{propertyName}' carries a non-midnight time " +
+                $"('{raw}'). Truncating it would silently discard what the client asked for (SEM-4 forbids " +
+                $"conflating a local date with an instant) — declare the field 'datetime' if the time matters.");
+        }
+
+        return new DateValue { Value = DateOnly.FromDateTime(wallClock).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) };
+    }
+
+    /// <summary>
+    /// Parses AG Grid's two date-filter wire forms, exactly as <c>_serialiseDate</c> emits them:
+    /// <c>YYYY-MM-DD</c> and <c>YYYY-MM-DD hh:mm:ss</c> (a single space separator, zero-padded parts).
+    /// Deliberately exact rather than a lenient <see cref="DateTime.TryParse"/>: a lenient parse would
+    /// accept locale-shaped strings AG Grid never sends and quietly succeed on input this adapter
+    /// should be rejecting.
+    /// </summary>
+    private static bool TryParseAgGridWireDate(string raw, out DateTime wallClock, out bool hasTime)
+    {
+        if (DateTime.TryParseExact(raw, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out wallClock))
+        {
+            hasTime = true;
+            return true;
+        }
+
+        hasTime = false;
+        return DateTime.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out wallClock);
     }
 
     /// <summary>
