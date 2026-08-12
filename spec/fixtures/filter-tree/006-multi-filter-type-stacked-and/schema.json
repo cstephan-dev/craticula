@@ -1,5 +1,6 @@
 {
   "mode": "strict",
+  "source": "orders",
   "stableKey": "id",
   "fields": {
     "customerName": {

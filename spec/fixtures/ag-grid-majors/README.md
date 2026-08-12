@@ -147,7 +147,7 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
 
 ## Notes on artifact construction
 
-- Cases 001, 002, 003, 005, 006 are ordinary leaf-row queries: `SELECT * FROM employees`, SEM-6's
+- Cases 001, 002, 003, 005, 006 are ordinary leaf-row queries: `SELECT * FROM "employees"`, SEM-6's
   `id` tiebreaker always appended, Mongo's mandatory null-bucket `$addFields`/`$sort`/`$unset` trio,
   Search `sort[].missing`. Range paging is `LIMIT (endRow - startRow) OFFSET startRow` /
   `$skip`/`$limit` / `from`/`size`.
@@ -166,21 +166,34 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
     query where no document score is ever read. Following `group-aggregation/` here is consistent with
     everything above it in this list, but it does mean this category is internally split, so it is
     written down rather than left for a reader to notice.
-  - **NOT** `group-aggregation/`'s identifier quoting — see the next bullet, which is the one place
-    this case knowingly departs from its reference category.
-- **Known open contradiction: identifier quoting on a grouped projection.** Case 004 renders
-  `SELECT department AS department, SUM(salary) AS salary_sum ...`; `group-aggregation/001`, the same
-  IR construct, renders `SELECT "region" AS "region", SUM("amount") AS "amount_sum" ...`. This is not
-  a difference of content — it is the *same* grouped-projection construct rendered two ways, and 004
-  is the first grouped projection authored outside `group-aggregation/`, so it is the first case where
-  the suite states two answers to one question. Unquoted is kept here because it is the suite majority
-  — 144 of the 164 Postgres artifacts are unquoted, and **all 20 quoted ones are `group-aggregation/`**
-  — and because switching this one case would split *this* category instead of unsplitting the suite.
-  **Neither rendering is normative yet.** A port cannot satisfy both under T-1a artifact equality if it
-  emits a single canonical form, so this must be resolved — by picking one and re-authoring the
-  minority — before Postgres artifact equality can be enforced across categories. Until then, treat a
-  quoting-only mismatch on a grouped projection as a known suite defect, not a port bug. Tracking it
-  here rather than silently in one category's notes is the point of this bullet.
+  - **and** `group-aggregation/`'s identifier quoting — see the next bullet; this used to be the one
+    place case 004 knowingly departed from its reference category, and no longer is.
+- **RESOLVED (#1638): identifier quoting on a grouped projection.** This bullet used to record an
+  open contradiction: case 004 rendered `SELECT department AS department, SUM(salary) AS salary_sum
+  ...` while `group-aggregation/001`, the *same* IR construct, rendered `SELECT "region" AS "region",
+  SUM("amount") AS "amount_sum" ...`. Unquoted was kept here at the time because it was the suite
+  majority (144 of 164 Postgres artifacts, with all 20 quoted ones in `group-aggregation/`) and
+  switching one case would have split this category instead of unsplitting the suite.
+  #1638 unsplit the suite the other way: **always quote** is now normative
+  (`spec/semantics.md`, SQL-1), the 144 unquoted artifacts were re-authored, and case 004 now reads
+  `SELECT "department" AS "department", SUM("salary") AS "salary_sum" FROM "employees" ...`. The
+  deciding argument was not the head-count but a latent execution-tier bug the artifact tier cannot
+  see: `dialect-parity/` declares camelCase physical columns that unquoted PostgreSQL folds to
+  lowercase, so those queries would have failed against a real table at T-1b (#1624). A
+  quoting-only mismatch is therefore now a **port bug**, not a suite defect. Kept as a record of why
+  the answer is what it is.
+
+  *Scope of "resolved", so nobody reads this bullet as "the suite is now internally consistent".* It
+  resolves the quoting split, on **Postgres**, and nothing more. Two registers of open contradictions
+  remain, both scheduled and both recorded where their artifacts live: `dialect-parity/`'s 19
+  `mysql`/`mssql`/`sqlite` artifacts are still unquoted pending #1639's choice of each engine's quote
+  character (`dialect-parity/README.md`), and `group-aggregation/` still splits from the rest of the
+  suite on grouped `ORDER BY` collation and on the unwrapped drill-down conjunction, both pending
+  BM-2 decisions (`group-aggregation/README.md`, "Known open contradictions"). **Case 004 is inside
+  the first of those two today**: its `ORDER BY "department" ASC NULLS LAST` groups and sorts on a
+  case-insensitive `string` column with no `COLLATE craticula_ci`, exactly as `group-aggregation/`'s
+  20 do and unlike every leaf artifact in the suite. It is the only grouped artifact outside that
+  category, so #1640 must re-author it in the same pass.
 - The Mongo query-level `collation` wrapper appears only where SEM-1's collation mechanism is
   actually used (`$eq`/`$in`/group-key **matching** on a case-insensitive `string`). Cases whose only
   string mechanism is a pattern match keep their own `$options: "i"` and need no wrapper — a

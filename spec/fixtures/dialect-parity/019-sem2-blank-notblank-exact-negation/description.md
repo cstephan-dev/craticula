@@ -6,8 +6,11 @@ hand-derived condition (SEM-2's Must-Not: "must NOT derive `notBlank` independen
 below is rendered as an **explicit negation wrapping `blank`'s own compiled form**, to make that
 mechanism visible rather than its algebraically-equivalent expansion:
 
-- **Postgres**: `NOT (lastName IS NULL OR lastName = '')` — not the De Morgan-expanded
-  `lastName IS NOT NULL AND lastName <> ''` (functionally identical once evaluated, but the
+- **Postgres**: `NOT (("lastName" IS NULL OR "lastName" = ''))` — the inner parentheses are
+  `blank`'s own compiled form, reproduced verbatim, and the outer ones are `NOT`'s; the double pair
+  is what makes "negate `blank`'s output" visible in the text rather than merged away. Not the
+  De Morgan-expanded
+  `"lastName" IS NOT NULL AND "lastName" <> ''` (functionally identical once evaluated, but the
   negated form is what this rule requires the compiler to actually *construct*; the AND-form, if a
   dialect renderer chooses to simplify to it, must be *derived from* this negation, never written
   independently).

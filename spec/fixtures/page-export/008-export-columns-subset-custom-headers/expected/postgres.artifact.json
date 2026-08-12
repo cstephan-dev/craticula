@@ -1,5 +1,5 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT customer_name AS customerName, total_amount AS totalAmount, order_date AS orderDate FROM orders ORDER BY id ASC NULLS LAST",
+  "sql": "SELECT \"customer_name\" AS \"customerName\", \"total_amount\" AS \"totalAmount\", \"order_date\" AS \"orderDate\" FROM \"orders\" ORDER BY \"id\" ASC NULLS LAST",
   "params": []
 }

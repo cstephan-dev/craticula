@@ -1,5 +1,6 @@
 {
   "mode": "strict",
+  "source": "sales_fact",
   "stableKey": "id",
   "fields": {
     "id": {

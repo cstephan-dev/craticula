@@ -1,5 +1,5 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM employees WHERE department NOT IN ($1, $2) OR department IS NULL ORDER BY id ASC NULLS LAST LIMIT $3 OFFSET $4",
-  "params": ["SALES", "SUPPORT", 100, 0]
+  "sql": "SELECT * FROM \"employees\" WHERE (\"department\" <> ALL($1) OR \"department\" IS NULL) ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [["SALES", "SUPPORT"], 100, 0]
 }

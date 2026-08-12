@@ -13,6 +13,14 @@ in the schema. Most fixtures share the same base `GridSchema` (fields `id` int64
 `createdAt` datetime, `stableKey: "id"`, `mode: "strict"`) so the only thing that varies between
 cases is the request shape.
 
+**`source` (added #1638) is a convention here, not a derivation.** Every other category's `source`
+was read back out of that fixture's own expected artifact's `FROM` clause — the authoritative
+per-fixture answer. These 22 fixtures have no artifact to read (that is the point of the category),
+so all 22 carry `source: "items"`, chosen to match their shared generic goods-shaped field set
+(`name`/`price`/`quantity`/`amount`/`active`). Nothing in this category depends on the value: no
+case here ever reaches a compiler, so no `FROM` clause is ever emitted. Keep new cases on the same
+value unless one is deliberately testing something about `source` itself.
+
 `rejectedAt` values follow the pinned validation order from
 `docs/architecture/c4-components-core-ir.md`: **allowlist → resourceLimits → typeCoercion →
 requestParsing**. Note `requestParsing` sits conceptually *before* allowlist in actual execution

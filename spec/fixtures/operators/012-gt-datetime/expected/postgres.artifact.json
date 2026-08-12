@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM items WHERE created_at > $1 ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT * FROM \"items\" WHERE \"created_at\" > $1 ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "2026-01-01T00:00:00Z",
     100,

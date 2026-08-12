@@ -4,11 +4,12 @@ namespace Craticula.AgGrid.Tests;
 
 /// <summary>
 /// Hand-built boundary tests for <see cref="AgGridRequestParser.Parse"/>'s <c>set</c> filterType
-/// dispatch — always <see cref="ComparisonOperator.In"/>, values wrapped as <see cref="StringValue"/>
-/// verbatim (this is also how boolean columns are filtered on the real wire, per the plan's Key
-/// design decision #1 — this parser never rewrites a boolean-shaped set selection into AR-6's
-/// dedicated <c>true</c>/<c>false</c> unary operator; that translation, if ever needed, belongs to a
-/// later semantic/compiler stage, not request parsing).
+/// dispatch — <see cref="ComparisonOperator.In"/> with values wrapped as <see cref="StringValue"/>
+/// verbatim. Every request here is parsed WITHOUT an <see cref="AgGridParseOptions.Schema"/>, which
+/// is also what keeps the boolean-column convention (a single-value selection on a field declared
+/// <c>boolean</c> becoming AR-6's unary <c>true</c>/<c>false</c>, added in #1638 — see
+/// <c>AgGridRequestParserOperatorsFixtureTests</c>) out of these cases: unschema'd,
+/// <c>values: ["true"]</c> is an ordinary set membership on the literal text.
 /// </summary>
 public class AgGridRequestParserSetConditionTests
 {
@@ -41,7 +42,7 @@ public class AgGridRequestParserSetConditionTests
     }
 
     [Fact]
-    public void Single_Boolean_Like_Value_Still_Maps_To_In_Not_To_Unary_True()
+    public void Single_Boolean_Like_Value_Maps_To_In_When_No_Schema_Declares_The_Field_Boolean()
     {
         var comparison = ParseSingleComparison("""{ "filterType": "set", "values": ["true"] }""");
 

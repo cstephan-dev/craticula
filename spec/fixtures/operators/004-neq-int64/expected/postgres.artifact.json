@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM items WHERE ((age <> $1 OR age IS NULL)) AND ((age <> $2 OR age IS NULL)) ORDER BY id ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "sql": "SELECT * FROM \"items\" WHERE ((\"age\" <> $1 OR \"age\" IS NULL) AND (\"age\" <> $2 OR \"age\" IS NULL)) ORDER BY \"id\" ASC NULLS LAST LIMIT $3 OFFSET $4",
   "params": [
     30,
     40,

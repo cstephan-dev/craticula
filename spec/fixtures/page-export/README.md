@@ -36,13 +36,22 @@ trigger-character coverage). Requirement ids referenced below are
   `exportColumns` fixtures.** `schema.json`'s `physical.sql.column` differs from the logical field
   name for `orderDate` (`order_date`), `customerName` (`customer_name`), and `totalAmount`
   (`total_amount`). Every `postgres.artifact.json` `SELECT` list in this category aliases those
-  three back to their logical camelCase names (`order_date AS orderDate`, etc.) — the same "alias
+  three back to their logical camelCase names (`"order_date" AS "orderDate"`, etc.) — the same "alias
   only when the physical name differs from the logical field name" convention `group-aggregation/`'s
   005-006 fixtures use (see 008's `description.md` for the full rationale). `ORDER BY`/`WHERE`
   clauses reference the physical column name directly, never the alias, matching every other
   category's convention. This applies uniformly, including to fixtures whose own point is
   unrelated to column projection (001-007, 010-022) — a fixture's artifact must be correct in
   every detail, not just the one property it's authored to exercise.
+- **Canonical SQL rendering (#1638).** All 22 Postgres artifacts gained identifier quoting — every
+  column, every alias, and the table — per `spec/semantics.md`'s "Addendum — canonical SQL
+  rendering" (SQL-1). One artifact also had a rendering rewritten: `005`'s `region IN ($1, $2)` with
+  two scalar parameters became `"region" = ANY($1)` with a **single array parameter**
+  (`params: [["EMEA", "APAC"]]`), SQL-4's Postgres in-list form, which is what `operators/035`-`038`
+  and `dialect-parity/016` already used. This category is otherwise out of scope for the SQL
+  compiler story (#1638 §"Scope boundaries") — the rewrite happened here anyway because leaving one
+  category spelling `in` differently would have preserved exactly the contradiction the pass exists
+  to remove.
 
 ## Cases
 

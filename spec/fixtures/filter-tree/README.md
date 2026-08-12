@@ -22,6 +22,14 @@ Depth is counted from the root node inward, root = depth 1; each `And`/`Or`/`Not
 
 ## Postgres compilation conventions used in these artifacts
 
+> Suite-wide rendering rules (always-quoted identifiers, composite/negation parenthesisation,
+> `NOT ILIKE`, `= ANY($1)`) are normative in `spec/semantics.md`'s "Addendum — canonical SQL
+> rendering". The bullets below are what is specific to *this* category's tree shapes.
+
+- **`notContains` renders with the negated operator, `<col> NOT ILIKE ...`, not `NOT (<col> ILIKE
+  ...)`** (SQL-3). Fixture `006`'s second leaf is the one place this category shows it; the outer
+  `NOT (...)` form below belongs to a **tree-level `Not` node** only, which is a different IR shape
+  even though the two look alike in the text.
 - **`eq`/`neq` leaves use a collation, never `ILIKE`.** Per SEM-1's pinned exact-match mechanism,
   a case-insensitive `eq`/`neq` leaf on a `string` field compiles as `<col> COLLATE craticula_ci =
   $n` (`<>` for `neq`) — `ILIKE` is reserved for `contains`/`notContains`/`startsWith`/`endsWith`,

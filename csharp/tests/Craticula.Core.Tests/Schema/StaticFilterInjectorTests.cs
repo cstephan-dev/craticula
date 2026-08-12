@@ -21,6 +21,7 @@ public class StaticFilterInjectorTests
 
     private static GridSchema MakeSchema(FilterNode? staticFilter) => new()
     {
+        Source = "orders",
         StableKey = "id",
         StaticFilter = staticFilter,
         Fields = new Dictionary<string, FieldConfig> { ["id"] = new() { Type = FieldType.Int64 } },

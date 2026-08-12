@@ -1,5 +1,5 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM employees WHERE NOT (lastName ILIKE '%' || $1 || '%' ESCAPE '\\') OR lastName IS NULL ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT * FROM \"employees\" WHERE (\"lastName\" NOT ILIKE '%' || $1 || '%' ESCAPE '\\' OR \"lastName\" IS NULL) ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": ["smith", 100, 0]
 }

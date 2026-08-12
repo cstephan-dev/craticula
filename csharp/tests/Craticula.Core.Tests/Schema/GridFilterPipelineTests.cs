@@ -19,6 +19,7 @@ public class GridFilterPipelineTests
     private static GridSchema MakeSchema(FilterNode? staticFilter = null, GridSchemaMode mode = GridSchemaMode.Strict) => new()
     {
         Mode = mode,
+        Source = "orders",
         StableKey = "id",
         StaticFilter = staticFilter,
         Fields = new Dictionary<string, FieldConfig>

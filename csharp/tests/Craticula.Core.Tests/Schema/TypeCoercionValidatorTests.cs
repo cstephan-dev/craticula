@@ -15,6 +15,7 @@ public class TypeCoercionValidatorTests
 {
     private static GridSchema Schema { get; } = new()
     {
+        Source = "items",
         StableKey = "id",
         Fields = new Dictionary<string, FieldConfig>
         {

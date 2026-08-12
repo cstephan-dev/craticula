@@ -10,10 +10,65 @@ cross-backend-parity cases in this category).
 All 20 cases share one `schema.json` ("sales" grid: `id` stableKey; `region`/`segment`/`product`
 groupable strings; `fiscalYear` groupable int64; `amount` a decimal aggregatable over
 `sum`/`min`/`max`/`avg`; `quantity` an int64 aggregatable over all five funcs including `count`).
-The compiled artifacts illustrate one base SQL table/Mongo collection/Search index, named
-`sales_fact` — `spec/grid-schema.schema.json` deliberately does not model the FROM
-table/collection itself (SC-1..SC-5 scope, `#1631`'s concern), so this name is illustrative only,
-chosen once and reused for consistency across the category.
+All 20 read one base SQL table / Mongo collection / Search index, `sales_fact`. That name used to
+appear only in the expected artifacts — `spec/grid-schema.schema.json` did not model the FROM
+target at all, so it was recoverable from nothing but the artifacts themselves. #1638 added a
+required `source` to the schema (SQL-0 in `spec/semantics.md`'s canonical-rendering addendum); each
+fixture's `source` was set from its own artifact's `FROM` clause, so `sales_fact` is now declared
+input rather than an unexplained constant in the output.
+
+**Identifier quoting started here and is now the suite-wide rule.** These 20 artifacts were the only
+quoted ones in the suite (`SELECT "region" AS "region", SUM("amount") AS "amount_sum" FROM
+"sales_fact"`) against 144 unquoted ones elsewhere. #1638 resolved that contradiction in this
+category's favour — always quote, including the table and every alias — and re-authored the other
+144. **On quoting alone**, nothing here changed: this category is the reference for that form. It is
+*not* aligned with the rest of the addendum, though — see the register below, and note that `020`'s
+`params[0]` was separately corrected to AR-7's decimal-as-string (`"1000"`, not `1000`).
+
+## Known open contradictions (owned by #1640)
+
+In the spirit of the register `ag-grid-majors/README.md` carried before #1638 closed its entry: when
+a port's grouped output disagrees with these artifacts on the two points below, that is a **known
+defect in the oracle**, not necessarily a bug in the port. T-1's "if a fixture and an implementation
+disagree, the implementation has a bug" presumes the fixtures agree with each other; on these two
+points they do not, and #1638 deliberately refused to guess because both turn on a **BM-2 design
+call** it does not own. Delete an entry when #1640 settles it — and re-author the affected artifacts
+in the same commit. (b) is confined to this category; (a) reaches one artifact outside it,
+`ag-grid-majors/004`, which is the suite's only other grouped query and follows this category's
+conventions by design.
+
+**(a) Grouped/aggregated `ORDER BY` keys omit `COLLATE craticula_ci` on case-insensitive `string`
+columns.** No `ORDER BY` key in any of these 20 artifacts carries the collation, although every one
+of them sorts on a case-insensitive `string` column (`region`/`segment`/`product`, and `id`, which is
+a `string` in this category's schema). Everywhere else in the suite the same key does carry it —
+`sort-paging/001` renders `ORDER BY "last_name" COLLATE craticula_ci ASC NULLS LAST` — and so does
+`SqlQueryBuilder.RenderOrderBy`, unconditionally, via
+`SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity`. Case `002` contradicts *itself* within one
+statement: `WHERE "region" COLLATE craticula_ci = $1 ... ORDER BY "segment" ASC NULLS LAST`, i.e. the
+same category of column filtered under the collation mechanism and sorted without it — precisely
+what SEM-1's "never mix the two mechanisms for one field" forbids. `ag-grid-majors/004`
+(`ORDER BY "department" ASC NULLS LAST`, grouped) has the same defect for the same reason.
+
+*Why it was not simply fixed:* adding the collation to `ORDER BY` alone would leave `GROUP BY`
+without it, and on a `deterministic = false` ICU collation `GROUP BY` is what decides **bucket
+identity** — whether `"EMEA"` and `"emea"` are one group or two. That is a semantics decision about
+grouping (BM-2), not a rendering tidy-up, and it has to be made for `GROUP BY`, `ORDER BY` and AGG-3's
+drill-down `WHERE` *together* or the three will disagree again.
+
+**(b) The drill-down conjunction renders unwrapped.** `003` and `005` emit
+`WHERE "region" COLLATE craticula_ci = $1 AND "segment" COLLATE craticula_ci = $2` — bare — and `004`
+the same with a third conjunct, while SQL-2 requires every composite to wrap (`(a AND b)`), as
+`filter-tree/` and `operators/` do. (`001` has no drill-down filter and `002` has a single one, so
+neither is affected: a lone predicate is not a composite.)
+
+*Why it is genuinely ambiguous rather than simply wrong:* all three have `filterModel: null`. Their
+entire `WHERE` is synthesised from `groupKeys` by BM-2's drill-down protocol, so there is no IR
+`andNode` anywhere — and SQL-2 is stated as a rule about *IR constructs*, so it may legitimately not
+apply. #1640 must decide whether the drill-down conjunction is materialised as a real `andNode`
+(wrap, and these three artifacts change) or assembled as clause text (no wrap, and SQL-2 gains an
+explicit exception naming this case). Either answer is fine; leaving it unstated is not, because a
+compiler that reuses the filter-tree renderer for the drill-down gets the wrapped form for free and
+will look wrong against these three.
 
 ## Aggregation semantics addendum (AGG-1..AGG-5) — applied category-wide
 

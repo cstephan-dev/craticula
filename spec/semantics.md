@@ -12,9 +12,11 @@ one worked example per backend family showing the *same logical outcome* reached
 backend-native mechanisms, an explicit "must NOT" list, and cross-links to the IR shapes in
 [`ir.schema.json`](./ir.schema.json) that the rule constrains.
 
-All SQL/Mongo/OpenSearch examples below are illustrative snippets to convey intent, not the literal
-compiler output for any one dialect — dialect-specific rendering (identifier quoting, parameter
-style) is BM-1's concern, not this document's.
+All SQL/Mongo/OpenSearch examples in the SEM-1..SEM-7 sections below are illustrative snippets to
+convey intent, not the literal compiler output for any one dialect. The literal rendering — identifier
+quoting, parenthesisation, which operator carries a negation, how a set is parameterized — is pinned
+separately in the **"Addendum — canonical SQL rendering"** at the end of this document, which *is*
+normative and *is* byte-for-byte what the `spec/fixtures/` Postgres artifacts contain.
 
 ---
 
@@ -167,8 +169,8 @@ negative *operators* above. AG Grid's client-side row model has no tree-level NO
 as a reference point, but its own rationale extends cleanly: a NOT that excludes a NULL/missing row
 just because SQL's three-valued logic happens to do so is the identical bug this rule exists to
 prevent, one syntax level up. Concretely, `Not(Comparison(field, contains, X))` on SQL compiles as
-`NOT (col ILIKE '%'||:v||'%') OR col IS NULL` — the `OR col IS NULL` is mandatory on the *outside* of
-the `NOT`, exactly mirroring `neq`'s own compiled shape — while Mongo's `$nor`/ES's `must_not`
+`(NOT (col ILIKE '%'||:v||'%') OR col IS NULL)` — the `OR col IS NULL` is mandatory on the *outside*
+of the `NOT`, exactly mirroring `neq`'s own compiled shape — while Mongo's `$nor`/ES's `must_not`
 already include null/missing documents natively for most query types (verify per query type per the
 third "must NOT" below, the same caveat as `neq`'s own worked example).
 
@@ -186,9 +188,10 @@ non-SSRM behavior.
 
 **Worked example** — `neq: "Alice"` against a `name` field where some rows have `name IS NULL`:
 
-- **SQL** — the explicit `OR IS NULL` is mandatory precisely because bare `<>` drops NULLs:
+- **SQL** — the explicit `OR IS NULL` is mandatory precisely because bare `<>` drops NULLs (the
+  enclosing parentheses are not optional either — see SQL-2 in the canonical-rendering addendum):
   ```sql
-  WHERE name <> :v OR name IS NULL
+  WHERE (name <> :v OR name IS NULL)
   ```
 - **MongoDB** — `{ field: { $ne: value } }` already matches documents where the field is null or
   entirely missing (MongoDB's `$ne` treats a missing field as not-equal), so the naive single-clause
@@ -762,3 +765,118 @@ TRD §15 risk register's own "documented-divergence register" precedent) rather 
 with a client-side reorder, which would defeat server-side paging's whole purpose for the grouped
 case. Fixtures exercising composite null-bucket ordering mark this explicitly rather than silently
 pinning three-way-identical output that ES/OpenSearch cannot actually produce.
+
+---
+
+## Addendum — canonical SQL rendering (not numbered SEM-*, for the same reason as the aggregation
+addendum: the TRD's §7 enumerates SEM-1..SEM-7 and stops, but the conformance fixture suite needs a
+literal answer and no other document owns one)
+
+The SEM-1..SEM-7 sections above pin *semantics* and say so explicitly — their snippets are
+illustrative. That was enough while nothing tried to satisfy them. It stopped being enough in #1638:
+the fixture suite (#1630) was hand-authored by seven parallel agents with no compiler to check it,
+and a research pass found the **same IR construct rendered several different ways from identical
+inputs** across categories — two spellings of `notIn`, two of `notContains`, two parenthesisations of
+a null-inclusive negative, two of a composite `and`/`or`, two of `notBlank`, and identifier quoting
+in one category out of nine. No single compiler can satisfy contradictory oracles under T-1a artifact
+equality, so the answers are pinned here, once, and every language port inherits them instead of
+rediscovering them.
+
+Each rule below is the form the `spec/fixtures/*/expected/postgres.artifact.json` files now contain.
+Postgres is the reference dialect (§5); where a rule is Postgres-specific rather than universal, it
+says so and names what the other dialects do instead.
+
+**SQL-0. `GridSchema.source` is where the table comes from.** A compiled query names a physical
+collection — `FROM employees`, a Mongo collection, a Search index — and until #1638 that name existed
+in no input: not in the AG Grid wire request (no SSRM payload carries one, and none should: it is
+exactly the kind of thing SEC-1 keeps client-side callers away from), not in `GridSchema`, not in the
+TRD. It was recoverable only from a fixture's directory name. `grid-schema.schema.json` therefore
+declares a **required** `source` string, alongside the field allowlist (SC-2) and the per-backend
+physical mappings (SC-4) that are already host-declared and already never client-influenced. A
+compiler MUST take the collection from `schema.source` and MUST NOT accept one from the request.
+
+**SQL-1. Always quote identifiers — every column, every alias, and the table.** Postgres renders
+`SELECT * FROM "employees" WHERE "hire_date" >= $1`, never the bare form.
+
+*Why.* Unquoted identifiers are not "the same thing without the noise" — PostgreSQL **case-folds them
+to lowercase**. The fixture suite contains real proof: `dialect-parity/` declares camelCase physical
+columns (`lastName`, `employeeCode`, `jobTitle`) and, before #1638, emitted them unquoted, so
+`WHERE lastName ILIKE ...` would reach the server as `where lastname ilike ...` and fail against the
+table those fixtures describe. The artifact-equality tier (T-1a) cannot see that class of bug at all
+— it compares strings — so it would have sat in the oracle until the execution-equality tier (T-1b,
+#1624) ran the query against a real database. Quoting also makes `Dialect.QuoteIdentifier`
+unambiguous: it is applied to *every* identifier, so there is no second rule about when to skip it,
+and no dialect needs a keyword blocklist to stay correct.
+
+*Must NOT.* Must NOT quote conditionally ("only when it needs it", "only mixed-case names") — that
+reintroduces the blocklist and makes the fixture oracle depend on a keyword list that differs per
+dialect and per server version. Must NOT quote things that are not identifiers: the collation name in
+`COLLATE craticula_ci`, parameter placeholders, and the `'%'` / `'\'` / `''` literals of the ILIKE and
+blank scaffolding are all left exactly as they are.
+
+*The rule is universal; the fixture suite is not yet.* #1638 re-authored only the **Postgres**
+artifacts, because the *rule* ("always quote") is dialect-independent while the *quote character* is
+not — `"` on Postgres and SQLite, `[…]` on SQL Server, backticks (or `"` under `ANSI_QUOTES`) on
+MySQL — and choosing each engine's is part of writing that engine's `Dialect`, which is **#1639**.
+So the **19 `mysql`/`mssql`/`sqlite` artifacts in `spec/fixtures/dialect-parity/` predate this rule
+and are still unquoted**, which makes `006`-`010`'s six-artifact parity sets temporarily mixed
+(quoted Postgres, unquoted others). That is a **known, scheduled gap in the oracle, not a licence to
+quote conditionally**: #1639 re-authors those 19 as it implements each dialect, and until it does, a
+port that quotes them and disagrees with the fixture is right and the fixture is stale. Quoting is
+the only SQL-0..SQL-4 rule those 19 artifacts still predate — SQL-2's wraps were applied to them in
+the same pass, and no non-Postgres artifact exercises SQL-3 or SQL-4 at all.
+
+**SQL-2. Parenthesisation is structural, not cosmetic — one rule per construct, applied always.**
+Correct SQL admits many equivalent bracketings; artifact equality admits one. The four cases:
+
+- **Composite `and` / `or` (`$defs/andNode`, `$defs/orNode`): the composite is wrapped, its children
+  are rendered bare.** `(a AND b)`, `(a OR b OR c)` — never `(a) AND (b)`, never `((a)) AND ((b))`. A
+  child that is itself a composite (or a construct with its own wrap, below) carries its own
+  parentheses, so nesting composes: `((x OR y) AND z)`. A single-child composite still wraps: `(x)`.
+- **A null-inclusive negative (SEM-2) is always wrapped**, whether or not it is the whole `WHERE`
+  clause: `("age" <> $1 OR "age" IS NULL)`. Never bare at the top level. This is what makes the leaf
+  safe to drop into any parent without the parent knowing what it contains — a top-level `OR` left
+  unwrapped inside an `AND` parent is a silent correctness bug, and pinning the wrap unconditionally
+  is what removes the whole class. **Unlike the quote character, this is not a per-dialect choice at
+  all**: parenthesisation is structural, so a query builder emits it and the `Dialect` interface has
+  no say in it (an artifact for *any* dialect that shows the disjunction bare is therefore
+  unsatisfiable by construction, not merely unusual — `dialect-parity/008`'s `mysql`/`mssql`/`sqlite`
+  artifacts were fixed on exactly that ground).
+- **A tree-level `notNode` (`Not(child)`)** renders `(NOT (<child>) OR <col> IS NULL [OR ...])` — the
+  inner parentheses around the child, the outer around the whole null-inclusive disjunction, and one
+  `IS NULL` disjunct per distinct field referenced anywhere in the child subtree, in first-appearance
+  order.
+- **`blank` / `notBlank`.** `blank` is `("c" IS NULL OR "c" = '')` for a `string` field and `"c" IS
+  NULL` for every other type (SEM-2's fourth must-not). `notBlank` is `NOT (<blank>)` **literally
+  applied to that text**, which yields `NOT (("c" IS NULL OR "c" = ''))` for a string and
+  `NOT ("c" IS NULL)` otherwise. The doubled parentheses in the string case are not an accident to be
+  tidied away: they are SEM-2's "negate the compiled `blank` condition, never re-derive it" made
+  visible in the output. Collapsing them by hand is the first step toward the two forms drifting.
+
+**SQL-3. A negative operator renders with the negated operator, not an outer `NOT (...)`.**
+`notContains` is `"c" NOT ILIKE '%' || $1 || '%' ESCAPE '\'`, not `NOT ("c" ILIKE ...)`.
+
+*Why.* Every other negative operator already does this — `neq` renders `<>`, not `NOT (=)`; `notIn`
+renders `<> ALL`, not `NOT (= ANY)` — so the outer-`NOT` spelling made `notContains` the single
+exception, for no gain. Keeping the negation in the operator also keeps the `ESCAPE` clause attached
+to the pattern-match expression it belongs to, which is what SEM-7 requires. Note the deliberate
+contrast with the previous rule: an outer `NOT (...)` is correct and required for a **tree-level
+`notNode`**, because there the negation applies to an arbitrary subtree, not to one comparison. The
+distinction is the IR shape, never the surface similarity of the two.
+
+**SQL-4. Set membership is one array parameter on Postgres — `= ANY($1)` / `<> ALL($1)` — and that is
+a dialect rendering, not a universal one.** The set's values are bound as a **single** array
+parameter, so the placeholder count never depends on the value count: `"status" = ANY($1)` with
+`params: [["active", "pending"]]`, never `IN ($1, $2)` with two scalars.
+
+*Why it is behind the dialect interface.* `ANY(array)` does not exist in SQL Server, MySQL or SQLite.
+#1639 renders those three as `IN (...)` with N scalar parameters. The query builder therefore MUST
+NOT emit either spelling itself — it asks the dialect for an in-list rendering and passes it the
+field and the set. A builder that contains an `if` for this is the BM-1 smell
+`docs/architecture/c4-components-sql-compiler.md` warns about. (This rule is also the reason the two
+spellings must not be treated as interchangeable in a fixture: `params.length` differs between them,
+so a port that picks the other one fails on the parameter list even when the SQL text is accepted.)
+
+**Cross-links.** `grid-schema.schema.json` (`source`), `$defs/andNode`, `$defs/orNode`,
+`$defs/notNode`, `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`notContains`),
+`$defs/setOperator` (`in`, `notIn`), and BM-1's `Dialect` interface.

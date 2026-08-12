@@ -12,6 +12,14 @@ public sealed record GridSchema
     /// <summary>[DEFAULT] SC-1: Strict throws on an unlisted colId; Lenient silently strips it.</summary>
     public GridSchemaMode Mode { get; init; } = GridSchemaMode.Strict;
 
+    /// <summary>
+    /// The physical collection every compiled query reads from: the SQL table or view named in
+    /// <c>FROM</c>, the MongoDB collection, the Search index. Host-declared and never
+    /// client-influenced, like the per-field <see cref="SqlMapping"/> beside it — no AG Grid request
+    /// carries it and no compiler can invent it. Must be non-blank.
+    /// </summary>
+    public required string Source { get; init; }
+
     /// <summary>SEM-6: the field appended as a trailing sort tiebreaker whenever the request's own
     /// sort doesn't already end in a unique key. Must itself be a key present in <see cref="Fields"/>.</summary>
     public required string StableKey { get; init; }
@@ -34,6 +42,7 @@ public sealed record GridSchema
     /// (unmapped properties, duplicate keys, null where non-nullable, out-of-range enum values) —
     /// the checks here are the ones that survive valid-shaped-but-still-invalid JSON:
     /// <c>fields</c> non-empty (minProperties:1), no null <see cref="FieldConfig"/> entries,
+    /// <see cref="Source"/> non-blank (minLength:1),
     /// <see cref="StableKey"/> non-blank (minLength:1) and present in <see cref="Fields"/>,
     /// every <see cref="SqlMapping"/>'s "exactly one of column/qualifiedColumn/expression", and
     /// (via <see cref="FilterNodeValidator"/>) every structural invariant of a present
@@ -63,6 +72,11 @@ public sealed record GridSchema
                 throw new GridSchemaValidationException(
                     $"GridSchema.fields['{colId}'].physical.sql must set exactly one of column, qualifiedColumn, or expression.");
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(schema.Source))
+        {
+            throw new GridSchemaValidationException("GridSchema.source must not be blank.");
         }
 
         if (string.IsNullOrWhiteSpace(schema.StableKey))

@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM items WHERE (status COLLATE craticula_ci <> ALL($1) OR status IS NULL) ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT * FROM \"items\" WHERE (\"status\" COLLATE craticula_ci <> ALL($1) OR \"status\" IS NULL) ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     [
       "inactive",

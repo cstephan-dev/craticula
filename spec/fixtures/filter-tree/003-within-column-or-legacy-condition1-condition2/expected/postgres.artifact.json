@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM orders WHERE (region COLLATE craticula_ci = $1 OR region COLLATE craticula_ci = $2) ORDER BY id ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "sql": "SELECT * FROM \"orders\" WHERE (\"region\" COLLATE craticula_ci = $1 OR \"region\" COLLATE craticula_ci = $2) ORDER BY \"id\" ASC NULLS LAST LIMIT $3 OFFSET $4",
   "params": [
     "west",
     "east",

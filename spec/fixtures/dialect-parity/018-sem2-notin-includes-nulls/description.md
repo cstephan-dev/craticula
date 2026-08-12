@@ -12,9 +12,14 @@ no wire-level invert/exclude flag, so no native `filterModel` shape can express 
 structural gap `operators/036-notin-string` documents). This fixture reaches `notIn` via the
 `customFilters` (OQ-11) wire extension instead, with `filterModel: null`.
 
-- **Postgres/SQL Server/MySQL/SQLite** (Postgres shown; the other three dialects render
-  identically in shape): a bare `NOT IN (...)` would silently drop every NULL row under
-  three-valued logic — the explicit `OR department IS NULL` is mandatory.
+- **Postgres**: `("department" <> ALL($1) OR "department" IS NULL)` — a bare set-negative would
+  silently drop every NULL row under three-valued logic, so the explicit `OR "department" IS NULL`
+  is mandatory, and the whole disjunction is parenthesised per `spec/semantics.md`'s "Canonical SQL
+  rendering" section. The set itself is **one array parameter** (`<> ALL($1)`), not N scalar
+  placeholders — Postgres's array form, chosen so the placeholder count does not depend on the
+  value count. The other three dialects render identically *in shape* but not in text: neither SQL
+  Server, MySQL nor SQLite has `ANY(array)`, so #1639 renders them `NOT IN (...)` with N scalar
+  parameters behind the same dialect method.
 - **MongoDB**: `$nin` already matches missing/null-valued documents on its own, mirroring `$ne`'s
   behavior (`008`'s own note) — the compiler nonetheless emits the explicit `$or`-composed form for
   the same two reasons SEM-2 gives for `$ne`: parallel compiled shape across backends, and

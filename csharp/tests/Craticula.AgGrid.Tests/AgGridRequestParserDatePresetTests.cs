@@ -25,6 +25,7 @@ public class AgGridRequestParserDatePresetTests
 
     private static GridSchema SchemaWith(string field, FieldType type) => new()
     {
+        Source = "employees",
         StableKey = "id",
         Fields = new Dictionary<string, FieldConfig>
         {

@@ -1,5 +1,5 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM employees WHERE jobTitle ILIKE '%' || $1 || '%' ESCAPE '\\' ORDER BY id ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT * FROM \"employees\" WHERE \"jobTitle\" ILIKE '%' || $1 || '%' ESCAPE '\\' ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": ["engineer", 100, 0]
 }

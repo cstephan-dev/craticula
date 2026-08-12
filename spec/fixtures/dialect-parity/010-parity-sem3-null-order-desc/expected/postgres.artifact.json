@@ -1,5 +1,5 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT * FROM employees ORDER BY salary DESC NULLS FIRST, id ASC NULLS LAST LIMIT $1 OFFSET $2",
+  "sql": "SELECT * FROM \"employees\" ORDER BY \"salary\" DESC NULLS FIRST, \"id\" ASC NULLS LAST LIMIT $1 OFFSET $2",
   "params": [100, 0]
 }
