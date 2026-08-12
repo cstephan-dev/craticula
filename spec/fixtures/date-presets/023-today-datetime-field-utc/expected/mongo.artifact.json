@@ -1,0 +1,45 @@
+[
+  {
+    "$match": {
+      "createdAt": {
+        "$gte": {
+          "$date": "2026-08-12T00:00:00Z"
+        },
+        "$lt": {
+          "$date": "2026-08-13T00:00:00Z"
+        }
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

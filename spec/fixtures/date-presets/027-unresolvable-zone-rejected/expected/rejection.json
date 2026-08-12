@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "'Mars/Olympus_Mons' is IANA-SHAPED but names no zone any tzdata install can resolve. The adapter must reject rather than fall back to its configured default zone: a silent fallback would resolve every preset boundary in some other zone than the request asked for, producing wrong-but-plausible rows with no error anywhere. Host-independent — no tzdata release contains this id."
+}

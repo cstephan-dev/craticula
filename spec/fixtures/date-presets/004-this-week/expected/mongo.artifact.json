@@ -1,0 +1,41 @@
+[
+  {
+    "$match": {
+      "hireDate": {
+        "$gte": "2026-08-10",
+        "$lt": "2026-08-17"
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

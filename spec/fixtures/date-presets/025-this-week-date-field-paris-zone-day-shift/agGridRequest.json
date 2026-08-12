@@ -1,0 +1,25 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "hireDate": {
+      "filterType": "date",
+      "type": "thisWeek"
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "requestContext": {
+    "zone": "Europe/Paris",
+    "now": "2026-08-16T23:30:00Z"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM employees WHERE (hire_date >= $1 AND hire_date < $2) ORDER BY id ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "params": [
+    "2026-08-12",
+    "2026-08-13",
+    100,
+    0
+  ]
+}

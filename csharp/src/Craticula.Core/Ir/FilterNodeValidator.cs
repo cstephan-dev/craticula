@@ -226,7 +226,7 @@ public static class FilterNodeValidator
                     errors.Add($"datetimeValue.value '{Truncate(dtv.Value)}' does not match ir.schema.json's ISO-8601 instant pattern.");
                 }
 
-                if (dtv.Zone.Length == 0 || dtv.Zone.Length > 64 || !ZonePattern.IsMatch(dtv.Zone))
+                if (!IsIanaZoneIdShape(dtv.Zone))
                 {
                     errors.Add($"datetimeValue.zone '{Truncate(dtv.Zone)}' does not match ir.schema.json's IANA-zone-id shape.");
                 }
@@ -234,6 +234,26 @@ public static class FilterNodeValidator
                 break;
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="zone"/> has the shape <c>ir.schema.json</c> requires of a
+    /// <c>datetimeValue.zone</c> (an IANA zone id: 1-64 characters matching
+    /// <c>^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$</c>). Public — not merely the private check inlined
+    /// above — because an adapter that RESOLVES a zone id from untrusted input needs the identical
+    /// rule at its own boundary, to reject cleanly there rather than letting a bad id travel to
+    /// <see cref="Validate"/> and surface as a structural-invariant failure. Sharing the one rule
+    /// (rather than each caller keeping a copy of the pattern) is what keeps it from drifting from
+    /// <c>ir.schema.json</c>.
+    ///
+    /// <para>Shape only: this says nothing about whether the id names a zone the host can actually
+    /// resolve, nor whether it is a real IANA id rather than a platform alias — notably
+    /// <c>localtime</c>, <c>Factory</c> and <c>posixrules</c> all satisfy this shape but are tzdata
+    /// implementation artifacts, not zones (and <c>localtime</c> resolves to whatever the server
+    /// process is configured for, which SEM-4 forbids as a zone source). A caller resolving
+    /// untrusted input must reject those separately.</para>
+    /// </summary>
+    public static bool IsIanaZoneIdShape(string zone) =>
+        zone.Length is > 0 and <= 64 && ZonePattern.IsMatch(zone);
 
     /// <summary>Internal (not private) so <see cref="Craticula.Core.Schema.TypeCoercionValidator"/>
     /// reuses the same truncation instead of duplicating it — same-assembly precedent already set by

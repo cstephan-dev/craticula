@@ -1,0 +1,21 @@
+{
+  "query": {
+    "range": {
+      "hireDate": {
+        "gte": "2026-04-01",
+        "lt": "2026-07-01",
+        "format": "strict_date"
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

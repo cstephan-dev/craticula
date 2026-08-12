@@ -91,7 +91,11 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
     filter?: number, filterTo?: number }`.
   - Date condition (`iDateFilter.ts`): same `type` vocabulary as number, plus `dateFrom`/`dateTo`
     strings (`"YYYY-MM-DD HH:mm:ss"` or `"YYYY-MM-DD"`); **date presets** (AG-2) use a preset
-    `type` (`"today"`, `"last7Days"`, ...) with `dateFrom`/`dateTo` both `undefined`.
+    `type` (`"today"`, `"last7Days"`, ...) with `dateFrom`/`dateTo` both `undefined`. The preset
+    vocabulary (`ISimpleFilterModelPresetType`) is closed and has 22 members, each resolving to a
+    half-open `[from, to)` range published in AG Grid's own spec table — the adapter resolves it
+    against an injected clock + zone, so no compiler ever sees an unresolved preset. See
+    `date-presets/README.md` for the full table and the pinned-clock convention.
   - Set condition (`iSetFilter.ts`): `{ filterType: "set", values: string[]|null }` — maps to
     `in`/`notIn`.
   - Multi condition (`iMultiFilter.ts`): `{ filterType: "multi", filterModels: [<condition>, ...] }`
@@ -112,16 +116,26 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
   filter's `notIn` direction (AG Grid's `SetFilterModel` carries only an inclusion list — there is no
   wire-level invert flag).
 - **`requestContext` (extension, not part of AG Grid's own wire format):** an optional sibling field,
-  `{ requestContext: { zone: "<IANA id>" } }`, carrying the zone the adapter used to resolve any
-  `datetime`-typed filter value in this request (SEM-4). Required on any fixture whose expected
-  artifacts depend on a specific zone resolution — without it, a port author must guess the zone the
-  fixture author assumed.
+  `{ requestContext: { zone: "<IANA id>", now: "<ISO-8601 instant>" } }`. Required on any fixture
+  whose expected artifacts depend on a specific zone resolution or on a specific "current time" —
+  without it, a port author must guess what the fixture author assumed.
+  - `zone` carries the zone the adapter used to resolve any `datetime`-typed filter value in this
+    request (SEM-4). An adapter **does** read this off the request: it takes precedence over whatever
+    default zone the adapter was configured with, and an id it cannot resolve is a clean rejection,
+    never a silent fallback.
+  - `now` (added by AG-2's `date-presets/` category) pins the instant a **date preset** resolves
+    against — preset resolution is clock-dependent, so a preset fixture is not reproducible without
+    it. Unlike `zone`, this is an instruction **to the conformance harness**, not a field an adapter
+    reads off the wire: the harness sets its injected clock to this instant before parsing. An
+    implementation must not honour a client-supplied `now`, or any caller could redefine what
+    "last 7 days" means. Absent on every fixture that does not use a preset.
 
 ## Categories
 
 | Directory | Proves | Target count |
 |---|---|---|
 | `operators/` | AR-6's 17-operator closed set, across field types | ~45 |
+| `date-presets/` | AG-2 date presets resolved to absolute half-open ranges (SEM-4 type + zone) | ~28 |
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |

@@ -456,6 +456,16 @@ fixtures needing this carry an optional `requestContext: { "zone": "<IANA id>" }
 alongside the AG Grid wire shape (the same "documented extension beyond AG Grid's own wire format"
 pattern as `customFilters`, OQ-11) — see `spec/fixtures/README.md`.
 
+`requestContext` carries a second, related field for the same reproducibility reason: `now` (an
+ISO-8601 instant), required by any fixture whose expected artifacts depend on what "now" was — i.e.
+every AG-2 date-preset fixture, since `today`/`last7Days`/... resolve relative to the current
+instant. The two fields differ in status, and the difference is normative: **`zone` is read off the
+wire, `now` is not.** An implementation resolves presets against its own injected clock and MUST NOT
+honor a client-supplied `now` — a request that could redefine what "last 7 days" means would let any
+caller move the window at will. `now` exists so a conformance harness can pin its clock and replay
+the fixture deterministically; it is a harness instruction, never a wire input. See
+`spec/fixtures/date-presets/README.md`.
+
 **Cross-links.** `$defs/dateValue`, `$defs/datetimeValue`, `$defs/rangeComparisonNode`
 (`fromInclusive`, `toInclusive`), `$defs/typedValue`.
 
