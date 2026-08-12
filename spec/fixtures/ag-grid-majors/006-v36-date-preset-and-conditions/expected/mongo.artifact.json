@@ -1,0 +1,65 @@
+{
+  "pipeline": [
+    {
+      "$match": {
+        "$and": [
+          {
+            "hireDate": {
+              "$gte": "2026-07-13",
+              "$lt": "2026-08-13"
+            }
+          },
+          {
+            "$or": [
+              {
+                "status": {
+                  "$eq": "active"
+                }
+              },
+              {
+                "status": {
+                  "$eq": "onLeave"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "$addFields": {
+        "__idNullBucket": {
+          "$cond": [
+            {
+              "$eq": [
+                "$id",
+                null
+              ]
+            },
+            1,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "$sort": {
+        "__idNullBucket": 1,
+        "id": 1
+      }
+    },
+    {
+      "$unset": "__idNullBucket"
+    },
+    {
+      "$skip": 0
+    },
+    {
+      "$limit": 100
+    }
+  ],
+  "collation": {
+    "locale": "en",
+    "strength": 2
+  }
+}

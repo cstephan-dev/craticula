@@ -1,0 +1,33 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "salary": {
+      "filterType": "number",
+      "operator": "AND",
+      "conditions": [
+        {
+          "filterType": "number",
+          "type": "greaterThanOrEqual",
+          "filter": 60000
+        },
+        {
+          "filterType": "number",
+          "type": "lessThan",
+          "filter": 120000
+        }
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

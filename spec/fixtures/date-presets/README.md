@@ -10,12 +10,29 @@ zone) and **AR-6** (the resolved node is the closed operator set's `inRange`).
 ## What a preset looks like on the wire, and why the server has to resolve it
 
 AG Grid's `ISimpleFilterModelPresetType` is part of the same flat `type` vocabulary as
-`equals`/`lessThan`/`blank`, and presets are members of AG Grid's own `zeroInputTypes` set — so the
-entry is exactly `{ "filterType": "date", "type": "<preset>" }`, with `dateFrom`, `dateTo`, `filter`
-and `filterTo` all absent. AG Grid's SSRM documentation states the obligation directly: *"Both use the
-preset `type` and leave `dateFrom` and `dateTo` as `undefined`. Your server (or custom filtering code)
-must interpret the preset and apply the equivalent date range logic using its own time zone and locale
-rules."*
+`equals`/`lessThan`/`blank`, and presets are members of AG Grid's own `zeroInputTypes` set, so no bound
+is ever *computed* for one. The entry on the wire is:
+
+```json
+{"dateFrom": null, "dateTo": null, "filterType": "date", "type": "<preset>"}
+```
+
+**`dateFrom`/`dateTo` are present and explicitly `null`, not absent** — every fixture here models that.
+`release-36.0.0`'s `date/dateFilter.ts` `createCondition` ends with
+`return { dateFrom: null, dateTo: null, filterType, type, ...model };`, and because a preset is
+zero-input `model` stays empty, so the two nulls survive into the emitted JSON. `filter`/`filterTo`
+really are absent (they belong to the text/number models, not `DateFilterModel`).
+
+**Beware AG Grid's own prose here — it disagrees with AG Grid's own emitter.** Both
+`iDateFilter.ts`'s `PresetDateRangeFilterModel` doc comment ("`dateFrom` and `dateTo` are always
+`undefined`", and the interface literally declares `dateFrom: undefined`) and the SSRM documentation
+(*"Both use the preset `type` and leave `dateFrom` and `dateTo` as `undefined`. Your server (or custom
+filtering code) must interpret the preset and apply the equivalent date range logic using its own time
+zone and locale rules."*) describe a payload the code beside them does not produce. A port author who
+trusts the prose and writes `if ('dateFrom' in model)` — or a JSON schema with
+`"required": []` plus `"additionalProperties": false` on a preset variant — will mis-handle every real
+preset payload. Follow the emitter; the documentation obligation it states is still correct, only the
+key-presence claim is not.
 
 The resolution table below is AG Grid's own published `@Spec` comment (`dateFilterHandler.ts`),
 reproduced verbatim — **every range is half-open `[from, to)`**:

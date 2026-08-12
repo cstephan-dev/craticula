@@ -1,0 +1,10 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT department AS department, SUM(salary) AS salary_sum FROM employees WHERE (hire_date >= $1 AND hire_date < $2) GROUP BY department ORDER BY department ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "params": [
+    "2018-01-01",
+    "2024-01-01",
+    100,
+    0
+  ]
+}

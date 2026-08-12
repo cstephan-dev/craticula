@@ -1,0 +1,49 @@
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "range": {
+            "hireDate": {
+              "gte": "2018-01-01",
+              "format": "strict_date"
+            }
+          }
+        },
+        {
+          "range": {
+            "hireDate": {
+              "lt": "2024-01-01",
+              "format": "strict_date"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "department": {
+      "composite": {
+        "size": 100,
+        "sources": [
+          {
+            "department": {
+              "terms": {
+                "field": "department.keyword",
+                "missing_bucket": true
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "salary_sum": {
+          "sum": {
+            "field": "salary"
+          }
+        }
+      }
+    }
+  }
+}

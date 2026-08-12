@@ -1,0 +1,55 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "wildcard": {
+            "department.keyword": {
+              "value": "Eng*",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "bool": {
+            "should": [
+              {
+                "term": {
+                  "department.keyword": {
+                    "value": "Engineering",
+                    "case_insensitive": true
+                  }
+                }
+              },
+              {
+                "term": {
+                  "department.keyword": {
+                    "value": "Engineering Support",
+                    "case_insensitive": true
+                  }
+                }
+              }
+            ],
+            "minimum_should_match": 1
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "salary": {
+        "order": "desc",
+        "missing": "_first"
+      }
+    },
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 50,
+  "from": 200
+}

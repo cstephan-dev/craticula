@@ -1,0 +1,64 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "bool": {
+            "should": [
+              {
+                "wildcard": {
+                  "lastName.keyword": {
+                    "value": "Van*",
+                    "case_insensitive": true
+                  }
+                }
+              },
+              {
+                "wildcard": {
+                  "lastName.keyword": {
+                    "value": "*sen*",
+                    "case_insensitive": true
+                  }
+                }
+              }
+            ],
+            "minimum_should_match": 1
+          }
+        },
+        {
+          "bool": {
+            "should": [
+              {
+                "term": {
+                  "department.keyword": {
+                    "value": "Engineering",
+                    "case_insensitive": true
+                  }
+                }
+              },
+              {
+                "term": {
+                  "department.keyword": {
+                    "value": "Support",
+                    "case_insensitive": true
+                  }
+                }
+              }
+            ],
+            "minimum_should_match": 1
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

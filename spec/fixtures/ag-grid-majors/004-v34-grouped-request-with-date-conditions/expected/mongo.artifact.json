@@ -1,0 +1,57 @@
+[
+  {
+    "$match": {
+      "$and": [
+        {
+          "hireDate": {
+            "$gte": "2018-01-01"
+          }
+        },
+        {
+          "hireDate": {
+            "$lt": "2024-01-01"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "$group": {
+      "_id": "$department",
+      "salary_sum": {
+        "$sum": "$salary"
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "__groupNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__groupNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": "__groupNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

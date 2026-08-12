@@ -1,0 +1,82 @@
+{
+  "mode": "strict",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": false,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "department": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "groupable": true,
+      "physical": {
+        "sql": {
+          "column": "department"
+        },
+        "mongo": {
+          "path": "department"
+        },
+        "search": {
+          "field": "department",
+          "keywordSubField": "department.keyword"
+        }
+      },
+      "text": {
+        "caseSensitivity": "insensitive",
+        "searchMode": "substring"
+      }
+    },
+    "salary": {
+      "type": "decimal",
+      "filterable": true,
+      "sortable": true,
+      "aggregatable": [
+        "sum",
+        "min",
+        "max",
+        "avg"
+      ],
+      "physical": {
+        "sql": {
+          "column": "salary"
+        },
+        "mongo": {
+          "path": "salary"
+        },
+        "search": {
+          "field": "salary"
+        }
+      }
+    },
+    "hireDate": {
+      "type": "date",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "hire_date"
+        },
+        "mongo": {
+          "path": "hireDate"
+        },
+        "search": {
+          "field": "hireDate"
+        }
+      }
+    }
+  }
+}

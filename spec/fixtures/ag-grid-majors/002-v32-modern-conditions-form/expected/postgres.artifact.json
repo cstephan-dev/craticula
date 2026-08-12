@@ -1,0 +1,10 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM employees WHERE (salary >= $1 AND salary < $2) ORDER BY id ASC NULLS LAST LIMIT $3 OFFSET $4",
+  "params": [
+    "60000",
+    "120000",
+    100,
+    0
+  ]
+}

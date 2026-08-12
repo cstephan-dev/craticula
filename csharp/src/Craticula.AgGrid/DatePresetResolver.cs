@@ -20,8 +20,12 @@ public readonly record struct DatePresetRange(DateOnly From, DateOnly To);
 ///
 /// <para><b>Why this exists at all.</b> A preset arrives in the very same <c>type</c> slot as
 /// <c>equals</c>/<c>lessThan</c>/<c>blank</c> (AG Grid's <c>ISimpleFilterModelType</c> union is one
-/// flat vocabulary), with <c>dateFrom</c> and <c>dateTo</c> both <c>undefined</c> — presets are in AG
-/// Grid's own <c>zeroInputTypes</c> set, so no bound reaches the wire. AG Grid's SSRM documentation
+/// flat vocabulary), carrying no bound of its own — presets are in AG Grid's own
+/// <c>zeroInputTypes</c> set, so <c>createCondition</c> computes nothing and its
+/// <c>{ dateFrom: null, dateTo: null, ... }</c> defaults survive into the emitted JSON. (AG Grid's own
+/// <c>PresetDateRangeFilterModel</c> doc comment says both are <c>undefined</c>; its emitter says
+/// otherwise, and the emitter wins — see <c>spec/fixtures/date-presets/README.md</c>.) Either way this
+/// resolver reads neither. AG Grid's SSRM documentation
 /// states the obligation explicitly: "Your server (or custom filtering code) must interpret the
 /// preset and apply the equivalent date range logic using its own time zone and locale rules." The
 /// resolution table below is copied from AG Grid's own <c>@Spec</c> comment in
@@ -271,18 +275,39 @@ public static class DatePresetResolver
     /// rather than a bare <see cref="TimeZoneInfo.ConvertTimeToUtc(System.DateTime, TimeZoneInfo)"/>
     /// (which additionally THROWS on the gap case rather than resolving it).
     /// </summary>
-    public static DateTimeOffset StartOfDayInstant(DateOnly localDate, TimeZoneInfo zone)
+    public static DateTimeOffset StartOfDayInstant(DateOnly localDate, TimeZoneInfo zone) =>
+        LocalDateTimeToInstant(localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), zone);
+
+    /// <summary>
+    /// The instant a local wall-clock reading corresponds to in <paramref name="zone"/> — the general
+    /// form of <see cref="StartOfDayInstant"/> (which is just this at midnight), shared so both the
+    /// preset path and the adapter's explicit <c>dateFrom</c>/<c>dateTo</c> resolution handle DST
+    /// identically instead of keeping two copies of the rule.
+    ///
+    /// <para>Both DST discontinuities are handled deliberately, and neither can be left to the
+    /// obvious call:</para>
+    /// <list type="bullet">
+    /// <item><b>Ambiguous</b> (fall-back overlap — the reading happens twice): takes the LARGER
+    /// offset, which is the FIRST of the two occurrences. <see cref="TimeZoneInfo.GetUtcOffset(DateTime)"/>
+    /// alone would silently pick the second.</item>
+    /// <item><b>Invalid</b> (spring-forward gap — the reading never happens): keeps the pre-transition
+    /// offset, which resolves to the transition instant itself, matching what JavaScript's own
+    /// <c>Date</c> does for the same input. <see cref="TimeZoneInfo.ConvertTimeToUtc(DateTime, TimeZoneInfo)"/>
+    /// would THROW here, turning an ordinary filter on an unlucky day into a server error.</item>
+    /// </list>
+    /// </summary>
+    public static DateTimeOffset LocalDateTimeToInstant(DateTime localWallClock, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(zone);
 
-        var localMidnight = localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        var unspecified = DateTime.SpecifyKind(localWallClock, DateTimeKind.Unspecified);
 
-        if (zone.IsAmbiguousTime(localMidnight))
+        if (zone.IsAmbiguousTime(unspecified))
         {
-            return new DateTimeOffset(localMidnight, zone.GetAmbiguousTimeOffsets(localMidnight).Max());
+            return new DateTimeOffset(unspecified, zone.GetAmbiguousTimeOffsets(unspecified).Max());
         }
 
-        return new DateTimeOffset(localMidnight, zone.GetUtcOffset(localMidnight));
+        return new DateTimeOffset(unspecified, zone.GetUtcOffset(unspecified));
     }
 
     /// <summary>

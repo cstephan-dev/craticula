@@ -1,0 +1,44 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "hireDate": {
+      "dateFrom": null,
+      "dateTo": null,
+      "filterType": "date",
+      "type": "last30Days"
+    },
+    "status": {
+      "filterType": "text",
+      "operator": "OR",
+      "conditions": [
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "active"
+        },
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "onLeave"
+        }
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc",
+      "type": "default"
+    }
+  ],
+  "requestContext": {
+    "zone": "UTC",
+    "now": "2026-08-12T14:37:00Z"
+  }
+}

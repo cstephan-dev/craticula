@@ -1,0 +1,35 @@
+{
+  "startRow": 200,
+  "endRow": 250,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "department": {
+      "filterType": "multi",
+      "filterModels": [
+        {
+          "filterType": "text",
+          "type": "startsWith",
+          "filter": "Eng"
+        },
+        {
+          "filterType": "set",
+          "values": [
+            "Engineering",
+            "Engineering Support"
+          ]
+        }
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "salary",
+      "sort": "desc",
+      "type": "default"
+    }
+  ]
+}
