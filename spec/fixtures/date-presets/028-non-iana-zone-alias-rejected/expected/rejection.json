@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "'localtime' is a tzdata artifact, not a zone: it resolves — on a typical Linux/.NET host it loads successfully AND satisfies ir.schema.json's IANA-zone-id shape — to whatever zone the SERVER process happens to be configured for. Honoring it would let any client silently move every preset boundary into the server's zone, which SEM-4 forbids ('must NOT assume a fixed server or database default timezone anywhere'). A shape check alone does not catch it, so an implementation must reject this id (and its siblings 'Factory' and 'posixrules') explicitly."
+}

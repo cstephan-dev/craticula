@@ -1,0 +1,7 @@
+Proves that an unresolvable `requestContext.zone` is a clean rejection, not a silent fallback to the adapter's configured default zone.
+
+The request is byte-identical to `001-today` apart from its zone, which is `Mars/Olympus_Mons` — deliberately IANA-*shaped* (it satisfies `ir.schema.json`'s `^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$`) but present in no tzdata release, so no host can resolve it. That combination is the point: a shape check alone accepts this id, so an implementation only rejects it by actually attempting resolution and failing loudly.
+
+Why silence would be the dangerous outcome: every preset in this category resolves its day boundaries *in the request's zone*, so falling back to some other zone does not produce an error — it produces a plausible range shifted by the offset between the two zones, which for `today` can be an entirely different calendar day (see `025-this-week-date-field-paris-zone-day-shift`, where UTC and Paris answers do not overlap at all). The failure would surface as wrong rows, not as an exception.
+
+Unlike the two schema-dependent rejections this category covers only in the reference adapter's own unit tests (a preset on a non-`date`/`datetime` field, and a preset parsed with no `GridSchema` available), this case is a pure wire-shape property: the outcome does not depend on how the harness was configured, so every port can replay it and must reach `requestParsing` / `malformed-request`.
