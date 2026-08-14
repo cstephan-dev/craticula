@@ -18,8 +18,9 @@ structural gap `operators/036-notin-string` documents). This fixture reaches `no
   rendering" section. The set itself is **one array parameter** (`<> ALL($1)`), not N scalar
   placeholders — Postgres's array form, chosen so the placeholder count does not depend on the
   value count. The other three dialects render identically *in shape* but not in text: neither SQL
-  Server, MySQL nor SQLite has `ANY(array)`, so #1639 renders them `NOT IN (...)` with N scalar
-  parameters behind the same dialect method.
+  Server, MySQL nor SQLite has `ANY(array)`, so their arms (added in #1639) render `NOT IN (...)`
+  with N scalar parameters behind the same dialect method — which is why this fixture's four SQL
+  arms do not even agree on `params.length`.
 - **MongoDB**: `$nin` already matches missing/null-valued documents on its own, mirroring `$ne`'s
   behavior (`008`'s own note) — the compiler nonetheless emits the explicit `$or`-composed form for
   the same two reasons SEM-2 gives for `$ne`: parallel compiled shape across backends, and
@@ -31,7 +32,17 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** general/semantic fixture — Postgres + MongoDB + Search.
+**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+Postgres-only in #1639 (D2): the negated half of SQL-4's split (`<> ALL($1)` vs `NOT IN (?, ?)`) on
+a case-**sensitive** field.
+
+**#1639's review pass added `COLLATE Latin1_General_CS_AS` to the `mssql` arm.** SEM-1 requires one
+mechanism per field across every context, so a declared-sensitive field carries its collation on a
+set membership exactly as it does on an `eq` — and on SQL Server the case-sensitive direction needs
+a spelled mechanism, because the stock server collation folds case (see `014`, and the category
+README's **D4**). The collation sits on the **column**, left of `NOT IN`, the same position `016`'s
+CI arm puts it: an in-list resolves its comparison semantics from the left operand. The other three
+arms stay bare, for the three different reasons `014`'s table records.
 
 **Requirement ids:** SEM-2, SEM-6 (tiebreaker, incidental), SC-3 (case-sensitive opt-in, orthogonal
 reinforcement), OQ-11 (`customFilters` usage).

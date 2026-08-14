@@ -1,0 +1,5 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT * FROM `employees` WHERE `remarks` LIKE CONCAT('%', ?, '%') ESCAPE '\\\\' ORDER BY ISNULL(`id`) ASC, `id` ASC LIMIT ? OFFSET ?",
+  "params": ["A[BC]", 100, 0]
+}

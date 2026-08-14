@@ -1,0 +1,5 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM \"employees\" WHERE \"employeeCode\" LIKE '%' || $1 || '%' ESCAPE '\\' ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": ["AB*10", 100, 0]
+}

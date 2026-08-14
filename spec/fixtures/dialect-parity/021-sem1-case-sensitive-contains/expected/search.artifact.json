@@ -1,0 +1,8 @@
+{
+  "query": {
+    "wildcard": { "employeeCode.keyword": { "value": "*AB\\*10*" } }
+  },
+  "sort": [ { "id": { "order": "asc", "missing": "_last" } } ],
+  "from": 0,
+  "size": 100
+}

@@ -1,0 +1,5 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT * FROM \"employees\" WHERE \"employeeCode\" = ? ORDER BY \"id\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": ["AB-100", 100, 0]
+}

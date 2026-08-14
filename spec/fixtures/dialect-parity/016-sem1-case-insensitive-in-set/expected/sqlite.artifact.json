@@ -1,0 +1,5 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT * FROM \"employees\" WHERE \"lastName\" COLLATE NOCASE IN (?, ?) ORDER BY \"id\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": ["smith", "jones", 100, 0]
+}

@@ -1,0 +1,23 @@
+{
+  "mode": "strict",
+  "source": "employees",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "physical": {
+        "sql": { "column": "id" },
+        "mongo": { "path": "id" },
+        "search": { "field": "id" }
+      }
+    },
+    "remarks": {
+      "type": "string",
+      "physical": {
+        "sql": { "column": "remarks" },
+        "mongo": { "path": "remarks" },
+        "search": { "field": "remarks", "keywordSubField": "remarks.keyword" }
+      }
+    }
+  }
+}

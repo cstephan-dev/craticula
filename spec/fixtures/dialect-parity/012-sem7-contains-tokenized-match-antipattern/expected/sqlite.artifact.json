@@ -1,0 +1,5 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT * FROM \"employees\" WHERE \"department\" LIKE '%' || ? || '%' ESCAPE '\\' ORDER BY \"id\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": ["art", 100, 0]
+}

@@ -28,10 +28,41 @@ public static class SemanticsResolver
         PatternMatch
     }
 
-    /// <summary>SEM-1's resolved decision for one field+context: whether the comparison is
-    /// case-insensitive, and if so, which <see cref="CaseSensitivityMechanism"/> family a compiler
-    /// must use to realize it.</summary>
-    public readonly record struct CaseSensitivityDecision(bool IsCaseInsensitive, CaseSensitivityMechanism Mechanism);
+    /// <summary>
+    /// SEM-1's answer to "how must this comparison treat case?", in the three values it actually has
+    /// — deliberately NOT a <see cref="bool"/>.
+    ///
+    /// <para>A boolean has to spell <see cref="Sensitive"/> and <see cref="NotApplicable"/> the same
+    /// way, and a compiler cannot tell them apart afterwards. That conflation is not academic: an
+    /// engine whose own default collation is case-INsensitive (SQL Server and Azure SQL ship
+    /// <c>SQL_Latin1_General_CP1_CI_AS</c>) must emit an explicit case-sensitive mechanism for
+    /// <see cref="Sensitive"/> — otherwise the field the host declared
+    /// <c>caseSensitivity: "sensitive"</c> silently matches case-insensitively, which is SEM-1's
+    /// second Must-Not mirrored — while emitting that same mechanism for
+    /// <see cref="NotApplicable"/> would attach a collation to an <c>int</c>/<c>date</c> column,
+    /// which those engines reject outright.</para>
+    /// </summary>
+    public enum CaseSensitivityMode
+    {
+        /// <summary>Not a text comparison at all, so no collation mechanism applies in either
+        /// direction — SEM-1 governs <c>stringValue</c> comparisons only.</summary>
+        NotApplicable,
+
+        /// <summary>Text, compared case-insensitively — SEM-1's default for a <c>string</c> field,
+        /// realized through <see cref="CaseSensitivityDecision.Mechanism"/>.</summary>
+        Insensitive,
+
+        /// <summary>Text, compared case-sensitively — SC-3's explicit per-field opt-in, which a
+        /// compiler must realize just as deliberately as the insensitive direction.</summary>
+        Sensitive
+    }
+
+    /// <summary>SEM-1's resolved decision for one field+context: how the comparison treats case, and
+    /// — when it is <see cref="CaseSensitivityMode.Insensitive"/> — which
+    /// <see cref="CaseSensitivityMechanism"/> family a compiler must use to realize it. The mechanism
+    /// is <see cref="CaseSensitivityMechanism.None"/> in the other two modes: it answers "which family
+    /// folds case here", and neither of them folds case.</summary>
+    public readonly record struct CaseSensitivityDecision(CaseSensitivityMode Mode, CaseSensitivityMechanism Mechanism);
 
     /// <summary>SEM-2: which condition <c>blank</c>/<c>notBlank</c> resolves to for a given
     /// <see cref="FieldType"/> — text fields additionally treat the empty string as blank, every
@@ -43,14 +74,15 @@ public static class SemanticsResolver
     }
 
     /// <summary>
-    /// SEM-1: resolves the case-sensitivity mechanism for a comparison <paramref name="op"/> against
-    /// <paramref name="field"/>. SEM-1 only ever applies to a <c>stringValue</c> comparison — a field
-    /// whose <see cref="FieldConfig.Type"/> isn't <see cref="FieldType.String"/> is always
-    /// <c>(false, None)</c>, regardless of <paramref name="op"/> or any <see cref="FieldConfig.Text"/>
-    /// setting (which <see cref="FieldConfig.Text"/>'s own doc already states is "only meaningful"
-    /// for a string field — this method is what actually enforces that, since nothing stops a schema
-    /// from configuring both). For a string field, it is case-insensitive unless it explicitly opts
-    /// into <see cref="CaseSensitivity.Sensitive"/> via <see cref="FieldConfig.Text"/> — absent
+    /// SEM-1: resolves how a comparison <paramref name="op"/> against <paramref name="field"/> treats
+    /// case. SEM-1 only ever applies to a <c>stringValue</c> comparison — a field whose
+    /// <see cref="FieldConfig.Type"/> isn't <see cref="FieldType.String"/> is always
+    /// <c>(NotApplicable, None)</c>, regardless of <paramref name="op"/> or any
+    /// <see cref="FieldConfig.Text"/> setting (which <see cref="FieldConfig.Text"/>'s own doc already
+    /// states is "only meaningful" for a string field — this method is what actually enforces that,
+    /// since nothing stops a schema from configuring both). For a string field, it is
+    /// <see cref="CaseSensitivityMode.Insensitive"/> unless it explicitly opts into
+    /// <see cref="CaseSensitivity.Sensitive"/> via <see cref="FieldConfig.Text"/> — absent
     /// <see cref="FieldConfig.Text"/> defaults to insensitive, matching the IR-level default SEM-1
     /// pins regardless of any one engine's own default. When insensitive, the mechanism is
     /// <see cref="CaseSensitivityMechanism.Collation"/> for the exact-match/ordering/set family
@@ -58,14 +90,16 @@ public static class SemanticsResolver
     /// <see cref="CaseSensitivityMechanism.PatternMatch"/> for the substring family
     /// (<c>contains</c>/<c>notContains</c>/<c>startsWith</c>/<c>endsWith</c>), and
     /// <see cref="CaseSensitivityMechanism.None"/> for every operator SEM-1 doesn't cover (the unary
-    /// operators, and <c>inRange</c>). A case-sensitive field is always <c>(false, None)</c>
-    /// regardless of <paramref name="op"/>.
+    /// operators, and <c>inRange</c>). A case-sensitive field is always <c>(Sensitive, None)</c>
+    /// regardless of <paramref name="op"/> — <see cref="CaseSensitivityMode.Sensitive"/> is a
+    /// decision a compiler must render, not the absence of one.
     /// </summary>
     public static CaseSensitivityDecision ResolveCaseSensitivity(FieldConfig field, ComparisonOperator op)
     {
-        if (!IsCaseInsensitiveField(field))
+        var mode = ResolveMode(field);
+        if (mode != CaseSensitivityMode.Insensitive)
         {
-            return new CaseSensitivityDecision(false, CaseSensitivityMechanism.None);
+            return new CaseSensitivityDecision(mode, CaseSensitivityMechanism.None);
         }
 
         var mechanism = op switch
@@ -81,32 +115,42 @@ public static class SemanticsResolver
             _ => CaseSensitivityMechanism.None
         };
 
-        return new CaseSensitivityDecision(true, mechanism);
+        return new CaseSensitivityDecision(CaseSensitivityMode.Insensitive, mechanism);
     }
 
     /// <summary>
-    /// SEM-1: resolves the case-sensitivity mechanism for sorting or group-key drilldown matching on
-    /// <paramref name="field"/> — the same insensitivity check as
+    /// SEM-1: resolves how sorting or group-key drilldown matching on <paramref name="field"/> treats
+    /// case — the same <see cref="CaseSensitivityMode"/> classification as
     /// <see cref="ResolveCaseSensitivity(FieldConfig, ComparisonOperator)"/>, but the mechanism is
     /// always <see cref="CaseSensitivityMechanism.Collation"/> when insensitive: SEM-1 pins that sort
     /// and group-key matching always use the collation mechanism, never pattern-match, so the same
     /// field never sorts under one mechanism and filters under another.
     /// </summary>
     public static CaseSensitivityDecision ResolveSortOrGroupKeyCaseSensitivity(FieldConfig field) =>
-        IsCaseInsensitiveField(field)
-            ? new CaseSensitivityDecision(true, CaseSensitivityMechanism.Collation)
-            : new CaseSensitivityDecision(false, CaseSensitivityMechanism.None);
+        ResolveMode(field) switch
+        {
+            CaseSensitivityMode.Insensitive =>
+                new CaseSensitivityDecision(CaseSensitivityMode.Insensitive, CaseSensitivityMechanism.Collation),
+            var mode => new CaseSensitivityDecision(mode, CaseSensitivityMechanism.None)
+        };
 
     /// <summary>
-    /// SEM-1 only ever applies to a <c>stringValue</c> comparison — a non-string field is never
-    /// case-insensitive in SEM-1's sense, regardless of what (if anything) its
-    /// <see cref="FieldConfig.Text"/> says. Without this <see cref="FieldConfig.Type"/> gate, a
-    /// plain numeric/date/boolean field with no <see cref="FieldConfig.Text"/> at all would
-    /// incorrectly resolve to case-insensitive-via-collation, which is not merely wrong but a
-    /// compile-time error on a backend that rejects a collation on a non-text type.
+    /// The single source of SEM-1's field-level classification, which both resolvers above derive
+    /// their <see cref="CaseSensitivityDecision.Mode"/> from — so "is this field case-sensitive?" has
+    /// exactly one answer no matter which context asks.
+    ///
+    /// <para>SEM-1 only ever applies to a <c>stringValue</c> comparison, hence the
+    /// <see cref="FieldConfig.Type"/> gate: without it, a plain numeric/date/boolean field with no
+    /// <see cref="FieldConfig.Text"/> at all would resolve to case-insensitive-via-collation, which is
+    /// not merely wrong but a compile-time error on a backend that rejects a collation on a non-text
+    /// type. It is a THREE-way classification rather than that gate plus a boolean precisely because
+    /// the gate's "no" and the opt-in's "no" demand opposite renderings — see
+    /// <see cref="CaseSensitivityMode"/>.</para>
     /// </summary>
-    private static bool IsCaseInsensitiveField(FieldConfig field) =>
-        field.Type == FieldType.String && field.Text?.CaseSensitivity != CaseSensitivity.Sensitive;
+    private static CaseSensitivityMode ResolveMode(FieldConfig field) =>
+        field.Type != FieldType.String ? CaseSensitivityMode.NotApplicable
+        : field.Text?.CaseSensitivity == CaseSensitivity.Sensitive ? CaseSensitivityMode.Sensitive
+        : CaseSensitivityMode.Insensitive;
 
     /// <summary>
     /// SEM-2: whether <paramref name="op"/> MUST include NULL-valued rows in its match set —

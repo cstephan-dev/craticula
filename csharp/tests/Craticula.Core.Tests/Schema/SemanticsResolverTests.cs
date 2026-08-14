@@ -43,7 +43,7 @@ public class SemanticsResolverTests
     {
         var decision = SemanticsResolver.ResolveCaseSensitivity(InsensitiveField, op);
 
-        Assert.True(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.Collation, decision.Mechanism);
     }
 
@@ -56,7 +56,7 @@ public class SemanticsResolverTests
     {
         var decision = SemanticsResolver.ResolveCaseSensitivity(InsensitiveField, op);
 
-        Assert.True(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.PatternMatch, decision.Mechanism);
     }
 
@@ -70,16 +70,19 @@ public class SemanticsResolverTests
     {
         var decision = SemanticsResolver.ResolveCaseSensitivity(InsensitiveField, op);
 
-        Assert.True(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
     }
 
     [Fact]
-    public void Sensitive_Field_Always_Resolves_To_False_None_Regardless_Of_Operator()
+    public void Sensitive_Field_Always_Resolves_To_Sensitive_None_Regardless_Of_Operator()
     {
         var decision = SemanticsResolver.ResolveCaseSensitivity(SensitiveField, ComparisonOperator.Eq);
 
-        Assert.False(decision.IsCaseInsensitive);
+        // Sensitive, NOT NotApplicable: the field IS text, and a compiler must be able to tell "text
+        // the host asked to compare case-sensitively" from "nothing to collate" — the two need
+        // opposite renderings on an engine whose default collation folds case.
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Sensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
     }
 
@@ -90,7 +93,7 @@ public class SemanticsResolverTests
 
         var decision = SemanticsResolver.ResolveCaseSensitivity(field, ComparisonOperator.Eq);
 
-        Assert.True(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
     }
 
     [Fact]
@@ -98,7 +101,7 @@ public class SemanticsResolverTests
     {
         var decision = SemanticsResolver.ResolveCaseSensitivity(ExplicitlyInsensitiveField, ComparisonOperator.Eq);
 
-        Assert.True(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.Collation, decision.Mechanism);
     }
 
@@ -119,8 +122,30 @@ public class SemanticsResolverTests
 
         var decision = SemanticsResolver.ResolveCaseSensitivity(field, ComparisonOperator.Eq);
 
-        Assert.False(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.NotApplicable, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
+    }
+
+    /// <summary>
+    /// The distinction the <see cref="SemanticsResolver.CaseSensitivityMode"/> enum exists for, made
+    /// a test rather than a comment: a case-sensitive <c>string</c> field and a non-text field are
+    /// both "not case-insensitive", and a <see cref="bool"/> seam gave a compiler no way to tell them
+    /// apart. They must be rendered differently — an explicit case-sensitive collation for the first,
+    /// nothing at all for the second — so the resolver must not report them identically.
+    /// </summary>
+    [Fact]
+    public void A_Sensitive_String_Field_And_A_NonText_Field_Do_Not_Resolve_To_The_Same_Mode()
+    {
+        var sensitive = SemanticsResolver.ResolveCaseSensitivity(SensitiveField, ComparisonOperator.Eq);
+        var nonText = SemanticsResolver.ResolveCaseSensitivity(new FieldConfig { Type = FieldType.Int64 }, ComparisonOperator.Eq);
+
+        Assert.NotEqual(sensitive.Mode, nonText.Mode);
+
+        // ...and the sort/group-key context resolves the same way, because SEM-1's "same mechanism in
+        // every context on a field" would otherwise be reachable only for the insensitive direction.
+        Assert.NotEqual(
+            SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(SensitiveField).Mode,
+            SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(new FieldConfig { Type = FieldType.Int64 }).Mode);
     }
 
     // -- SEM-1: ResolveSortOrGroupKeyCaseSensitivity ------------------------------------------
@@ -130,7 +155,7 @@ public class SemanticsResolverTests
     {
         var decision = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(InsensitiveField);
 
-        Assert.True(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.Collation, decision.Mechanism);
     }
 
@@ -139,7 +164,7 @@ public class SemanticsResolverTests
     {
         var decision = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(SensitiveField);
 
-        Assert.False(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Sensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
     }
 
@@ -150,7 +175,7 @@ public class SemanticsResolverTests
 
         var decision = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(idField);
 
-        Assert.False(decision.IsCaseInsensitive);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.NotApplicable, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
     }
 

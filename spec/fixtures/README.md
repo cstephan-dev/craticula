@@ -63,13 +63,23 @@ containers exist (a later Feature #1624 story) — this is additive, not a schem
 
 Every `expected/*.artifact.json` for a SQL dialect is byte-compared under T-1a, so "correct SQL" is
 not enough — there is exactly one accepted spelling per construct, and it is normative in
-`spec/semantics.md`'s **"Addendum — canonical SQL rendering"** (SQL-0..SQL-4), not here. In short:
+`spec/semantics.md`'s **"Addendum — canonical SQL rendering"** (SQL-0..SQL-6), not here. In short:
 identifiers are **always quoted**, including the table and every alias (`SELECT "region" AS "region"
 FROM "sales_fact"`); a composite `and`/`or` wraps itself and renders its children bare; a SEM-2
 null-inclusive negative is always wrapped; `notContains` renders `NOT ILIKE`, not `NOT (... ILIKE
 ...)`; `notBlank` is literally `NOT (<blank>)`; and Postgres set membership is `= ANY($1)` /
-`<> ALL($1)` against **one array parameter**. Read that addendum before authoring or reviewing any
-SQL artifact.
+`<> ALL($1)` against **one array parameter**. Two rules there are per dialect rather than universal
+and are the ones a port is most likely to get silently wrong: **SQL-5** (the substring family's
+operator, `ESCAPE` clause and escape alphabet all vary — MySQL spells `ESCAPE '\\'`, SQLite's
+case-sensitive path is `GLOB` with no `ESCAPE` clause at all, SQL Server escapes `[` as well) and
+**SQL-6** (an engine whose default collation folds case must spell the case-**sensitive** mechanism
+explicitly, not leave it bare). Read that addendum before authoring or reviewing any SQL artifact.
+
+**One cross-dialect divergence is known and deliberately unfixed**, because T-1a compares strings and
+cannot grade it: a zero-width page window (`{"startRow": 100, "endRow": 100}`) yields an empty page on
+Postgres/MySQL/SQLite and a **server error** on SQL Server. Recorded with its reasoning in
+`dialect-parity/README.md`'s "Known divergences deferred to the execution-equality tier"; owned by
+Feature #1624 (T-1b). No fixture exercises it — every fixture pages `0..100`.
 
 This was not always so. Fixtures authored in #1630 disagreed with each other on all six of those
 points (the suite was written by seven parallel agents with no compiler to check it). #1638 picked
@@ -78,14 +88,23 @@ had a rendering rewritten (`dialect-parity/008`, `/017`, `/018`, `/019`; `filter
 `operators/001`, `/004`, `/007`; `page-export/005`) — so the previously-recorded "cross-category
 quoting contradiction" (`ag-grid-majors/README.md`) is **resolved for Postgres**.
 
-Two arms of it are deliberately still open, both scheduled, both recorded where the affected
-artifacts live rather than only here:
+One arm of it is deliberately still open; the other closed in #1639. Both are recorded where the
+affected artifacts live rather than only here:
 
-- **The 19 `mysql`/`mssql`/`sqlite` artifacts in `dialect-parity/` are still unquoted** — the *rule*
-  is universal, but the quote character (`"` vs `[…]` vs backticks) is each engine's own and is
-  chosen when that engine's `Dialect` is written, i.e. **#1639**. See `spec/semantics.md` SQL-1's
-  "the rule is universal; the fixture suite is not yet" paragraph and `dialect-parity/README.md`.
-- **Two splits survive on the grouped artifacts** — every grouped `ORDER BY` key omits
+- **CLOSED (#1639): the `mysql`/`mssql`/`sqlite` artifacts in `dialect-parity/` are now quoted too.**
+  The *rule* was always universal; only the quote character (`"` vs `[…]` vs backticks) was each
+  engine's own, and it is chosen when that engine's `Dialect` is written. #1639 wrote all three and
+  re-authored the 19 pre-existing arms accordingly, then added 30 more (`011`-`020` promoted to full
+  parity coverage) — plus a new `021` for the case-sensitive substring case its own coverage audit
+  found missing and a new `022` for T-SQL's `[` wildcard, found by its code review: 55 non-Postgres
+  arms in total, every one quoted, and each engine's escape for a quote character *inside* an
+  identifier pinned with it (`]`→`]]`, `` ` ``→```` `` ````, `"`→`""`). See
+  `dialect-parity/README.md`, which also records that story's five decisions (MySQL's `ESCAPE '\\'`,
+  the per-dialect arm coverage policy, SQLite's `GLOB` for a case-sensitive substring match, SQL
+  Server's explicit case-**sensitive** collation, and its `[` escaping) — now normative in
+  `spec/semantics.md` as **SQL-5**/**SQL-6** — along with the host DDL obligations and the one known
+  divergence deferred to T-1b (#1624).
+- **STILL OPEN — two splits survive on the grouped artifacts** — every grouped `ORDER BY` key omits
   `COLLATE craticula_ci` on a case-insensitive `string` column (all 20 of `group-aggregation/`, plus
   `ag-grid-majors/004`), and `group-aggregation/003`/`004`/`005` render their drill-down conjunction
   unwrapped. Both are **#1640**'s to settle, because both turn on BM-2 design calls (bucket identity
@@ -104,6 +123,16 @@ owns the substring mechanics and escaping). Do not reach for `ILIKE`/`$regex` fo
 set-membership operator "because it's already case-insensitive that way" — it reintroduces an
 escaping trap (a literal `%`/`_` in the value silently becomes a wildcard) that a collation doesn't
 have. See `spec/semantics.md` SEM-1 for the full rationale.
+
+**The case-SENSITIVE direction is a mechanism too, not the absence of one** (`spec/semantics.md`
+**SQL-6**, added in #1639's review pass). Where an engine's own default collation folds case — SQL
+Server's stock `SQL_Latin1_General_CP1_CI_AS`, MySQL's `_ci` server default — leaving a field
+declared `caseSensitivity: "sensitive"` bare silently discards the declaration. SQL Server therefore
+spells `COLLATE Latin1_General_CS_AS` (`dialect-parity/014`, `/018`, `/021`); MySQL cannot express it
+in the statement at all and defers to a `_bin`/`_as_cs` column collation in host DDL. Postgres and
+SQLite spell nothing, because their defaults already distinguish case — three different answers that
+happen to share a spelling on two of the four, which is why an artifact showing "no collation" says
+nothing on its own about which reason applies.
 
 ## `agGridRequest.json` wire shape (grounded in `github/ag-grid`, the local reference clone)
 
@@ -210,7 +239,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
 | `page-export/` | AG-3/EXP-2 page spec, EXP-1/EXP-6/EXP-8 export + hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits | ~20 |
-| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7) | ~20 |
+| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7) | ~22 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |
 
 Each category directory has its own `README.md` enumerating its cases and the specific requirement

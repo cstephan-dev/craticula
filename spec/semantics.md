@@ -691,7 +691,12 @@ deliberately, per field, instead of getting it by accident.
   tokenized-match trap this rule exists to rule out.
 - Must NOT emit a SQL `LIKE` pattern without a matching `ESCAPE` clause — SEC-4's wildcard-escaping
   is a no-op on any dialect without a default escape character (SQL Server, SQLite) or with
-  backslash-escaping disabled (MySQL's `NO_BACKSLASH_ESCAPES`).
+  backslash-escaping disabled (MySQL's `NO_BACKSLASH_ESCAPES`). **Read this together with SQL-5 in
+  the canonical-rendering addendum**, which is where the per-dialect answer lives: the operator, the
+  `ESCAPE` clause's spelling, and the escape *alphabet* all vary. Taken literally as a universal
+  rule, this bullet is wrong on two of the four v1 SQL dialects — SQLite's case-sensitive path is
+  `GLOB`, which has no `ESCAPE` clause at all, and SQL Server's alphabet includes `[` on top of
+  SEC-4's three.
 - Must NOT build the MongoDB `$regex` value by applying only SEC-4's LIKE/wildcard escape set —
   regex metacharacters are a distinct, wider class (see the worked example above) and must be
   escaped in full before insertion; SEC-4 alone is not sufficient here and must NOT be treated as
@@ -814,17 +819,26 @@ dialect and per server version. Must NOT quote things that are not identifiers: 
 `COLLATE craticula_ci`, parameter placeholders, and the `'%'` / `'\'` / `''` literals of the ILIKE and
 blank scaffolding are all left exactly as they are.
 
-*The rule is universal; the fixture suite is not yet.* #1638 re-authored only the **Postgres**
-artifacts, because the *rule* ("always quote") is dialect-independent while the *quote character* is
-not — `"` on Postgres and SQLite, `[…]` on SQL Server, backticks (or `"` under `ANSI_QUOTES`) on
-MySQL — and choosing each engine's is part of writing that engine's `Dialect`, which is **#1639**.
-So the **19 `mysql`/`mssql`/`sqlite` artifacts in `spec/fixtures/dialect-parity/` predate this rule
-and are still unquoted**, which makes `006`-`010`'s six-artifact parity sets temporarily mixed
-(quoted Postgres, unquoted others). That is a **known, scheduled gap in the oracle, not a licence to
-quote conditionally**: #1639 re-authors those 19 as it implements each dialect, and until it does, a
-port that quotes them and disagrees with the fixture is right and the fixture is stale. Quoting is
-the only SQL-0..SQL-4 rule those 19 artifacts still predate — SQL-2's wraps were applied to them in
-the same pass, and no non-Postgres artifact exercises SQL-3 or SQL-4 at all.
+*The rule is universal, and as of #1639 so is the fixture suite.* #1638 re-authored only the
+**Postgres** artifacts, because the *rule* ("always quote") is dialect-independent while the *quote
+character* is not, and choosing each engine's is part of writing that engine's `Dialect`. #1639 wrote
+the other three and closed the gap: **all 55 `mysql`/`mssql`/`sqlite` arms in
+`spec/fixtures/dialect-parity/` are now quoted**, so `006`-`022`'s six-artifact parity sets are no
+longer mixed. The characters, with the escape each engine uses for one appearing *inside* an
+identifier:
+
+| Dialect | Quote | Escape inside an identifier |
+|---|---|---|
+| Postgres | `"` | `"` → `""` |
+| SQL Server | `[…]` | `]` → `]]` |
+| MySQL / MariaDB | `` ` `` | `` ` `` → ```` `` ```` |
+| SQLite | `"` | `"` → `""` |
+
+MySQL uses backticks rather than `"` because `"` only quotes an identifier under `ANSI_QUOTES`, which
+is off by default and is a session mode a compiler must not assume of a host's connection. SQL-3 and
+SQL-4 are now exercised on every dialect too (`017`/`018`'s new arms), and SQL-4 is where the four
+genuinely part company: Postgres binds one array parameter, the other three bind N scalars, so even
+`params.length` differs across the arms of one fixture.
 
 **SQL-2. Parenthesisation is structural, not cosmetic — one rule per construct, applied always.**
 Correct SQL admits many equivalent bracketings; artifact equality admits one. The four cases:
@@ -877,6 +891,85 @@ field and the set. A builder that contains an `if` for this is the BM-1 smell
 spellings must not be treated as interchangeable in a fixture: `params.length` differs between them,
 so a port that picks the other one fails on the parameter list even when the SQL text is accepted.)
 
+**SQL-5. The substring family's pattern operator, escape clause and escape alphabet are all per
+dialect — three axes, not one.** SEM-7 mandates "a SQL `LIKE` pattern with a matching `ESCAPE`
+clause" and, read literally, that is wrong on two of the four v1 dialects. The rule as the fixture
+suite actually pins it (#1639's D1/D3, and its review pass; `spec/fixtures/dialect-parity/README.md`
+keeps the story-level rationale):
+
+| Dialect | Operator | Escape clause | Escape alphabet |
+|---|---|---|---|
+| Postgres | `ILIKE` (CI) / `LIKE` (CS) | `ESCAPE '\'` | `\` `%` `_` |
+| SQL Server | `LIKE` (both, + a collation — SQL-6) | `ESCAPE '\'` | `\` `%` `_` **`[`** |
+| MySQL / MariaDB | `LIKE` (both) | **`ESCAPE '\\'`** | `\` `%` `_` |
+| SQLite | `LIKE` (CI) / **`GLOB`** (CS) | `ESCAPE '\'` / **none** | `\` `%` `_` / **class-wrapping** |
+
+Three of those cells are correctness, not spelling, and each is invisible to the artifact-equality
+tier if a port gets it wrong in isolation:
+
+- **MySQL spells the escape character `'\\'`.** With `NO_BACKSLASH_ESCAPES` off — MySQL's default —
+  a backslash is the string-literal escape character, so `ESCAPE '\'` escapes the closing quote: the
+  literal never terminates and *the statement does not parse*. The escape **character** is still `\`
+  on all four dialects, so the bound value is byte-identical across the arms; only the SQL text
+  differs.
+- **SQLite renders `GLOB` for a case-sensitive substring match, and drops the `ESCAPE` clause.**
+  Its `LIKE` is ASCII-case-insensitive unconditionally (it is a function call, ignores collating
+  sequences, and `PRAGMA case_sensitive_like` is a connection-level setting a compiler must not
+  depend on), so emitting `LIKE` for a field declared `caseSensitivity: "sensitive"` silently
+  returns case-insensitive rows. `GLOB` is a different pattern language, not a synonym: its
+  wildcards are `*`/`?`, so the anchoring becomes `'*' || :v || '*'`, and it accepts **no `ESCAPE`
+  clause at all** — a literal `*`, `?` or `[` is neutralised by wrapping it in a single-member
+  character class (`[*]`, `[?]`, `[[]`). SQL-3 still applies: the negated form is `NOT GLOB`.
+- **SQL Server escapes `[` as well.** T-SQL's `LIKE` treats `[` as a character-class opener, so an
+  unescaped user value `A[BC]` matches `AB` or `AC` rather than itself, and `[^x]`/`[a-z]` widen the
+  match set further — SEM-7's own "must NOT" about a user-supplied literal still behaving as a
+  wildcard. `]`, `^` and `-` need no escaping in turn, on either this dialect or SQLite's GLOB path:
+  all three are special only *inside* a class, and once the opener is neutralised no class from the
+  value can exist.
+
+*Must NOT.* A port MUST NOT read SEM-7's "`LIKE` … with a matching `ESCAPE` clause" as universal:
+on the SQLite case-sensitive path there is no `LIKE` and no `ESCAPE` clause to attach one to, and a
+port that emits them anyway both fails `dialect-parity/021`'s sqlite arm and returns the wrong rows.
+It MUST NOT widen the shared escape alphabet to the union of all four either — `\[` in a Postgres
+pattern is a literal backslash followed by a bracket, which is not what the user searched for.
+
+**SQL-6. Where an engine's default collation disagrees with the field's declared case sensitivity,
+the compiler MUST spell the mechanism explicitly — in *both* directions.** SEM-1's second Must-Not
+("must NOT default to case-sensitive because the engine's default is") has a mirror image that is
+just as wrong and much easier to ship: leaving a field declared `caseSensitivity: "sensitive"`
+*bare* on an engine whose default collation folds case. SQL Server and Azure SQL ship
+`SQL_Latin1_General_CP1_CI_AS`; MySQL's server default is a `_ci` family. On both, "emit no
+case-insensitivity mechanism" means "compare case-insensitively", so the host's explicit opt-in is
+silently discarded and the SQL reads as though it were correct.
+
+| Dialect | Case-insensitive | Case-sensitive |
+|---|---|---|
+| Postgres | `COLLATE craticula_ci` | nothing — default collation is deterministic |
+| SQL Server | `COLLATE Latin1_General_CI_AS` | **`COLLATE Latin1_General_CS_AS`** |
+| MySQL / MariaDB | nothing — column's declared collation | nothing — **host DDL obligation** (see below) |
+| SQLite | `COLLATE NOCASE` | nothing — default sequence is `BINARY` |
+
+Whatever a dialect spells, it spells on **every construct**, per SEM-1's "same mechanism in every
+context on a field": the scalar comparison, the set membership, the substring match and the
+`ORDER BY`/group-key. `dialect-parity/014` (`eq`), `/018` (`notIn`) and `/021` (`contains`) pin the
+case-sensitive direction; `/006`, `/016`, `/007` pin the insensitive one.
+
+*Why MySQL is the exception, and what a host owes.* Case sensitivity there is a property of the
+**column's** declared collation, which the statement cannot override portably — MySQL's
+case-sensitive collation names are charset-specific (`utf8mb4_bin`, `utf8mb4_0900_as_cs`, MariaDB's
+own set) rather than one spelling a compiler can pin. A field declared `caseSensitivity: "sensitive"`
+therefore requires a `_bin`/`_as_cs` **column** collation in the host's DDL, or the declaration has
+no effect. That is a documented host obligation (PERF-4's per-backend index-guidance page), not a
+gap the compiler silently fills with a guessed collation name.
+
+*Must NOT.* A compiler MUST NOT infer "case-sensitive" from the *absence* of a case-insensitivity
+mechanism, and a `Dialect` seam MUST NOT carry this decision as a boolean: `false` would have to
+mean both "text, compare case-sensitively" and "not a text comparison at all", and the two need
+opposite renderings — SQL Server rejects a `COLLATE` clause on an `int`/`date` expression outright
+("COLLATE clause cannot be used on expressions of type int"). The decision is three-valued at the
+seam or it is wrong at one end of it.
+
 **Cross-links.** `grid-schema.schema.json` (`source`), `$defs/andNode`, `$defs/orNode`,
-`$defs/notNode`, `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`notContains`),
-`$defs/setOperator` (`in`, `notIn`), and BM-1's `Dialect` interface.
+`$defs/notNode`, `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`notContains`,
+`contains`), `$defs/setOperator` (`in`, `notIn`), `$defs/textOptions` (`caseSensitivity`), SEM-1,
+SEM-7, SEC-4, and BM-1's `Dialect` interface.

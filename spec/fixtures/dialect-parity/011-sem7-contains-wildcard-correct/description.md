@@ -16,8 +16,11 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** general/semantic fixture — Postgres + MongoDB + Search (not a full four-SQL-dialect
-parity showcase; SQL Server/MySQL/SQLite would render identically to `007`'s `contains` case, already
-covered there).
+**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+Postgres-only in #1639 (D2). The earlier note here ("SQL Server/MySQL/SQLite would render identically
+to `007`") was true of the *shape* and misleading about the *coverage*: the substring family is where
+three engine-specific tokens land at once (the concat operator `+`/`CONCAT`/`||`, the collation's
+presence and position, and D1's `ESCAPE` literal), and a second case exercising them against a
+different column costs three small files.
 
 **Requirement ids:** SEM-7, SEM-1 (CI default carried through unchanged), SEM-6 (tiebreaker, incidental).

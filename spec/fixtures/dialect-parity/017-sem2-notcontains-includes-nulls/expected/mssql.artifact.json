@@ -1,0 +1,5 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT * FROM [employees] WHERE ([lastName] COLLATE Latin1_General_CI_AS NOT LIKE '%' + @p1 + '%' ESCAPE '\\' OR [lastName] IS NULL) ORDER BY CASE WHEN [id] IS NULL THEN 1 ELSE 0 END ASC, [id] ASC OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY",
+  "params": ["smith", 0, 100]
+}

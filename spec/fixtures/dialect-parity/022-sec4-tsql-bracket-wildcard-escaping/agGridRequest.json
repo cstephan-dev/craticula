@@ -1,0 +1,13 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "remarks": { "filterType": "text", "type": "contains", "filter": "A[BC]" }
+  },
+  "sortModel": []
+}

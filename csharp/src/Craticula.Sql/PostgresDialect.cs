@@ -1,16 +1,24 @@
 using System.Globalization;
 using System.Text;
 using Craticula.Core.Ir;
+using Craticula.Core.Schema;
 
 namespace Craticula.Sql;
 
 /// <summary>
 /// The reference dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/*/expected/postgres.artifact.json</c> and documented in <c>spec/semantics.md</c>'s
-/// "Addendum — canonical SQL rendering" (SQL-0..SQL-4): <c>"</c> quoting, <c>$n</c> placeholders,
+/// "Addendum — canonical SQL rendering" (SQL-0..SQL-6): <c>"</c> quoting, <c>$n</c> placeholders,
 /// <c>LIMIT $n OFFSET $n</c>, the host-created <c>craticula_ci</c> ICU collation for SEM-1's
 /// exact-match family, <c>ILIKE ... ESCAPE '\'</c> for SEM-7's substring family, and
 /// <c>= ANY($1)</c>/<c>&lt;&gt; ALL($1)</c> for SQL-4 set membership.
+///
+/// <para><b>Only the case-INsensitive direction has a spelling here.</b> PostgreSQL's default
+/// collation is deterministic and distinguishes case, so
+/// <see cref="SemanticsResolver.CaseSensitivityMode.Sensitive"/> is already what a bare comparison
+/// does and naming a collation for it would pin a locale this project has no reason to choose. That
+/// is a fact about Postgres, not a house style: SQL Server ships a case-INsensitive default and
+/// therefore must spell both directions (<see cref="MssqlDialect"/>).</para>
 ///
 /// <para>Stateless and therefore safe to share; <see cref="Instance"/> exists so callers need not
 /// allocate one per request.</para>
@@ -50,13 +58,17 @@ public sealed class PostgresDialect : ISqlDialect
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
-        bool caseInsensitive,
+        SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {
         // SEM-1: on Postgres the collation attaches to the column side of the comparison, which is
-        // also what keeps a plain B-tree index on that collation usable.
-        var left = caseInsensitive ? $"{quotedColumn} COLLATE {CaseInsensitiveCollation}" : quotedColumn;
-        return $"{left} {Symbol(comparison)} {parameters.Bind(value)}";
+        // also what keeps a plain B-tree index on that collation usable. Sensitive and NotApplicable
+        // are spelled the same way HERE (nothing) but for different reasons — see the class remarks.
+        var left = caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive
+            ? $"{quotedColumn} COLLATE {CaseInsensitiveCollation}"
+            : quotedColumn;
+
+        return $"{left} {SqlComparisonSymbols.For(comparison)} {parameters.Bind(value)}";
     }
 
     public string RenderSubstringMatch(
@@ -64,12 +76,13 @@ public sealed class PostgresDialect : ISqlDialect
         SqlSubstringAnchor anchor,
         bool negated,
         string value,
-        bool caseInsensitive,
+        SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {
         // SEM-1: the substring family uses the pattern-match mechanism, so case-insensitivity is
-        // ILIKE rather than a collation. A case-SENSITIVE field falls back to plain LIKE.
-        var op = (negated, caseInsensitive) switch
+        // ILIKE rather than a collation. A case-SENSITIVE field uses plain LIKE, which on Postgres
+        // really is case-sensitive — no extra mechanism needed, unlike SQL Server's LIKE.
+        var op = (negated, caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive) switch
         {
             (false, true) => "ILIKE",
             (false, false) => "LIKE",
@@ -93,10 +106,12 @@ public sealed class PostgresDialect : ISqlDialect
         string quotedColumn,
         bool negated,
         IReadOnlyList<object?> values,
-        bool caseInsensitive,
+        SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {
-        var left = caseInsensitive ? $"{quotedColumn} COLLATE {CaseInsensitiveCollation}" : quotedColumn;
+        var left = caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive
+            ? $"{quotedColumn} COLLATE {CaseInsensitiveCollation}"
+            : quotedColumn;
 
         // SQL-4: ONE array parameter, so the placeholder count never depends on the value count.
         var placeholder = parameters.Bind(values);
@@ -107,14 +122,14 @@ public sealed class PostgresDialect : ISqlDialect
         string quotedColumn,
         SortDirection direction,
         NullsPosition nullsPosition,
-        bool caseInsensitive)
+        SemanticsResolver.CaseSensitivityMode caseSensitivity)
     {
         var key = new StringBuilder(quotedColumn);
 
         // SEM-1: the collation sits between the column and the direction, and is the SAME mechanism
         // the exact-match family uses above — never ILIKE — so a field can't sort under one
         // mechanism and filter under another.
-        if (caseInsensitive)
+        if (caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive)
         {
             key.Append(" COLLATE ").Append(CaseInsensitiveCollation);
         }
@@ -134,16 +149,4 @@ public sealed class PostgresDialect : ISqlDialect
     // resolves it to "no clause" before asking.
     public string RenderPaging(int offset, int limit, ISqlParameterSink parameters) =>
         $"LIMIT {parameters.Bind(limit)} OFFSET {parameters.Bind(offset)}";
-
-    private static string Symbol(SqlScalarComparison comparison) => comparison switch
-    {
-        SqlScalarComparison.Equal => "=",
-        SqlScalarComparison.NotEqual => "<>",
-        SqlScalarComparison.GreaterThan => ">",
-        SqlScalarComparison.GreaterThanOrEqual => ">=",
-        SqlScalarComparison.LessThan => "<",
-        SqlScalarComparison.LessThanOrEqual => "<=",
-        _ => throw new SqlCompilationException($"Unknown scalar comparison '{comparison}'.")
-    };
-
 }
