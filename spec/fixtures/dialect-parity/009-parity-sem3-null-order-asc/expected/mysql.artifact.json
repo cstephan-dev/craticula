@@ -1,5 +1,5 @@
 {
   "dialect": "mysql",
-  "sql": "SELECT * FROM employees ORDER BY ISNULL(salary) ASC, salary ASC, ISNULL(id) ASC, id ASC LIMIT ? OFFSET ?",
+  "sql": "SELECT * FROM `employees` ORDER BY ISNULL(`salary`) ASC, `salary` ASC, ISNULL(`id`) ASC, `id` ASC LIMIT ? OFFSET ?",
   "params": [100, 0]
 }

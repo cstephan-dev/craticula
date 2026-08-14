@@ -26,6 +26,14 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** general/semantic fixture — Postgres + MongoDB + Search.
+**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+Postgres-only in #1639 (D2) for the opposite reason to its neighbours: `blank`/`notBlank` is a
+*builder-owned composition*, so the four SQL arms differ in nothing but the quote character. That is
+the assertion — a dialect that "tidied" the doubled parentheses, or re-derived `IS NOT NULL AND <> ''`
+instead of negating `blank`'s own text, fails three more artifacts than it used to.
+
+> Caveat for a fifth dialect: Oracle (#1642) treats `''` as NULL, so this composition degenerates
+> there. That is a change to the `Dialect` interface, not another implementation of it — see
+> `ISqlDialect`'s own remarks.
 
 **Requirement ids:** SEM-2, SEM-6 (tiebreaker, incidental).

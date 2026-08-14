@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Craticula.AgGrid;
-using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 
 namespace Craticula.Sql.Tests;
@@ -30,7 +29,7 @@ public class PostgresConformanceFixtureTests
     [
         ("operators", 47),
         ("date-presets", 26),
-        ("dialect-parity", 16),
+        ("dialect-parity", 18),
         ("filter-tree", 15),
         ("sort-paging", 11),
         ("ag-grid-majors", 5)
@@ -164,13 +163,16 @@ public class PostgresConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_120_Of_The_121_Leaf_Fixtures_This_Story_Scoped()
+    public void The_End_To_End_Suite_Is_122_Of_The_123_Leaf_Fixtures_In_The_Scoped_Categories()
     {
-        // 121 minus sort-paging/012, which the SQL builder compiles correctly but the AG Grid
+        // 123 minus sort-paging/012, which the SQL builder compiles correctly but the AG Grid
         // adapter cannot yet FEED correctly (see ExcludedFixtures for the full reason, and
         // SqlQueryBuilderPageAndSortTests for the assertion that closes the loop on the builder's
         // half). This number going up without ExcludedFixtures shrinking means a fixture was added.
-        Assert.Equal(120, InScopeFixtures.Count);
+        // It last moved in #1639's review pass, which added dialect-parity/022 (a filter value
+        // containing '[', giving T-SQL's fourth LIKE wildcard an artifact oracle) on top of the
+        // same story's 021 (the case-sensitive substring case, SQLite's GLOB rendering).
+        Assert.Equal(122, InScopeFixtures.Count);
     }
 
     [Fact]
@@ -207,65 +209,11 @@ public class PostgresConformanceFixtureTests
 
     // ---- the harness ------------------------------------------------------------------------------
 
-    /// <summary>
-    /// The exact pipeline a host runs, with nothing stubbed: the fixture's own <c>schema.json</c>,
-    /// its own request, SEC-3's default <see cref="ResourceLimits"/>, and the reference dialect.
-    /// </summary>
-    private static SqlQuery Compile(string category, string fixtureDir)
-    {
-        var schema = GridSchema.Parse(Read(category, fixtureDir, "schema.json"));
-        var parsed = AgGridRequestParser.Parse(Read(category, fixtureDir, "agGridRequest.json"), OptionsFor(category, fixtureDir, schema));
-
-        var filter = GridFilterPipeline.Process(parsed.NativeFilter, parsed.CustomFilters, parsed.Page, schema, new ResourceLimits());
-
-        return SqlQueryBuilder.Build(
-            new SqlQueryRequest
-            {
-                Schema = schema,
-                Filter = filter,
-                Sort = parsed.Sort,
-                Page = parsed.Page,
-                Group = parsed.Group,
-                Aggregations = parsed.Aggregations
-            },
-            PostgresDialect.Instance);
-    }
-
-    /// <summary>
-    /// The harness setup a port must reproduce: the fixture's own <c>GridSchema</c> always (a date
-    /// filter's wire value is typed from it), plus a clock pinned to <c>requestContext.now</c> for
-    /// the cases that declare one. That <c>now</c> is an instruction to the harness, not a field the
-    /// parser reads — see <see cref="AgGridParseOptions.Clock"/>.
-    /// </summary>
-    private static AgGridParseOptions OptionsFor(string category, string fixtureDir, GridSchema schema)
-    {
-        using var request = JsonDocument.Parse(Read(category, fixtureDir, "agGridRequest.json"));
-
-        var pinnedNow = request.RootElement.TryGetProperty("requestContext", out var context)
-            && context.ValueKind == JsonValueKind.Object
-            && context.TryGetProperty("now", out var now)
-            && now.ValueKind == JsonValueKind.String
-                ? now.GetString()
-                : null;
-
-        return new AgGridParseOptions
-        {
-            Schema = schema,
-            Clock = pinnedNow is null ? TimeProvider.System : FixedClock.At(pinnedNow)
-        };
-    }
+    private static SqlQuery Compile(string category, string fixtureDir) =>
+        FixtureCompiler.Compile(category, fixtureDir, PostgresDialect.Instance);
 
     private static string Read(string category, string fixtureDir, params string[] rest) =>
-        File.ReadAllText(RepoPaths.Fixture([category, fixtureDir, .. rest]));
+        FixtureCompiler.Read(category, fixtureDir, rest);
 
-    /// <summary>
-    /// Both sides of the parameter comparison go through the identical writer, so the assertion is
-    /// on JSON <em>values</em> (including each number's exact literal text and each element's type)
-    /// without being sensitive to the fixture file's own whitespace. Comparing the serialized text
-    /// rather than element-by-element is what keeps <c>"19.99"</c> (a decimal, AR-7) from silently
-    /// passing against <c>19.99</c> (a double).
-    /// </summary>
-    private static string CanonicalJson<T>(T value) => JsonSerializer.Serialize(value, CanonicalOptions);
-
-    private static readonly JsonSerializerOptions CanonicalOptions = new() { WriteIndented = false };
+    private static string CanonicalJson<T>(T value) => FixtureCompiler.CanonicalJson(value);
 }

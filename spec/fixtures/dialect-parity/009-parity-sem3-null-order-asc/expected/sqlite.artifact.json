@@ -1,5 +1,5 @@
 {
   "dialect": "sqlite",
-  "sql": "SELECT * FROM employees ORDER BY salary ASC NULLS LAST, id ASC NULLS LAST LIMIT ? OFFSET ?",
+  "sql": "SELECT * FROM \"employees\" ORDER BY \"salary\" ASC NULLS LAST, \"id\" ASC NULLS LAST LIMIT ? OFFSET ?",
   "params": [100, 0]
 }

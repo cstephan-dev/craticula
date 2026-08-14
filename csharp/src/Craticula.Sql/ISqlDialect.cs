@@ -1,4 +1,5 @@
 using Craticula.Core.Ir;
+using Craticula.Core.Schema;
 
 namespace Craticula.Sql;
 
@@ -39,9 +40,19 @@ public enum SqlSubstringAnchor
 /// <para><b>Rendering only, never semantics.</b> Which mechanism realizes case-insensitivity, whether
 /// a negative operator includes NULLs, what <c>blank</c> resolves to for a field type, where NULLs
 /// sort — all of that is decided upstream by <c>Craticula.Core.Schema.SemanticsResolver</c> (#1634)
-/// and arrives here as a plain flag or an already-chosen shape. An implementation that consults a
-/// <c>GridSchema</c>, re-derives a SEM-* rule, or decides <em>whether</em> to fold case (rather than
-/// how) has crossed the line this interface exists to draw.</para>
+/// and arrives here as an already-made decision or an already-chosen shape. An implementation that
+/// consults a <c>GridSchema</c>, re-derives a SEM-* rule, or decides <em>whether</em> to fold case
+/// (rather than how) has crossed the line this interface exists to draw.</para>
+///
+/// <para><b>Case sensitivity arrives as <see cref="SemanticsResolver.CaseSensitivityMode"/>, not a
+/// <c>bool</c>, and that is load-bearing.</b> A boolean cannot distinguish "text, compared
+/// case-sensitively" from "not a text comparison at all", and the two demand opposite renderings on
+/// an engine whose own default collation is case-insensitive: SQL Server must spell an explicit
+/// case-SENSITIVE collation for the first (else it silently returns rows the host's
+/// <c>caseSensitivity: "sensitive"</c> declaration excluded — SEM-1's second Must-Not mirrored) and
+/// must spell nothing at all for the second (a collation on an <c>int</c> column is a hard error). The
+/// distinction is a semantic one the resolver owns; each dialect only decides how — or whether — to
+/// spell each of the three.</para>
 ///
 /// <para><b>Structure is the builder's, tokens are the dialect's.</b> The parenthesisation rules
 /// (<c>spec/semantics.md</c> SQL-2), the null-inclusive <c>OR col IS NULL</c> disjunct, the
@@ -86,17 +97,20 @@ public interface ISqlDialect
 
     /// <summary>
     /// SEM-1 exact-match/ordering family: <c>eq</c>/<c>neq</c>/<c>gt</c>/<c>gte</c>/<c>lt</c>/<c>lte</c>
-    /// against a single value. <paramref name="caseInsensitive"/> is
+    /// against a single value. <paramref name="caseSensitivity"/> is
     /// <c>SemanticsResolver.ResolveCaseSensitivity</c>'s already-made decision that the collation
-    /// mechanism applies — the dialect only chooses how to spell it (Postgres puts
-    /// <c>COLLATE craticula_ci</c> on the column, SQLite puts <c>COLLATE NOCASE</c> after the value,
-    /// MySQL needs nothing at all because its columns already carry a <c>_ci</c> collation).
+    /// mechanism applies (or does not) — the dialect only chooses how to spell each of the three
+    /// modes. Postgres puts <c>COLLATE craticula_ci</c> on the column and needs nothing for
+    /// <c>Sensitive</c> (its default collation already distinguishes case); SQLite puts
+    /// <c>COLLATE NOCASE</c> after the value and likewise needs nothing for <c>Sensitive</c>; SQL
+    /// Server spells <em>both</em> directions, because its stock collation is case-INsensitive; MySQL
+    /// spells neither, because case sensitivity there is the column's declared collation.
     /// </summary>
     string RenderScalarComparison(
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
-        bool caseInsensitive,
+        SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters);
 
     /// <summary>
@@ -106,14 +120,21 @@ public interface ISqlDialect
     /// <c>ESCAPE</c> clause), since the escape character is not portable — SEM-7's "must NOT emit a
     /// SQL <c>LIKE</c> pattern without a matching <c>ESCAPE</c> clause". Only the <em>character</em>
     /// is the dialect's: call <see cref="SqlPatternEscaping.Escape"/> with it rather than reimplementing
-    /// the loop.
+    /// the loop. (A dialect whose <c>LIKE</c> has metacharacters beyond SEC-4's shared set — T-SQL's
+    /// <c>[</c> — adds its own on top of that call rather than forking the shared one.)
+    ///
+    /// <para><paramref name="caseSensitivity"/> can select a different pattern OPERATOR, not just a
+    /// different token around the same one: SQLite's <c>LIKE</c> is ASCII-case-insensitive
+    /// unconditionally, so its <c>Sensitive</c> arm is <c>GLOB</c>, with different wildcards and no
+    /// <c>ESCAPE</c> clause at all. <c>NotApplicable</c> never reaches this method — a substring match
+    /// against a non-text field has no defined rendering and the builder rejects it upstream.</para>
     /// </summary>
     string RenderSubstringMatch(
         string quotedColumn,
         SqlSubstringAnchor anchor,
         bool negated,
         string value,
-        bool caseInsensitive,
+        SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters);
 
     /// <summary>
@@ -126,22 +147,24 @@ public interface ISqlDialect
         string quotedColumn,
         bool negated,
         IReadOnlyList<object?> values,
-        bool caseInsensitive,
+        SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters);
 
     /// <summary>
     /// SEM-3 one <c>ORDER BY</c> key, including null placement. May legitimately expand to more than
     /// one comma-separated key: MySQL has no <c>NULLS FIRST</c>/<c>LAST</c> syntax and emulates it
     /// with a leading <c>ISNULL(col)</c> key, SQL Server with a <c>CASE WHEN col IS NULL</c> one.
-    /// <paramref name="caseInsensitive"/> comes from
+    /// <paramref name="caseSensitivity"/> comes from
     /// <c>SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity</c>, which already restricts the
-    /// collation mechanism to case-insensitive <c>string</c> keys.
+    /// collation mechanism to <c>string</c> keys — and SEM-1's "same mechanism in every context on a
+    /// field" is why an ordering key collates in exactly the cases the exact-match family does, in
+    /// both directions.
     /// </summary>
     string RenderSortKey(
         string quotedColumn,
         SortDirection direction,
         NullsPosition nullsPosition,
-        bool caseInsensitive);
+        SemanticsResolver.CaseSensitivityMode caseSensitivity);
 
     /// <summary>
     /// The trailing paging clause for an already-resolved row window: skip <paramref name="offset"/>

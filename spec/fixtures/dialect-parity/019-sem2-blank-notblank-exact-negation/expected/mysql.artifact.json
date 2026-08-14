@@ -1,0 +1,5 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT * FROM `employees` WHERE NOT ((`lastName` IS NULL OR `lastName` = '')) ORDER BY ISNULL(`id`) ASC, `id` ASC LIMIT ? OFFSET ?",
+  "params": [100, 0]
+}

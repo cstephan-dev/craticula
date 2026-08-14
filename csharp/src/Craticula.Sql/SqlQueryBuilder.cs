@@ -17,7 +17,7 @@ namespace Craticula.Sql;
 /// the <c>blank</c> condition and the SEM-6 tiebreaker all come from
 /// <see cref="SemanticsResolver"/> (#1634) — the one place SEM-* rules live, so the SQL, Mongo and
 /// Search compilers cannot drift apart (G3/G4). What IS this compiler's own responsibility is the
-/// SQL <em>shape</em> those decisions render into: <c>spec/semantics.md</c>'s SQL-0..SQL-4 addendum,
+/// SQL <em>shape</em> those decisions render into: <c>spec/semantics.md</c>'s SQL-0..SQL-6 addendum,
 /// and specifically the tree-level <c>NOT</c> fan-out, which SemanticsResolver deliberately has no
 /// method for because it is a statement about tree shape rather than about one operator.</para>
 ///
@@ -229,22 +229,47 @@ public static class SqlQueryBuilder
             var condition => throw new SqlCompilationException($"Unknown blank condition '{condition}'.")
         };
 
+    /// <summary>
+    /// SEM-1: the resolver decides HOW the comparison treats case and, when it folds it, BY WHICH
+    /// MECHANISM; the dialect only spells that decision. The three-valued answer is passed through
+    /// intact — collapsing it to "insensitive or not" here is exactly the conflation that let a
+    /// schema-declared case-SENSITIVE field render bare on an engine whose default collation folds
+    /// case (see <see cref="SemanticsResolver.CaseSensitivityMode"/>).
+    ///
+    /// <para><paramref name="family"/> is the mechanism family the CALLER is about to render, and
+    /// mismatching it is a compiler bug rather than a client error: an insensitive field whose
+    /// operator resolves to <see cref="SemanticsResolver.CaseSensitivityMechanism.PatternMatch"/> must
+    /// never reach the collation rendering, and vice versa. It is unreachable by construction — the
+    /// scalar/set call sites only ever pass SEM-1's collation-family operators and the substring one
+    /// only its pattern-family operators — so it fails loudly instead of silently degrading to "no
+    /// mechanism", which would be a plausible-looking artifact that folds case in the wrong place.</para>
+    /// </summary>
+    private static SemanticsResolver.CaseSensitivityMode ResolveCaseSensitivity(
+        FieldConfig field, ComparisonOperator op, SemanticsResolver.CaseSensitivityMechanism family)
+    {
+        var decision = SemanticsResolver.ResolveCaseSensitivity(field, op);
+
+        if (decision.Mode == SemanticsResolver.CaseSensitivityMode.Insensitive && decision.Mechanism != family)
+        {
+            throw new SqlCompilationException(
+                $"Operator '{op}' resolves to the '{decision.Mechanism}' case-insensitivity mechanism, but is being " +
+                $"rendered through the '{family}' family — SEM-1 requires one mechanism per field across every context.");
+        }
+
+        return decision.Mode;
+    }
+
     private static string RenderScalar(string column, FieldConfig field, ComparisonOperator op, TypedValue value, Context context)
     {
-        // SEM-1: the resolver decides IF and BY WHICH MECHANISM the comparison folds case; the
-        // dialect only spells the chosen mechanism. The Collation check matters — a substring
-        // operator resolving to PatternMatch must never reach the collation rendering.
-        var decision = SemanticsResolver.ResolveCaseSensitivity(field, op);
-        var caseInsensitive = decision is { IsCaseInsensitive: true, Mechanism: SemanticsResolver.CaseSensitivityMechanism.Collation };
+        var caseSensitivity = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation);
 
         return context.Dialect.RenderScalarComparison(
-            column, ScalarComparison(op), EncodeValue(value, field), caseInsensitive, context.Parameters);
+            column, ScalarComparison(op), EncodeValue(value, field), caseSensitivity, context.Parameters);
     }
 
     private static string RenderSubstring(string column, FieldConfig field, ComparisonNode node, Context context)
     {
-        var decision = SemanticsResolver.ResolveCaseSensitivity(field, node.Op);
-        var caseInsensitive = decision is { IsCaseInsensitive: true, Mechanism: SemanticsResolver.CaseSensitivityMechanism.PatternMatch };
+        var caseSensitivity = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.PatternMatch);
 
         // There is no portable meaning for "does this number contain that substring", and guessing
         // one (casting the column to text) would silently change both semantics and index usage. The
@@ -270,13 +295,12 @@ public static class SqlQueryBuilder
 
         return context.Dialect.RenderSubstringMatch(
             column, SubstringAnchor(node.Op), negated: node.Op == ComparisonOperator.NotContains,
-            pattern.Value, caseInsensitive, context.Parameters);
+            pattern.Value, caseSensitivity, context.Parameters);
     }
 
     private static string RenderSet(string column, FieldConfig field, ComparisonNode node, Context context)
     {
-        var decision = SemanticsResolver.ResolveCaseSensitivity(field, node.Op);
-        var caseInsensitive = decision is { IsCaseInsensitive: true, Mechanism: SemanticsResolver.CaseSensitivityMechanism.Collation };
+        var caseSensitivity = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.Collation);
 
         var values = node.Values
             ?? throw new SqlCompilationException($"Operator '{node.Op}' on field '{node.Field}' requires 'values'.");
@@ -287,7 +311,7 @@ public static class SqlQueryBuilder
             encoded.Add(EncodeValue(value, field));
         }
 
-        return context.Dialect.RenderSetMembership(column, negated: node.Op == ComparisonOperator.NotIn, encoded, caseInsensitive, context.Parameters);
+        return context.Dialect.RenderSetMembership(column, negated: node.Op == ComparisonOperator.NotIn, encoded, caseSensitivity, context.Parameters);
     }
 
     /// <summary>
@@ -350,11 +374,13 @@ public static class SqlQueryBuilder
 
             // SEM-1: sorting always uses the collation mechanism when the field is case-insensitive
             // — never the pattern-match one — so a field cannot filter under one mechanism and sort
-            // under another. The resolver already restricts this to `string` fields.
-            var caseInsensitive = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(field).IsCaseInsensitive;
+            // under another. The resolver already restricts this to `string` fields, and the mode is
+            // passed through whole so a case-SENSITIVE key can be spelled as deliberately as an
+            // insensitive one on an engine that needs it.
+            var caseSensitivity = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(field).Mode;
 
             rendered.Add(context.Dialect.RenderSortKey(
-                ResolveColumn(key.Field, context), key.Direction, key.NullsPosition, caseInsensitive));
+                ResolveColumn(key.Field, context), key.Direction, key.NullsPosition, caseSensitivity));
         }
 
         return string.Join(", ", rendered);

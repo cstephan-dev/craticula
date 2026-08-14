@@ -1,0 +1,5 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT * FROM [employees] WHERE [lastName] COLLATE Latin1_General_CI_AS > @p1 ORDER BY CASE WHEN [id] IS NULL THEN 1 ELSE 0 END ASC, [id] ASC OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY",
+  "params": ["Smith", 0, 100]
+}

@@ -1,0 +1,24 @@
+{
+  "mode": "strict",
+  "source": "employees",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "physical": {
+        "sql": { "column": "id" },
+        "mongo": { "path": "id" },
+        "search": { "field": "id" }
+      }
+    },
+    "employeeCode": {
+      "type": "string",
+      "text": { "caseSensitivity": "sensitive" },
+      "physical": {
+        "sql": { "column": "employeeCode" },
+        "mongo": { "path": "employeeCode" },
+        "search": { "field": "employeeCode", "keywordSubField": "employeeCode.keyword" }
+      }
+    }
+  }
+}

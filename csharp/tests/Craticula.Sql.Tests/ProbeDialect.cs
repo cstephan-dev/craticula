@@ -1,5 +1,6 @@
 using System.Globalization;
 using Craticula.Core.Ir;
+using Craticula.Core.Schema;
 
 namespace Craticula.Sql.Tests;
 
@@ -31,7 +32,7 @@ internal sealed class ProbeDialect : ISqlDialect
     public string ParameterPlaceholder(int ordinal) => ":p" + (ordinal + 1).ToString(CultureInfo.InvariantCulture);
 
     public string RenderScalarComparison(
-        string quotedColumn, SqlScalarComparison comparison, object? value, bool caseInsensitive, ISqlParameterSink parameters)
+        string quotedColumn, SqlScalarComparison comparison, object? value, SemanticsResolver.CaseSensitivityMode caseSensitivity, ISqlParameterSink parameters)
     {
         var symbol = comparison switch
         {
@@ -46,13 +47,13 @@ internal sealed class ProbeDialect : ISqlDialect
 
         // Collation on the VALUE side, unlike Postgres's column side.
         var placeholder = parameters.Bind(value);
-        return caseInsensitive
+        return caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive
             ? $"{quotedColumn} {symbol} {placeholder} COLLATE PROBE_CI"
             : $"{quotedColumn} {symbol} {placeholder}";
     }
 
     public string RenderSubstringMatch(
-        string quotedColumn, SqlSubstringAnchor anchor, bool negated, string value, bool caseInsensitive, ISqlParameterSink parameters)
+        string quotedColumn, SqlSubstringAnchor anchor, bool negated, string value, SemanticsResolver.CaseSensitivityMode caseSensitivity, ISqlParameterSink parameters)
     {
         var placeholder = parameters.Bind(SqlPatternEscaping.Escape(value, PatternEscape));
         var pattern = anchor switch
@@ -64,25 +65,25 @@ internal sealed class ProbeDialect : ISqlDialect
         };
 
         var op = negated ? "NOT LIKE" : "LIKE";
-        var collation = caseInsensitive ? " COLLATE PROBE_CI" : string.Empty;
+        var collation = caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive ? " COLLATE PROBE_CI" : string.Empty;
         return $"{quotedColumn}{collation} {op} {pattern} ESCAPE '{PatternEscape}'";
     }
 
     public string RenderSetMembership(
-        string quotedColumn, bool negated, IReadOnlyList<object?> values, bool caseInsensitive, ISqlParameterSink parameters)
+        string quotedColumn, bool negated, IReadOnlyList<object?> values, SemanticsResolver.CaseSensitivityMode caseSensitivity, ISqlParameterSink parameters)
     {
         // N scalar parameters, not one array — the SQL-4 axis that makes params.Length itself a
         // dialect decision.
         var placeholders = values.Select(parameters.Bind);
-        var collation = caseInsensitive ? " COLLATE PROBE_CI" : string.Empty;
+        var collation = caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive ? " COLLATE PROBE_CI" : string.Empty;
         return $"{quotedColumn}{collation} {(negated ? "NOT IN" : "IN")} ({string.Join(", ", placeholders)})";
     }
 
-    public string RenderSortKey(string quotedColumn, SortDirection direction, NullsPosition nullsPosition, bool caseInsensitive)
+    public string RenderSortKey(string quotedColumn, SortDirection direction, NullsPosition nullsPosition, SemanticsResolver.CaseSensitivityMode caseSensitivity)
     {
         // No native NULLS FIRST/LAST: one IR sort key expands into TWO ORDER BY keys.
         var nullBucket = nullsPosition == NullsPosition.First ? "DESC" : "ASC";
-        var collation = caseInsensitive ? " COLLATE PROBE_CI" : string.Empty;
+        var collation = caseSensitivity == SemanticsResolver.CaseSensitivityMode.Insensitive ? " COLLATE PROBE_CI" : string.Empty;
         var order = direction == SortDirection.Asc ? "ASC" : "DESC";
 
         return $"CASE WHEN {quotedColumn} IS NULL THEN 1 ELSE 0 END {nullBucket}, {quotedColumn}{collation} {order}";

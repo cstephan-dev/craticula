@@ -1,0 +1,5 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT * FROM \"employees\" WHERE \"jobTitle\" LIKE '%' || ? || '%' ESCAPE '\\' ORDER BY \"id\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": ["engineer", 100, 0]
+}

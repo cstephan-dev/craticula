@@ -184,13 +184,13 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   the answer is what it is.
 
   *Scope of "resolved", so nobody reads this bullet as "the suite is now internally consistent".* It
-  resolves the quoting split, on **Postgres**, and nothing more. Two registers of open contradictions
-  remain, both scheduled and both recorded where their artifacts live: `dialect-parity/`'s 19
-  `mysql`/`mssql`/`sqlite` artifacts are still unquoted pending #1639's choice of each engine's quote
-  character (`dialect-parity/README.md`), and `group-aggregation/` still splits from the rest of the
-  suite on grouped `ORDER BY` collation and on the unwrapped drill-down conjunction, both pending
-  BM-2 decisions (`group-aggregation/README.md`, "Known open contradictions"). **Case 004 is inside
-  the first of those two today**: its `ORDER BY "department" ASC NULLS LAST` groups and sorts on a
+  resolved the quoting split, on **Postgres**, and nothing more. Of the two registers of open
+  contradictions it left behind, one has since closed: `dialect-parity/`'s `mysql`/`mssql`/`sqlite`
+  artifacts were unquoted pending #1639's choice of each engine's quote character, and **#1639
+  quoted all 52 of them** (`dialect-parity/README.md`). Still open: `group-aggregation/` splits from
+  the rest of the suite on grouped `ORDER BY` collation and on the unwrapped drill-down conjunction,
+  both pending BM-2 decisions (`group-aggregation/README.md`, "Known open contradictions"). **Case
+  004 is inside that remaining one**: its `ORDER BY "department" ASC NULLS LAST` groups and sorts on a
   case-insensitive `string` column with no `COLLATE craticula_ci`, exactly as `group-aggregation/`'s
   20 do and unlike every leaf artifact in the suite. It is the only grouped artifact outside that
   category, so #1640 must re-author it in the same pass.
