@@ -23,9 +23,10 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2): SQL-3's "the negation goes into the operator" applied to four different
 substring mechanisms at once, wrapped in SEM-2's null-inclusive disjunction — which is *structural*
-and therefore byte-identical across the four arms apart from quoting.
+and therefore byte-identical across the five arms apart from quoting, the collation Oracle spells
+for a mechanism Postgres reaches with `ILIKE`, and the paging clause.
 
 **Requirement ids:** SEM-2, SEM-1, SEM-7, SEM-6 (tiebreaker, incidental).

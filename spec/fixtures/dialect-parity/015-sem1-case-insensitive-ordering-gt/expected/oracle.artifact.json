@@ -1,0 +1,5 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT * FROM \"employees\" WHERE \"lastName\" COLLATE BINARY_CI > :p1 ORDER BY \"id\" ASC NULLS LAST OFFSET :p2 ROWS FETCH NEXT :p3 ROWS ONLY",
+  "params": ["Smith", 0, 100]
+}

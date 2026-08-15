@@ -35,7 +35,7 @@ comparisons (`gt`/`gte`/`lt`/`lte`), not equality.
 
 **Mongo is the exception, and deliberately so — see `spec/semantics.md`'s accepted divergence #3
 (third shape).** This arm carries **no** query-level `collation`, so its `segment` `$match` compares
-case-**sensitively** where the four SQL dialects collate it. MongoDB's `collation` is a *query-level*
+case-**sensitively** where the five SQL dialects collate it. MongoDB's `collation` is a *query-level*
 option governing `$match`, `$group` and `$sort` together, with no per-stage form — so it cannot both
 apply to the `segment` comparison SEM-1 wants collated and stay off the `$group` on `region` that
 GRP-6(a) requires exact. Bucket identity wins: a folded bucket would return a value that matches

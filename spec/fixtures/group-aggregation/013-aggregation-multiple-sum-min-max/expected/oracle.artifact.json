@@ -1,0 +1,8 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT \"region\" AS \"region\", SUM(\"amount\") AS \"amountSum\", MIN(\"amount\") AS \"amountMin\", MAX(\"amount\") AS \"amountMax\" FROM \"sales_fact\" GROUP BY \"region\" ORDER BY \"region\" ASC NULLS LAST OFFSET :p1 ROWS FETCH NEXT :p2 ROWS ONLY",
+  "params": [
+    0,
+    100
+  ]
+}

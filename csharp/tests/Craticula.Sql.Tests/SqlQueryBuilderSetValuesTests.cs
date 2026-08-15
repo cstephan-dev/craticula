@@ -10,7 +10,7 @@ namespace Craticula.Sql.Tests;
 /// failures.
 ///
 /// <para>Everything the four fixtures DO pin — the <c>SELECT DISTINCT</c> shape, the bare
-/// <c>ORDER BY</c>, the surviving filter, the prefix predicate and the resolved cap on all four
+/// <c>ORDER BY</c>, the surviving filter, the prefix predicate and the resolved cap on all five
 /// dialects — is asserted against the artifacts by <see cref="PostgresConformanceFixtureTests"/> and
 /// <see cref="DialectConformanceFixtureTests"/>, never re-copied here.</para>
 /// </summary>

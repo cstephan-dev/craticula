@@ -1,0 +1,5 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT * FROM \"employees\" WHERE (\"age\" <> :p1 OR \"age\" IS NULL) ORDER BY \"id\" ASC NULLS LAST OFFSET :p2 ROWS FETCH NEXT :p3 ROWS ONLY",
+  "params": [30, 0, 100]
+}

@@ -1,0 +1,5 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT * FROM \"employees\" WHERE \"remarks\" COLLATE BINARY_CI LIKE '%' || :p1 || '%' ESCAPE '\\' ORDER BY \"id\" ASC NULLS LAST OFFSET :p2 ROWS FETCH NEXT :p3 ROWS ONLY",
+  "params": ["50\\% off (bonus)", 0, 100]
+}

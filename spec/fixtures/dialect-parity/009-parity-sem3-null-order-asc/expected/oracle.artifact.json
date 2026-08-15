@@ -1,0 +1,5 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT * FROM \"employees\" ORDER BY \"salary\" ASC NULLS LAST, \"id\" ASC NULLS LAST OFFSET :p1 ROWS FETCH NEXT :p2 ROWS ONLY",
+  "params": [0, 100]
+}

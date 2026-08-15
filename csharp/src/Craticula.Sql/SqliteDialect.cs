@@ -7,7 +7,7 @@ namespace Craticula.Sql;
 /// <summary>
 /// The SQLite dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/dialect-parity/*/expected/sqlite.artifact.json</c> and follows
-/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-6) for everything the
+/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-7) for everything the
 /// rule declares universal: <c>"</c> quoting, <c>?</c> positional placeholders,
 /// <c>LIMIT ? OFFSET ?</c> paging, and <c>IN (...)</c>/<c>NOT IN (...)</c> with N scalar parameters
 /// for SQL-4 set membership.
@@ -49,7 +49,7 @@ public sealed class SqliteDialect : ISqlDialect
     /// <summary>SEM-1's case-insensitive mechanism here: SQLite's built-in <c>NOCASE</c> collating
     /// sequence. Built in rather than host-created (unlike Postgres's <c>craticula_ci</c>), and
     /// ASCII-only — the same limitation SQLite's <c>LIKE</c> has, and a real semantic difference from
-    /// the other three dialects that the execution-equality tier (T-1b, #1624) will surface on
+    /// the other four dialects that the execution-equality tier (T-1b, #1624) will surface on
     /// non-ASCII data.</summary>
     public const string CaseInsensitiveCollation = "NOCASE";
 
@@ -59,6 +59,9 @@ public sealed class SqliteDialect : ISqlDialect
     private const char PatternEscape = '\\';
 
     public string Name => "sqlite";
+
+    // SQL-7: SQLite distinguishes '' from NULL, so SEM-2's text arm keeps both disjuncts.
+    public bool EmptyStringIsNull => false;
 
     public string QuoteIdentifier(string identifier) =>
         // A literal '"' inside an identifier is doubled — the standard SQL escape, which SQLite

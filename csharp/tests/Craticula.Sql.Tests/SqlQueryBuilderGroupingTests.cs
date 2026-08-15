@@ -271,7 +271,7 @@ public class SqlQueryBuilderGroupingTests
     /// <c>ColumnVO.id</c> reconstructed — so an aggregation the adapter DID alias is found by that
     /// alias and not by its field. What it then ORDERS BY is the aggregate expression, not the alias:
     /// an output name is not usable inside an expression on PostgreSQL or T-SQL, and SEM-3's null
-    /// placement is emulated with exactly such an expression on two of the four dialects.
+    /// placement is emulated with exactly such an expression on two of the five dialects.
     /// </summary>
     [Fact]
     public void A_Sort_On_An_Aliased_Aggregate_Is_Addressed_By_Its_Alias_And_Orders_By_The_Expression()

@@ -8,7 +8,7 @@ namespace Craticula.Sql;
 /// <summary>
 /// The reference dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/*/expected/postgres.artifact.json</c> and documented in <c>spec/semantics.md</c>'s
-/// "Addendum — canonical SQL rendering" (SQL-0..SQL-6): <c>"</c> quoting, <c>$n</c> placeholders,
+/// "Addendum — canonical SQL rendering" (SQL-0..SQL-7): <c>"</c> quoting, <c>$n</c> placeholders,
 /// <c>LIMIT $n OFFSET $n</c>, the host-created <c>craticula_ci</c> ICU collation for SEM-1's
 /// exact-match family, <c>ILIKE ... ESCAPE '\'</c> for SEM-7's substring family, and
 /// <c>= ANY($1)</c>/<c>&lt;&gt; ALL($1)</c> for SQL-4 set membership.
@@ -39,11 +39,14 @@ public sealed class PostgresDialect : ISqlDialect
 
     /// <summary>The <c>ESCAPE</c> character named in every emitted <c>LIKE</c>/<c>ILIKE</c> — the
     /// same character SEC-4's escaping prefixes with. PostgreSQL's own default happens to be <c>\</c>
-    /// too, but SEM-7 requires naming it explicitly anyway, since three of the four v1 SQL dialects
-    /// have no default at all.</summary>
+    /// too, but SEM-7 requires naming it explicitly anyway, since no other SQL dialect here has a
+    /// default at all.</summary>
     private const char PatternEscape = '\\';
 
     public string Name => "postgres";
+
+    // SQL-7: PostgreSQL distinguishes '' from NULL, so SEM-2's text arm keeps both disjuncts.
+    public bool EmptyStringIsNull => false;
 
     public string QuoteIdentifier(string identifier) =>
         // A literal '"' inside an identifier is doubled — the standard SQL escape. No fixture

@@ -8,7 +8,7 @@ namespace Craticula.Sql;
 /// <summary>
 /// The SQL Server / Azure SQL dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/dialect-parity/*/expected/mssql.artifact.json</c> and follows
-/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-6) for everything the
+/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-7) for everything the
 /// rule declares universal: <c>[…]</c> quoting, <c>@p1</c> named placeholders,
 /// <c>OFFSET ... ROWS FETCH NEXT ... ROWS ONLY</c> paging, a column-side
 /// <c>COLLATE Latin1_General_CI_AS</c> for SEM-1's exact-match family, <c>LIKE</c> over a <c>+</c>
@@ -39,8 +39,10 @@ namespace Craticula.Sql;
 /// <item><description><c>OFFSET/FETCH</c> spells the offset <em>before</em> the row count, so its two
 /// paging parameters bind in the opposite order to <c>LIMIT/OFFSET</c>'s — the axis
 /// <see cref="ISqlDialect.RenderPaging"/> exists for, and visible in every artifact's <c>params</c>
-/// tail as <c>[offset, limit]</c> where the other three dialects have
-/// <c>[limit, offset]</c>.</description></item>
+/// tail as <c>[offset, limit]</c> where Postgres, MySQL and SQLite have <c>[limit, offset]</c>.
+/// <see cref="OracleDialect"/> (#1642) is on this side of the split, not theirs — its 12.1
+/// row-limiting clause spells the offset first too — so this is 2-vs-3, not
+/// 1-vs-3.</description></item>
 /// </list>
 ///
 /// <para>Stateless and therefore safe to share; <see cref="Instance"/> exists so callers need not
@@ -78,6 +80,9 @@ public sealed class MssqlDialect : ISqlDialect
     private const char PatternEscape = '\\';
 
     public string Name => "mssql";
+
+    // SQL-7: T-SQL distinguishes '' from NULL, so SEM-2's text arm keeps both disjuncts.
+    public bool EmptyStringIsNull => false;
 
     public string QuoteIdentifier(string identifier) =>
         // A literal ']' inside a bracket-quoted identifier is doubled — T-SQL's own escape, and the
@@ -238,8 +243,10 @@ public sealed class MssqlDialect : ISqlDialect
     /// parameters; this <c>0</c> is not a value the request carries at all — it is the syntax that
     /// makes "no offset" expressible on this engine, in the same register as the <c>'%'</c> anchors
     /// and the <c>ESCAPE</c> character this file already emits as literals. Binding it instead would
-    /// put a parameter into the mssql arm of every BM-3 artifact that the other three dialects do not
-    /// have, making <c>params</c> differ across dialects for a number no client ever sent.</para>
+    /// put a parameter into the mssql arm of every BM-3 artifact that the other four dialects do not
+    /// have, making <c>params</c> differ across dialects for a number no client ever sent. (Oracle
+    /// spells the same <c>FETCH</c> keyword and still needs no zero, because its clause is legal
+    /// without an <c>OFFSET</c> — so this literal is T-SQL's alone, not "the FETCH engines'".)</para>
     ///
     /// <para>The alternative spelling, <c>SELECT DISTINCT TOP (@p1) …</c>, is idiomatic T-SQL and is
     /// deliberately not used: it would have to be injected into the select list, so the builder would

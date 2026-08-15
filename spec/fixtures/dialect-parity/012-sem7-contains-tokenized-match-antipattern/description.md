@@ -32,7 +32,7 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2): the SQL arms carry the same per-dialect substring mechanics as `011`,
 against a different column, which is what keeps the anti-pattern's *correct* half honest on every
 engine rather than only on the reference one.

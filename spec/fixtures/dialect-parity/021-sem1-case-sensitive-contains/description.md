@@ -7,7 +7,7 @@ two cases is the operator, so any difference between their artifacts is attribut
 substring mechanism and to nothing else.
 
 It exists because that combination turns out not to be a token swap on one backend — and, as #1639's
-review pass established, not the *same* token swap on the other three either. **Only Postgres's
+review pass established, not the *same* token swap on the other four either. **Only Postgres's
 `LIKE` is case-sensitive on its own**, so only its arm is `007`'s minus the CI mechanism and nothing
 else. SQL Server's `LIKE` folds case under the stock server collation, so its arm swaps
 `Latin1_General_CI_AS` for `Latin1_General_CS_AS` rather than dropping the clause (see `014` and the
@@ -18,15 +18,19 @@ it is ASCII-case-insensitive *unconditionally*
 sequences entirely, and `PRAGMA case_sensitive_like` is a connection-level setting a compiler must
 not depend on. Emitting `LIKE` here anyway would silently return case-insensitive rows for a field
 the host explicitly declared sensitive — the mirror image of SEM-1's second Must-Not, and invisible
-to a reader of the SQL. SQLite therefore switches **operator**, to `GLOB`.
+to a reader of the SQL. SQLite therefore switches **operator**, to `GLOB`. **Oracle (#1642) behaves
+like SQL Server**: it has no `ILIKE`, its bare `LIKE` folds case or not according to the *session*'s
+`NLS_COMP`/`NLS_SORT`, so it swaps `COLLATE BINARY_CI` for `COLLATE BINARY` rather than dropping the
+clause. Five dialects, five different routes to the same rows.
 
 Filter value: `"AB*10"` on the case-sensitive `employeeCode` field, `contains`. The `*` is chosen
-because it is a metacharacter in exactly two of the four escape alphabets this suite deals in, so the
+because it is a metacharacter in exactly two of the four *distinct* escape alphabets this suite deals
+in (Oracle's is Postgres's, so adding it in #1642 added an arm but not an alphabet), so the
 same input produces four visibly different bound/embedded values (the same technique `020` uses for
 `%` and `(`/`)`):
 
-- `*` is **not** a SQL `LIKE` wildcard and is **not** in SEC-4's set (`\`, `%`, `_`) — so the three
-  `LIKE` dialects bind it completely literally.
+- `*` is **not** a SQL `LIKE` wildcard and is **not** in SEC-4's set (`\`, `%`, `_`) — so the four
+  `LIKE` dialects (Postgres, SQL Server, MySQL, Oracle) bind it completely literally.
 - `*` **is** GLOB's "any sequence" wildcard — so SQLite must neutralise it, and cannot do so the way
   every other artifact in this suite does (below).
 - `*` **is** a regex metacharacter, so Mongo's full-metacharacter escape (`020`: every character
@@ -65,6 +69,14 @@ Per backend:
     and `^` only negates when it is the first character *inside* a class.)
   - SQL-3 still applies to the negated form: `notContains` would render `NOT GLOB`, never an outer
     `NOT (...)`.
+- **Oracle**: `LIKE` with `||` concatenation, `ESCAPE '\'` (one backslash — a backslash is an
+  ordinary character in an Oracle literal, so MySQL's doubling would be wrong here), and an inline
+  `COLLATE BINARY` — SQL Server's arm's argument on a different engine. Bare is *not* case-sensitive
+  on Oracle: a column with no DDL collation derives `USING_NLS_COMP`, resolved through the session's
+  `NLS_COMP`/`NLS_SORT`, so dropping the clause would hand back the same silent wrong answer SQLite's
+  `LIKE` would. `COLLATE BINARY` is `007`'s `BINARY_CI` with only the `_CI` component removed, which
+  is what keeps SEM-1's "one mechanism per field" true across the two directions. Param `AB*10`,
+  unescaped: Oracle's `LIKE` alphabet is exactly `%` and `_`.
 - **MongoDB**: `$regex` **without** the `"i"` option — the same `contains`-compiles-to-`$regex`
   mechanism as `007`/`011`, with SEM-1's case-insensitivity dropped. No query-level `collation`
   wrapper either, for the same reason `014` has none *and* the reason `007` has none: a
@@ -78,7 +90,7 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Authored in #1639 to
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Authored in #1639 to
 close the gap that story found: before it, **no fixture anywhere in the suite reached a
 case-sensitive substring match** (the only two case-sensitive fields declared were `014`'s
 `employeeCode` under `eq` and `018`'s `department` under `notIn`), which left SQLite's `GLOB` path —

@@ -16,7 +16,7 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2). The earlier note here ("SQL Server/MySQL/SQLite would render identically
 to `007`") was true of the *shape* and misleading about the *coverage*: the substring family is where
 three engine-specific tokens land at once (the concat operator `+`/`CONCAT`/`||`, the collation's

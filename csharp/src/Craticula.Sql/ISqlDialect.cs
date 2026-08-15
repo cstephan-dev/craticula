@@ -58,18 +58,27 @@ public enum SqlSubstringAnchor
 /// (<c>spec/semantics.md</c> SQL-2), the null-inclusive <c>OR col IS NULL</c> disjunct, the
 /// <c>blank</c> composition and the tree-level <c>NOT</c> fan-out are identical in every SQL dialect,
 /// so they stay in the builder. <c>IS NULL</c> and <c>= ''</c> are likewise emitted there: they are
-/// ANSI SQL every v1 dialect spells identically (verified across all four dialects' artifacts in
-/// <c>spec/fixtures/dialect-parity/</c>), so pushing them down would add an override point no dialect
-/// would ever use differently.</para>
+/// ANSI SQL every dialect spells identically, so pushing them down would add an override point no
+/// dialect would ever use differently.</para>
 ///
-/// <para><b>That last claim is scoped to the four v1 dialects (§5), and Oracle (#1642) breaks it.</b>
-/// Oracle treats the empty string as NULL, so <c>blank</c>'s string arm
-/// <c>("c" IS NULL OR "c" = '')</c> degenerates there — the second disjunct can never be true, and
-/// the two halves of SEM-2's text/non-text split collapse into one. Adding Oracle therefore is NOT
-/// just another implementation of this interface: it needs the <c>blank</c> composition itself made
-/// overridable (or explicitly declared equivalent), which is a change to this file, not to a dialect.
-/// Recorded here so that story discovers it while designing rather than after its artifacts
-/// disagree.</para>
+/// <para><b>Nine rendering methods and ONE capability fact — a distinction worth keeping.</b>
+/// Everything above returns SQL text: the dialect is asked "how do you spell this?" and the builder
+/// splices the answer in. <see cref="EmptyStringIsNull"/> is a different kind of member and the only
+/// one of its kind: it answers a question <em>about the engine</em>, and the builder then composes
+/// the predicate itself. Reach for that shape when the composition must stay in one place (because
+/// two operators are defined as each other's negation, say) and only a single engine fact varies
+/// inside it; reach for a rendering method when the whole construct's shape, token order or
+/// parameter count is the dialect's own. Getting that backwards is how four dialects end up carrying
+/// byte-identical implementations of the same method.</para>
+///
+/// <para><b>This interface has now been widened three times, and none of them was free</b> — #1639
+/// turned <c>RenderScalarComparison</c>'s case-sensitivity argument from a <c>bool</c> into the
+/// three-valued <see cref="SemanticsResolver.CaseSensitivityMode"/>, #1641 added
+/// <see cref="RenderRowLimit"/>, and #1642 added <see cref="EmptyStringIsNull"/>. Each cost every
+/// existing implementation a change and every language port a re-read. BM-1's claim is that adding a
+/// dialect needs no change to <see cref="SqlQueryBuilder"/>, not that this file never moves; but a
+/// fourth widening should have to argue that the seam, and not the candidate dialect, is what is
+/// wrong.</para>
 ///
 /// <para>Every method that binds a value takes the <see cref="ISqlParameterSink"/> rather than a
 /// pre-rendered placeholder, because how many parameters a construct binds is itself
@@ -81,6 +90,43 @@ public interface ISqlDialect
 {
     /// <summary>The artifact's <c>dialect</c> discriminator (<c>"postgres"</c>, <c>"mysql"</c>, ...).</summary>
     string Name { get; }
+
+    /// <summary>
+    /// SQL-7: does this engine treat the zero-length string as NULL? <c>false</c> on Postgres, SQL
+    /// Server, MySQL and SQLite; <c>true</c> on <see cref="OracleDialect"/> alone.
+    ///
+    /// <para><b>Not a spelling — an engine fact, and the only member here that is one.</b> It is the
+    /// single input <see cref="SqlQueryBuilder"/> needs to keep composing SEM-2's <c>blank</c> itself:
+    /// <c>true</c> makes the text arm <c>"c" IS NULL</c> and <c>false</c> leaves it
+    /// <c>("c" IS NULL OR "c" = '')</c>. <c>notBlank</c> is then <c>NOT (&lt;that text&gt;)</c>, which
+    /// is what SEM-2 requires, in both branches.</para>
+    ///
+    /// <para><b>Why this is a correctness fix and not a redundant-disjunct tidy-up.</b> Oracle
+    /// documents that a character value of length zero is NULL, so <c>"c" = ''</c> is <c>"c" = NULL</c>
+    /// and evaluates to UNKNOWN for <em>every</em> row, NULL-valued or not. <c>blank</c> survives that
+    /// by luck (<c>TRUE OR UNKNOWN</c> is TRUE, <c>FALSE OR UNKNOWN</c> is UNKNOWN, and a <c>WHERE</c>
+    /// clause keeps only TRUE — so the right rows match either way). <c>notBlank</c> does not:
+    /// <c>NOT (FALSE OR UNKNOWN)</c> is <c>NOT UNKNOWN</c>, which is UNKNOWN, so a row with a real
+    /// value is filtered out along with the NULLs and the operator returns the <b>empty result
+    /// set</b> — a silently empty grid, on well-formed SQL that the artifact tier cannot see is
+    /// wrong. Same defect class as MySQL's <c>ESCAPE '\'</c> (SQL-5) and SQLite's
+    /// case-insensitive <c>LIKE</c> (D3).</para>
+    ///
+    /// <para>Deliberately <b>not</b> a <c>RenderBlank</c> method, on two grounds. Four of five dialects
+    /// would carry a byte-identical implementation of it, which is the duplicate-instead-of-share
+    /// smell #1639's review flagged for the comparison symbols; and every one of those five would have
+    /// to reach into <c>Craticula.Core</c> for <c>SemanticsResolver.ResolveBlankCondition</c> to
+    /// answer the field-type half, which is a dependency no dialect has today. Deliberately not
+    /// resolved <em>in</em> that resolver either: that assembly knows nothing about dialects and
+    /// teaching it would invert the layering this seam exists to draw.</para>
+    ///
+    /// <para><em>What is deliberately NOT among those grounds</em>: "so that <c>blank</c> and
+    /// <c>notBlank</c> cannot drift apart". They cannot drift under either design — the negation is
+    /// composed builder-side as <c>NOT (…)</c> over whatever text the <c>blank</c> half produced, and
+    /// a <c>RenderBlank</c> member would have fed that same composition. The argument reads well and
+    /// discriminates nothing, so it is not carried here.</para>
+    /// </summary>
+    bool EmptyStringIsNull { get; }
 
     /// <summary>
     /// SQL-1: quotes one identifier — applied to <em>every</em> column and to the table, never
@@ -205,12 +251,18 @@ public interface ISqlDialect
     /// not have and bind a parameter the query has no value for.</para>
     ///
     /// <para>And a bare row cap is genuinely per-engine, in position as well as spelling: three of the
-    /// four v1 dialects spell it <c>LIMIT ?</c>, while T-SQL has no <c>LIMIT</c> at all and reaches it
+    /// five dialects spell it <c>LIMIT ?</c>, while T-SQL has no <c>LIMIT</c> at all and reaches it
     /// through <c>OFFSET 0 ROWS FETCH NEXT … ROWS ONLY</c> (or a <c>TOP (…)</c> that would have to be
     /// injected into the select list instead — the reason this member returns a trailing clause, so
     /// the builder's statement shape stays one shape). That is exactly the axis this interface exists
     /// for; a builder that spelled it itself would be the BM-1 smell, and
     /// <c>DialectIndependenceTests</c>' forbidden-token list contains <c>LIMIT</c> for that reason.</para>
+    ///
+    /// <para>#1642 added a <b>third</b> spelling and confirmed the member was the right call:
+    /// <see cref="OracleDialect"/> writes <c>FETCH FIRST … ROWS ONLY</c> — the same keyword family as
+    /// T-SQL's but legal with no <c>OFFSET</c> before it, so it needs neither that dialect's literal
+    /// zero nor Postgres's <c>LIMIT</c>. It fit this signature unchanged, which is what #1641
+    /// predicted when it wrote the member.</para>
     ///
     /// <para><paramref name="limit"/> arrives already resolved by
     /// <c>Craticula.Core.Schema.ResourceLimitsValidator.ResolveSetValuesLimit</c> — clamping the

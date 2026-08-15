@@ -19,7 +19,7 @@ raising the ceiling for an explicit request like this one has not thereby agreed
 values to every set filter that opens.
 
 Note this fixture's request is the *only* difference from `016`: same column, same empty filter
-model, same ordering. Its four SQL arms therefore differ from `016`'s in exactly one token -- the
+model, same ordering. Its five SQL arms therefore differ from `016`'s in exactly one token -- the
 bound cap -- which is what makes the clamp the only thing it can be proving.
 
 **Wire shape note:** `setValuesRequest` is **Craticula's own synthetic request shape**, not an AG Grid-defined format. AG Grid community edition has no fixed wire type for "get distinct values for a set filter" -- it delegates value resolution to a host-supplied callback (`values: (params) => void`) that the host implements however it likes. This fixture models a reasonable server-side wire contract for that callback so the compiler side (BM-3) has something concrete to compile against. See `group-aggregation/README.md` for the full shape rationale.

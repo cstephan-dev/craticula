@@ -8,7 +8,8 @@ here is a **general/structural** fixture, so each carries `expected/postgres.art
 `mssql`/`mysql`/`sqlite` arms to the sixteen BM-2 cases as well and #1641 to the five BM-3 ones (see
 "Per-dialect arms" below) — not because any of them is dialect-*specific*, but because BM-2's DoD is
 "identical grouping protocol verified across all four dialects" and three of the four had no artifact
-to verify against. Every case here is therefore six-backend.
+to verify against. #1642 then added an `oracle` arm to every one of them, so **every case here is
+seven-backend**.
 
 All 22 cases share one `schema.json` ("sales" grid: `id` stableKey; `region`/`segment`/`product`
 groupable strings; `fiscalYear` groupable int64; `amount` a decimal aggregatable over
@@ -75,7 +76,7 @@ corrected it there and in that category's README.
 > (`ORDER BY … "id" COLLATE craticula_ci ASC NULLS LAST`). It recorded that as an open SEM-1/SEM-6
 > question predating BM-2, on the premise that "the ungrouped path already does this for any string
 > `stableKey` — no fixture had one until now". **The premise was wrong about the oracle**: measured
-> across all 164 fixtures and all six backends, 21 declare a case-insensitive `string` `stableKey`
+> across all 164 fixtures and every backend arm they carry, 21 declare a case-insensitive `string` `stableKey`
 > and `005`/`006` are the *only* two that ever pinned a collated tiebreaker — both authored here, and
 > on `main` both read `ORDER BY … "id" ASC NULLS LAST`. So this pass was not inheriting a rule, it
 > was minting one.
@@ -120,7 +121,8 @@ it in place. Its `filterModel` carried a `segment` filter and *no* `region` one,
 is `set-filter-values-excludes-own-field-filter` — so it proved that another column's filter is
 honoured and said nothing at all about the target column's being dropped. A compiler that omitted the
 exclusion entirely passed it. It now carries a `region` filter beside the `segment` one, and because
-the exclusion removes it, **all six artifacts are byte-identical** to what they were: a vacuous
+the exclusion removes it, **all six artifacts then existing are byte-identical** to what they were
+(the `oracle` arm #1642 added later was derived from the corrected request): a vacuous
 fixture became a real test at zero artifact cost, and a compiler that forgets the exclusion now fails
 against the *existing* oracle. (Verified rather than assumed — compiling the corrected request
 reproduces every arm exactly.)
@@ -130,7 +132,9 @@ prefix pattern *inside the bound parameter* — `"region" ILIKE $1 ESCAPE '\'` w
 where the suite's own canonical `startsWith` rendering composes the pattern in SQL and binds the
 escaped literal alone: `operators/027` (and `025`/`026`/`028` for the rest of the family) pin
 `ILIKE $1 || '%' ESCAPE '\'` with `params: ["Smart"]`, and SQL-3/SEM-7 describe that form. One
-artifact against twenty-four is not a disagreement about which is canonical. Corrected to
+artifact against twelve is not a disagreement about which is canonical (`operators/` carries three
+backends per case, not six — the "twenty-four" this paragraph read until #1642's review pass was an
+over-count of the same four fixtures). Corrected to
 `"region" ILIKE $1 || '%' ESCAPE '\'` / `params: ["eu", 1000]`. Its **mongo** arm was already right
 (`{"$regex": "^eu", "$options": "i"}` is exactly `operators/027`'s) and its **search** arm is
 untouched — a `terms` aggregation's `include` is an aggregation-level filter with its own mechanism,
@@ -140,11 +144,12 @@ which that case's `description.md` explains at length.
 aggregations carry distinct `ColumnVO.id`s (`amountSum`/`amountMin`/`amountMax`) over one field, so
 AGG-2 makes those ids the aliases — but its artifacts spelled the compiler defaults
 (`amount_sum`/`amount_min`/`amount_max`). Its twin `012` had already been corrected to the AGG-2
-form in an earlier review pass; `013` was missed. Fixed on all six arms. The compiler was right and
+form in an earlier review pass; `013` was missed. Fixed on all six arms then existing (`013`'s
+`oracle` arm was authored later, in #1642, already carrying the AGG-2 names). The compiler was right and
 the fixture was wrong, which is the direction T-1 assumes only when the fixtures agree with each
 other — here they did not, and `012` was the tiebreak.
 
-## Per-dialect arms (#1640)
+## Per-dialect arms (#1640, extended to Oracle by #1642)
 
 `001`-`015` and `020` now carry `mssql`/`mysql`/`sqlite` arms alongside `postgres`/`mongo`/`search`
 — 48 artifacts, derived by mechanical transformation of each fixture's **own** Postgres arm using
@@ -152,22 +157,27 @@ only the per-dialect token table in `spec/semantics.md` SQL-1/SQL-5/SQL-6 and
 `dialect-parity/README.md` (quote character, placeholder form, SEM-3 null-ordering emulation, and
 the paging clause with its binding order), never by running a compiler and recording its output.
 That is what makes BM-2's "identical grouping protocol verified across all four dialects" checkable.
+#1642 added a fifth arm to every case in this category (Oracle, at full parity coverage), so the
+claim now spans five dialects; **not one of the 22 needed a structural change for it** — BM-2's
+grouping protocol is entirely ANSI, and Oracle's only genuine divergence (SQL-7's `blank` collapse)
+is not reachable from any request in this category.
 
-`021` (added in #1640's review pass, pinning AG-6's auto-group-column colId) carries all six arms
-too, derived the same way from `002`'s.
+`021` (added in #1640's review pass, pinning AG-6's auto-group-column colId) carries every arm too,
+derived the same way from `002`'s.
 
 *Corrected in the second review round:* `021` originally carried a **two**-entry `sortModel`
 (`[ag-Grid-AutoColumn, segment]`), which its own `rowGroupCols: [region, segment, product]` could
 never produce. AG Grid's default single display column carries `showRowGroup: true`, which
 `getSourceColumnsForGroupColumn` answers with *every* row-group column, and `setSortForColumn` sorts
 `[column, ...sortableRowGroupColumns]` — so one header click sends
-`[ag-Grid-AutoColumn, region, segment, product]`. The request now carries that; all six artifacts are
-unchanged, because the collapse still yields the single `segment` key, which is what makes the
+`[ag-Grid-AutoColumn, region, segment, product]`. The request now carries that; all six artifacts then
+existing are unchanged, because the collapse still yields the single `segment` key, which is what makes the
 re-derivation evidence rather than bookkeeping.
 
 `016`-`019` gained theirs in **#1641**, once BM-3's compiler existed — 12 more artifacts, derived the
-same way from each case's own Postgres arm, so every case in this category is now six-backend. `022`
-was added in that story's review pass and is six-backend from the start, derived the same way but
+same way from each case's own Postgres arm. **#1642** then added the 22 `oracle` arms in one pass,
+by the identical transformation, so every case in this category is now seven-backend. `022`
+was added in #1641's review pass, derived the same way but
 from **two** sibling arms rather than one: `017`'s for the surviving `segment` predicate and `018`'s
 for the prefix, conjoined under SQL-2's composite rule. It exists because GRP-6(c)'s `WHERE` order is
 normative and `params`-visible while no artifact carried both halves — the gap that rule's own text
@@ -175,7 +185,8 @@ admitted to. Two
 tokens are specific to this shape and appear nowhere else in the suite: the row cap renders
 `LIMIT ?` on MySQL/SQLite (no `OFFSET` — a distinct-values query is not paged) and
 `OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY` on SQL Server, whose `FETCH` is illegal without an `OFFSET`
-and whose zero is therefore a literal rather than a bound parameter. All four dialects bind exactly
+and whose zero is therefore a literal rather than a bound parameter (Oracle needs no such trick: its
+`FETCH FIRST` is legal with no `OFFSET`, a third spelling again). All five dialects bind exactly
 one value for it, so `params` is identical across the arms. See `spec/semantics.md` GRP-6(e) for the
 table and the reasoning.
 
@@ -187,8 +198,8 @@ claim was false as written.** PostgreSQL's `SELECT` documentation says an output
 stand alone, that is, it cannot be used in an expression" — its own arm was legal only because the
 alias did stand alone there — and T-SQL binds the same way, resolving an alias inside a `CASE`
 against the `FROM` scope and raising Msg 207, *Invalid column name*. GRP-4 now requires the
-**aggregate expression** in the ordering path on all four dialects, including the
-already-legal Postgres one, and `020`'s four SQL arms were re-authored to `SUM("amount")` /
+**aggregate expression** in the ordering path on every dialect, including the
+already-legal Postgres one, and `020`'s four SQL arms then existing were re-authored to `SUM("amount")` /
 `SUM([amount])` / `` SUM(`amount`) ``. Uniform rather than fixed on the two broken arms, because
 "which of these two forms is legal here" is a semantic difference, not the per-dialect spelling the
 `ISqlDialect` seam exists for. `020`'s **mongo** and **search** arms are unaffected and keep the

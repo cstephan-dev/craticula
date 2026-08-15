@@ -203,6 +203,8 @@ public class SqlQueryBuilderOperatorTests
     {
         // SQL-2: the doubled parentheses are SEM-2's "negate the compiled blank condition, never
         // re-derive it" made visible — collapsing them is the first step toward the two drifting.
+        // Postgres-specific, and SQL-7 is why that qualifier matters: on Oracle the inner form is a
+        // bare IS NULL. DialectIndependenceTests covers both branches across every dialect.
         Assert.Equal("(\"status\" IS NULL OR \"status\" = '')", Where(Comparison("status", ComparisonOperator.Blank)).Where);
         Assert.Equal("NOT ((\"status\" IS NULL OR \"status\" = ''))", Where(Comparison("status", ComparisonOperator.NotBlank)).Where);
     }

@@ -14,7 +14,7 @@ aggregate **expression**; Mongo `$sort` on the `$group` output key; the Search c
 aggregation can only order by its *source* values natively, so ordering by a sub-aggregation metric
 requires an explicit `bucket_sort` pipeline aggregation.
 
-**Ordering-target note (GRP-4, corrected in #1640's review pass).** All four SQL arms originally
+**Ordering-target note (GRP-4, corrected in #1640's review pass).** All four SQL arms that existed then originally
 ordered by the aggregate's select-list **alias** (`ORDER BY "amount_sum" DESC NULLS FIRST` on
 Postgres, and that same alias *inside* the emulated null bucket on SQL Server and MySQL:
 `CASE WHEN [amount_sum] IS NULL …`, `` ISNULL(`amount_sum`) ``). The category README recorded the
@@ -23,7 +23,7 @@ latter two as a T-1b execution risk with the note that "both engines resolve sel
 output column name "has to stand alone, that is, it cannot be used in an expression" — the Postgres
 arm was legal only because the alias did stand alone — and T-SQL binds an alias inside a `CASE`
 against the `FROM` scope, raising Msg 207 *Invalid column name*. GRP-4 now requires the aggregate
-expression in the ordering path, and all four arms read `SUM(…)` there, **including Postgres's**,
+expression in the ordering path, and all five arms read `SUM(…)` there, **including Postgres's**,
 which was already legal: "which of these two forms an engine accepts" is a semantic difference, not
 a per-dialect spelling, so splitting it across dialects would put it in the wrong layer. The alias
 still names the aggregate in the projection, which is what the grid reads the response back by.

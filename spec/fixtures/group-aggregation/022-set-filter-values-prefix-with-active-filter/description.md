@@ -50,7 +50,8 @@ still binding last:
   both text predicates (SEM-1's mechanism table), `+` for concatenation, `@pN` placeholders, the
   emulated `CASE WHEN … IS NULL` null placement, and `OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY` for
   the cap (GRP-6(e) — T-SQL has no `LIMIT` and its `FETCH` is illegal without an `OFFSET`, whose
-  zero is a **literal** so all four dialects still bind exactly one value for the cap).
+  zero is a **literal** so all five dialects still bind exactly one value for the cap — Oracle needs
+  no such trick, since its `FETCH FIRST` is legal with no `OFFSET` before it).
 - **MySQL** — backtick quoting, no spelled collation at all (the column's own declared collation is
   case-insensitive, SQL-6), `CONCAT(?, '%')`, `ESCAPE '\\'` with the doubled backslash, `ISNULL(…)`
   null placement, `LIMIT ?`.
