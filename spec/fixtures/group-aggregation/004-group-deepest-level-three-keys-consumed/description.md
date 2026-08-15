@@ -9,14 +9,23 @@ showing that the typed `groupKeys` contract (AR-7) isn't string-only: the equali
 `fiscal_year` must be compiled as a numeric comparison, not a string comparison. Grouped query on
 the last remaining column (`product`).
 
-**Case-sensitivity note (AGG-3):** `region`/`segment` are case-insensitive string fields (SEM-1).
-Per the semantics addendum's **AGG-3** rule, a `groupKeys` drill-down match is compiled into an
-equality predicate against the group column exactly like any other filter value, so it follows the
-same per-field case-sensitivity mechanism SEM-1 pins for `eq` -- never automatically exact-match.
-Postgres compiles each consumed key's match to a case-insensitive collation (`COLLATE
-craticula_ci`, never `ILIKE`/`lower()` -- SEM-1's collation-vs-pattern-match split), Mongo applies a
-query-level `collation: {"locale": "en", "strength": 2}` option alongside the pipeline, and Search's
-`term` query carries `case_insensitive: true` on each matched key.
+**Case-sensitivity note (GRP-2, superseding this case's original AGG-3 note):**
+`region`/`segment` are case-insensitive string fields (SEM-1), and the consumed `groupKeys`
+drill-down matches are nonetheless compiled **exactly**. #1640 settled this: a grouping request's
+`GROUP BY`, drill-down `WHERE` and `ORDER BY` must agree with one another or a child level stops
+summing to its parent's aggregate, and a collated `GROUP BY` key is not valid SQL at all. So
+Postgres renders `"region" = $1` with no `COLLATE craticula_ci`, Mongo's pipeline carries no
+query-level `collation` (that option is query-level and would fold `$group`'s buckets too), and
+Search's `term`s carry no `case_insensitive`. A user's own `eq` filter on the same field is
+untouched and still collates -- see `017`. On SQL Server and MySQL, whose default collations fold
+case, exact buckets are a host DDL obligation; GRP-2 records that divergence.
+
+**Wrapping note (GRP-5):** the drill-down conjunction is materialised as a real IR `and` node and
+merged with any user filter through the same primitive `customFilters` uses, so SQL-2's "every
+composite wraps" applies to it with no exception: `WHERE ("region" = $1 AND "segment" = $2)`. The
+original artifact rendered it bare, on the reading that a synthesised conjunction is not an IR
+construct; #1640 rejected that reading, because any compiler reusing its filter renderer for the
+drill-down produces the wrapped form for free.
 
 **Modeling note (deviation from raw AG Grid wire fidelity, deliberate):** real AG Grid SSRM sends `groupKeys` as `string[]` on the wire; the frontend adapter resolves each raw string into a typed value using the group column's declared schema type before building the IR (`AR-7`), exactly like it does for filter values. `spec/ir.schema.json`'s `$defs/groupSpec.groupKeys` requires that resolved `typedValue` form -- a prior review caught and fixed a regression where `groupKeys` had been left as raw scalars there. This fixture suite pins that fix at the request boundary too: `agGridRequest.json` here already carries the adapter-resolved typed form (e.g. `{"type":"string","value":"EMEA"}`), not the raw wire string, so a fixture consumer builds/checks the IR directly against the typed contract without re-deriving the (out-of-scope-for-this-suite) string-to-typedValue resolution step. See `group-aggregation/README.md` for the category-wide note.
 

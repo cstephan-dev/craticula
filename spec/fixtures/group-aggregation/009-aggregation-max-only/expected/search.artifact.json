@@ -6,8 +6,7 @@
         {
           "term": {
             "region.keyword": {
-              "value": "EMEA",
-              "case_insensitive": true
+              "value": "EMEA"
             }
           }
         }

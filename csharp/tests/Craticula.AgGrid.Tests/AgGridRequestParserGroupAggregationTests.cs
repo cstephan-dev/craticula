@@ -230,4 +230,200 @@ public class AgGridRequestParserGroupAggregationTests
         var group = Parse(request).Group;
         Assert.Equal(["region"], group!.GroupCols);
     }
+
+    // ---- AG-6: the auto group column's colId ------------------------------------------------------
+    //
+    // `ag-Grid-AutoColumn[-<id>]` lives in AG GRID's column space, not the host's, so it matches no
+    // GridSchema field and a compiler can only reject it. Resolving it is the adapter's job, and
+    // until #1640's review nothing did it — which made the single most common grouped-grid
+    // interaction, clicking the group column's header, a hard failure. The shapes below are read
+    // from columnUtils.ts / autoColService.ts / sortService.ts (see
+    // spec/fixtures/group-aggregation/021's description for the exact citations).
+
+    private const string ThreeLevelGroup =
+        """
+        "rowGroupCols": [
+          { "id": "regionCol", "displayName": "Region", "field": "region" },
+          { "id": "segment", "displayName": "Segment", "field": "segment" },
+          { "id": "product", "displayName": "Product", "field": "product" }
+        ]
+        """;
+
+    private static string GroupedRequest(string groupKeys, string sortModel) =>
+        $$"""
+          {
+            "startRow": 0, "endRow": 100,
+            {{ThreeLevelGroup}},
+            "valueCols": [], "pivotCols": [], "pivotMode": false,
+            "groupKeys": [{{groupKeys}}],
+            "filterModel": null,
+            "sortModel": [{{sortModel}}]
+          }
+          """;
+
+    [Fact]
+    public void The_Bare_Auto_Column_Resolves_To_The_Group_Column_This_Level_Buckets_By()
+    {
+        // 0 keys consumed -> the level buckets by groupCols[0]; 1 consumed -> groupCols[1]. Same
+        // dispatch as GRP-1's, which is the point: the display column shows the whole path, so the
+        // only thing this request can order by is the level it is itself producing.
+        var top = Parse(GroupedRequest("", """{ "colId": "ag-Grid-AutoColumn", "sort": "asc" }"""));
+        Assert.Equal("region", top.Sort![0].Field);
+
+        var second = Parse(GroupedRequest(
+            """{ "type": "string", "value": "EMEA" }""",
+            """{ "colId": "ag-Grid-AutoColumn", "sort": "desc" }"""));
+        Assert.Equal("segment", second.Sort![0].Field);
+        Assert.Equal(SortDirection.Desc, second.Sort[0].Direction);
+    }
+
+    /// <summary>
+    /// The <c>multipleColumns</c> form names its source column, and the suffix is that column's
+    /// <c>ColumnVO.id</c> — <c>rowGroupCol.getId()</c> in <c>createOneAutoCol</c>. <c>regionCol</c>
+    /// here has id <c>regionCol</c> and field <c>region</c>, so looking the suffix up against the
+    /// FIELDS instead would silently fail to resolve.
+    /// </summary>
+    [Fact]
+    public void The_Suffixed_Auto_Column_Resolves_Its_Suffix_As_A_ColumnVO_Id_Not_As_A_Field()
+    {
+        var parsed = Parse(GroupedRequest("", """{ "colId": "ag-Grid-AutoColumn-regionCol", "sort": "asc" }"""));
+
+        Assert.Equal("region", parsed.Sort![0].Field);
+    }
+
+    /// <summary>
+    /// AG Grid's sort coupling (on by default) sets the sort on the display column AND on every
+    /// source column <c>getSourceColumnsForGroupColumn</c> returns for it — which, for the DEFAULT
+    /// single auto column, is every row-group column: its colDef carries
+    /// <c>showRowGroup: rowGroupCol?.getColId() ?? true</c> (the literal <c>true</c>) and that
+    /// service answers <c>true</c> with <c>rowGroupColsSvc.columns.slice(0)</c>. So one click on the
+    /// group header emits 1 + N entries, not a pair, and all N collapse into the one key the display
+    /// column resolved to. Keeping them would leave the request sorting on a column pinned to a
+    /// single value by the drill-down (<c>region</c>) and on a level this response does not produce
+    /// (<c>product</c>), both of which GRP-4 rejects — i.e. the commonest grouped interaction would
+    /// still fail. Pinned by <c>spec/fixtures/group-aggregation/021</c>.
+    /// </summary>
+    [Fact]
+    public void The_Whole_Coupled_Row_Group_Set_Collapses_Into_The_Resolved_Key()
+    {
+        var parsed = Parse(GroupedRequest(
+            """{ "type": "string", "value": "EMEA" }""",
+            """
+            { "colId": "ag-Grid-AutoColumn", "sort": "desc" },
+            { "colId": "region", "sort": "desc" },
+            { "colId": "segment", "sort": "desc" },
+            { "colId": "product", "sort": "desc" }
+            """));
+
+        Assert.Single(parsed.Sort!);
+        Assert.Equal("segment", parsed.Sort![0].Field);
+        Assert.Equal(SortDirection.Desc, parsed.Sort[0].Direction);
+    }
+
+    /// <summary>
+    /// The <c>multipleColumns</c> form is the other half of the same rule and must stay distinct: its
+    /// <c>showRowGroup</c> is one column's id (the string arm of the same service method), so its
+    /// coupled set is that ONE column. Collapsing the whole row-group list for it would silently
+    /// discard sort keys the client really did ask for.
+    /// </summary>
+    [Fact]
+    public void A_Suffixed_Auto_Column_Collapses_Only_Its_Own_Source_Column()
+    {
+        var parsed = Parse(GroupedRequest(
+            "",
+            """
+            { "colId": "ag-Grid-AutoColumn-regionCol", "sort": "asc" },
+            { "colId": "region", "sort": "asc" },
+            { "colId": "segment", "sort": "desc" }
+            """));
+
+        Assert.Equal(["region", "segment"], parsed.Sort!.Select(item => item.Field));
+    }
+
+    /// <summary>
+    /// ...and the collapse is narrow: a duplicate neither side of which came from an auto column is
+    /// left exactly as the client sent it, since nothing in this adapter created it.
+    /// </summary>
+    [Fact]
+    public void A_Duplicate_The_Adapter_Did_Not_Create_Is_Left_Alone()
+    {
+        var parsed = Parse(GroupedRequest(
+            "",
+            """
+            { "colId": "segment", "sort": "asc" },
+            { "colId": "segment", "sort": "desc" }
+            """));
+
+        Assert.Equal(2, parsed.Sort!.Count);
+    }
+
+    /// <summary>
+    /// On the drill-down leaf every group column is consumed, so there is no level for the display
+    /// column to name — and every row shares the whole group path, making the key a constant that
+    /// orders nothing. Dropped rather than mapped to some level's column, which would impose an
+    /// ordering the user never asked for. SEM-6's tiebreaker still guarantees a total order.
+    /// </summary>
+    [Fact]
+    public void On_The_Drill_Down_Leaf_The_Auto_Column_Key_Is_Dropped()
+    {
+        var parsed = Parse(GroupedRequest(
+            """
+            { "type": "string", "value": "EMEA" },
+            { "type": "string", "value": "Enterprise" },
+            { "type": "string", "value": "Widget" }
+            """,
+            """{ "colId": "ag-Grid-AutoColumn", "sort": "asc" }"""));
+
+        Assert.Null(parsed.Sort);
+    }
+
+    /// <summary>
+    /// A suffix naming no <c>rowGroupCols</c> entry is left UNRESOLVED on purpose and carried through
+    /// VERBATIM, so it fails downstream as the unknown colId it is. Mapping it to some other column
+    /// would be a silent substitution; DROPPING it — which this adapter did until #1640's second
+    /// review — is worse, because the response then comes back in a different order from the one the
+    /// grid's own header shows, with no rejection and no log. Any other bogus colId reaches a compiler
+    /// and is refused there; the auto-column prefix must not be the one that opens a silent-drop path.
+    /// </summary>
+    [Fact]
+    public void An_Unrecognized_Auto_Column_Suffix_Is_Carried_Through_Verbatim_To_Be_Rejected()
+    {
+        var parsed = Parse(GroupedRequest("", """{ "colId": "ag-Grid-AutoColumn-nosuch", "sort": "asc" }"""));
+
+        Assert.Equal("ag-Grid-AutoColumn-nosuch", parsed.Sort![0].Field);
+    }
+
+    /// <summary>
+    /// ...and so is an auto-column colId on a request carrying no group state at all, for the same
+    /// reason: it names no level because there are no levels, which is a malformed request rather
+    /// than something to quietly discard.
+    /// </summary>
+    [Fact]
+    public void An_Auto_Column_ColId_On_An_Ungrouped_Request_Is_Carried_Through_Verbatim()
+    {
+        var request =
+            """
+            {
+              "startRow": 0, "endRow": 100,
+              "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false,
+              "groupKeys": [],
+              "filterModel": null,
+              "sortModel": [{ "colId": "ag-Grid-AutoColumn", "sort": "asc" }]
+            }
+            """;
+
+        var parsed = Parse(request);
+
+        Assert.Equal("ag-Grid-AutoColumn", parsed.Sort![0].Field);
+    }
+
+    /// <summary>An ordinary colId that merely starts with something else is untouched — the prefix
+    /// match is AG Grid's own (<c>isColumnGroupAutoCol</c>), not a fuzzy one.</summary>
+    [Fact]
+    public void A_Normal_ColId_Is_Not_Rewritten()
+    {
+        var parsed = Parse(GroupedRequest("", """{ "colId": "product", "sort": "asc" }"""));
+
+        Assert.Equal("product", parsed.Sort![0].Field);
+    }
 }

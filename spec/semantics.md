@@ -28,30 +28,47 @@ normative and *is* byte-for-byte what the `spec/fixtures/` Postgres artifacts co
 (`gt`/`gte`/`lt`/`lte`), which fold case in their lexicographic comparison exactly as the
 equality/substring operators fold case in theirs: case sensitivity is a per-field property (SC-3),
 not a per-operator one, and — the scope of "not a per-operator one" pinned explicitly here — **not
-a per-context one either**: the identical mechanism governs an `eq`/`in` comparison, an `ORDER BY`/
-`$sort`/`sort` on that field, and a `groupSpec.groupKeys` drill-down match against that field's
-group column. A grid that lets a user filter `region eq "emea"` case-insensitively but then fails to
-drill into the `EMEA` group bucket with that same casing has the identical bug this rule exists to
-prevent, just triggered from the grouping UI instead of the filter UI. Per-field, a schema author may
-opt a field into case-sensitive comparison instead. Whichever mode is active, the compiler MUST reach
-it through an index-friendly, backend-native mechanism — and, critically, **the same class of
-mechanism (collation vs. pattern-match) MUST be used consistently across every context on that
-field**, never one mechanism for filtering and a different one for sorting.
+a per-context one either**: the identical mechanism governs an `eq`/`in` comparison and an
+`ORDER BY`/`$sort`/`sort` on that field. Per-field, a schema author may opt a field into
+case-sensitive comparison instead. Whichever mode is active, the compiler MUST reach it through an
+index-friendly, backend-native mechanism — and, critically, **the same class of mechanism (collation
+vs. pattern-match) MUST be used consistently across every context on that field**, never one
+mechanism for filtering and a different one for sorting.
+
+**The one carve-out, and it is not a per-context exception smuggled back in: grouping (GRP-2).**
+This rule governs how a field's *values* are compared. It does **not** govern *bucket identity*, a
+question it never asks and which BM-2's protocol answers separately: inside a grouping request the
+`GROUP BY` key, the `groupSpec.groupKeys` drill-down match and the `ORDER BY` are all **exact**,
+because they have to agree with one another or a child level stops summing to its parent's
+aggregate — and because collating a `GROUP BY` key produces a statement the engines reject outright.
+That is a per-*statement* rule, not a per-construct one, so it cannot reintroduce the mix this
+section forbids; a user's own filter predicate inside that same grouped request is still governed
+here, in full. See the grouping addendum (GRP-2) for the whole argument, the accepted divergence on
+engines whose default collation folds case, and why an earlier draft of this section — which read
+the drill-down match as an ordinary comparison — was wrong on this one point.
 
 **Two distinct mechanisms, not one — pick per shape, not per whim.** This document previously left
-it ambiguous whether Postgres case-insensitive *equality* (`eq`/`in`/`notIn`, and by extension sort
-and group-key matching) should reuse `ILIKE` (the *substring* mechanism, §SEM-7's territory) or use a
+it ambiguous whether Postgres case-insensitive *equality* (`eq`/`in`/`notIn`, and by extension sort)
+should reuse `ILIKE` (the *substring* mechanism, §SEM-7's territory) or use a
 collation (the *exact-comparison* mechanism, as SQL Server/MySQL already do below). Reusing `ILIKE`
 for exact match turns out to be a trap: `ILIKE`'s pattern-language treats a literal `%`/`_` in the
 *value* as a wildcard, so an exact-match operator silently becomes a widened pattern match unless
 every value is escaped — and MongoDB's `$eq`/`$in` set-membership forms have no `ESCAPE`-clause
 equivalent at all, making that escaping structurally inapplicable to some backends' idiomatic forms.
-The rule, pinned: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort and group-key matching on
+The rule, pinned: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sorting on
 a case-insensitive field, use a case-insensitive COLLATION** (an equality/ordering mechanism, no
 pattern language, nothing to escape). **`contains`/`notContains`/`startsWith`/`endsWith` use `ILIKE`
 or the backend's substring mechanism** (SEM-7 covers `contains` specifically) — a pattern-match
 mechanism is appropriate there because the operator itself is a pattern match; the value's own `%`/
 `_` are escaped there because the position is a pattern, not because the CI requirement demands it.
+
+> **This paragraph says *which mechanism* when one is used at all; it does not say one always is.**
+> An earlier draft ended both sentences above with "plus sort **and group-key matching**", which
+> #1640 made wrong and #1640's own review found still standing here — in the very sentence this
+> section labels *the rule, pinned* — after the carve-out had been written into the intro and the
+> Must-NOTs. A `groupSpec.groupKeys` drill-down match, a `GROUP BY` key and a **grouped level's**
+> `ORDER BY` use **no** case-folding mechanism at all (GRP-2). A port implementing SEM-1 from the
+> pinned sentence alone would emit the collation and fail `group-aggregation/002`.
 
 **Rationale.** AG Grid's in-memory (client-side) row model filters text case-insensitively by
 default. If the SSRM compiler defaults to case-sensitive comparison instead, the exact same filter
@@ -143,10 +160,11 @@ per field, never assume it exists.
   default; per-field case sensitivity is an explicit schema opt-in (SC-3), never an accidental
   inheritance from the underlying engine.
 - Must NOT apply case-folding inconsistently between the comparison and any related `ORDER BY`/sort
-  or `groupSpec.groupKeys` match on the same field — case sensitivity is a per-field property, not a
-  per-operator *or per-context* one.
-- Must NOT use `ILIKE`/pattern-match as the mechanism for `eq`/`neq`/`in`/`notIn`/ordering/sort/
-  group-key matching — that mechanism is a collation. Reserve `ILIKE`/pattern-match for
+  on the same field — case sensitivity is a per-field property, not a per-operator *or per-context*
+  one. (A `groupSpec.groupKeys` drill-down match is the documented carve-out: it is exact, together
+  with the `GROUP BY` and `ORDER BY` of the same statement — GRP-2, not this rule.)
+- Must NOT use `ILIKE`/pattern-match as the mechanism for `eq`/`neq`/`in`/`notIn`/ordering/sort —
+  that mechanism is a collation. Reserve `ILIKE`/pattern-match for
   `contains`/`notContains`/`startsWith`/`endsWith`, where the operator itself is a pattern match.
 - Must NOT assume an ES/OpenSearch `range` query can be made case-insensitive at query time — it
   cannot in the pinned 7.10-era subset; case-insensitive ordering requires a schema-declared
@@ -543,6 +561,46 @@ as to any other sort key): since a `stableKey` is required to be unique but not 
 no direction the user chose) — i.e. the appended key is always `{ field: stableKey, direction: "asc",
 nullsPosition: "last" }`.
 
+> **Superseded in part by GRP-4 (#1640), for a grouped level only.** This rule says the appended key
+> is *always* the schema's `stableKey`, and its second Must-NOT below forbids treating anything else
+> as unique. On a **grouped level** that is now wrong: the `stableKey` is not in the grouped
+> projection at all, so ordering by it is invalid SQL rather than merely undesirable, and the
+> **group column** plays its role instead — appended last, ascending, nulls last, and not appended
+> twice when the sort already ends in it, all of which are this rule's own mechanics unchanged. The
+> Must-NOT's *intent* is untouched and still binds: the substitute is not a key that "merely looks
+> unique", it is unique across the level's rows **by construction**, since a `GROUP BY` emits one row
+> per distinct value of it. Everything else — an ungrouped query, and a fully-consumed drill-down
+> **leaf**, which projects rows — keeps `stableKey` exactly as written here. Recorded rather than
+> deleted, since the affected artifacts (`group-aggregation/001`-`004`, `007`-`015`, `020`, `021` on
+> every arm) were authored against the original.
+
+> **Superseded in part by #1640's review, for the appended tiebreaker's case sensitivity.** The
+> appended key resolves **exact** — no case-folding mechanism is spelled on it — whatever SEM-1 says
+> about the `stableKey`'s own field, and whether or not the query is grouped. Everything else about
+> the tiebreaker is unchanged: still last, still ascending, still nulls-last, still not appended when
+> the sort already ends in it.
+>
+> This is not a stylistic exemption, it is *this rule's own guarantee*. A `stableKey` is declared
+> unique, and it is unique under the collation its **storage** uses; a compiler that attaches a
+> different one is no longer comparing the text a user asked about, it is re-deciding row identity.
+> The fixture suite's `craticula_ci` is declared `deterministic = false`, and under a
+> non-deterministic collation `'aB3'` and `'Ab3'` compare **equal** — so a collated tiebreaker leaves
+> exactly the ties it exists to break, the same statement may order those rows differently at
+> `OFFSET 0` and at `OFFSET 100`, and a row is returned twice or dropped from both pages. That is the
+> Rationale immediately below, and the third Must-NOT further down, reintroduced through this rule's
+> own mechanism. Spelling nothing sorts the key under its storage collation, i.e. under the one its
+> declared uniqueness is stated in. It is GRP-2's argument extended by one step: a key that
+> establishes **identity** is not governed by how a field's *values* compare.
+>
+> The scope is the **appended** key only. A user's own sort key keeps SEM-1 in full, including on the
+> stable key's own column when the request sorts by it explicitly (nothing was appended then) — so one
+> statement legitimately reads
+> `ORDER BY "last_name" COLLATE craticula_ci ASC NULLS LAST, "id" ASC NULLS LAST`, a collated user key
+> beside a bare tiebreaker, and `spec/fixtures/sort-paging/001` pins it. Recorded rather than folded
+> into the rule because `group-aggregation/005`/`006` are the only artifacts in the whole suite that
+> ever pinned the collated form — measured across all six backends — and both were authored, and
+> re-authored, inside #1640.
+
 **Rationale.** Paging over a sort key that isn't unique is non-deterministic at the database level:
 nothing in the SQL standard (or in Mongo's or ES's own documentation) guarantees that rows tied on
 the chosen sort key come back in the same relative order across two separate executions of the
@@ -744,13 +802,17 @@ left absent and the compiler's own default naming applies. This is a one-line, d
 "is `id` distinct from `field`" — precisely so that every fixture/port computes the identical answer
 from the identical `ColumnVO` shape, rather than each guessing when alias-setting is warranted.
 
-**AGG-3. Group-key drill-down matching (`groupSpec.groupKeys`) follows the group column's own
-case-sensitivity setting (SEM-1) — it is not automatically exact-match.** A `groupKeys` entry is
-compiled into an equality predicate against its group column (BM-2) exactly like any other filter
-value; SEM-1's own rule that case sensitivity is "a per-field property, not a per-operator or
-per-context one" already covers this without further amendment — restated here only because the
-conformance fixture suite needed it made explicit for grouped queries specifically, alongside the
-plain-filter case SEM-1's own worked examples focus on.
+**AGG-3. A `groupKeys` entry is a typed value (AR-7), compiled into an equality predicate against
+its group column.** It is a value like any other filter value and is typed from the group column's
+declared schema type before the IR is built, never left as a raw wire string.
+
+> **Superseded in part by GRP-2 (#1640).** This rule previously also said that the drill-down match
+> "follows the group column's own case-sensitivity setting (SEM-1) — it is not automatically
+> exact-match". That is now **wrong**: the grouping addendum makes the drill-down, the `GROUP BY` and
+> the grouped `ORDER BY` exact together, because they must agree with one another or a child level
+> stops summing to its parent's aggregate, and because a collated `GROUP BY` key is not valid SQL.
+> The sentence is recorded here rather than deleted silently, since the affected artifacts
+> (`group-aggregation/002`-`012`, `015` on all three backends) were authored against it.
 
 **AGG-4. ES/OpenSearch `terms` aggregation ordering (BM-3 set-filter values, and any composite group
 aggregation) is pinned to ascending by key value, not the engine default.** A bare `terms` aggregation
@@ -770,6 +832,284 @@ TRD §15 risk register's own "documented-divergence register" precedent) rather 
 with a client-side reorder, which would defeat server-side paging's whole purpose for the grouped
 case. Fixtures exercising composite null-bucket ordering mark this explicitly rather than silently
 pinning three-way-identical output that ES/OpenSearch cannot actually produce.
+
+---
+
+## Addendum — grouping semantics (GRP-1..GRP-5; not numbered SEM-*, for the same reason as the
+aggregation addendum, and added by #1640 because BM-2's own two open contradictions could not be
+settled anywhere a fixture README would be the only record)
+
+BM-2 (row grouping over AG Grid SSRM) is a *protocol*, not a single query shape: one request per
+expanded level, each carrying the whole group path so far. #1630's fixtures pinned that protocol's
+output before anything compiled it, and left two points genuinely undecided — whether a grouped
+query folds case, and whether the drill-down conjunction is IR or clause text. Both are settled
+here, because a rule that lives only in a category README is a rule the next language port will
+re-derive differently.
+
+**GRP-1. One request, one level: the dispatch is `groupKeys.length` against `groupCols.length`.**
+Fewer keys than columns → a **grouped level**: bucket by `groupCols[groupKeys.length]` (the next
+not-yet-consumed column, and only that one — never the whole remaining list), aggregate the
+`valueCols`, and restrict to the already-consumed keys. Equal → the **drill-down leaf**: every
+dimension is consumed, so the answer is raw rows restricted by those keys, with no `GROUP BY` and no
+aggregation (`spec/fixtures/group-aggregation/005`, `006`). More keys than columns is a malformed
+request and MUST be rejected — consuming only as many as fit returns a different bucket's rows under
+a label the client did not ask for.
+
+*Where the arity check belongs.* It is a property of the **request**, not of any one backend, and
+`ir.schema.json` cannot express it (JSON Schema has no way to compare two arrays' lengths) — so it
+belongs in the shared `groupSpec` validator every compiler already runs, not in a compiler. Put it in
+one of them and the others must each re-derive it; its failure mode is silent, so the one that
+forgets returns wrong rows rather than an error.
+
+*The colIds are client-controlled, and pass the same boundary as a filter's.* `rowGroupCols` and
+`valueCols` arrive off the wire exactly as `filterModel` does, so every `groupCols` entry and every
+aggregation `field` MUST pass the SC-1 allowlist, and MUST additionally satisfy SC-2's per-field
+`groupable` / `aggregatable` capability flags — the one place those flags are enforced at all.
+**SC-1's Lenient mode does not apply to either.** Lenient may silently drop an unknown *condition*,
+because the result merely widens and a host can knowingly accept that; neither of these is a
+condition. Dropping a `groupCol` changes which level the response describes — and, with its
+`groupKey`, returns a different bucket's rows under the label the client asked for, arriving
+silently at exactly what the paragraph above rejects loudly. Dropping an aggregation hands the grid
+a response missing the key it asked for, i.e. a column of blanks indistinguishable from real nulls.
+Both are rejected in every mode. Pinned by `spec/fixtures/adversarial/003-unknown-colid-row-group`.
+
+**GRP-2. A grouping request is *exact* on the protocol's own keys: no case-folding mechanism is
+spelled on any of them.** There are exactly three: the `GROUP BY` key, the drill-down `WHERE`
+predicates a consumed `groupKeys` entry compiles into, and a **grouped level's** `ORDER BY` keys.
+All render bare, whatever the column's declared `caseSensitivity`. So `"EMEA"` and `"emea"` are two
+buckets with two unambiguous labels — which is also what AG Grid's own client-side grouping does.
+
+*Why the three must agree, and why "exact" is the only coherent answer.* Bucket identity is decided
+by the `GROUP BY`; the drill-down that expands a bucket must select **exactly** the rows that
+produced it, or the child level stops summing to the parent's aggregate; and the `ORDER BY` of that
+same level orders the buckets the `GROUP BY` just produced. That rules out every mixed
+answer. Between the two coherent ones, "collate everywhere" is not merely undesirable, it is
+**invalid SQL**: `SELECT "segment" … GROUP BY "segment" COLLATE craticula_ci` groups by an
+expression the select list no longer contains, and Postgres and SQL Server both reject it. Exactness
+also avoids inventing a label rule for a folded bucket (is it `EMEA` or `emea`?), which nothing in
+AG Grid's wire contract supplies.
+
+*Scope — deliberately narrow, and narrower than #1640's first draft.* GRP-2 governs the keys that
+**decide or reproduce bucket identity**, not "every key of a grouping request". Two things inside
+one are outside it:
+
+- **A user's own filter.** A pre-aggregation row filter (AR-5) selects the rows that will be
+  bucketed and has no say in bucket identity, so it keeps SEM-1's per-field mechanism. One statement
+  may therefore compare the same column twice by two mechanisms — `WHERE ("region" = $1 AND "region"
+  ILIKE '%' || $2 || '%' ESCAPE '\')` — and that is correct, not the contradiction SEM-1 forbids:
+  SEM-1 governs how a field's *values* are compared, GRP-2 governs *bucket identity*, a question
+  SEM-1 never asks.
+- **A drill-down leaf's `ORDER BY`.** #1640's first draft keyed the `ORDER BY` rule on "the request
+  carries a `groupSpec`", which swept the fully-consumed leaf in with it; its review found that
+  wrong. A leaf has no `GROUP BY` and no buckets. It orders raw rows by whatever column the user
+  picked, which need not be a group column at all — `group-aggregation/005` sorts on `product`,
+  neither a group column nor a group key — so the bucket-identity argument above simply does not
+  reach it. It is an ordinary row query in this respect and **SEM-1 governs it**, collation
+  included. Leaving it bare was also a live defect and not merely an inconsistency: a leaf that
+  filters `lastName eq "smith"` and sorts on `lastName` would emit a collated `WHERE` beside a bare
+  `ORDER BY` — one field, two mechanisms, one statement, which SEM-1's third Must-NOT forbids
+  outright. Its drill-down `WHERE` is still exact, because that IS one of the protocol's keys.
+- **A leaf that sorts on a *consumed* group column**, which is the boundary between the two bullets
+  above. It emits an exact `WHERE "region" = $1` beside a collated `ORDER BY "region" COLLATE
+  craticula_ci` — one field, two mechanisms, one statement, and yet correct: the `WHERE` has pinned
+  that column to a single group key, so the ordering is a no-op over the returned rows and there is
+  no comparison for the two mechanisms to disagree about. Stated because it looks exactly like the
+  SEM-1 violation the bullet above exists to prevent, and a reviewer who spots it should be able to
+  find it already answered rather than re-derive it.
+
+The one thing that must never happen is the mix SEM-1 does forbid: a **grouped level** whose
+`GROUP BY` and `ORDER BY` disagree with each other, which GRP-2's per-*statement* scope removes.
+
+*Accepted divergence, and the host obligation it creates.* "Spell nothing" means "exact" only where
+the engine's own default already is. It is on Postgres (deterministic default collation) and SQLite
+(`BINARY`). It is **not** on SQL Server / Azure SQL (stock `SQL_Latin1_General_CP1_CI_AS`) or MySQL /
+MariaDB (a `_ci` family default): there, a grouped string column folds case and `"EMEA"`/`"emea"`
+land in one bucket. A host that wants exact buckets on those engines must declare the groupable
+column with a binary / `_as_cs` collation in its DDL — the same kind of obligation SQL-6 already
+records for MySQL's case-sensitive direction, and for the same reason (no portable in-statement
+spelling exists that does not break the `GROUP BY`). Recorded here as a documented divergence rather
+than papered over; the execution-equality tier (T-1b, #1624) is what can grade it, and T-1a cannot
+see it at all.
+
+*Per-backend consequences beyond SQL.* ES/OpenSearch drops the `case_insensitive: true` parameter
+from a drill-down `term`, leaving `{"term": {"<field>.keyword": {"value": "EMEA"}}}`, the same
+exact-term form `dialect-parity/014` already uses; a composite `terms` source over a `keyword` field
+is exact already and needs nothing. Its per-clause granularity means it can satisfy the scope
+carve-outs above exactly — a bare drill-down `term` beside a `wildcard`/`case_insensitive` user
+filter, and beside a leaf `sort` on a `search.normalizedSubField`, all in one request.
+
+*Accepted divergence #3 — MongoDB cannot satisfy this rule and the carve-outs above at the same
+time.* MongoDB's `collation` is a **query-level** option: it governs `$match`, `$group` and `$sort`
+together, and there is no per-stage form. So a grouping request whose scope carve-outs ask for a
+case-insensitive comparison somewhere and an exact one somewhere else has no pipeline that expresses
+both, and the "a grouping request's pipeline carries no `collation` at all" shorthand an earlier
+draft used hid a real choice rather than describing a consequence-free one. Two shapes reach it:
+
+- a grouped request carrying a **user `eq`/`in` filter** on a case-insensitive string (SEM-1 wants
+  the collation; the `GROUP BY` and drill-down forbid it), and
+- a **drill-down leaf** sorting a case-insensitive string (SEM-1 wants it; the drill-down `WHERE`
+  forbids it) — which `group-aggregation/005` and `006` now are.
+
+**The protocol's keys win, on both: the pipeline carries no `collation`.** Bucket identity is a
+correctness property — get it wrong and a child level's rows stop summing to the parent's aggregate,
+silently — while a case-folded filter or sort is a narrower, visible difference in which rows come
+back and in what order. So on MongoDB a user's own filter compares case-**sensitively**, and a
+leaf's `$sort` orders case-sensitively, where the four SQL dialects collate both. Recorded here as a
+documented, host-visible divergence, in the same register as GRP-2's SQL Server/MySQL DDL obligation
+and AGG-5: no fixture reaches the first shape (no grouped case carries both `groupKeys` and a
+`filterModel`), and `005`/`006`'s Mongo arms pin the second. The execution-equality tier (T-1b,
+#1624) is what can grade it; T-1a cannot see it.
+
+**GRP-3. A grouping request names its output columns at every level; an ungrouped one does not.**
+A grouped level projects `<group column> AS <logical field name>` — aliased **always**, even when
+the physical column and the logical name coincide — followed by one aggregate per `valueCol`. A
+drill-down leaf projects every field the schema declares, in declaration order, aliased back to its
+logical name **only where the physical column differs** (`"fiscal_year" AS "fiscalYear"`, but plain
+`"region"`). *"Declaration order" means the order of the `fields` object's members in the schema
+**document***, and an implementation must take it from there: the natural shortcut — enumerating
+whatever map the schema was deserialized into — is a language-specific accident (`Dictionary<K,V>`
+in .NET, `dict` in Python and `Map` in JS happen to preserve insertion order; Go's `map` and Java's
+`HashMap` emphatically do not), and `group-aggregation/005`/`006` compare this column list byte for
+byte. `SELECT *` is not available to the protocol at either level: it returns *physical*
+column names, and a grid that asked for `fiscalYear` cannot read a `fiscal_year` key. An **ungrouped**
+query is out of GRP-3's scope and still renders `SELECT *`; widening that belongs to the export
+feature, which owns the request-supplied column list (EXP-3) any general projection rule has to
+compose with.
+
+**GRP-4. A grouped level orders by what it projects, and breaks ties on its group column.**
+- A sort key naming an **aggregated column** orders by that aggregate's **expression**
+  (`ORDER BY SUM("amount")`), never by the raw column, which the projection does not contain. The key
+  is matched against `alias ?? field`, i.e. AGG-2's `ColumnVO.id` reconstructed — the grid sends the
+  *column's* id, and AGG-2 sets the alias from that id exactly when it differs from the field.
+- **Repeat the expression; do not refer back to the output name.** An output column name is only
+  *conditionally* usable in `ORDER BY`: PostgreSQL's `SELECT` documentation states that it "has to
+  stand alone, that is, it cannot be used in an expression", and T-SQL binds the same way — an alias
+  inside a `CASE` resolves against the `FROM` scope and raises "Invalid column name". It rarely
+  stands alone here, because SEM-3's null placement is **emulated** on two of the four dialects
+  (`CASE WHEN … IS NULL THEN 1 ELSE 0 END` on SQL Server, `ISNULL(…)` on MySQL), so the ordering
+  target sits inside an expression on both. The expression form is unambiguously legal in either
+  position on all four engines, so it is used uniformly rather than only where the wrapper forces
+  it — a per-dialect split would make a *semantic* difference look like a spelling one. (#1640's
+  first draft emitted the name; its review found `020`'s mssql and mysql arms were the T-SQL failure
+  above.) Mongo and Search are unaffected and keep the name: after `$group` the aggregate is a real
+  field of the document a later `$sort` stage reads, and ES's `bucket_sort` addresses a
+  sub-aggregation by a `buckets_path`, not by an alias.
+- An aggregate with no alias takes the compiler default **`<field>_<func>`** (`amount_sum`,
+  `id_count`) — stated here because it lands in query text as an identifier and every port must
+  choose the same one. It names the aggregate in the projection and in the response, which is what
+  the grid reads it back by; only the `ORDER BY` avoids it.
+- SEM-6's tiebreaker still applies, but the **group column** plays the stable key's role: the
+  schema's `stableKey` is not in the grouped projection, so ordering by it is invalid SQL, while the
+  group column's values are unique across the level's rows by construction. Appended last, ascending,
+  nulls last, and not appended twice when the sort already ends in it — SEM-6's own rules, unchanged.
+- A sort key that is neither the group column nor an aggregate output MUST be rejected rather than
+  rendered; the engine would refuse the statement anyway, and a compiler error names the reason.
+  **This is a statement about the IR's colId space, not AG Grid's** — see AG-6 below, which is what
+  makes the two the same space by the time a compiler sees them.
+- A drill-down **leaf** is an ordinary row query in this respect and keeps SEM-6's `stableKey`.
+
+**AG-6. AG Grid addresses a grouped sort through the row-group *display* column, whose colId the
+adapter must resolve before the IR is built.** `sortService.getSortModel()` writes
+`colId: column.getId()`, and for the auto group column that id is
+`columnUtils.ts`'s `GROUP_AUTO_COLUMN_ID = 'ag-Grid-AutoColumn'` — or, under
+`groupDisplayType: 'multipleColumns'`, `` `${GROUP_AUTO_COLUMN_ID}-${rowGroupCol.getId()}` ``
+(`autoColService.createOneAutoCol`). Neither matches any `GridSchema.fields` key, because it is a
+colId in **AG Grid's** column space rather than the host's, and the SSRM sort listener passes it to
+the server untouched. Resolving it is therefore the adapter's job by definition — nothing downstream
+knows that AG Grid mints display columns — and until #1640's review nothing did it, which made the
+single most common grouped-grid interaction, clicking the group column's header, a hard failure
+against GRP-4's rejection above.
+
+- **`ag-Grid-AutoColumn`** shows the whole group path, so it resolves to the group column *this
+  request's own level buckets by*: `groupCols[groupKeys.length]`, GRP-1's dispatch exactly.
+- **`ag-Grid-AutoColumn-<id>`** names its source column, and the suffix is that column's
+  `ColumnVO.id` — looked up against the `rowGroupCols` entries' **ids**, which differ from their
+  `field`s whenever a host gives a grouped column its own id.
+- On a **drill-down leaf** every group column is consumed, there is no level to name, and every row
+  shares the whole group path — so the key would order nothing and is **dropped**. SEM-6's
+  tiebreaker still guarantees a total order.
+- A suffix naming no `rowGroupCols` entry, and an auto-column colId on a request carrying **no group
+  state at all**, are both left **unresolved and carried through verbatim**, so each fails downstream
+  as the unknown colId it is. Dropping either is worse than mapping it: the response then comes back
+  in a different order from the one the grid's own header shows, with no rejection and no log, and the
+  auto-column prefix would be the only colId in the adapter with such a path — every other bogus colId
+  reaches a compiler and is refused there. The refusal does come from the **compiler**, which resolves
+  each sort field against the schema; sort colIds have no allowlist stage of their own yet (SEM-6's
+  own note about the orchestrator that does not exist applies here too), so "it reaches the field
+  allowlist" — which an earlier draft of this rule said — is aspirational rather than true.
+- **Collapse the coupled set afterwards.** AG Grid's sort *coupling*
+  (`gridOptionsUtils._isColumnsSortingCoupledToGroup`, true unless `treeData` or a custom
+  `autoGroupColumnDef.comparator`) sets the sort on `[column, ...sortableRowGroupColumns]` — the
+  display column **and every source column** `showRowGroupColsService.getSourceColumnsForGroupColumn`
+  returns for it — and `getIndexedSortMap` gives them all the display column's index, so they are all
+  emitted. For the **default single display column that is every row-group column**, not just the
+  level it resolved to: `autoColService.createBaseColDef` sets
+  `showRowGroup: rowGroupCol?.getColId() ?? true`, i.e. the literal `true`, and that service answers
+  `true` with `rowGroupColsSvc.columns.slice(0)`. So with `rowGroupCols: [region, segment, product]`
+  one user click emits `[ag-Grid-AutoColumn, region, segment, product]` — 1 + N, not a pair — and AG
+  Grid means **one logical key** by it. Collapse the whole coupled set into the entry the display
+  column resolved to, keeping the **first** occurrence so the user's key precedence is preserved.
+  A **suffixed** display column is the other arm of the same service method: its `showRowGroup` is one
+  column's id, so its coupled set is that one column and only it collapses. Scoped to entries the
+  resolution itself accounts for, and only after the display column that named them: a key the client
+  sent on its own is left alone. Pinned by `group-aggregation/021`.
+  *(Keeping the surplus entries is not a cosmetic duplicate — with the payload above they leave the
+  request sorting on a column the drill-down has pinned to one value and on a level this response does
+  not produce, both of which GRP-4 rejects outright.)*
+
+**GRP-5. The drill-down is materialised as real IR, and merged with the user's filter through the
+same merge primitive as everything else.** Each consumed key becomes an `eq` comparison node against
+its group column (AGG-3's typed value), the set is wrapped in an `and` node when there is more than
+one, and the result is `and`-merged with the request's own filter tree exactly as `customFilters`
+and static filters are (AR-5/OQ-11's one merge primitive). It is **not** assembled as clause text.
+
+*Consequence, and the contradiction this closes.* Because it is ordinary IR, SQL-2's "every composite
+wraps" applies to it with no exception: two or more consumed keys render `("region" = $1 AND
+"segment" = $2)`, wrapped. #1630's fixtures had them bare, on the reading that a synthesised
+conjunction is not an IR construct; that reading is rejected, because any compiler that reuses its
+filter renderer for the drill-down — which is every sensible one — gets the wrapped form for free.
+A single consumed key is not a composite and does not wrap.
+
+*Order.* The drill-down leads: `WHERE (<group path> AND <user filter>)`. Nothing in the fixture suite
+pins this (no case carries both), and it is stated rather than left open because the choice is
+visible in `params`, which is compared exactly.
+
+*Provenance must survive the merge.* The two halves are ordinary IR and indistinguishable by shape —
+a `groupKeys` match on `region` and a user `eq` on `region` are the same node — yet GRP-2 gives them
+different answers. **A compiler must therefore carry the distinction itself and must not try to
+recover it from the merged tree.** Reference identity happens to work and is a trap: any later change
+that rebuilds nodes between synthesis and rendering (flattening nested `and`s, or routing the group
+columns through an allowlist/coercion stage, both of which mint new nodes) silently gives the
+drill-down the user's mechanism, `"EMEA"` starts matching `"emea"`, and child rows stop summing to
+the parent — with no error and no failing artifact. Rendering each half under its own resolution
+context and composing the wrapped `and` from the two results is equivalent, byte for byte, and has no
+such invariant to break.
+
+*Resource limits (SEC-3), on two levels.* `groupKeys` is as client-controlled as any filter value, so
+N consumed keys are N leaf predicates that must be counted against the SEC-3 leaf/depth budget
+**together with** the user's filter, over the merged tree. This is an amplification BM-2 introduced:
+before it, group state was ignored entirely. But that check only runs where the filter pipeline runs,
+and a host may hand a `groupSpec` straight to a compiler — so `ir.schema.json` additionally carries a
+**structural** `maxItems` on `groupCols` (and, since GRP-1's cross-array comparison is inexpressible
+there, on `groupKeys` too), enforced by the same shared validator GRP-1's arity rule lives in. That is
+an amplification cap in the register of `fieldName.maxLength`, deliberately **not** one of SEC-3's
+named, host-configurable limits — its value is fixed at SEC-3's own *default* max-leaves, so a
+structurally valid `groupSpec` can never exceed that budget by itself, while a host configuring
+something tighter still gets the tighter answer from the runtime validator.
+
+*Type coercion (SEM-5).* A `groupKey` is a filter value, so it must satisfy its group column's
+declared type before a compiler sees it — a compiler that binds it is entitled to assume this, exactly
+as it does for a filter value. It differs from a filter value in one respect that decides *how*: the
+wire already carries each key **pre-typed** as a `typedValue` (`$defs/groupSpec` requires it, and a
+frontend adapter resolves the raw wire string using the group column's declared type before building
+the request), so there is nothing untyped to parse. A variant that disagrees with the declared type is
+therefore a **wrongly-typed request**, rejected at the `typeCoercion` stage with SEM-5's own
+`uncoercible-value` reason — never repaired, and never allowed to surface further downstream as a
+compiler precondition failure on ordinary client input.
+
+**Cross-links.** `$defs/groupSpec` (`groupCols`, `groupKeys`), `$defs/aggregation`,
+`$defs/sortItem`, AGG-1..AGG-3, SEM-1, SEM-6, SQL-2, SQL-6, and BM-2/AR-8/AR-9 in the TRD.
+`spec/fixtures/group-aggregation/` is the artifact oracle for all five.
 
 ---
 
@@ -949,10 +1289,17 @@ silently discarded and the SQL reads as though it were correct.
 | MySQL / MariaDB | nothing — column's declared collation | nothing — **host DDL obligation** (see below) |
 | SQLite | `COLLATE NOCASE` | nothing — default sequence is `BINARY` |
 
-Whatever a dialect spells, it spells on **every construct**, per SEM-1's "same mechanism in every
-context on a field": the scalar comparison, the set membership, the substring match and the
-`ORDER BY`/group-key. `dialect-parity/014` (`eq`), `/018` (`notIn`) and `/021` (`contains`) pin the
-case-sensitive direction; `/006`, `/016`, `/007` pin the insensitive one.
+Whatever a dialect spells, it spells on **every construct where SEM-1 applies at all**, per SEM-1's
+"same mechanism in every context on a field": the scalar comparison, the set membership, the
+substring match and the `ORDER BY`. `dialect-parity/014` (`eq`), `/018` (`notIn`) and `/021`
+(`contains`) pin the case-sensitive direction; `/006`, `/016`, `/007` pin the insensitive one.
+
+The **exception is the row-group protocol's own keys**, where SEM-1 does not apply in either
+direction: a `GROUP BY` key, a `groupKeys` drill-down match and a grouped level's `ORDER BY` spell
+nothing at all (GRP-2). This table therefore has no column for them, and on the two engines whose
+default folds case that "nothing" is a host DDL obligation of exactly the kind the MySQL row below
+records — see GRP-2's own accepted-divergence paragraph. A drill-down **leaf**'s `ORDER BY` is not
+one of the protocol's keys and is covered by the table normally.
 
 *Why MySQL is the exception, and what a host owes.* Case sensitivity there is a property of the
 **column's** declared collation, which the statement cannot override portably — MySQL's

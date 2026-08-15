@@ -16,17 +16,17 @@
         ]
       },
       "aggs": {
-        "amount_sum": {
+        "amountSum": {
           "sum": {
             "field": "amount"
           }
         },
-        "amount_min": {
+        "amountMin": {
           "min": {
             "field": "amount"
           }
         },
-        "amount_max": {
+        "amountMax": {
           "max": {
             "field": "amount"
           }

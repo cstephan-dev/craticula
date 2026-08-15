@@ -6,6 +6,14 @@ Three aggregation pairs together: `sum(amount)`, `min(amount)`, `max(amount)` --
 "summary row" shape. Top-level group (`rowGroupCols` = [region], `groupKeys` = []): grouped by
 `region` with no drill-down filter yet.
 
+**Alias note (AGG-2), corrected in #1640.** All three `valueCols` entries carry a `ColumnVO.id`
+distinct from their `field` (`amountSum`/`amountMin`/`amountMax` over `amount`), which is precisely
+the disambiguation case AGG-2 exists for -- so those ids **are** the aliases and the compiler's
+`<field>_<func>` default never applies here. The artifacts originally spelled the defaults
+(`amount_sum`/`amount_min`/`amount_max`), a leftover from before AGG-2 was written; its twin `012`
+had already been corrected and this case had been missed. Contrast `015`, where `id === field` and
+the default genuinely does apply.
+
 **Modeling note (deviation from raw AG Grid wire fidelity, deliberate):** real AG Grid SSRM sends `groupKeys` as `string[]` on the wire; the frontend adapter resolves each raw string into a typed value using the group column's declared schema type before building the IR (`AR-7`), exactly like it does for filter values. `spec/ir.schema.json`'s `$defs/groupSpec.groupKeys` requires that resolved `typedValue` form -- a prior review caught and fixed a regression where `groupKeys` had been left as raw scalars there. This fixture suite pins that fix at the request boundary too: `agGridRequest.json` here already carries the adapter-resolved typed form (e.g. `{"type":"string","value":"EMEA"}`), not the raw wire string, so a fixture consumer builds/checks the IR directly against the typed contract without re-deriving the (out-of-scope-for-this-suite) string-to-typedValue resolution step. See `group-aggregation/README.md` for the category-wide note.
 
 **Null-ordering note (SEM-3):** the compiled `ORDER BY`/`$sort`/`sort` clauses shown here are incidental to this case (needed only for deterministic grouping/paging, not because this case's own request/data exercises a null group value or null sort key) -- but SEM-3 requires every backend to *always* emit an explicit null-ordering position on a raw-field sort key, never left implicit, regardless of whether a given fixture's data actually contains a null. Postgres carries `NULLS LAST`; Mongo (no native null ordering) uses the null-bucket `$addFields`/`$sort`/`$unset` emulation pattern; Search's grouped composite aggregations set `missing_bucket: true` on every terms source so a null-valued group isn't silently dropped (ir.schema.json's `groupSpec` description explicitly anticipates a drilled-into null group bucket). SEM-3/SEM-6's own exhaustive property coverage stays in the dedicated `sort-paging/` category; this is only the minimal consistent application needed so these artifacts model real compiler output.

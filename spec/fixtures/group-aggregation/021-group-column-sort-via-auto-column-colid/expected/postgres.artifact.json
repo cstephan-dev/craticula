@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT \"segment\" AS \"segment\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE \"region\" = $1 GROUP BY \"segment\" ORDER BY \"segment\" DESC NULLS FIRST LIMIT $2 OFFSET $3",
+  "params": [
+    "EMEA",
+    100,
+    0
+  ]
+}

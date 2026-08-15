@@ -92,6 +92,75 @@ public class SqlQueryBuilderPageAndSortTests
         Assert.DoesNotContain("COLLATE", query.Sql, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// SEM-6: the APPENDED tiebreaker resolves exact even when the stable key is a case-insensitive
+    /// string, while the user's own key on an equally case-insensitive column still collates — both
+    /// in the same statement, which is what makes this a rule about the key's provenance and not
+    /// about the field.
+    ///
+    /// <para>Determinism is the reason, not tidiness. <c>craticula_ci</c> is declared
+    /// <c>deterministic = false</c>, so under it <c>'aB3'</c> and <c>'Ab3'</c> compare EQUAL: a
+    /// collated tiebreaker leaves those rows tied, Postgres is then free to order them differently at
+    /// <c>OFFSET 0</c> and <c>OFFSET 100</c>, and a row comes back twice or vanishes from both pages —
+    /// exactly the failure SEM-6 exists to prevent, reintroduced by SEM-6's own mechanism. Spelling
+    /// nothing sorts the key under its own storage collation, which is the one its declared uniqueness
+    /// is stated in.</para>
+    /// </summary>
+    [Fact]
+    public void The_Appended_Tiebreaker_Is_Exact_Even_When_The_Stable_Key_Is_A_Case_Insensitive_String()
+    {
+        var schema = new GridSchema
+        {
+            Source = "employees",
+            StableKey = "id",
+            Fields = new Dictionary<string, FieldConfig>
+            {
+                ["id"] = Field(FieldType.String, "id"),
+                ["lastName"] = Field(FieldType.String, "last_name")
+            }
+        };
+
+        var query = SqlQueryBuilder.Build(
+            new SqlQueryRequest
+            {
+                Schema = schema,
+                Sort = [Key("lastName", SortDirection.Asc, NullsPosition.Last)],
+                Page = new RangePage { StartRow = 0, EndRow = 100 }
+            },
+            PostgresDialect.Instance);
+
+        Assert.Contains(
+            "ORDER BY \"last_name\" COLLATE craticula_ci ASC NULLS LAST, \"id\" ASC NULLS LAST LIMIT",
+            query.Sql,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ...and the exemption is scoped to the key this compiler MINTED: a user who explicitly sorts by
+    /// the stable key gets SEM-1's ordinary treatment for that column, because nothing was appended.
+    /// </summary>
+    [Fact]
+    public void A_User_Sort_That_Already_Ends_In_A_Case_Insensitive_Stable_Key_Still_Collates()
+    {
+        var schema = new GridSchema
+        {
+            Source = "employees",
+            StableKey = "id",
+            Fields = new Dictionary<string, FieldConfig> { ["id"] = Field(FieldType.String, "id") }
+        };
+
+        var query = SqlQueryBuilder.Build(
+            new SqlQueryRequest
+            {
+                Schema = schema,
+                Sort = [Key("id", SortDirection.Asc, NullsPosition.Last)],
+                Page = new RangePage { StartRow = 0, EndRow = 100 }
+            },
+            PostgresDialect.Instance);
+
+        Assert.Contains("ORDER BY \"id\" COLLATE craticula_ci ASC NULLS LAST", query.Sql, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Nulls_Position_Is_Emitted_Literally_And_Not_Re_Derived_From_The_Direction()
     {

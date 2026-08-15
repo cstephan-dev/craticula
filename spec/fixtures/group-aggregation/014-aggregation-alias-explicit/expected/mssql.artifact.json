@@ -1,0 +1,8 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT [region] AS [region], SUM([amount]) AS [totalRevenue] FROM [sales_fact] GROUP BY [region] ORDER BY CASE WHEN [region] IS NULL THEN 1 ELSE 0 END ASC, [region] ASC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY",
+  "params": [
+    0,
+    100
+  ]
+}

@@ -159,4 +159,51 @@ public class GridSchemaDeserializationTests
         Assert.True(id.Exportable);
         Assert.Null(id.Label);
     }
+
+    /// <summary>
+    /// GRP-3: <see cref="GridSchema.FieldOrder"/> is the schema's DECLARATION order, read from the
+    /// JSON document itself. The field names below are deliberately reverse-alphabetical and not the
+    /// order a sorted or hash-ordered container would produce, so this fails if the order is ever
+    /// re-derived from <see cref="GridSchema.Fields"/> — an <c>IReadOnlyDictionary</c> whose
+    /// enumeration order .NET does not specify, and which the drill-down leaf's projection
+    /// (compared byte-for-byte by <c>group-aggregation/005</c> and <c>006</c>) depends on.
+    /// </summary>
+    [Fact]
+    public void FieldOrder_Is_The_Declaration_Order_Of_The_Json_Not_The_Dictionarys_Enumeration()
+    {
+        var schema = GridSchema.Parse("""
+        {
+          "source": "items",
+          "stableKey": "zulu",
+          "fields": {
+            "zulu":    { "type": "int64" },
+            "alpha":   { "type": "string" },
+            "mike":    { "type": "string" },
+            "bravo":   { "type": "int64" }
+          }
+        }
+        """);
+
+        Assert.Equal(["zulu", "alpha", "mike", "bravo"], schema.FieldOrder);
+    }
+
+    /// <summary>A schema built in code has no JSON to read an order from, so it falls back to
+    /// <see cref="GridSchema.Fields"/> — the only source there is, and the one that was being relied
+    /// on implicitly everywhere before GRP-3 made the rule explicit.</summary>
+    [Fact]
+    public void A_Hand_Built_Schema_Falls_Back_To_Its_Dictionarys_Own_Keys()
+    {
+        var schema = new GridSchema
+        {
+            Source = "items",
+            StableKey = "id",
+            Fields = new Dictionary<string, FieldConfig>
+            {
+                ["id"] = new() { Type = FieldType.Int64 },
+                ["name"] = new() { Type = FieldType.String }
+            }
+        };
+
+        Assert.Equal(schema.Fields.Keys, schema.FieldOrder);
+    }
 }

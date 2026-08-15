@@ -155,10 +155,18 @@ public interface ISqlDialect
     /// one comma-separated key: MySQL has no <c>NULLS FIRST</c>/<c>LAST</c> syntax and emulates it
     /// with a leading <c>ISNULL(col)</c> key, SQL Server with a <c>CASE WHEN col IS NULL</c> one.
     /// <paramref name="caseSensitivity"/> comes from
-    /// <c>SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity</c>, which already restricts the
+    /// <c>SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity</c>, which already restricts the
     /// collation mechanism to <c>string</c> keys — and SEM-1's "same mechanism in every context on a
     /// field" is why an ordering key collates in exactly the cases the exact-match family does, in
     /// both directions.
+    ///
+    /// <para>One exception, and it is the resolver's to make, not this method's: inside BM-2's
+    /// row-group protocol GRP-2 spells no mechanism at all, so every ordering key of a grouped or
+    /// drill-down query arrives as
+    /// <see cref="SemanticsResolver.CaseSensitivityMode.NotApplicable"/> even when it is a
+    /// case-insensitive <c>string</c>. A dialect needs no code for that — it already renders that
+    /// mode — but a reader comparing <c>sort-paging/001</c> with <c>group-aggregation/002</c> needs
+    /// the reason.</para>
     /// </summary>
     string RenderSortKey(
         string quotedColumn,

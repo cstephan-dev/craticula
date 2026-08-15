@@ -6,12 +6,12 @@ using Craticula.Core.Schema;
 namespace Craticula.Sql;
 
 /// <summary>
-/// BM-1's dialect-agnostic query builder: walks the IR filter/sort/page spec and emits
-/// <c>SELECT * FROM &lt;source&gt; [WHERE &lt;tree&gt;] ORDER BY &lt;keys&gt; [&lt;paging&gt;]</c> as a
-/// <see cref="SqlQuery"/>. Every token that differs between SQL dialects goes through
-/// <see cref="ISqlDialect"/>; nothing in this file switches on which dialect it was handed, which is
-/// what makes "adding a dialect requires zero builder changes" checkable rather than aspirational
-/// (see <c>docs/architecture/c4-components-sql-compiler.md</c>).
+/// BM-1's dialect-agnostic query builder: walks the IR filter/group/sort/page spec and emits
+/// <c>SELECT &lt;projection&gt; FROM &lt;source&gt; [WHERE &lt;tree&gt;] [GROUP BY &lt;key&gt;]
+/// ORDER BY &lt;keys&gt; [&lt;paging&gt;]</c> as a <see cref="SqlQuery"/>. Every token that differs
+/// between SQL dialects goes through <see cref="ISqlDialect"/>; nothing in this file switches on
+/// which dialect it was handed, which is what makes "adding a dialect requires zero builder changes"
+/// checkable rather than aspirational (see <c>docs/architecture/c4-components-sql-compiler.md</c>).
 ///
 /// <para><b>Semantics are never re-derived here.</b> Case-sensitivity mechanism, null-inclusivity,
 /// the <c>blank</c> condition and the SEM-6 tiebreaker all come from
@@ -21,10 +21,20 @@ namespace Craticula.Sql;
 /// and specifically the tree-level <c>NOT</c> fan-out, which SemanticsResolver deliberately has no
 /// method for because it is a statement about tree shape rather than about one operator.</para>
 ///
-/// <para><b>Scope (#1638).</b> Leaf queries only. Grouped queries, aggregations and <c>GROUP BY</c>
-/// are BM-2 (#1640); the set-filter distinct-values query is BM-3 (#1641); the explicit projection
-/// and <c>exportScope</c> belong to the export feature. See <see cref="SqlQueryRequest.Group"/> for
-/// how group state is tolerated in the meantime.</para>
+/// <para><b>Grouping (#1640, BM-2).</b> A request carrying a <see cref="GroupSpec"/> compiles under
+/// <c>spec/semantics.md</c>'s grouping addendum (GRP-1..GRP-5): <see cref="GroupingPlan"/> decides
+/// between the grouped level and the fully-consumed drill-down leaf, the consumed <c>groupKeys</c>
+/// become real IR predicates merged through <see cref="FilterTreeMerge"/> (so SQL-2's wrap applies
+/// to them exactly as it does to a user's own <c>and</c>), and none of the protocol's own keys fold
+/// case (GRP-2). Everything grouping adds to the emitted text is ANSI —
+/// <c>GROUP BY</c>, <c>SUM</c>/<c>MIN</c>/<c>MAX</c>/<c>AVG</c>/<c>COUNT</c>, <c>AS</c> — so BM-2
+/// needed <b>no</b> new <see cref="ISqlDialect"/> member; the drill-down predicate and the ordering
+/// keys reuse <see cref="ISqlDialect.RenderScalarComparison"/> and
+/// <see cref="ISqlDialect.RenderSortKey"/> unchanged.</para>
+///
+/// <para><b>Still out of scope.</b> The set-filter distinct-values query is BM-3 (#1641), and
+/// <c>exportScope</c>/the export column list belong to the export feature — which is also why an
+/// <em>ungrouped</em> query still projects <c>SELECT *</c> (GRP-3).</para>
 /// </summary>
 public static class SqlQueryBuilder
 {
@@ -46,18 +56,30 @@ public static class SqlQueryBuilder
 
         FilterNodeValidator.Validate(request.Filter);
         PageSpecValidator.Validate(request.Page);
+        GroupSpecValidator.Validate(request.Group);
+        AggregationValidator.Validate(request.Aggregations);
 
         var parameters = new SqlParameterBag(dialect);
+        var grouping = GroupingPlan.Resolve(request);
         var context = new Context(request.Schema, dialect, parameters);
 
-        var sql = new StringBuilder("SELECT * FROM ").Append(dialect.QuoteIdentifier(request.Schema.Source));
+        var sql = new StringBuilder("SELECT ")
+            .Append(RenderProjection(grouping, context))
+            .Append(" FROM ")
+            .Append(dialect.QuoteIdentifier(request.Schema.Source));
 
-        if (request.Filter is not null)
+        if (RenderWhere(request.Filter, grouping?.DrillDown, context) is { } predicate)
         {
-            sql.Append(" WHERE ").Append(RenderNode(request.Filter, context));
+            sql.Append(" WHERE ").Append(predicate);
         }
 
-        sql.Append(" ORDER BY ").Append(RenderOrderBy(request.Sort, context));
+        // GRP-1: only the grouped level buckets; the fully-consumed drill-down leaf emits raw rows.
+        if (grouping?.GroupColumn is { } groupColumn)
+        {
+            sql.Append(" GROUP BY ").Append(ResolveColumn(groupColumn, context));
+        }
+
+        sql.Append(" ORDER BY ").Append(RenderOrderBy(request.Sort, grouping, context));
 
         // EXP-2: an unpaginated request renders nothing at all, so the statement ends after ORDER BY.
         if (ResolveRowWindow(request.Page) is { } window)
@@ -73,20 +95,208 @@ public static class SqlQueryBuilder
         };
     }
 
-    /// <summary>The per-compilation state threaded through the tree walk, so no rendering method
-    /// needs four parameters of plumbing.</summary>
-    private readonly record struct Context(GridSchema Schema, ISqlDialect Dialect, ISqlParameterSink Parameters);
+    /// <summary>
+    /// The per-compilation state threaded through the tree walk, so no rendering method needs four
+    /// parameters of plumbing.
+    ///
+    /// <para><paramref name="IsGroupKeyMatch"/> carries <em>provenance</em>, not shape: the drill-down
+    /// predicates and the user's own filter are both ordinary IR (GRP-5), and yet the two resolve
+    /// their case sensitivity by different rules — GRP-2 for the group-key matches, SEM-1 for the
+    /// user's own predicates. It is set once, by <see cref="RenderWhere"/>, on the context the
+    /// drill-down subtree is rendered under, and is never re-derived from a node: the two halves are
+    /// rendered as two separate walks precisely so that nothing downstream has to distinguish them by
+    /// inspecting a tree they have both been merged into.</para>
+    /// </summary>
+    private readonly record struct Context(
+        GridSchema Schema,
+        ISqlDialect Dialect,
+        ISqlParameterSink Parameters,
+        bool IsGroupKeyMatch = false);
+
+    // ---- grouping (BM-2) --------------------------------------------------------------------------
+
+    /// <summary>
+    /// GRP-1: what a <see cref="GroupSpec"/> resolves to for this one request —
+    /// <see langword="null"/> when the request carries no group state at all.
+    /// </summary>
+    /// <param name="GroupColumn">The next not-yet-consumed group column, which this level buckets by;
+    /// <see langword="null"/> when every group column has been consumed and the request is the
+    /// drill-down leaf (<c>spec/fixtures/group-aggregation/005</c>, <c>006</c>).</param>
+    /// <param name="DrillDown">The already-consumed keys as real IR (GRP-5), or
+    /// <see langword="null"/> at the top group level.</param>
+    /// <param name="Aggregations">AR-8's <c>valueCols</c>, empty rather than null so the projection
+    /// loop needs no second null check. Ignored on the leaf, which projects rows, not aggregates.</param>
+    private sealed record GroupingPlan(
+        string? GroupColumn,
+        FilterNode? DrillDown,
+        IReadOnlyList<Aggregation> Aggregations)
+    {
+        public static GroupingPlan? Resolve(SqlQueryRequest request)
+        {
+            if (request.Group is not { } group)
+            {
+                return null;
+            }
+
+            // GRP-5's synthesis lives in Core, not here: GridFilterPipeline needs the identical
+            // predicates to charge the client's groupKeys against SEC-3's leaf budget, and two
+            // implementations that merely agreed today would be free to drift. GRP-1's arity rule
+            // (consumed <= GroupCols.Count, which the index below relies on) is enforced by the
+            // GroupSpecValidator that Synthesize runs, and by Build's own explicit call to it.
+            var drillDown = DrillDownFilter.Synthesize(group);
+            var consumed = group.GroupKeys.Count;
+
+            return new GroupingPlan(
+                consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null,
+                drillDown,
+                request.Aggregations ?? []);
+        }
+    }
+
+    /// <summary>
+    /// GRP-3: what the statement selects.
+    ///
+    /// <list type="bullet">
+    /// <item><description><b>Grouped level</b> — the group column aliased to its logical field name
+    /// (always, even when the two coincide), then one aggregate per <c>valueCol</c> under its own
+    /// output name.</description></item>
+    /// <item><description><b>Drill-down leaf</b> — every declared field, in the schema's own
+    /// declaration order, aliased back to its logical name only where the physical column differs.
+    /// A grouping request's rows are named at every level, which <c>SELECT *</c> cannot do: it
+    /// returns the physical column names, so a schema whose <c>fiscalYear</c> lives in
+    /// <c>fiscal_year</c> would hand the grid a key it does not know.</description></item>
+    /// <item><description><b>Ungrouped</b> — <c>SELECT *</c>, #1638's inherited form. Widening it to
+    /// the explicit list belongs to the export feature, which owns the request-supplied column list
+    /// (EXP-3) that would have to compose with it.</description></item>
+    /// </list>
+    /// </summary>
+    private static string RenderProjection(GroupingPlan? grouping, Context context)
+    {
+        if (grouping is null)
+        {
+            return "*";
+        }
+
+        var items = new List<string>();
+
+        if (grouping.GroupColumn is { } groupColumn)
+        {
+            items.Add(Alias(ResolveColumn(groupColumn, context), groupColumn, context));
+
+            foreach (var aggregation in grouping.Aggregations)
+            {
+                items.Add($"{AggregateCall(aggregation, context)} AS {context.Dialect.QuoteIdentifier(OutputName(aggregation))}");
+            }
+
+            return string.Join(", ", items);
+        }
+
+        // GRP-3's "in declaration order" comes from GridSchema.FieldOrder, never from Fields.Keys:
+        // that dictionary's enumeration order is unspecified by .NET, and 005/006 compare this column
+        // list byte-for-byte.
+        foreach (var field in context.Schema.FieldOrder)
+        {
+            var column = ResolveColumn(field, context);
+            var alias = context.Dialect.QuoteIdentifier(field);
+            items.Add(column == alias ? column : $"{column} AS {alias}");
+        }
+
+        return string.Join(", ", items);
+    }
+
+    private static string Alias(string expression, string logicalName, Context context) =>
+        $"{expression} AS {context.Dialect.QuoteIdentifier(logicalName)}";
+
+    /// <summary>The aggregate expression itself — <c>SUM("amount")</c>. Composed in one place because
+    /// it is emitted twice: once in the projection under its output name, and once in the
+    /// <c>ORDER BY</c> (see <see cref="ResolveGroupedSortTarget"/> for why the ordering repeats the
+    /// expression rather than referring back to the name).</summary>
+    private static string AggregateCall(Aggregation aggregation, Context context) =>
+        $"{Function(aggregation.Func)}({ResolveColumn(aggregation.Field, context)})";
+
+    /// <summary>
+    /// AR-8's closed v1 function set. These five spellings are ANSI SQL and identical on all four v1
+    /// dialects (and on Oracle), which is why the aggregate call is composed here rather than behind
+    /// an <see cref="ISqlDialect"/> member: an override point no dialect would ever use differently
+    /// is the mirror image of the BM-1 smell — see <see cref="ISqlDialect"/>'s own note on why
+    /// <c>IS NULL</c> and <c>= ''</c> likewise stay in the builder.
+    /// </summary>
+    private static string Function(AggregationFunc func) => func switch
+    {
+        AggregationFunc.Sum => "SUM",
+        AggregationFunc.Min => "MIN",
+        AggregationFunc.Max => "MAX",
+        AggregationFunc.Avg => "AVG",
+
+        // AGG-1: COUNT(<field>) counts non-null occurrences of that field, never rows — SQL's own
+        // COUNT(expr) already skips NULLs, so the portable form is simply never COUNT(*).
+        AggregationFunc.Count => "COUNT",
+
+        _ => throw new SqlCompilationException($"Unknown aggregation function '{func}'.")
+    };
+
+    /// <summary>
+    /// GRP-4: an aggregate's output name — AGG-2's <see cref="Aggregation.Alias"/> when the adapter
+    /// set one (<c>ColumnVO.id</c> differed from <c>ColumnVO.field</c>), and otherwise the compiler
+    /// default <c>&lt;field&gt;_&lt;func&gt;</c> the fixtures pin (<c>amount_sum</c>, <c>id_count</c>).
+    /// The alias is the one identifier in a compiled statement that does not come from the schema
+    /// allowlist, which is why <see cref="AggregationValidator"/> holds it to
+    /// <c>ir.schema.json</c>'s identifier pattern before it ever reaches here.
+    /// </summary>
+    private static string OutputName(Aggregation aggregation) =>
+        aggregation.Alias ?? $"{aggregation.Field}_{aggregation.Func.ToString().ToLowerInvariant()}";
 
     // ---- filter tree ----------------------------------------------------------------------------
 
-    private static string RenderNode(FilterNode node, Context context) => node switch
+    /// <summary>
+    /// GRP-5: the whole <c>WHERE</c> clause — the synthesised drill-down <c>and</c>-composed with the
+    /// request's own filter, drill-down first, so the statement reads along the group path before it
+    /// reads the user's own predicates. Nothing in the fixture suite pins that order (no case carries
+    /// both), and GRP-5 states it rather than leaving a port to guess, because the choice is visible
+    /// in <c>params</c>.
+    ///
+    /// <para><b>Why the two halves are composed here rather than merged into one tree and walked
+    /// once.</b> They resolve case sensitivity by different rules (GRP-2 versus SEM-1), so a single
+    /// walk over a merged tree needs some way to tell a group-key match from a user predicate that is
+    /// spelled identically — and the only thing that can, once both are ordinary IR, is the node's
+    /// reference identity. That is a non-local invariant with no guard: any later change that
+    /// rebuilds nodes between synthesis and rendering (a flatten-nested-<c>and</c>s optimisation in
+    /// <see cref="FilterTreeMerge"/>, or routing the group columns through
+    /// <see cref="GridFilterPipeline"/>, whose <see cref="FieldAllowlistValidator.Strip"/> and
+    /// <see cref="TypeCoercionValidator.Coerce"/> both do) would silently give the drill-down the
+    /// user's mechanism, and <c>"EMEA"</c> would start matching <c>"emea"</c> with no exception and no
+    /// failing artifact. Rendering each half under its own <see cref="Context"/> removes the
+    /// invariant instead of documenting it; the composition below is exactly what
+    /// <see cref="RenderComposite"/> produces for the equivalent <see cref="AndNode"/>, so the emitted
+    /// text and the parameter order are unchanged.</para>
+    /// </summary>
+    private static string? RenderWhere(FilterNode? filter, FilterNode? drillDown, Context context)
     {
-        AndNode and => RenderComposite(and, " AND ", context),
-        OrNode or => RenderComposite(or, " OR ", context),
-        NotNode not => RenderNot(not, context),
-        ComparisonNode comparison => RenderComparison(comparison, context),
-        _ => throw new SqlCompilationException($"Unknown FilterNode type '{node.GetType().Name}'.")
-    };
+        // Rendered in this order, not merely joined in it: the parameter bag binds in call order, so
+        // the drill-down's keys take the leading placeholders exactly as they would inside an AndNode.
+        var groupPath = drillDown is null ? null : RenderNode(drillDown, context with { IsGroupKeyMatch = true });
+        var userFilter = filter is null ? null : RenderNode(filter, context);
+
+        return (groupPath, userFilter) switch
+        {
+            (null, null) => null,
+            ({ } path, null) => path,
+            (null, { } user) => user,
+
+            // SQL-2's wrap, identical to the AndNode form: `(a AND b)`, children bare.
+            ({ } path, { } user) => $"({path} AND {user})"
+        };
+    }
+
+    private static string RenderNode(FilterNode node, Context context) =>
+        node switch
+        {
+            AndNode and => RenderComposite(and, " AND ", context),
+            OrNode or => RenderComposite(or, " OR ", context),
+            NotNode not => RenderNot(not, context),
+            ComparisonNode comparison => RenderComparison(comparison, context),
+            _ => throw new SqlCompilationException($"Unknown FilterNode type '{node.GetType().Name}'.")
+        };
 
     /// <summary>
     /// SQL-2: a composite is wrapped and its children are rendered bare — <c>(a AND b)</c>, never
@@ -243,10 +453,27 @@ public static class SqlQueryBuilder
     /// scalar/set call sites only ever pass SEM-1's collation-family operators and the substring one
     /// only its pattern-family operators — so it fails loudly instead of silently degrading to "no
     /// mechanism", which would be a plausible-looking artifact that folds case in the wrong place.</para>
+    ///
+    /// <para>A predicate inside the synthesised drill-down is not a filter at all: it is a group-key
+    /// MATCH, and GRP-2 requires it to agree with the <c>GROUP BY</c> that produced the bucket label
+    /// being expanded — otherwise expanding <c>"EMEA"</c> also pulls <c>"emea"</c>'s rows and the
+    /// children stop summing to the parent's total. It therefore resolves through
+    /// <see cref="SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity"/>, in this one place
+    /// rather than at each call site, so there is a single answer to "does this fold case". The
+    /// provenance comes from <see cref="Context.IsGroupKeyMatch"/>, which
+    /// <see cref="RenderWhere"/> sets on the walk it starts over the drill-down — never inferred from
+    /// the node itself.</para>
     /// </summary>
     private static SemanticsResolver.CaseSensitivityMode ResolveCaseSensitivity(
-        FieldConfig field, ComparisonOperator op, SemanticsResolver.CaseSensitivityMechanism family)
+        FieldConfig field, ComparisonOperator op, SemanticsResolver.CaseSensitivityMechanism family, Context context)
     {
+        if (context.IsGroupKeyMatch)
+        {
+            return SemanticsResolver
+                .ResolveOrderingAndGroupKeyCaseSensitivity(field, SemanticsResolver.GroupingMode.Grouped)
+                .Mode;
+        }
+
         var decision = SemanticsResolver.ResolveCaseSensitivity(field, op);
 
         if (decision.Mode == SemanticsResolver.CaseSensitivityMode.Insensitive && decision.Mechanism != family)
@@ -261,7 +488,7 @@ public static class SqlQueryBuilder
 
     private static string RenderScalar(string column, FieldConfig field, ComparisonOperator op, TypedValue value, Context context)
     {
-        var caseSensitivity = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation);
+        var caseSensitivity = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation, context);
 
         return context.Dialect.RenderScalarComparison(
             column, ScalarComparison(op), EncodeValue(value, field), caseSensitivity, context.Parameters);
@@ -269,7 +496,7 @@ public static class SqlQueryBuilder
 
     private static string RenderSubstring(string column, FieldConfig field, ComparisonNode node, Context context)
     {
-        var caseSensitivity = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.PatternMatch);
+        var caseSensitivity = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.PatternMatch, context);
 
         // There is no portable meaning for "does this number contain that substring", and guessing
         // one (casting the column to text) would silently change both semantics and index usage. The
@@ -300,7 +527,7 @@ public static class SqlQueryBuilder
 
     private static string RenderSet(string column, FieldConfig field, ComparisonNode node, Context context)
     {
-        var caseSensitivity = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.Collation);
+        var caseSensitivity = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.Collation, context);
 
         var values = node.Values
             ?? throw new SqlCompilationException($"Operator '{node.Op}' on field '{node.Field}' requires 'values'.");
@@ -358,32 +585,114 @@ public static class SqlQueryBuilder
     // ---- ORDER BY -------------------------------------------------------------------------------
 
     /// <summary>
-    /// SEM-6/SEM-3: the request's own keys in order, then the schema's stable key as a trailing
-    /// tiebreaker (unless the sort already ends in it), each key carrying its explicit
-    /// <see cref="NullsPosition"/>. Never empty — the tiebreaker guarantees at least one key, so
-    /// every compiled query has a total, reproducible order and server-side paging is stable.
+    /// SEM-6/SEM-3: the request's own keys in order, then a trailing tiebreaker (unless the sort
+    /// already ends in it), each key carrying its explicit <see cref="NullsPosition"/>. Never empty —
+    /// the tiebreaker guarantees at least one key, so every compiled query has a total, reproducible
+    /// order and server-side paging is stable.
+    ///
+    /// <para>GRP-4: on a grouped level the tiebreaker is the <em>group column</em>, not the schema's
+    /// <see cref="GridSchema.StableKey"/>. The stable key is not in the grouped projection at all, so
+    /// ordering by it is not merely undesirable but invalid SQL; the group column takes its place and
+    /// plays the same role exactly, since its values are unique across the result rows by
+    /// construction. The drill-down leaf projects rows, so it keeps SEM-6's stable key
+    /// unchanged.</para>
+    ///
+    /// <para>SEM-6: the APPENDED tiebreaker resolves exact whatever the query's shape — it establishes
+    /// row identity rather than comparing text, and collating it under a non-deterministic collation
+    /// would leave the very ties it exists to break unbroken. That is a semantics decision, so it is
+    /// made by <see cref="SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity"/> from the
+    /// provenance this method reports, never re-derived here by comparing the last key's field to the
+    /// stable key.</para>
     /// </summary>
-    private static string RenderOrderBy(IReadOnlyList<SortItem>? sort, Context context)
+    private static string RenderOrderBy(IReadOnlyList<SortItem>? sort, GroupingPlan? grouping, Context context)
     {
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(sort, context.Schema.StableKey);
+        var groupColumn = grouping?.GroupColumn;
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(
+            sort, groupColumn ?? context.Schema.StableKey, out var tiebreakerAppended);
+
+        // GRP-2, at its narrowed scope: exactness covers the protocol's OWN keys, and a grouped
+        // level's ORDER BY is one of them — it orders the very buckets the GROUP BY produced, so it
+        // has to agree with it. A drill-down LEAF has no GROUP BY and no buckets: it orders raw rows
+        // by whatever column the user picked, which need not be a group column at all
+        // (spec/fixtures/group-aggregation/005 sorts on `product`, neither a group column nor a group
+        // key). Nothing about bucket identity is at stake there, so it is an ordinary query in this
+        // respect and SEM-1 governs it — which also stops a leaf that filters and sorts the SAME
+        // field from spelling two different mechanisms in one statement, the mix SEM-1 forbids
+        // outright. The drill-down WHERE stays exact either way; that is the provenance decision
+        // ResolveCaseSensitivity makes, not this one.
+        var ordering = groupColumn is null
+            ? SemanticsResolver.GroupingMode.Ungrouped
+            : SemanticsResolver.GroupingMode.Grouped;
 
         var rendered = new List<string>(keys.Count);
-        foreach (var key in keys)
+        for (var i = 0; i < keys.Count; i++)
         {
-            var field = ResolveField(key.Field, context);
+            var key = keys[i];
 
-            // SEM-1: sorting always uses the collation mechanism when the field is case-insensitive
-            // — never the pattern-match one — so a field cannot filter under one mechanism and sort
-            // under another. The resolver already restricts this to `string` fields, and the mode is
-            // passed through whole so a case-SENSITIVE key can be spelled as deliberately as an
-            // insensitive one on an engine that needs it.
-            var caseSensitivity = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(field).Mode;
+            var (column, field) = groupColumn is null
+                ? (ResolveColumn(key.Field, context), ResolveField(key.Field, context))
+                : ResolveGroupedSortTarget(key.Field, groupColumn, grouping!.Aggregations, context);
 
-            rendered.Add(context.Dialect.RenderSortKey(
-                ResolveColumn(key.Field, context), key.Direction, key.NullsPosition, caseSensitivity));
+            // The tiebreaker is always the LAST key when there is one — SEM-6's own rule, which
+            // AppendStableKeyTiebreaker enforced above.
+            var provenance = tiebreakerAppended && i == keys.Count - 1
+                ? SemanticsResolver.SortKeyProvenance.AppendedTiebreaker
+                : SemanticsResolver.SortKeyProvenance.Request;
+
+            var caseSensitivity = SemanticsResolver
+                .ResolveOrderingAndGroupKeyCaseSensitivity(field, ordering, provenance)
+                .Mode;
+
+            rendered.Add(context.Dialect.RenderSortKey(column, key.Direction, key.NullsPosition, caseSensitivity));
         }
 
         return string.Join(", ", rendered);
+    }
+
+    /// <summary>
+    /// AR-9/GRP-4: what a grouped level's sort key actually orders by. A grouped statement can only
+    /// order by something it produces, which is the group column or one of the aggregates — never
+    /// the raw aggregated column (<c>ORDER BY "amount"</c> is not in the projection and would be
+    /// invalid).
+    ///
+    /// <para><b>The ordering repeats the aggregate EXPRESSION — <c>SUM("amount")</c> — rather than
+    /// referring back to its select-list alias.</b> An output name is only conditionally usable in
+    /// <c>ORDER BY</c>: PostgreSQL's <c>SELECT</c> documentation states that an output column name
+    /// "has to stand alone, that is, it cannot be used in an expression", and T-SQL binds the same
+    /// way — an alias inside a <c>CASE</c> resolves against the <c>FROM</c> scope and raises "Invalid
+    /// column name". That matters here and not in the projection because SEM-3's null placement is
+    /// EMULATED on two of the four dialects: <see cref="MssqlDialect"/> wraps every sort key in
+    /// <c>CASE WHEN … IS NULL</c> and <see cref="MySqlDialect"/> in <c>ISNULL(…)</c>, so on those two
+    /// the ordering target is never standing alone. Emitting the expression is unambiguously legal in
+    /// both positions on all four engines, so it is done uniformly rather than only where the wrapper
+    /// forces it — a per-dialect split here would be a semantic difference dressed as a spelling one,
+    /// which is exactly what <see cref="ISqlDialect"/>'s seam exists to keep out.</para>
+    ///
+    /// <para>The match is against <c>Alias ?? Field</c>, which is AGG-2's <c>ColumnVO.id</c>
+    /// reconstructed: the grid sends the <em>column's</em> id in <c>sortModel</c>, and AGG-2 sets
+    /// <see cref="Aggregation.Alias"/> from that id exactly when it differs from the field. Anything
+    /// else is rejected rather than rendered — a plausible-looking statement the engine refuses is
+    /// worse than a compiler error naming the reason.</para>
+    /// </summary>
+    private static (string Column, FieldConfig Field) ResolveGroupedSortTarget(
+        string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
+    {
+        foreach (var aggregation in aggregations)
+        {
+            if ((aggregation.Alias ?? aggregation.Field) == sortField)
+            {
+                return (AggregateCall(aggregation, context), ResolveField(aggregation.Field, context));
+            }
+        }
+
+        if (sortField == groupColumn)
+        {
+            return (ResolveColumn(sortField, context), ResolveField(sortField, context));
+        }
+
+        throw new SqlCompilationException(
+            $"A grouped query can be ordered only by its group column ('{groupColumn}') or by one of its " +
+            $"aggregations, but the request sorts on '{sortField}', which the grouped projection does not contain.");
     }
 
     // ---- paging ---------------------------------------------------------------------------------

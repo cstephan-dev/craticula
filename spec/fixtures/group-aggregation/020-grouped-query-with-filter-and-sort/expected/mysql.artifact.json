@@ -1,0 +1,9 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT `region` AS `region`, SUM(`amount`) AS `amount_sum` FROM `sales_fact` WHERE `amount` > ? GROUP BY `region` ORDER BY ISNULL(SUM(`amount`)) DESC, SUM(`amount`) DESC, ISNULL(`region`) ASC, `region` ASC LIMIT ? OFFSET ?",
+  "params": [
+    "1000",
+    100,
+    0
+  ]
+}

@@ -6,7 +6,7 @@ backend through the pinned backend-native mechanism from SEM-1's own worked exam
 
 - **Postgres**: an explicit case-insensitive **collation** on the comparison —
   `COLLATE craticula_ci = :v` — never `ILIKE`. SEM-1's mechanism note pins collation, not
-  pattern-match, for `eq`/`in`/ordering/sort/group-key matching; `ILIKE` is reserved for
+  pattern-match, for `eq`/`in`/ordering/sort; `ILIKE` is reserved for
   `contains`/`notContains`/`startsWith`/`endsWith` (`007`'s territory), where the operator itself
   is a pattern match. Reusing `ILIKE` here would silently widen an exact-match filter into a
   pattern match for any value containing a literal `%`/`_`.

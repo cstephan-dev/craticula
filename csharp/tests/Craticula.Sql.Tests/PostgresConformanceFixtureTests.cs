@@ -20,26 +20,31 @@ namespace Craticula.Sql.Tests;
 public class PostgresConformanceFixtureTests
 {
     /// <summary>
-    /// The six categories whose fixtures are pure leaf queries: no <c>GROUP BY</c>, no aggregation,
-    /// no explicit projection. Each declares the number of Postgres artifacts it is expected to
-    /// contribute, so adding a fixture to one of them fails <see cref="Each_In_Scope_Category_Contributes_Exactly_The_Fixture_Count_It_Declares"/>
-    /// rather than being silently unexercised.
+    /// The seven categories this compiler compiles end to end. Each declares the number of Postgres
+    /// artifacts it is expected to contribute, so adding a fixture to one of them fails
+    /// <see cref="Each_In_Scope_Category_Contributes_Exactly_The_Fixture_Count_It_Declares"/> rather
+    /// than being silently unexercised.
+    ///
+    /// <para><c>group-aggregation</c> joined in #1640 (BM-2), which is also why
+    /// <c>ag-grid-majors</c> went from 5 to 6: its <c>004</c> is a grouped request and was excluded
+    /// by name until a grouping compiler existed.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
         ("operators", 47),
         ("date-presets", 26),
         ("dialect-parity", 18),
+        ("group-aggregation", 17),
         ("filter-tree", 15),
         ("sort-paging", 11),
-        ("ag-grid-majors", 5)
+        ("ag-grid-majors", 6)
     ];
 
     /// <summary>
-    /// The three categories deliberately NOT compiled by this story, each with the reason — stated
-    /// here rather than left as a silent absence, so a reader can tell "out of scope" from
-    /// "forgotten". <see cref="Every_Fixture_Category_On_Disk_Is_Either_In_Scope_Or_Excluded_By_Name"/>
-    /// fails if a NEW category appears and is named in neither list.
+    /// The categories deliberately NOT compiled, each with the reason — stated here rather than left
+    /// as a silent absence, so a reader can tell "out of scope" from "forgotten".
+    /// <see cref="Every_Fixture_Category_On_Disk_Is_Either_In_Scope_Or_Excluded_By_Name"/> fails if a
+    /// NEW category appears and is named in neither list.
     /// </summary>
     private static readonly Dictionary<string, string> ExcludedCategories = new(StringComparer.Ordinal)
     {
@@ -47,9 +52,6 @@ public class PostgresConformanceFixtureTests
                       "(sql-artifact.schema.json and friends), validated by ajv-cli, not by this project.",
         ["adversarial"] = "Rejection-only fixtures: they carry expected/rejection.json, not a compiled artifact, " +
                           "and are already exercised by Craticula.Core.Tests' allowlist/limits/coercion suites.",
-        ["group-aggregation"] = "BM-2 (#1640): every case is a grouped query. 005/006 look leaf-shaped but have " +
-                                "filterModel:null and derive their whole WHERE from groupKeys, which is BM-2's " +
-                                "drill-down protocol, and they use the explicit projection this story scoped out.",
         ["page-export"] = "The export feature (EXP-1..EXP-8) owns the explicit projection and exportScope -> " +
                           "page:none mapping these fixtures pin; a leaf builder emitting SELECT * cannot produce them."
     };
@@ -63,9 +65,10 @@ public class PostgresConformanceFixtureTests
     /// </summary>
     private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal)
     {
-        ["ag-grid-majors/004-v34-grouped-request-with-date-conditions"] =
-            "A grouped request (rowGroupCols + valueCols): its artifact is a GROUP BY with an explicit " +
-            "projection and a SUM aggregate, which is BM-2's Grouping Strategy (#1640), not this leaf builder's.",
+        ["group-aggregation/016-set-filter-values-no-active-filters"] = SetValues,
+        ["group-aggregation/017-set-filter-values-excludes-own-field-filter"] = SetValues,
+        ["group-aggregation/018-set-filter-values-search-prefix"] = SetValues,
+        ["group-aggregation/019-set-filter-values-server-side-cap"] = SetValues,
 
         ["sort-paging/012-page-none-unpaginated-export"] =
             "BLOCKED UPSTREAM, not out of scope: the fixture resolves page:none from EXP-1's " +
@@ -76,6 +79,11 @@ public class PostgresConformanceFixtureTests
             "which asserts against the same artifact with only the PageSpec supplied. Delete this " +
             "entry the moment the adapter learns exportScope."
     };
+
+    private const string SetValues =
+        "BM-3 (#1641), not BM-2: these four compile the set-filter DISTINCT-values query from " +
+        "Craticula's own synthetic setValuesRequest shape (see the category README), which is neither " +
+        "an IServerSideGetRowsRequest nor something AgGridRequestParser parses at all.";
 
     public static TheoryData<string, string> InScopeFixtures
     {
@@ -163,16 +171,17 @@ public class PostgresConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_122_Of_The_123_Leaf_Fixtures_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_140_Of_The_145_Fixtures_In_The_Scoped_Categories()
     {
-        // 123 minus sort-paging/012, which the SQL builder compiles correctly but the AG Grid
-        // adapter cannot yet FEED correctly (see ExcludedFixtures for the full reason, and
+        // 145 minus the five named in ExcludedFixtures: group-aggregation/016-019 (BM-3, #1641) and
+        // sort-paging/012, which the SQL builder compiles correctly but the AG Grid adapter cannot
+        // yet FEED correctly (see ExcludedFixtures for the full reason, and
         // SqlQueryBuilderPageAndSortTests for the assertion that closes the loop on the builder's
         // half). This number going up without ExcludedFixtures shrinking means a fixture was added.
-        // It last moved in #1639's review pass, which added dialect-parity/022 (a filter value
-        // containing '[', giving T-SQL's fourth LIKE wildcard an artifact oracle) on top of the
-        // same story's 021 (the case-sensitive substring case, SQLite's GLOB rendering).
-        Assert.Equal(122, InScopeFixtures.Count);
+        // It last moved in #1640's review pass, which added group-aggregation/021 (AG-6's auto
+        // group column colId) on top of the 20 cases and ag-grid-majors/004 that #1640 itself
+        // brought into scope once the grouping compiler existed.
+        Assert.Equal(140, InScopeFixtures.Count);
     }
 
     [Fact]

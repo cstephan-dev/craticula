@@ -1,63 +1,57 @@
-{
-  "pipeline": [
-    {
-      "$match": {
-        "region": "EMEA"
-      }
-    },
-    {
-      "$group": {
-        "_id": "$segment",
-        "id_count": {
-          "$sum": {
-            "$cond": [
-              {
-                "$eq": [
-                  "$id",
-                  null
-                ]
-              },
-              0,
-              1
-            ]
-          }
-        }
-      }
-    },
-    {
-      "$addFields": {
-        "__groupNullBucket": {
+[
+  {
+    "$match": {
+      "region": "EMEA"
+    }
+  },
+  {
+    "$group": {
+      "_id": "$segment",
+      "id_count": {
+        "$sum": {
           "$cond": [
             {
               "$eq": [
-                "$_id",
+                "$id",
                 null
               ]
             },
-            1,
-            0
+            0,
+            1
           ]
         }
       }
-    },
-    {
-      "$sort": {
-        "__groupNullBucket": 1,
-        "_id": 1
-      }
-    },
-    {
-      "$unset": "__groupNullBucket"
-    },
-    {
-      "$skip": 0
-    },
-    {
-      "$limit": 100
     }
-  ],
-  "collation": {
-    "locale": "en",
-    "strength": 2
+  },
+  {
+    "$addFields": {
+      "__groupNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__groupNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": "__groupNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
   }
-}
+]

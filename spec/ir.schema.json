@@ -313,14 +313,16 @@
       "properties": {
         "groupCols": {
           "type": "array",
-          "description": "Ordered list of row-group column field names, as configured on the grid.",
+          "description": "Ordered list of row-group column field names, as configured on the grid. maxItems is a structural amplification cap, not a SEC-3 named limit (those stay host-configurable and out of this schema, per the root description): groupSpec is as client-controlled as the filter tree, GRP-5 compiles each consumed key into one leaf predicate, and a host may hand a groupSpec straight to a compiler without passing the SEC-3 validator at all — so N needs a bound that holds on every path. 64 is SEC-3's own DEFAULT max-leaves, which makes a structurally valid groupSpec unable to exceed that budget by itself; a host configuring a smaller maxLeaves still gets the tighter answer from the runtime validator.",
           "items": { "$ref": "#/$defs/fieldName" },
-          "minItems": 1
+          "minItems": 1,
+          "maxItems": 64
         },
         "groupKeys": {
           "type": "array",
-          "description": "Group key values already consumed by the drill-down so far, one per already-expanded group level, in groupCols order. Each key is a typedValue (AR-7) — a group key is compiled into an equality predicate against its group column (BM-2), i.e. it is a filter value like any other, so it must be typed the same way; an untyped JSON scalar here would force every compiler to re-guess the type AR-7 exists to make explicit. A drilled-into null group bucket is nullValue, not JSON null.",
-          "items": { "$ref": "#/$defs/typedValue" }
+          "description": "Group key values already consumed by the drill-down so far, one per already-expanded group level, in groupCols order. Each key is a typedValue (AR-7) — a group key is compiled into an equality predicate against its group column (BM-2), i.e. it is a filter value like any other, so it must be typed the same way; an untyped JSON scalar here would force every compiler to re-guess the type AR-7 exists to make explicit. A drilled-into null group bucket is nullValue, not JSON null. maxItems repeats groupCols' cap for the same amplification reason: GRP-1's groupKeys.length <= groupCols.length is a cross-array comparison JSON Schema cannot express, so structural validation alone would otherwise leave this array unbounded.",
+          "items": { "$ref": "#/$defs/typedValue" },
+          "maxItems": 64
         }
       },
       "required": ["groupCols", "groupKeys"]

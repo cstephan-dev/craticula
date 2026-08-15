@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Craticula.Core.Ir;
 
 namespace Craticula.Core.Schema;
@@ -35,6 +36,37 @@ public sealed record GridSchema
     public required IReadOnlyDictionary<string, FieldConfig> Fields { get; init; }
 
     /// <summary>
+    /// GRP-3: the colIds of <see cref="Fields"/> in the order the schema DECLARES them — the order a
+    /// grouping request's drill-down leaf projects its columns in, and therefore the order the
+    /// compiled column list is compared byte-for-byte against
+    /// (<c>spec/fixtures/group-aggregation/005</c>, <c>006</c>).
+    ///
+    /// <para><b>Why this is not just <c>Fields.Keys</c>.</b> <see cref="Parse"/> materialises
+    /// <see cref="Fields"/> as a plain <see cref="Dictionary{TKey,TValue}"/>, whose enumeration order
+    /// .NET explicitly does not specify. An insert-only dictionary happens to enumerate in insertion
+    /// order today, which is why the fixtures pass — but that is an implementation detail of the
+    /// current runtime, not a contract, and "declaration order" is a normative rule a port must be
+    /// able to reproduce. <see cref="Parse"/> therefore reads the order out of the JSON document
+    /// itself, where it is unambiguous.</para>
+    ///
+    /// <para>A <see cref="GridSchema"/> built directly in code (rather than parsed) has no JSON
+    /// declaration order to read, so this falls back to <see cref="Fields"/>'s own enumeration —
+    /// the only source available, and the same one that was being relied on implicitly before.
+    /// <see cref="System.Text.Json.Serialization.JsonIgnoreAttribute"/> keeps it out of the wire
+    /// contract entirely: <c>grid-schema.schema.json</c> declares no such property, and
+    /// <see cref="GridSchemaJson.Options"/>'s <c>UnmappedMemberHandling.Disallow</c> would otherwise
+    /// have to be relaxed for a field no host should ever supply.</para>
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> FieldOrder
+    {
+        get => _fieldOrder ?? [.. Fields.Keys];
+        init => _fieldOrder = value;
+    }
+
+    private readonly IReadOnlyList<string>? _fieldOrder;
+
+    /// <summary>
     /// Deserializes a <see cref="GridSchema"/> from JSON matching
     /// <c>spec/grid-schema.schema.json</c>, using <see cref="GridSchemaJson.Options"/>, then checks
     /// the invariants the JSON Schema states but neither C#'s type system nor System.Text.Json can
@@ -52,6 +84,8 @@ public sealed record GridSchema
     {
         var schema = JsonSerializer.Deserialize<GridSchema>(json, GridSchemaJson.Options)
             ?? throw new JsonException("GridSchema JSON deserialized to null.");
+
+        schema = schema with { FieldOrder = ReadDeclarationOrder(json) };
 
         FilterNodeValidator.Validate(schema.StaticFilter);
 
@@ -91,5 +125,26 @@ public sealed record GridSchema
         }
 
         return schema;
+    }
+
+    /// <summary>
+    /// GRP-3: the <c>fields</c> object's property names in document order, which is the one place
+    /// "declaration order" is actually stated. A second pass over JSON that
+    /// <see cref="JsonSerializer.Deserialize{TValue}(string, JsonSerializerOptions)"/> has already
+    /// accepted, so nothing here needs to re-report a malformed document — but the duplicate-key
+    /// setting is repeated rather than left at its permissive default, so this parse can never
+    /// disagree with <see cref="GridSchemaJson.Options"/> about how many properties there are.
+    /// </summary>
+    private static IReadOnlyList<string> ReadDeclarationOrder(string json)
+    {
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { AllowDuplicateProperties = false });
+
+        var order = new List<string>();
+        foreach (var field in document.RootElement.GetProperty("fields").EnumerateObject())
+        {
+            order.Add(field.Name);
+        }
+
+        return order;
     }
 }

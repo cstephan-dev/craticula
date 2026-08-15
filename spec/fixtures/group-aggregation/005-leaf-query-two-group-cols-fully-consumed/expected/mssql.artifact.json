@@ -1,0 +1,10 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT [id], [region], [segment], [product], [fiscal_year] AS [fiscalYear], [amount], [quantity] FROM [sales_fact] WHERE ([region] = @p1 AND [segment] = @p2) ORDER BY CASE WHEN [product] IS NULL THEN 1 ELSE 0 END ASC, [product] COLLATE Latin1_General_CI_AS ASC, CASE WHEN [id] IS NULL THEN 1 ELSE 0 END ASC, [id] ASC OFFSET @p3 ROWS FETCH NEXT @p4 ROWS ONLY",
+  "params": [
+    "EMEA",
+    "Enterprise",
+    0,
+    100
+  ]
+}

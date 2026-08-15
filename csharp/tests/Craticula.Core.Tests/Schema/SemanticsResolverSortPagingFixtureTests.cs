@@ -274,8 +274,12 @@ public class SemanticsResolverSortPagingFixtureTests
             Assert.Equal(sortItem.Direction == SortDirection.Asc ? "ASC" : "DESC", orderByKey.Direction);
             Assert.Equal(sortItem.NullsPosition == NullsPosition.Last ? "LAST" : "FIRST", orderByKey.NullsPosition);
 
+            // GroupingMode.Ungrouped is the whole point of this assertion, not a default: every
+            // sort-paging fixture is an ungrouped query, and 001 renders
+            // `ORDER BY "last_name" COLLATE craticula_ci ASC NULLS LAST` — the case GRP-2 must NOT
+            // reach when #1640 made a grouping request fold no case.
             var expectedCollation = SemanticsResolver
-                .ResolveSortOrGroupKeyCaseSensitivity(schema.Fields[sortItem.Field])
+                .ResolveOrderingAndGroupKeyCaseSensitivity(schema.Fields[sortItem.Field], SemanticsResolver.GroupingMode.Ungrouped)
                 .Mechanism == SemanticsResolver.CaseSensitivityMechanism.Collation;
             Assert.Equal(expectedCollation, orderByKey.HasCollation);
         }

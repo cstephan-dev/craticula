@@ -187,21 +187,28 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   resolved the quoting split, on **Postgres**, and nothing more. Of the two registers of open
   contradictions it left behind, one has since closed: `dialect-parity/`'s `mysql`/`mssql`/`sqlite`
   artifacts were unquoted pending #1639's choice of each engine's quote character, and **#1639
-  quoted all 52 of them** (`dialect-parity/README.md`). Still open: `group-aggregation/` splits from
-  the rest of the suite on grouped `ORDER BY` collation and on the unwrapped drill-down conjunction,
-  both pending BM-2 decisions (`group-aggregation/README.md`, "Known open contradictions"). **Case
-  004 is inside that remaining one**: its `ORDER BY "department" ASC NULLS LAST` groups and sorts on a
-  case-insensitive `string` column with no `COLLATE craticula_ci`, exactly as `group-aggregation/`'s
-  20 do and unlike every leaf artifact in the suite. It is the only grouped artifact outside that
-  category, so #1640 must re-author it in the same pass.
+  quoted all 52 of them** (`dialect-parity/README.md`). The other closed in **#1640**, which settled
+  BM-2's two open design calls as `spec/semantics.md`'s grouping addendum (GRP-1..GRP-5). **Case 004
+  was inside that one**, and the outcome is that its **artifacts** were already right — though not
+  its stated reasons, which #1640's review had to correct (see the bullet below and 004's own
+  `description.md`). GRP-2 makes a grouped level exact, so `ORDER BY "department" ASC NULLS LAST` —
+  grouped and sorted on a case-insensitive `string` column with no `COLLATE craticula_ci` — is now
+  the rule rather than the defect, and no arm of 004 changed. It is also no longer excluded from the
+  end-to-end SQL conformance suite, since a grouping compiler exists.
 - The Mongo query-level `collation` wrapper appears only where SEM-1's collation mechanism is
-  actually used (`$eq`/`$in`/group-key **matching** on a case-insensitive `string`). Cases whose only
-  string mechanism is a pattern match keep their own `$options: "i"` and need no wrapper — a
-  query-level collation does not apply to `$regex`. Note "matching": case 004 *groups* by a
-  case-insensitive column but has empty `groupKeys`, so nothing matches on it and its artifact is the
-  bare pipeline array, exactly like `group-aggregation/001` and `/020`. The wrapper is not free —
-  a query-level collation changes `$group` bucket identity and would fold `"Engineering"` and
-  `"engineering"` into one row — so it goes only where a `$match` needs it.
+  actually used **and the request is not grouped** — i.e. a user's own `$eq`/`$in` on a
+  case-insensitive `string`. Cases whose only string mechanism is a pattern match keep their own
+  `$options: "i"` and need no wrapper: a query-level collation does not apply to `$regex`. The
+  wrapper is not free — being query-level it changes `$group` bucket identity and would fold
+  `"Engineering"` and `"engineering"` into one row — which under GRP-2 is why **no grouping request
+  carries one at all**, whether or not a consumed group key produces a `$match`. Case 004 emits the
+  bare pipeline array, exactly like `group-aggregation/001` and `/020`.
+
+  *Corrected in #1640's review.* This bullet used to say the wrapper "goes only where a `$match`
+  needs it", and read "matching" as the deciding test — which made a consumed `groupKeys` match a
+  place the wrapper was required. GRP-2 makes exactly that match exact, so `group-aggregation/002`
+  onwards do not carry it either. The claim survived because Mongo has no conformance runner: nothing
+  in the suite could contradict it.
 - No `customFilters` anywhere in this category. Every case is a payload a real grid of that major can
   emit on its own; reaching for the extension would defeat the point. That is also why 008 exists:
   `operators/` reaches `inRange` *through* `customFilters`, so nothing was pinning what the native

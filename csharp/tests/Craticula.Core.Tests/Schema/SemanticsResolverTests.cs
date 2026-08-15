@@ -4,9 +4,11 @@ using Craticula.Core.Schema;
 namespace Craticula.Core.Tests.Schema;
 
 /// <summary>
-/// Hand-built boundary tests for <see cref="SemanticsResolver"/> (SEM-1/SEM-2/SEM-3/SEM-6): every
-/// <see cref="ComparisonOperator"/>'s resolved case-sensitivity mechanism, the sort/group-key
-/// mechanism always collapsing to <see cref="SemanticsResolver.CaseSensitivityMechanism.Collation"/>,
+/// Hand-built boundary tests for <see cref="SemanticsResolver"/> (SEM-1/SEM-2/SEM-3/SEM-6/GRP-2):
+/// every <see cref="ComparisonOperator"/>'s resolved case-sensitivity mechanism, the ungrouped
+/// ordering mechanism always collapsing to
+/// <see cref="SemanticsResolver.CaseSensitivityMechanism.Collation"/> while a grouping request folds
+/// no case at all,
 /// SEM-2's null-inclusive operator set and text-vs-other-type blank condition, SEM-3's pinned
 /// adapter default, and SEM-6's stableKey-tiebreaker append/no-op/validation behavior. Real-fixture-
 /// driven coverage of SEM-3/SEM-6 against <c>spec/fixtures/sort-paging/</c> lives in
@@ -141,42 +143,104 @@ public class SemanticsResolverTests
 
         Assert.NotEqual(sensitive.Mode, nonText.Mode);
 
-        // ...and the sort/group-key context resolves the same way, because SEM-1's "same mechanism in
-        // every context on a field" would otherwise be reachable only for the insensitive direction.
+        // ...and the ungrouped ordering context resolves the same way, because SEM-1's "same mechanism
+        // in every context on a field" would otherwise be reachable only for the insensitive direction.
         Assert.NotEqual(
-            SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(SensitiveField).Mode,
-            SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(new FieldConfig { Type = FieldType.Int64 }).Mode);
+            SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(SensitiveField, SemanticsResolver.GroupingMode.Ungrouped).Mode,
+            SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(new FieldConfig { Type = FieldType.Int64 }, SemanticsResolver.GroupingMode.Ungrouped).Mode);
     }
 
-    // -- SEM-1: ResolveSortOrGroupKeyCaseSensitivity ------------------------------------------
+    // -- SEM-1/GRP-2: ResolveOrderingAndGroupKeyCaseSensitivity ---------------------------------
 
     [Fact]
-    public void Sort_Or_GroupKey_Mechanism_Is_Always_Collation_When_Insensitive()
+    public void Ungrouped_Ordering_Mechanism_Is_Always_Collation_When_Insensitive()
     {
-        var decision = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(InsensitiveField);
+        var decision = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
+            InsensitiveField, SemanticsResolver.GroupingMode.Ungrouped);
 
         Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.Collation, decision.Mechanism);
     }
 
     [Fact]
-    public void Sort_Or_GroupKey_Mechanism_Is_None_When_Sensitive()
+    public void Ungrouped_Ordering_Mechanism_Is_None_When_Sensitive()
     {
-        var decision = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(SensitiveField);
+        var decision = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
+            SensitiveField, SemanticsResolver.GroupingMode.Ungrouped);
 
         Assert.Equal(SemanticsResolver.CaseSensitivityMode.Sensitive, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
     }
 
     [Fact]
-    public void Sort_Or_GroupKey_Mechanism_Is_None_For_A_NonString_Field()
+    public void Ungrouped_Ordering_Mechanism_Is_None_For_A_NonString_Field()
     {
         var idField = new FieldConfig { Type = FieldType.Int64 };
 
-        var decision = SemanticsResolver.ResolveSortOrGroupKeyCaseSensitivity(idField);
+        var decision = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
+            idField, SemanticsResolver.GroupingMode.Ungrouped);
 
         Assert.Equal(SemanticsResolver.CaseSensitivityMode.NotApplicable, decision.Mode);
         Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
+    }
+
+    /// <summary>
+    /// GRP-2: inside the row-group protocol NO structural key folds case, whatever the field says —
+    /// the point being that a case-INSENSITIVE string, the one shape that would otherwise collate, is
+    /// answered the same way as an int. Bucket identity, the drill-down match and the ordering have to
+    /// agree, and the only rendering all three can share is "no mechanism at all": collating the group
+    /// key is not merely undesirable, it makes the selected column stop matching the grouped
+    /// expression.
+    /// </summary>
+    [Fact]
+    public void Grouped_Structural_Keys_Never_Fold_Case_Whatever_The_Field_Declares()
+    {
+        FieldConfig[] fields =
+        [
+            InsensitiveField,
+            ExplicitlyInsensitiveField,
+            SensitiveField,
+            new FieldConfig { Type = FieldType.Int64 }
+        ];
+
+        foreach (var field in fields)
+        {
+            var decision = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
+                field, SemanticsResolver.GroupingMode.Grouped);
+
+            Assert.Equal(SemanticsResolver.CaseSensitivityMode.NotApplicable, decision.Mode);
+            Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
+        }
+    }
+
+    /// <summary>
+    /// The axis the method's parameter exists for, made a test: the SAME field answers differently in
+    /// the two modes. #1634 shipped this decision keyed on "sort key versus filter operator", which is
+    /// the wrong axis — <c>spec/fixtures/sort-paging/001</c> collates an ungrouped ORDER BY on exactly
+    /// this kind of field while <c>group-aggregation/002</c> does not, and no per-construct rule can
+    /// produce both.
+    /// </summary>
+    [Fact]
+    public void The_Same_Field_Resolves_Differently_Grouped_And_Ungrouped()
+    {
+        Assert.NotEqual(
+            SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(InsensitiveField, SemanticsResolver.GroupingMode.Ungrouped),
+            SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(InsensitiveField, SemanticsResolver.GroupingMode.Grouped));
+    }
+
+    /// <summary>
+    /// GRP-2 is narrow on purpose: it governs the protocol's OWN keys, never the user's filter. A
+    /// pre-aggregation filter selects rows before bucketing (AR-5) and has no say in bucket identity,
+    /// so it keeps SEM-1 — and the resolver has no grouping-aware overload for it at all, which is
+    /// what makes that unbypassable.
+    /// </summary>
+    [Fact]
+    public void A_User_Filter_Predicate_Keeps_SEM1_Regardless_Of_Grouping()
+    {
+        var decision = SemanticsResolver.ResolveCaseSensitivity(InsensitiveField, ComparisonOperator.Eq);
+
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, decision.Mode);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.Collation, decision.Mechanism);
     }
 
     // -- SEM-2: IsNullInclusive ----------------------------------------------------------------
@@ -274,6 +338,74 @@ public class SemanticsResolverTests
 
         Assert.Same(sort, result);
         Assert.Single(result);
+    }
+
+    /// <summary>
+    /// SEM-6: the tiebreaker this resolver MINTED is not recoverable from the returned list — it is
+    /// the same <see cref="SortItem"/> a user key on that field would be — so the one place that
+    /// decides it reports it. A caller re-deriving it by comparing the last field to the stable key
+    /// would be duplicating the rule, and the flag is load-bearing: it selects
+    /// <see cref="SemanticsResolver.SortKeyProvenance.AppendedTiebreaker"/> below.
+    /// </summary>
+    [Fact]
+    public void The_Overload_Reports_Whether_The_Trailing_Key_Was_Minted_Here()
+    {
+        SemanticsResolver.AppendStableKeyTiebreaker(null, "id", out var appendedToNull);
+        Assert.True(appendedToNull);
+
+        SemanticsResolver.AppendStableKeyTiebreaker([Item("lastName")], "id", out var appendedToSort);
+        Assert.True(appendedToSort);
+
+        SemanticsResolver.AppendStableKeyTiebreaker([Item("lastName"), Item("id")], "id", out var alreadyEndsInIt);
+        Assert.False(alreadyEndsInIt);
+    }
+
+    /// <summary>
+    /// SEM-6/GRP-2: the APPENDED tiebreaker never folds case, even on the case-insensitive string the
+    /// same resolver collates for a user's own ungrouped key. The point is determinism, not tidiness:
+    /// the fixture suite's <c>craticula_ci</c> is <c>deterministic = false</c>, so a collated
+    /// tiebreaker leaves <c>'aB3'</c> and <c>'Ab3'</c> tied, the sort non-total, and offset paging
+    /// free to return a row twice or drop it from both pages — the exact failure SEM-6 exists to
+    /// prevent. A <c>stableKey</c> is unique under its OWN storage collation; spelling nothing is what
+    /// sorts it under that one.
+    /// </summary>
+    [Fact]
+    public void The_Appended_Tiebreaker_Never_Folds_Case_Where_A_User_Key_On_The_Same_Field_Would()
+    {
+        var userKey = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
+            InsensitiveField, SemanticsResolver.GroupingMode.Ungrouped, SemanticsResolver.SortKeyProvenance.Request);
+
+        var tiebreaker = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
+            InsensitiveField, SemanticsResolver.GroupingMode.Ungrouped, SemanticsResolver.SortKeyProvenance.AppendedTiebreaker);
+
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.Insensitive, userKey.Mode);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.Collation, userKey.Mechanism);
+
+        Assert.Equal(SemanticsResolver.CaseSensitivityMode.NotApplicable, tiebreaker.Mode);
+        Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, tiebreaker.Mechanism);
+    }
+
+    /// <summary>...and a case-SENSITIVE field's tiebreaker is <c>NotApplicable</c> too, not
+    /// <c>Sensitive</c>: the appended key is an identity key, so no case decision of any kind is being
+    /// made about it. (On a grouped level GRP-2 already answered the same way, so the two rules
+    /// compose rather than compete.)</summary>
+    [Fact]
+    public void The_Appended_Tiebreaker_Is_NotApplicable_In_Every_Mode_And_For_Every_Field()
+    {
+        FieldConfig[] fields = [InsensitiveField, ExplicitlyInsensitiveField, SensitiveField, new() { Type = FieldType.Int64 }];
+        SemanticsResolver.GroupingMode[] modes = [SemanticsResolver.GroupingMode.Ungrouped, SemanticsResolver.GroupingMode.Grouped];
+
+        foreach (var field in fields)
+        {
+            foreach (var mode in modes)
+            {
+                var decision = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
+                    field, mode, SemanticsResolver.SortKeyProvenance.AppendedTiebreaker);
+
+                Assert.Equal(SemanticsResolver.CaseSensitivityMode.NotApplicable, decision.Mode);
+                Assert.Equal(SemanticsResolver.CaseSensitivityMechanism.None, decision.Mechanism);
+            }
+        }
     }
 
     [Fact]

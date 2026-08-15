@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT \"id\", \"region\", \"segment\", \"product\", \"fiscal_year\" AS \"fiscalYear\", \"amount\", \"quantity\" FROM \"sales_fact\" WHERE \"region\" COLLATE craticula_ci = $1 ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT \"id\", \"region\", \"segment\", \"product\", \"fiscal_year\" AS \"fiscalYear\", \"amount\", \"quantity\" FROM \"sales_fact\" WHERE \"region\" = $1 ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "EMEA",
     100,

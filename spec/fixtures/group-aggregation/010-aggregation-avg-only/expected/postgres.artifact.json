@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT \"segment\" AS \"segment\", AVG(\"amount\") AS \"amount_avg\" FROM \"sales_fact\" WHERE \"region\" COLLATE craticula_ci = $1 GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT \"segment\" AS \"segment\", AVG(\"amount\") AS \"amount_avg\" FROM \"sales_fact\" WHERE \"region\" = $1 GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "EMEA",
     100,

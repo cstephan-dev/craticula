@@ -37,15 +37,16 @@ public class DialectConformanceFixtureTests
     /// <see cref="Each_Dialect_Contributes_Exactly_The_Arm_Count_It_Declares"/> rather than being
     /// silently unexercised — the same discovery-based anti-rot shape the Postgres suite uses.
     ///
-    /// <para>All 55 live in <c>dialect-parity/</c> today, but discovery below deliberately scans
+    /// <para>#1640 added 16 arms per dialect in <c>group-aggregation/</c>; the rest live in
+    /// <c>dialect-parity/</c>. Discovery below deliberately scans
     /// <em>every</em> category: an arm added elsewhere must show up as a count mismatch here, not
     /// disappear because this suite only looked in one directory.</para>
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [
-        ("mssql", MssqlDialect.Instance, 18),
-        ("mysql", MySqlDialect.Instance, 19),
-        ("sqlite", SqliteDialect.Instance, 18)
+        ("mssql", MssqlDialect.Instance, 35),
+        ("mysql", MySqlDialect.Instance, 36),
+        ("sqlite", SqliteDialect.Instance, 35)
     ];
 
     /// <summary>
@@ -167,13 +168,16 @@ public class DialectConformanceFixtureTests
     }
 
     [Fact]
-    public void The_Suite_Is_All_55_Non_Postgres_Arms_In_The_Fixture_Tree()
+    public void The_Suite_Is_All_106_Non_Postgres_Arms_In_The_Fixture_Tree()
     {
-        // #1639: 19 re-authored + 30 added by promoting `011`-`020` to full parity coverage + 3 for
-        // the new `021` (the case-sensitive substring case) + 3 for `022`, added in the same story's
-        // review pass (T-SQL's `[` wildcard). This number going up without the per-dialect table
-        // above changing with it means an arm was added and went unexercised.
-        Assert.Equal(55, Arms.Count);
+        // #1639 left 55 (19 re-authored + 30 from promoting `011`-`020` to full parity coverage +
+        // 3 for `021`, the case-sensitive substring case, + 3 for `022`, T-SQL's `[` wildcard).
+        // #1640 added 51: three dialects for each of `group-aggregation/001`-`015`, `020` and
+        // `021` (the last added in #1640's review pass, pinning AG-6's auto-group-column colId),
+        // which is what makes BM-2's "identical grouping protocol across all four dialects"
+        // checkable at all. This number going up without the per-dialect table above changing with
+        // it means an arm was added and went unexercised.
+        Assert.Equal(106, Arms.Count);
     }
 
     [Fact]
