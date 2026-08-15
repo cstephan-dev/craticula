@@ -1,0 +1,9 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT \"segment\" AS \"segment\", MIN(\"amount\") AS \"amount_min\" FROM \"sales_fact\" WHERE \"region\" = ? GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": [
+    "EMEA",
+    100,
+    0
+  ]
+}

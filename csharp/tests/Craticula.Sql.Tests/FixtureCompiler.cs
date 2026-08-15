@@ -25,7 +25,14 @@ internal static class FixtureCompiler
             Read(category, fixtureDir, "agGridRequest.json"),
             OptionsFor(category, fixtureDir, schema));
 
-        var filter = GridFilterPipeline.Process(parsed.NativeFilter, parsed.CustomFilters, parsed.Page, schema, new ResourceLimits());
+        var filter = GridFilterPipeline.Process(
+            parsed.NativeFilter,
+            parsed.CustomFilters,
+            parsed.Page,
+            schema,
+            new ResourceLimits(),
+            parsed.Group,
+            parsed.Aggregations);
 
         return SqlQueryBuilder.Build(
             new SqlQueryRequest

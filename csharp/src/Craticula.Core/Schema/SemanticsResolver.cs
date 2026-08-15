@@ -44,8 +44,14 @@ public static class SemanticsResolver
     /// </summary>
     public enum CaseSensitivityMode
     {
-        /// <summary>Not a text comparison at all, so no collation mechanism applies in either
-        /// direction — SEM-1 governs <c>stringValue</c> comparisons only.</summary>
+        /// <summary>No collation mechanism applies in either direction, so a dialect spells nothing.
+        /// Reached three ways: the comparison is not a text one at all (SEM-1 governs
+        /// <c>stringValue</c> comparisons only); it is a structural key of a grouping request, where
+        /// GRP-2 forbids any mechanism on a <em>text</em> key too; or it is the SEM-6 tiebreaker a
+        /// compiler appended, which is an identity key rather than a text comparison — see
+        /// <see cref="ResolveOrderingAndGroupKeyCaseSensitivity"/> for both. All three share this
+        /// value because they need the identical rendering (nothing) on every dialect; they are still
+        /// separate decisions, and none of them is <see cref="Sensitive"/>.</summary>
         NotApplicable,
 
         /// <summary>Text, compared case-insensitively — SEM-1's default for a <c>string</c> field,
@@ -71,6 +77,52 @@ public static class SemanticsResolver
     {
         NullOnly,
         NullOrEmptyString
+    }
+
+    /// <summary>
+    /// GRP-2: whether the key being resolved is one of the row-group protocol's OWN
+    /// bucket-identity keys. This — not "sort key versus filter operator" — is the axis that decides
+    /// whether it folds case, which is why it is a parameter of
+    /// <see cref="ResolveOrderingAndGroupKeyCaseSensitivity"/> rather than something a call site
+    /// decides for itself.
+    /// </summary>
+    public enum GroupingMode
+    {
+        /// <summary>An ordinary key, governed by SEM-1 exactly as a filter predicate is —
+        /// <c>spec/fixtures/sort-paging/001</c> renders
+        /// <c>ORDER BY "last_name" COLLATE craticula_ci ASC NULLS LAST</c> and pins it. Reached by
+        /// every key of a query carrying no <c>groupSpec</c>, and also by the <c>ORDER BY</c> of a
+        /// fully-consumed drill-down <b>leaf</b>: a leaf has no <c>GROUP BY</c> and no buckets, so
+        /// its ordering decides nothing about bucket identity and there is nothing for GRP-2 to
+        /// govern (<c>spec/fixtures/group-aggregation/005</c> sorts on <c>product</c>, which is
+        /// neither a group column nor a group key).</summary>
+        Ungrouped,
+
+        /// <summary>
+        /// A key that decides or reproduces bucket identity, where GRP-2 forbids any case-folding
+        /// mechanism: a <c>GROUP BY</c> key, a <c>groupKeys</c> drill-down match (at either level —
+        /// including the leaf's, whose whole <c>WHERE</c> must select exactly the rows that produced
+        /// the bucket being expanded), and a <b>grouped level's</b> <c>ORDER BY</c>, which orders the
+        /// buckets the <c>GROUP BY</c> just produced and so has to agree with it.
+        /// </summary>
+        Grouped
+    }
+
+    /// <summary>
+    /// SEM-6: where an <c>ORDER BY</c>/<c>$sort</c>/<c>sort</c> key came from. Like
+    /// <see cref="GroupingMode"/> this is <em>provenance</em>, not shape — the appended tiebreaker and
+    /// a user key on the same field are the identical <see cref="SortItem"/> — so it is a parameter of
+    /// <see cref="ResolveOrderingAndGroupKeyCaseSensitivity"/> rather than something recovered from
+    /// the key itself.
+    /// </summary>
+    public enum SortKeyProvenance
+    {
+        /// <summary>A key the request itself carries, chosen by the user in the grid's own UI.</summary>
+        Request,
+
+        /// <summary>The <see cref="GridSchema.StableKey"/> tiebreaker
+        /// <see cref="AppendStableKeyTiebreaker"/> minted, which no user asked for.</summary>
+        AppendedTiebreaker
     }
 
     /// <summary>
@@ -119,20 +171,71 @@ public static class SemanticsResolver
     }
 
     /// <summary>
-    /// SEM-1: resolves how sorting or group-key drilldown matching on <paramref name="field"/> treats
-    /// case — the same <see cref="CaseSensitivityMode"/> classification as
-    /// <see cref="ResolveCaseSensitivity(FieldConfig, ComparisonOperator)"/>, but the mechanism is
-    /// always <see cref="CaseSensitivityMechanism.Collation"/> when insensitive: SEM-1 pins that sort
-    /// and group-key matching always use the collation mechanism, never pattern-match, so the same
-    /// field never sorts under one mechanism and filters under another.
+    /// SEM-1/GRP-2: resolves how a query's <em>structural</em> keys treat case — an <c>ORDER BY</c>
+    /// key, a <c>GROUP BY</c> key, and the drill-down predicate a <c>groupKeys</c> entry compiles
+    /// into. The answer depends on <paramref name="grouping"/>, and that is the whole point of this
+    /// method existing separately from
+    /// <see cref="ResolveCaseSensitivity(FieldConfig, ComparisonOperator)"/>.
+    ///
+    /// <para><b><see cref="GroupingMode.Ungrouped"/></b> — the same <see cref="CaseSensitivityMode"/>
+    /// classification a filter comparison gets, with the mechanism always
+    /// <see cref="CaseSensitivityMechanism.Collation"/> when insensitive: SEM-1 pins that ordering
+    /// uses the collation mechanism, never pattern-match, so a field never sorts under one mechanism
+    /// and filters under another.</para>
+    ///
+    /// <para><b><see cref="GroupingMode.Grouped"/></b> — always
+    /// <c>(NotApplicable, None)</c>: <b>no case-folding mechanism is spelled on a bucket-identity key
+    /// of a grouping request</b> (GRP-2, <c>spec/semantics.md</c>'s grouping addendum). A grouped query's
+    /// buckets are exact, so <c>"EMEA"</c> and <c>"emea"</c> are two groups with two unambiguous
+    /// labels, and the <c>GROUP BY</c> key, the drill-down <c>WHERE</c> and the <c>ORDER BY</c> must
+    /// agree on that or a child level stops summing to its parent's aggregate. The decision is
+    /// forced rather than merely chosen: collating the group key produces SQL the engines reject
+    /// outright, since the selected column would no longer match the grouped expression
+    /// (<c>SELECT "segment" … GROUP BY "segment" COLLATE craticula_ci</c>). Read GRP-2 for the
+    /// engines on which "spell nothing" is a host DDL obligation rather than an answer.</para>
+    ///
+    /// <para>Note the deliberate narrowness: this is about the keys that <em>decide or reproduce
+    /// bucket identity</em>, not about "every key of a grouping request". Two things inside a
+    /// grouping request are outside it. A user's own filter predicate selects rows before
+    /// aggregation (AR-5) and has no say in bucket identity, so it keeps SEM-1's per-field mechanism
+    /// through <see cref="ResolveCaseSensitivity(FieldConfig, ComparisonOperator)"/>. And a
+    /// fully-consumed drill-down leaf's <c>ORDER BY</c> orders raw rows, not buckets — it is passed
+    /// <see cref="GroupingMode.Ungrouped"/> by the compiler, which is what stops a leaf that filters
+    /// and sorts the same field from spelling two mechanisms in one statement.</para>
+    ///
+    /// <para><b><see cref="SortKeyProvenance.AppendedTiebreaker"/> is always <c>(NotApplicable,
+    /// None)</c> too, in either <paramref name="grouping"/> mode</b>, and this is SEM-6's own
+    /// determinism guarantee rather than a stylistic choice. A <see cref="GridSchema.StableKey"/> is
+    /// declared <em>unique</em>, and it is unique under the collation its own storage uses; a
+    /// compiler that attaches a different one to it is not comparing text the user asked about, it is
+    /// re-deciding row identity. On PostgreSQL the fixture suite's <c>craticula_ci</c> is declared
+    /// <c>deterministic = false</c>, under which <c>'aB3'</c> and <c>'Ab3'</c> compare EQUAL — so a
+    /// collated tiebreaker leaves the sort non-total, the same statement can order those rows
+    /// differently at <c>OFFSET 0</c> and <c>OFFSET 100</c>, and a row is returned twice or dropped
+    /// from both pages: precisely the bug SEM-6 exists to prevent, reintroduced by SEM-6's own
+    /// mechanism. Spelling nothing sorts it under the column's own collation, which is by definition
+    /// the one the uniqueness guarantee is stated in. This is GRP-2's argument extended one step: a
+    /// key that establishes identity is not governed by how a field's <em>values</em> compare. It does
+    /// NOT reach a user's own key on that same field — <c>spec/fixtures/sort-paging/001</c> still
+    /// renders <c>ORDER BY "last_name" COLLATE craticula_ci ASC NULLS LAST, "id" ASC NULLS LAST</c>,
+    /// collated user key and bare tiebreaker in one statement — nor a sort that already ends in the
+    /// stable key, where nothing was appended and the user's own key stands.</para>
     /// </summary>
-    public static CaseSensitivityDecision ResolveSortOrGroupKeyCaseSensitivity(FieldConfig field) =>
-        ResolveMode(field) switch
+    public static CaseSensitivityDecision ResolveOrderingAndGroupKeyCaseSensitivity(
+        FieldConfig field, GroupingMode grouping, SortKeyProvenance provenance = SortKeyProvenance.Request)
+    {
+        if (grouping == GroupingMode.Grouped || provenance == SortKeyProvenance.AppendedTiebreaker)
+        {
+            return new CaseSensitivityDecision(CaseSensitivityMode.NotApplicable, CaseSensitivityMechanism.None);
+        }
+
+        return ResolveMode(field) switch
         {
             CaseSensitivityMode.Insensitive =>
                 new CaseSensitivityDecision(CaseSensitivityMode.Insensitive, CaseSensitivityMechanism.Collation),
             var mode => new CaseSensitivityDecision(mode, CaseSensitivityMechanism.None)
         };
+    }
 
     /// <summary>
     /// The single source of SEM-1's field-level classification, which both resolvers above derive
@@ -216,14 +319,32 @@ public static class SemanticsResolver
     /// <see cref="FieldConfig.Sortable"/>) before calling this method, the same way
     /// <see cref="GridFilterPipeline"/> already does for filter field names.</para>
     /// </summary>
-    public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(IReadOnlyList<SortItem>? sort, string stableKey)
+    public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(IReadOnlyList<SortItem>? sort, string stableKey) =>
+        AppendStableKeyTiebreaker(sort, stableKey, out _);
+
+    /// <summary>
+    /// <see cref="AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>, additionally
+    /// reporting whether the trailing key is the one this method MINTED
+    /// (<paramref name="appended"/> <see langword="true"/>) or a key the request already carried.
+    /// That distinction is not recoverable from the returned list — the appended tiebreaker and a
+    /// user key on the same field are the identical <see cref="SortItem"/> — and it is load-bearing:
+    /// <see cref="SortKeyProvenance.AppendedTiebreaker"/> resolves case sensitivity differently from
+    /// <see cref="SortKeyProvenance.Request"/>. A caller that re-derived it by comparing the last
+    /// field to <paramref name="stableKey"/> would be duplicating this method's own rule, so it is
+    /// reported from the one place that decides it.
+    /// </summary>
+    public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(
+        IReadOnlyList<SortItem>? sort, string stableKey, out bool appended)
     {
         SortItemValidator.Validate(sort);
 
         if (sort is not null && sort[^1].Field == stableKey)
         {
+            appended = false;
             return sort;
         }
+
+        appended = true;
 
         var tiebreaker = new SortItem
         {

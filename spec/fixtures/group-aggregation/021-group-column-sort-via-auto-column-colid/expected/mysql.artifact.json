@@ -1,0 +1,9 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT `segment` AS `segment`, SUM(`amount`) AS `amount_sum` FROM `sales_fact` WHERE `region` = ? GROUP BY `segment` ORDER BY ISNULL(`segment`) DESC, `segment` DESC LIMIT ? OFFSET ?",
+  "params": [
+    "EMEA",
+    100,
+    0
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT `region` AS `region`, SUM(`amount`) AS `amountSum`, MIN(`amount`) AS `amountMin`, MAX(`amount`) AS `amountMax` FROM `sales_fact` GROUP BY `region` ORDER BY ISNULL(`region`) ASC, `region` ASC LIMIT ? OFFSET ?",
+  "params": [
+    100,
+    0
+  ]
+}

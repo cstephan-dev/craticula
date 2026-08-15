@@ -15,6 +15,9 @@ namespace Craticula.Core.Schema;
 /// unconditionally (not <see cref="GridSchemaMode"/>-gated — see <see cref="TypeCoercionException"/>'s
 /// own doc comment) and collects every violation before throwing, rather than failing on the first.
 ///
+/// <see cref="ValidateDeclaredTypes"/> is the same rule minus the string-parsing branch, for a tree
+/// whose corrected form could never reach a compiler — see its own doc for the one caller and why.
+///
 /// <see cref="FilterNode"/>/<see cref="ComparisonNode"/> are immutable records, so coercion that
 /// actually changes a value rebuilds the tree from that point up via <c>with</c> — but only where a
 /// value actually changed, by reference-comparing each slot's coerced result against its original.
@@ -51,6 +54,111 @@ public static class TypeCoercionValidator
         }
 
         return coerced;
+    }
+
+    /// <summary>
+    /// SEM-5, without the string-parsing branch: requires every <see cref="TypedValue"/> slot in
+    /// <paramref name="filter"/> to ALREADY carry its field's declared variant, reporting anything
+    /// else as the same <c>uncoercible-value</c> violation <see cref="Coerce"/> raises. A
+    /// <see cref="NullValue"/> passes against any declared type, matching <see cref="Coerce"/>'s own
+    /// rule. Nothing is rewritten and nothing is returned — this is a check, not a transformation.
+    ///
+    /// <para><b>Why a strict variant exists at all, and where it is used.</b> A tree that a caller
+    /// cannot receive back cannot be coerced: <see cref="GridFilterPipeline.Process"/> deliberately
+    /// returns the user's filter alone, so a corrected value inside the synthesised <c>groupKeys</c>
+    /// drill-down (<see cref="DrillDownFilter.Synthesize"/>) would be discarded and the compiler would
+    /// still re-synthesise the original — leaving exactly the caller-precondition failure the check is
+    /// there to prevent. That is not a loss, because the group path never needed the parsing branch:
+    /// <c>ir.schema.json</c>'s <c>groupSpec.groupKeys</c> carries each key <em>pre-typed</em> as a
+    /// <c>typedValue</c> precisely because "it is a filter value like any other, so it must be typed
+    /// the same way", and the AG Grid adapter passes it through verbatim (the one documented exception
+    /// to "the adapter never coerces"). A variant mismatch there is a wrongly-typed request, not an
+    /// untyped one, so it is a client rejection at the <c>typeCoercion</c> stage rather than a value to
+    /// fix up. A <em>filter</em> value is the opposite case — AG Grid's wire is untyped and the adapter
+    /// emits every scalar as a <see cref="StringValue"/> — which is why <see cref="Coerce"/>, not this,
+    /// governs it.</para>
+    /// </summary>
+    public static void ValidateDeclaredTypes(FilterNode? filter, GridSchema schema)
+    {
+        FilterNodeValidator.Validate(filter);
+
+        if (filter is null)
+        {
+            return;
+        }
+
+        var violations = new List<TypeCoercionViolation>();
+        Check(filter, schema, violations);
+
+        if (violations.Count > 0)
+        {
+            throw new TypeCoercionException(violations);
+        }
+
+        static void Check(FilterNode node, GridSchema schema, List<TypeCoercionViolation> violations)
+        {
+            switch (node)
+            {
+                case CompositeFilterNode composite:
+                    foreach (var child in composite.Nodes)
+                    {
+                        Check(child, schema, violations);
+                    }
+
+                    return;
+
+                case NotNode not:
+                    Check(not.Node, schema, violations);
+                    return;
+
+                case ComparisonNode comparison:
+                {
+                    if (!schema.Fields.TryGetValue(comparison.Field, out var fieldConfig))
+                    {
+                        throw new KeyNotFoundException(
+                            $"TypeCoercionValidator assumes '{comparison.Field}' already passed FieldAllowlistValidator " +
+                            "(coercion runs after allowlist in GridFilterPipeline) — it is not present in GridSchema.Fields.");
+                    }
+
+                    foreach (var value in Slots(comparison))
+                    {
+                        if (value is not NullValue && !Matches(value, fieldConfig.Type))
+                        {
+                            violations.Add(new TypeCoercionViolation(
+                                comparison.Field, fieldConfig.Type, Describe(value), Reason: "uncoercible-value"));
+                        }
+                    }
+
+                    return;
+                }
+
+                default:
+                    throw new NotSupportedException($"Unknown FilterNode type '{node.GetType()}'.");
+            }
+        }
+
+        static IEnumerable<TypedValue> Slots(ComparisonNode node)
+        {
+            if (node.Value is not null)
+            {
+                yield return node.Value;
+            }
+
+            if (node.From is not null)
+            {
+                yield return node.From;
+            }
+
+            if (node.To is not null)
+            {
+                yield return node.To;
+            }
+
+            foreach (var value in node.Values ?? [])
+            {
+                yield return value;
+            }
+        }
     }
 
     private static FilterNode CoerceNode(FilterNode node, GridSchema schema, List<TypeCoercionViolation> violations)

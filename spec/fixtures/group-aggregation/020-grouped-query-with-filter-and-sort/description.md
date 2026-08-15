@@ -10,9 +10,28 @@ filter applied before grouping (a `WHERE`, not a `HAVING` on the aggregate) -- A
 group keys" plus AR-5's ordinary filter-tree semantics composing on top of it.
 
 Sorting by the aggregated value needs different mechanics per backend: SQL `ORDER BY` the
-aggregate alias directly; Mongo `$sort` on the `$group` output key; the Search composite
+aggregate **expression**; Mongo `$sort` on the `$group` output key; the Search composite
 aggregation can only order by its *source* values natively, so ordering by a sub-aggregation metric
 requires an explicit `bucket_sort` pipeline aggregation.
+
+**Ordering-target note (GRP-4, corrected in #1640's review pass).** All four SQL arms originally
+ordered by the aggregate's select-list **alias** (`ORDER BY "amount_sum" DESC NULLS FIRST` on
+Postgres, and that same alias *inside* the emulated null bucket on SQL Server and MySQL:
+`CASE WHEN [amount_sum] IS NULL …`, `` ISNULL(`amount_sum`) ``). The category README recorded the
+latter two as a T-1b execution risk with the note that "both engines resolve select-list aliases in
+`ORDER BY` expressions". **That was wrong.** PostgreSQL's `SELECT` documentation states that an
+output column name "has to stand alone, that is, it cannot be used in an expression" — the Postgres
+arm was legal only because the alias did stand alone — and T-SQL binds an alias inside a `CASE`
+against the `FROM` scope, raising Msg 207 *Invalid column name*. GRP-4 now requires the aggregate
+expression in the ordering path, and all four arms read `SUM(…)` there, **including Postgres's**,
+which was already legal: "which of these two forms an engine accepts" is a semantic difference, not
+a per-dialect spelling, so splitting it across dialects would put it in the wrong layer. The alias
+still names the aggregate in the projection, which is what the grid reads the response back by.
+
+The **mongo** and **search** arms are unaffected and still address the aggregate by name. Neither is
+an alias in a scope: after `$group` the aggregate is a real field of the document the later
+`$addFields`/`$sort` stages read, and ES's `bucket_sort` addresses a sub-aggregation by a
+`buckets_path`.
 
 **Modeling note (deviation from raw AG Grid wire fidelity, deliberate):** real AG Grid SSRM sends `groupKeys` as `string[]` on the wire; the frontend adapter resolves each raw string into a typed value using the group column's declared schema type before building the IR (`AR-7`), exactly like it does for filter values. `spec/ir.schema.json`'s `$defs/groupSpec.groupKeys` requires that resolved `typedValue` form -- a prior review caught and fixed a regression where `groupKeys` had been left as raw scalars there. This fixture suite pins that fix at the request boundary too: `agGridRequest.json` here already carries the adapter-resolved typed form (e.g. `{"type":"string","value":"EMEA"}`), not the raw wire string, so a fixture consumer builds/checks the IR directly against the typed contract without re-deriving the (out-of-scope-for-this-suite) string-to-typedValue resolution step. See `group-aggregation/README.md` for the category-wide note.
 

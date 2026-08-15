@@ -81,7 +81,8 @@
         },
         "search": {
           "field": "product",
-          "keywordSubField": "product.keyword"
+          "keywordSubField": "product.keyword",
+          "normalizedSubField": "product.normalized"
         }
       },
       "text": {

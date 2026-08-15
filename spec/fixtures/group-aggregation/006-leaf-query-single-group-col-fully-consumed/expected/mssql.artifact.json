@@ -1,0 +1,9 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT [id], [region], [segment], [product], [fiscal_year] AS [fiscalYear], [amount], [quantity] FROM [sales_fact] WHERE [region] = @p1 ORDER BY CASE WHEN [id] IS NULL THEN 1 ELSE 0 END ASC, [id] ASC OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY",
+  "params": [
+    "EMEA",
+    0,
+    100
+  ]
+}

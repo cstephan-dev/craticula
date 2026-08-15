@@ -93,8 +93,12 @@ public static class AgGridRequestParser
 
         var nativeFilter = ParseFilterModel(root, DateResolutionContext.From(root, options));
         var customFilters = ParseCustomFilters(root);
-        var sort = ParseSortModel(root);
-        var (group, aggregations) = ParseGroupAndAggregations(root);
+
+        // Group state is parsed BEFORE the sort model, not merely beside it: AG Grid addresses a
+        // grouped sort through the row-group DISPLAY column's colId, which only the group state can
+        // resolve to a real field (see ResolveAutoGroupColumn).
+        var (group, aggregations, rowGroupCols) = ParseGroupAndAggregations(root);
+        var sort = ParseSortModel(root, group, rowGroupCols);
         var page = ParsePage(root);
 
         FilterNodeValidator.Validate(nativeFilter);
@@ -811,7 +815,8 @@ public static class AgGridRequestParser
 
     // ---- sortModel ----------------------------------------------------------------------------
 
-    private static IReadOnlyList<SortItem>? ParseSortModel(JsonElement root)
+    private static IReadOnlyList<SortItem>? ParseSortModel(
+        JsonElement root, GroupSpec? group, IReadOnlyList<ColumnVo> rowGroupCols)
     {
         if (!root.TryGetProperty("sortModel", out var sortModelEl) || sortModelEl.ValueKind == JsonValueKind.Null)
         {
@@ -824,6 +829,10 @@ public static class AgGridRequestParser
         }
 
         var items = new List<SortItem>();
+
+        // Every field an already-seen row-group display column stands for — see the collapse below.
+        var coupledToAutoColumn = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var element in sortModelEl.EnumerateArray())
         {
             if (element.ValueKind != JsonValueKind.Object)
@@ -843,6 +852,50 @@ public static class AgGridRequestParser
                     $"sortModel entry for colId '{colId}' has an unrecognized 'sort' value '{sortRaw}' (expected 'asc' or 'desc').")
             };
 
+            var isAutoColumn = IsAutoGroupColumnId(colId);
+            if (isAutoColumn)
+            {
+                if (ResolveAutoGroupColumn(colId, group, rowGroupCols) is not { } resolution)
+                {
+                    // Every group column is consumed: this is the drill-down leaf, whose rows all
+                    // share the whole group path, so the display column shows nothing to order by
+                    // and the key would be a constant. Dropped rather than mapped to some level's
+                    // column, which would be an ordering the user did not ask for. This is the ONLY
+                    // silent drop on this path — see ResolveAutoGroupColumn for why the two other
+                    // ways a display column can fail to name a level are carried through instead.
+                    continue;
+                }
+
+                foreach (var coupled in resolution.CoupledFields)
+                {
+                    coupledToAutoColumn.Add(coupled);
+                }
+
+                colId = resolution.Field;
+            }
+            else if (coupledToAutoColumn.Contains(colId))
+            {
+                // AG Grid's sort COUPLING (gridOptionsUtils._isColumnsSortingCoupledToGroup, on by
+                // default) sets the sort on the display column AND on every source column
+                // showRowGroupCols.getSourceColumnsForGroupColumn returns for it, and
+                // sortService.getIndexedSortMap gives them all the display column's index — so one
+                // user click on the group header emits the display column followed by the WHOLE
+                // coupled set (for the default single auto column, that is every row-group column:
+                // its colDef carries `showRowGroup: true`, which that service answers with
+                // `rowGroupColsSvc.columns.slice(0)`). They are one logical key, already represented
+                // by the entry the display column resolved to, so the rest are dropped. Deliberately
+                // narrow: only entries the resolution itself accounts for, and only AFTER the
+                // display column that named them — a key the client sent on its own is left alone.
+                continue;
+            }
+
+            // A repeat of the resolved key itself: keep the FIRST occurrence, so the user's own key
+            // precedence is preserved exactly and the unreachable later tiebreak is dropped.
+            if (isAutoColumn && items.Any(item => string.Equals(item.Field, colId, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
             // SEM-3: nullsPosition is always explicit in the IR, never left to a backend's default —
             // AG Grid's own SortModelItem carries no null-placement signal at all, so the adapter
             // fills it itself via #1634's shared SemanticsResolver rule (never re-derived ad hoc here).
@@ -857,11 +910,109 @@ public static class AgGridRequestParser
         return items.Count == 0 ? null : items;
     }
 
+    /// <summary>
+    /// AG Grid's row-group display column id — <c>columnUtils.ts</c>'s
+    /// <c>GROUP_AUTO_COLUMN_ID = 'ag-Grid-AutoColumn'</c>, matched by PREFIX exactly as AG Grid's own
+    /// <c>isColumnGroupAutoCol</c> does, because <c>groupDisplayType: 'multipleColumns'</c> mints one
+    /// column per row-group column and suffixes each with that column's id
+    /// (<c>autoColService.createOneAutoCol</c>: <c>`${GROUP_AUTO_COLUMN_ID}-${rowGroupCol.getId()}`</c>).
+    /// </summary>
+    private const string GroupAutoColumnId = "ag-Grid-AutoColumn";
+
+    private static bool IsAutoGroupColumnId(string colId) =>
+        colId.StartsWith(GroupAutoColumnId, StringComparison.Ordinal);
+
+    /// <summary>What a row-group display column's colId stands for.</summary>
+    /// <param name="Field">The schema field the display column resolves to — or, when it resolves to
+    /// nothing at all, the colId itself, unchanged (see <see cref="ResolveAutoGroupColumn"/>).</param>
+    /// <param name="CoupledFields">Every row-group field AG Grid's sort coupling emits <em>beside</em>
+    /// this display column, which the sort model must therefore collapse back into it. Empty when the
+    /// colId resolved to nothing, since nothing is coupled to a column AG Grid never minted.</param>
+    private readonly record struct AutoColumnResolution(string Field, IReadOnlyList<string> CoupledFields);
+
+    /// <summary>
+    /// AG-6/GRP-4: resolves a row-group display column's colId to the schema field it stands for, plus
+    /// the source fields AG Grid couples to it. <see langword="null"/> means <b>drop the key</b>, and
+    /// exactly one condition produces it: the drill-down leaf.
+    ///
+    /// <para><b>Why this has to exist at all.</b> When a user sorts the group column of an SSRM grid —
+    /// the single most common interaction a grouped grid has — <c>sortService.getSortModel</c> writes
+    /// <c>column.getId()</c>, and for the auto column that id is <c>ag-Grid-AutoColumn</c>, matching
+    /// no schema field. It is a colId in AG GRID's column space, not in the host's, so translating it
+    /// is the adapter's job by definition: nothing downstream knows AG Grid mints display columns.</para>
+    ///
+    /// <list type="bullet">
+    /// <item><description><b><c>ag-Grid-AutoColumn</c></b> (the single display column, AG Grid's
+    /// default) shows the whole group path, so what the request can actually order by is the level it
+    /// is itself producing — <c>groupCols[groupKeys.length]</c>, exactly GRP-1's dispatch. Its
+    /// coupled set is the <b>whole</b> <c>rowGroupCols</c> field list, not just that level's:
+    /// <c>autoColService.createBaseColDef</c> gives the single auto column
+    /// <c>showRowGroup: rowGroupCol?.getColId() ?? true</c>, i.e. <c>true</c>, and
+    /// <c>showRowGroupColsService.getSourceColumnsForGroupColumn</c> answers <c>true</c> with
+    /// <c>rowGroupColsSvc.columns.slice(0)</c> — every row-group column. AG Grid treats them as one
+    /// logical key and sorts them together.</description></item>
+    /// <item><description><b><c>ag-Grid-AutoColumn-&lt;id&gt;</c></b> (<c>multipleColumns</c>) names
+    /// its source column explicitly, so it resolves to THAT column, nothing is inferred, and its
+    /// coupled set is that one column — <c>showRowGroup</c> is the column's id there, the string arm
+    /// of the same service method. The suffix is the <c>ColumnVO.id</c>, which is why it is looked up
+    /// against the <c>rowGroupCols</c> entries' ids rather than their fields — the two differ whenever
+    /// a host gives a grouped column its own id. If it names a level this request is not producing,
+    /// the resolved field simply is not a legal sort target and GRP-4 rejects it downstream, naming
+    /// the reason — which is correct: a level bucketed by <c>region</c> genuinely cannot be ordered by
+    /// <c>segment</c>.</description></item>
+    /// </list>
+    ///
+    /// <para><b>Two ways a display column can name no level at all, and neither is silent.</b> A
+    /// suffix matching no <c>rowGroupCols</c> entry, and an auto-column colId on a request carrying no
+    /// group state whatsoever, both carry the colId through <b>unchanged</b>, so it fails downstream
+    /// as the unknown colId it is rather than vanishing. Dropping either would delete a sort key the
+    /// grid's own header still shows, ordering the response differently from the UI with no rejection
+    /// and no log — and the auto-column prefix would be the only colId in this adapter with such a
+    /// path, since any other bogus colId reaches a compiler and is refused there. The refusal comes
+    /// from the compiler (<c>SqlQueryBuilder</c> resolves every sort field against
+    /// <see cref="GridSchema.Fields"/>), NOT from <c>FieldAllowlistValidator</c>: sort colIds have no
+    /// allowlist stage yet — see <see cref="Craticula.Core.Schema.SemanticsResolver.AppendStableKeyTiebreaker"/>'s
+    /// own note on the orchestrator that does not exist.</para>
+    /// </summary>
+    private static AutoColumnResolution? ResolveAutoGroupColumn(
+        string colId, GroupSpec? group, IReadOnlyList<ColumnVo> rowGroupCols)
+    {
+        if (colId.Length > GroupAutoColumnId.Length)
+        {
+            // The '-' separator plus the source column's ColumnVO.id.
+            var sourceId = colId[(GroupAutoColumnId.Length + 1)..];
+
+            foreach (var vo in rowGroupCols)
+            {
+                if (string.Equals(vo.Id, sourceId, StringComparison.Ordinal))
+                {
+                    return new AutoColumnResolution(vo.Field, [vo.Field]);
+                }
+            }
+
+            return new AutoColumnResolution(colId, []);
+        }
+
+        if (group is null)
+        {
+            return new AutoColumnResolution(colId, []);
+        }
+
+        var level = group.GroupKeys.Count;
+        if (level >= group.GroupCols.Count)
+        {
+            return null;
+        }
+
+        return new AutoColumnResolution(group.GroupCols[level], rowGroupCols.Select(vo => vo.Field).ToList());
+    }
+
     // ---- rowGroupCols / groupKeys / valueCols --------------------------------------------------
 
     private readonly record struct ColumnVo(string Id, string Field, string? AggFunc);
 
-    private static (GroupSpec? Group, IReadOnlyList<Aggregation>? Aggregations) ParseGroupAndAggregations(JsonElement root)
+    private static (GroupSpec? Group, IReadOnlyList<Aggregation>? Aggregations, IReadOnlyList<ColumnVo> RowGroupCols)
+        ParseGroupAndAggregations(JsonElement root)
     {
         var groupCols = ReadColumnVoList(root, "rowGroupCols");
         var valueCols = ReadColumnVoList(root, "valueCols");
@@ -905,7 +1056,7 @@ public static class AgGridRequestParser
             }).ToList();
         }
 
-        return (group, aggregations);
+        return (group, aggregations, groupCols);
     }
 
     /// <summary>Reads a <c>ColumnVO[]</c> property (<c>rowGroupCols</c>/<c>valueCols</c>), using each

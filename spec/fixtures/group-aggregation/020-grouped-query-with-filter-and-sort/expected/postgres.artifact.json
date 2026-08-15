@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT \"region\" AS \"region\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE \"amount\" > $1 GROUP BY \"region\" ORDER BY \"amount_sum\" DESC NULLS FIRST, \"region\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT \"region\" AS \"region\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE \"amount\" > $1 GROUP BY \"region\" ORDER BY SUM(\"amount\") DESC NULLS FIRST, \"region\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "1000",
     100,

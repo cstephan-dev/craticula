@@ -86,16 +86,25 @@ and leaves it verbatim, unchanged from before).
   sort somewhere — a completeness bug, not an ordering one.
 - **Mongo carries no query-level `collation`**, and the artifact is the bare pipeline array. `groupKeys`
   is empty, so nothing here *matches* on the group column — there is no `$match` on `department` at
-  all, only a `$group` on it. This category's rule is that the wrapper appears only where SEM-1's
-  collation mechanism is genuinely used, and `group-aggregation/001-group-top-level-no-keys-consumed`
-  (the exact structural analogue: empty `groupKeys`, one `rowGroupCols` entry on a case-insensitive
-  string, one `sum` valueCol) and `/020-grouped-query-with-filter-and-sort` both emit the bare array
-  too. An earlier revision of this artifact wrapped it, which would have made this case and
+  all, only a `$group` on it. `group-aggregation/001-group-top-level-no-keys-consumed` (the exact
+  structural analogue: empty `groupKeys`, one `rowGroupCols` entry on a case-insensitive string, one
+  `sum` valueCol) and `/020-grouped-query-with-filter-and-sort` both emit the bare array too. An
+  earlier revision of this artifact wrapped it, which would have made this case and
   `group-aggregation/020` mutually unsatisfiable under T-1a artifact equality — a query-level
   collation is not decoration, it changes `$group` bucket identity and would collapse `"Engineering"`
-  and `"engineering"` into one row. When a *consumed* group key does produce a `$match` on a
-  case-insensitive string, the wrapper is required (`group-aggregation/002` onwards); that is the
-  distinction, not "the group column happens to be case-insensitive".
+  and `"engineering"` into one row.
+
+  *The artifact is right; the reason above used to be wrong, and this corrects it.* Until #1640's
+  review this bullet ended by saying that when a *consumed* group key does produce a `$match` on a
+  case-insensitive string "the wrapper is required (`group-aggregation/002` onwards)" — citing as
+  proof the exact fixtures #1640 had just **stripped** it from. GRP-2 makes a consumed `groupKeys`
+  drill-down match **exact**, so `002` onwards carry no wrapper either, and a grouping request never
+  gets one on account of its own keys. The real distinction is narrower than "does anything match":
+  the wrapper goes only where a **user's own** `$eq`/`$in` filter on a case-insensitive string needs
+  it, and even then only in a request that is not grouped — because Mongo's `collation` is
+  query-level, a grouped request cannot carry it without folding `$group`'s buckets too. GRP-2
+  records that as an accepted divergence. Under either the old reason or the new one this case's
+  artifact is the bare array, which is why nothing caught the drift: Mongo has no conformance runner.
 - **The Search artifact composes its cross-condition `And` as `bool.filter`**, where 001/003/005/006
   in this category use `bool.must`. Both conventions exist suite-wide (`filter-tree/` and `operators/`
   use `must`; `group-aggregation/` and `page-export/` use `filter`) and neither is wrong — `filter`

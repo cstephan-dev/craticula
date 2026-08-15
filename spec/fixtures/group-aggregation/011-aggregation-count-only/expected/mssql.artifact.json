@@ -1,0 +1,9 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT [segment] AS [segment], COUNT([id]) AS [id_count] FROM [sales_fact] WHERE [region] = @p1 GROUP BY [segment] ORDER BY CASE WHEN [segment] IS NULL THEN 1 ELSE 0 END ASC, [segment] ASC OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY",
+  "params": [
+    "EMEA",
+    0,
+    100
+  ]
+}

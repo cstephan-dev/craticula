@@ -3,7 +3,7 @@ using Craticula.Core.Ir;
 namespace Craticula.AgGrid.Tests;
 
 /// <summary>
-/// Fixture-driven coverage against the real <c>spec/fixtures/group-aggregation/</c> suite (20 cases,
+/// Fixture-driven coverage against the real <c>spec/fixtures/group-aggregation/</c> suite (21 cases,
 /// BM-2/BM-3/AR-8). Cases <c>016</c>-<c>019</c> are the distinct <c>setValuesRequest</c> envelope
 /// (BM-3, not the row-fetch request this parser handles — see
 /// <see cref="AgGridRequestParserRejectionTests"/> for their explicit-rejection coverage) and are
@@ -132,6 +132,27 @@ public class AgGridRequestParserGroupAggregationFixtureTests
         Assert.Equal(NullsPosition.First, parsed.Sort[0].NullsPosition);
     }
 
+    /// <summary>
+    /// AG-6, against the payload AG Grid really sends: sort coupling emits the display column plus
+    /// the WHOLE <c>rowGroupCols</c> set (1 + 3 entries here), and all four collapse into the single
+    /// level this request produces. Asserted from the fixture rather than only from a hand-written
+    /// request, because the defect #1640's second review found was precisely a fixture carrying a
+    /// payload its own <c>rowGroupCols</c> could never produce.
+    /// </summary>
+    [Fact]
+    public void Fixture021_The_Coupled_Auto_Column_Payload_Collapses_To_The_Level_It_Produces()
+    {
+        var parsed = Parse("021-group-column-sort-via-auto-column-colid");
+
+        Assert.Equal(["region", "segment", "product"], parsed.Group!.GroupCols);
+        Assert.Single(parsed.Group.GroupKeys);
+
+        Assert.Single(parsed.Sort!);
+        Assert.Equal("segment", parsed.Sort![0].Field);
+        Assert.Equal(SortDirection.Desc, parsed.Sort[0].Direction);
+        Assert.Equal(NullsPosition.First, parsed.Sort[0].NullsPosition);
+    }
+
     public static readonly TheoryData<string> AllRowFetchFixtures = new()
     {
         "001-group-top-level-no-keys-consumed",
@@ -149,7 +170,8 @@ public class AgGridRequestParserGroupAggregationFixtureTests
         "013-aggregation-multiple-sum-min-max",
         "014-aggregation-alias-explicit",
         "015-aggregation-alias-default-name",
-        "020-grouped-query-with-filter-and-sort"
+        "020-grouped-query-with-filter-and-sort",
+        "021-group-column-sort-via-auto-column-colid"
     };
 
     [Theory]

@@ -1,56 +1,50 @@
-{
-  "pipeline": [
-    {
-      "$match": {
-        "region": "EMEA"
-      }
-    },
-    {
-      "$addFields": {
-        "__idNullBucket": {
-          "$cond": [
-            {
-              "$eq": [
-                "$id",
-                null
-              ]
-            },
-            1,
-            0
-          ]
-        }
-      }
-    },
-    {
-      "$sort": {
-        "__idNullBucket": 1,
-        "id": 1
-      }
-    },
-    {
-      "$unset": "__idNullBucket"
-    },
-    {
-      "$skip": 0
-    },
-    {
-      "$limit": 100
-    },
-    {
-      "$project": {
-        "id": 1,
-        "region": 1,
-        "segment": 1,
-        "product": 1,
-        "fiscalYear": 1,
-        "amount": 1,
-        "quantity": 1,
-        "_id": 0
+[
+  {
+    "$match": {
+      "region": "EMEA"
+    }
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
       }
     }
-  ],
-  "collation": {
-    "locale": "en",
-    "strength": 2
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  },
+  {
+    "$project": {
+      "id": 1,
+      "region": 1,
+      "segment": 1,
+      "product": 1,
+      "fiscalYear": 1,
+      "amount": 1,
+      "quantity": 1,
+      "_id": 0
+    }
   }
-}
+]

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 
 namespace Craticula.Core.Tests.Schema;
@@ -86,9 +87,39 @@ public class AdversarialFixtureAllowlistTests
             .GetProperty("id").GetString()!;
 
         var ex = Assert.Throws<UnknownFieldException>(
-            () => FieldAllowlistValidator.Validate(schema, [colId]));
+            () => FieldAllowlistValidator.ValidateStructuralColumns(
+                schema, new GroupSpec { GroupCols = [colId], GroupKeys = [] }, null));
 
-        Assert.Contains(colId, ex.ColIds);
+        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith(colId, StringComparison.Ordinal));
+        AssertRejectedAsUnknownField(fixtureDir);
+    }
+
+    /// <summary>
+    /// The assertion above shows the check exists; this one shows a host actually reaches it. #1640's
+    /// review found <c>rowGroupCols</c> was the one client-controlled colId class that never entered
+    /// <see cref="GridFilterPipeline"/> at all — the fixture's own oracle was satisfied only by a test
+    /// hand-feeding the colId to the validator. Driving the fixture through the pipeline instead is
+    /// what makes <c>rejectedAt: "allowlist"</c> true of the real path.
+    /// </summary>
+    [Fact]
+    public void Fixture003_Is_Rejected_By_The_Pipeline_Itself_Not_Only_By_A_Direct_Validator_Call()
+    {
+        const string fixtureDir = "003-unknown-colid-row-group";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        var colId = request.RootElement.GetProperty("rowGroupCols").EnumerateArray().Single()
+            .GetProperty("id").GetString()!;
+
+        var ex = Assert.Throws<UnknownFieldException>(() => GridFilterPipeline.Process(
+            nativeFilter: null,
+            customFilters: null,
+            page: new RangePage { StartRow = 0, EndRow = 100 },
+            schema: schema,
+            limits: new ResourceLimits(),
+            group: new GroupSpec { GroupCols = [colId], GroupKeys = [] }));
+
+        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith(colId, StringComparison.Ordinal));
         AssertRejectedAsUnknownField(fixtureDir);
     }
 }

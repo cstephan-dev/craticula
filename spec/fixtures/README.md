@@ -104,22 +104,39 @@ affected artifacts live rather than only here:
   Server's explicit case-**sensitive** collation, and its `[` escaping) — now normative in
   `spec/semantics.md` as **SQL-5**/**SQL-6** — along with the host DDL obligations and the one known
   divergence deferred to T-1b (#1624).
-- **STILL OPEN — two splits survive on the grouped artifacts** — every grouped `ORDER BY` key omits
-  `COLLATE craticula_ci` on a case-insensitive `string` column (all 20 of `group-aggregation/`, plus
-  `ag-grid-majors/004`), and `group-aggregation/003`/`004`/`005` render their drill-down conjunction
-  unwrapped. Both are **#1640**'s to settle, because both turn on BM-2 design calls (bucket identity
-  under a non-deterministic collation; whether the drill-down is a real IR `andNode`). Registered in
-  `group-aggregation/README.md`'s "Known open contradictions" section; a port whose grouped output
-  disagrees with those artifacts should read it before assuming its own bug.
+- **CLOSED by #1640 (BM-2) for the 16 grouped cases; `016`-`019` remain open and are now #1641's.**
+  Both splits turned on BM-2 design calls, and both are now normative in `spec/semantics.md`'s
+  **grouping addendum (GRP-1..GRP-5)** rather than in a fixture README: a grouping request is
+  **exact** on the protocol's own keys, so its `GROUP BY`, drill-down `WHERE` and a **grouped
+  level's** `ORDER BY` render with no case-folding mechanism (GRP-2 — which is why those `ORDER BY`
+  keys carry no `COLLATE craticula_ci` and the drill-down predicates lost theirs), and the drill-down
+  **is** real IR, so SQL-2's wrap applies to it and `003`/`004`/`005` now read
+  `("region" = $1 AND "segment" = $2)` (GRP-5). `ag-grid-majors/004`'s artifacts were already correct
+  under GRP-2; its stated rationale was not, and #1640's review corrected it. The same story authored
+  the missing `mssql`/`mysql`/`sqlite` arms for `group-aggregation/001`-`015` and `020`, so BM-2's
+  "identical grouping protocol across all four dialects" is checkable rather than asserted.
+
+  *Two corrections from #1640's own review, both recorded in `group-aggregation/README.md`.* GRP-2
+  was **narrowed**: a fully-consumed drill-down **leaf**'s `ORDER BY` is not one of the protocol's
+  keys (it has no `GROUP BY` and no buckets), so SEM-1 governs it and `005`/`006` collate again on
+  the dialects that spell it. And the original register's entry (a) claimed all 20 of this category's
+  artifacts; only 16 were settled. **`016`-`019` are re-registered as open and owned by #1641** —
+  they carry a `setValuesRequest`, not a `groupSpec`, so GRP-2 never reached them, and whether BM-3's
+  distinct-values query is itself a bucket-identity query is a BM-3 design call.
 
 ## Case-insensitivity mechanism policy (SEM-1)
 
-Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort and
-group-key matching, use a case-insensitive COLLATION** (Postgres: the `craticula_ci` ICU collation;
-SQL Server/MySQL: their native CI collations; Mongo: query-level `collation: {locale, strength:2}`;
-ES/OpenSearch: `term`+`case_insensitive` for equality, a schema-declared `search.normalizedSubField`
-for ordering). **`contains`/`notContains`/`startsWith`/`endsWith` use `ILIKE`/pattern-match** (SEM-7
-owns the substring mechanics and escaping). Do not reach for `ILIKE`/`$regex` for an exact-match or
+Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,
+use a case-insensitive COLLATION** (Postgres: the `craticula_ci` ICU collation; SQL Server/MySQL:
+their native CI collations; Mongo: query-level `collation: {locale, strength:2}`; ES/OpenSearch:
+`term`+`case_insensitive` for equality, a schema-declared `search.normalizedSubField` for ordering).
+**`contains`/`notContains`/`startsWith`/`endsWith` use `ILIKE`/pattern-match** (SEM-7 owns the
+substring mechanics and escaping). **The row-group protocol's own keys are the documented third case:
+they use neither** — the `GROUP BY` key, the `groupKeys` drill-down match and a **grouped level's**
+`ORDER BY` are all exact, per `spec/semantics.md`'s grouping addendum (**GRP-2**), because they must
+agree with one another and a collated `GROUP BY` key is not valid SQL. That scope is narrow and both
+edges matter: a user filter inside the same grouped request still follows the split above, and so
+does a fully-consumed drill-down **leaf**'s `ORDER BY`, which orders raw rows rather than buckets. Do not reach for `ILIKE`/`$regex` for an exact-match or
 set-membership operator "because it's already case-insensitive that way" — it reintroduces an
 escaping trap (a literal `%`/`_` in the value silently becomes a wildcard) that a collation doesn't
 have. See `spec/semantics.md` SEM-1 for the full rationale.

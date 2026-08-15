@@ -1,0 +1,10 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT `id`, `region`, `segment`, `product`, `fiscal_year` AS `fiscalYear`, `amount`, `quantity` FROM `sales_fact` WHERE (`region` = ? AND `segment` = ?) ORDER BY ISNULL(`product`) ASC, `product` ASC, ISNULL(`id`) ASC, `id` ASC LIMIT ? OFFSET ?",
+  "params": [
+    "EMEA",
+    "Enterprise",
+    100,
+    0
+  ]
+}

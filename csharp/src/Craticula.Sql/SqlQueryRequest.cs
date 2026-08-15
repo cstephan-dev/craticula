@@ -29,16 +29,36 @@ public sealed record SqlQueryRequest
     public required PageSpec Page { get; init; }
 
     /// <summary>
-    /// Carried but deliberately NOT compiled here. A request can hold group state and still need the
-    /// plain leaf query — <c>spec/fixtures/page-export/010</c> and <c>/011</c> are exactly that shape
-    /// — so rejecting a non-null <see cref="Group"/> would break a legitimate caller. Compiling the
-    /// <c>GROUP BY</c>/aggregation/drill-down forms is BM-2's Grouping Strategy (#1640), which will
-    /// dispatch on this state before delegating the leaf case here; until it exists, a caller that
-    /// hands a genuinely grouped request straight to this builder gets the ungrouped query, which is
-    /// why the dispatch belongs in that story rather than being half-guessed in this one.
+    /// BM-2's row-group state, and the switch <see cref="SqlQueryBuilder"/> dispatches on (GRP-1):
+    /// <see langword="null"/> compiles the plain leaf query, fewer <see cref="GroupSpec.GroupKeys"/>
+    /// than <see cref="GroupSpec.GroupCols"/> compiles the grouped level, and equal counts compile
+    /// the drill-down leaf. Setting it changes more than the <c>GROUP BY</c>: a grouping request
+    /// projects named columns at every level (GRP-3) and folds no case on its own keys (GRP-2), so
+    /// it is not a decoration on the ungrouped query.
+    ///
+    /// <para>A caller that holds group state but wants the plain rows anyway must pass
+    /// <see langword="null"/> here. That is a real case — <c>spec/fixtures/page-export/010</c> and
+    /// <c>/011</c> carry <c>rowGroupCols</c> and still compile to a flat export, because EXP-1's
+    /// <c>exportScope: "all"</c> discards the grouping — and it belongs to the export feature, which
+    /// owns that decision, not to this builder.</para>
+    ///
+    /// <para><b>This is client-controlled input and must reach here already allowlisted</b>, exactly
+    /// like <see cref="Filter"/>: pass it (and <see cref="Aggregations"/>) to
+    /// <see cref="GridFilterPipeline.Process"/> alongside the filter tree. That is what applies SC-1,
+    /// SC-2's <c>groupable</c>/<c>aggregatable</c> capability flags, and — the one nobody expects —
+    /// SEC-3's leaf budget over the <c>groupKeys</c> drill-down, which <c>groupSpec</c> has no
+    /// <c>maxItems</c> of its own to bound. This builder assumes all three, the same precondition
+    /// <see cref="Filter"/> already carries.</para>
     /// </summary>
     public GroupSpec? Group { get; init; }
 
-    /// <summary>Carried and ignored for the same reason as <see cref="Group"/> (BM-2, #1640).</summary>
+    /// <summary>
+    /// AR-8's <c>valueCols</c>. Compiled into the grouped level's projection alongside the group
+    /// column, and ignored on the drill-down leaf and on an ungrouped request, both of which project
+    /// rows rather than aggregates. <see langword="null"/> is legal on a grouped request too: AG Grid
+    /// sends one whenever the user groups without adding an aggregation, and the answer is the bucket
+    /// list alone. Client-controlled, and subject to the same allowlist precondition as
+    /// <see cref="Group"/> — see its remarks.
+    /// </summary>
     public IReadOnlyList<Aggregation>? Aggregations { get; init; }
 }

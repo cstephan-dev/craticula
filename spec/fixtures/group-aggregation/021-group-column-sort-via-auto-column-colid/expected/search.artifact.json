@@ -1,0 +1,41 @@
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "term": {
+            "region.keyword": {
+              "value": "EMEA"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "segment": {
+      "composite": {
+        "size": 100,
+        "sources": [
+          {
+            "segment": {
+              "terms": {
+                "field": "segment.keyword",
+                "missing_bucket": true,
+                "order": "desc"
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "amount_sum": {
+          "sum": {
+            "field": "amount"
+          }
+        }
+      }
+    }
+  }
+}

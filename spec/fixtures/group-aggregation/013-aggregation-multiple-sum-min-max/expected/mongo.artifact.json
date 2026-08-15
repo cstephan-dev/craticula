@@ -2,13 +2,13 @@
   {
     "$group": {
       "_id": "$region",
-      "amount_sum": {
+      "amountSum": {
         "$sum": "$amount"
       },
-      "amount_min": {
+      "amountMin": {
         "$min": "$amount"
       },
-      "amount_max": {
+      "amountMax": {
         "$max": "$amount"
       }
     }
