@@ -1,0 +1,18 @@
+{
+  "setValuesRequest": {
+    "colId": "region",
+    "filterModel": {
+      "region": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "EMEA"
+      },
+      "segment": {
+        "filterType": "text",
+        "type": "equals",
+        "filter": "Enterprise"
+      }
+    },
+    "searchPrefix": "eu"
+  }
+}

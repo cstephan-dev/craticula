@@ -158,4 +158,10 @@ public sealed class MySqlDialect : ISqlDialect
     // OFFSET/FETCH. EXP-2's unpaginated case never reaches here.
     public string RenderPaging(int offset, int limit, ISqlParameterSink parameters) =>
         $"LIMIT {parameters.Bind(limit)} OFFSET {parameters.Bind(offset)}";
+
+    // GRP-6: a row cap with no offset. MySQL's OFFSET is optional after LIMIT (its own
+    // `LIMIT offset, count` shorthand is deliberately not used — the ordering of the two numbers is
+    // reversed there, which is a trap for a reader comparing this with RenderPaging above).
+    public string RenderRowLimit(int limit, ISqlParameterSink parameters) =>
+        $"LIMIT {parameters.Bind(limit)}";
 }

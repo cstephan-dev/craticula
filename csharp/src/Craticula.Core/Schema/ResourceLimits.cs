@@ -2,7 +2,7 @@ namespace Craticula.Core.Schema;
 
 /// <summary>
 /// SEC-3: host-configurable resource ceilings enforced by <see cref="ResourceLimitsValidator"/>
-/// over an IR filter tree and page spec. All five are plain, non-nullable <see cref="int"/>
+/// over an IR filter tree and page spec. All six are plain, non-nullable <see cref="int"/>
 /// properties with SEC-3's own defaults — by design there is no way to express "no limit" here
 /// (SEC-3: "none unlimited"). Each <c>init</c> accessor additionally rejects non-positive values:
 /// a limit of 0 or less is not "no limit", it is a silent denial-of-service (every request,
@@ -17,6 +17,7 @@ public sealed record ResourceLimits
     private readonly int _maxInValues = 1000;
     private readonly int _maxPageSize = 1000;
     private readonly int _maxSetValuesResults = 10000;
+    private readonly int _defaultSetValuesResults = 1000;
 
     /// <summary>Max filter tree depth, root node = depth 1 (SEC-3 default: 8).</summary>
     public int MaxDepth
@@ -47,15 +48,36 @@ public sealed record ResourceLimits
     }
 
     /// <summary>
-    /// Caps BM-3's distinct-values query LIMIT — a compiled query's own result size, not an input
-    /// shape to reject, so unlike the other four limits <see cref="ResourceLimitsValidator"/> does
-    /// not check this one; it is recorded here for the future BM-3 compiler work to consume
-    /// (SEC-3 default: 10000).
+    /// Caps BM-3's distinct-values query row limit — a compiled query's own result size, not an input
+    /// shape to reject, so unlike the other four limits <see cref="ResourceLimitsValidator.Validate"/>
+    /// does not check this one; it is consumed by
+    /// <see cref="ResourceLimitsValidator.ResolveSetValuesLimit"/>, which clamps whatever the client
+    /// asked for to it (SEC-3 default: 10000).
     /// </summary>
     public int MaxSetValuesResults
     {
         get => _maxSetValuesResults;
         init => _maxSetValuesResults = RequirePositive(value, nameof(MaxSetValuesResults));
+    }
+
+    /// <summary>
+    /// GRP-6: the cap applied when a <see cref="Ir.SetValuesSpec"/> requests none of its own
+    /// (default: 1000). A distinct-values query is <em>never</em> unbounded — a set filter over a
+    /// high-cardinality column would otherwise stream the whole column into a dropdown — so "the
+    /// client asked for no limit" resolves to this, not to infinity.
+    ///
+    /// <para>Deliberately a <b>separate</b> knob from <see cref="MaxSetValuesResults"/> rather than
+    /// reusing it as the default: the two answer different questions (what a quiet client gets versus
+    /// what the loudest one may ever get), and a host that raises the ceiling for an explicit
+    /// power-user request has not thereby agreed to send ten thousand values to every set filter that
+    /// opens. No ordering between them is enforced here — <see cref="ResourceLimitsValidator.ResolveSetValuesLimit"/>
+    /// takes the minimum, so a host configuring a default above its own maximum still gets the
+    /// maximum rather than a validation error at construction time.</para>
+    /// </summary>
+    public int DefaultSetValuesResults
+    {
+        get => _defaultSetValuesResults;
+        init => _defaultSetValuesResults = RequirePositive(value, nameof(DefaultSetValuesResults));
     }
 
     private static int RequirePositive(int value, string paramName) => value > 0

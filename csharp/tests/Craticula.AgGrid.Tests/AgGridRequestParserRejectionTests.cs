@@ -43,6 +43,13 @@ public class AgGridRequestParserRejectionTests
         Assert.Equal("malformed-request", ex.Reason);
     }
 
+    /// <summary>
+    /// Still a rejection after #1641 built BM-3's compiler, and deliberately so: the envelope is not
+    /// an <c>IServerSideGetRowsRequest</c> and this method's output record has a required
+    /// <c>Page</c> the envelope never carries. It routes to
+    /// <see cref="AgGridRequestParser.ParseSetValues"/> instead — see
+    /// <see cref="AgGridRequestParserSetValuesTests"/>.
+    /// </summary>
     [Fact]
     public void SetValuesRequest_Envelope_Fixture_016_Throws_MalformedRequest()
     {
@@ -51,6 +58,7 @@ public class AgGridRequestParserRejectionTests
 
         var ex = Assert.Throws<AgGridRequestParseException>(() => AgGridRequestParser.Parse(requestJson));
         Assert.Equal("malformed-request", ex.Reason);
+        Assert.Contains("ParseSetValues", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

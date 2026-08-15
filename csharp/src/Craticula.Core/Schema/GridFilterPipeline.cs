@@ -78,12 +78,16 @@ public static class GridFilterPipeline
         // fundamental of the two first.
         FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations);
 
-        // TODO: refine — this only checks colId membership (SC-1), not the per-field
-        // FieldConfig.Filterable capability flag (SC-2): a field declared filterable:false can still
-        // be filtered on. (The group/aggregation capability flags above ARE enforced, because #1640's
-        // review found them enforced nowhere at all; Filterable stays deferred for the reason #1631
-        // deferred it — no fixture exercises it.) Flagging so the gap stays a decision, not an
-        // oversight.
+        // Deferred to #1872 ("Enforce SC-2 capability flags: filterable on the filter and set-values
+        // paths"): this only checks colId membership (SC-1), not the per-field
+        // FieldConfig.Filterable capability flag (SC-2), so a field declared filterable:false can
+        // still be filtered on. (The group/aggregation capability flags above ARE enforced, because
+        // #1640's review found them enforced nowhere at all; Filterable stays deferred for the reason
+        // #1631 deferred it — no fixture exercises it.) It is ONE gap, not two: BM-3's
+        // setValuesSpec.colId would be held to this same flag (see
+        // FieldAllowlistValidator.ValidateStructuralColumns), and #1872 closes both call sites
+        // together — enforcing it on only one would refuse a column's set-filter value list while
+        // still honouring that column's own filterModel entry.
         var allowlistResult = FieldAllowlistValidator.Validate(schema, CollectFieldNames(merged));
         var allowlisted = FieldAllowlistValidator.Strip(merged, allowlistResult.Stripped);
 
@@ -115,6 +119,107 @@ public static class GridFilterPipeline
         TypeCoercionValidator.ValidateDeclaredTypes(drillDown, schema);
 
         return StaticFilterInjector.Inject(coerced, schema);
+    }
+
+    /// <summary>
+    /// GRP-6: the same pipeline for a BM-3 distinct-values request, with the one stage that request
+    /// adds — <b>the own-field exclusion</b> — in front of it.
+    ///
+    /// <para>Full order: <c>customFilters merge -> structural colId (SC-1) -> own-field exclusion ->
+    /// search-prefix predicate -> allowlist -> limits -> coercion -> static injection</c>. Everything
+    /// from the allowlist on is <see cref="Process"/>'s own pinned sequence, unchanged, over a
+    /// different tree.</para>
+    ///
+    /// <para><b>Why the exclusion runs first, and not after the limits check.</b> Every stage below it
+    /// then validates <em>exactly</em> the tree that gets compiled — the same property #1640 wanted
+    /// when it started charging the <c>groupKeys</c> drill-down against SEC-3, read the other way
+    /// round. The alternative (charge the submitted model, then drop) rejects requests over conditions
+    /// this query is about to throw away, and 400s a set filter for a filter the user's grid
+    /// legitimately shows. Nothing is weakened by it: the dropped subtree reaches no engine, and the
+    /// cost of walking it is the cost of parsing the document, which is a host's request-size
+    /// concern rather than SEC-3's.</para>
+    ///
+    /// <para><b>The search prefix is injected before the allowlist, deliberately.</b> It is an
+    /// ordinary <c>startsWith</c> predicate (<see cref="SetValuesFilter.SearchPrefixPredicate"/>), so
+    /// letting it flow through the remaining stages is what gives it SEM-5 coercion and its own SEC-3
+    /// leaf for free. It cannot be stripped on the way: its field is
+    /// <see cref="SetValuesSpec.ColId"/>, which the structural check two lines above has already
+    /// proved present in <see cref="GridSchema.Fields"/>, so
+    /// <see cref="GridSchemaMode.Lenient"/> has nothing to strip it for.</para>
+    ///
+    /// <para><b>Order inside the <c>WHERE</c>: the user's filter leads, the prefix trails.</b> No
+    /// fixture pins it (none carries both), and it is stated in GRP-6 rather than left open because
+    /// the choice is visible in <c>params</c>, which is compared exactly. The filter model is the
+    /// ambient state of the grid; the prefix is the narrowing the user is typing on top of it, so the
+    /// statement reads in the order the two were established. (GRP-5's drill-down leads for the
+    /// mirror-image reason — a group path is structural context, not a transient narrowing.)</para>
+    /// </summary>
+    /// <exception cref="UnknownFieldException"><see cref="SetValuesSpec.ColId"/> is not in the
+    /// schema's allowlist — in every <see cref="GridSchemaMode"/>, since it is the question rather
+    /// than a condition on it.</exception>
+    /// <exception cref="TypeCoercionException">A <see cref="SetValuesSpec.SearchPrefix"/> was supplied
+    /// against a column that is not declared <see cref="FieldType.String"/>.</exception>
+    public static FilterNode? ProcessSetValues(
+        FilterNode? nativeFilter,
+        FilterNode? customFilters,
+        SetValuesSpec setValues,
+        GridSchema schema,
+        ResourceLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(setValues);
+        ArgumentNullException.ThrowIfNull(schema);
+
+        SetValuesSpecValidator.Validate(setValues);
+
+        var merged = FilterTreeMerge.CustomFilterMerge(nativeFilter, customFilters);
+
+        FieldAllowlistValidator.ValidateStructuralColumns(schema, group: null, aggregations: null, setValues);
+
+        var scoped = SetValuesFilter.ExcludeOwnField(merged, setValues.ColId);
+        var withPrefix = FilterTreeMerge.And(scoped, RequireTextTarget(setValues, schema));
+
+        var allowlistResult = FieldAllowlistValidator.Validate(schema, CollectFieldNames(withPrefix));
+        var allowlisted = FieldAllowlistValidator.Strip(withPrefix, allowlistResult.Stripped);
+
+        // NonePage, and that is not a placeholder: GRP-6's cap is a ceiling on distinct values, not a
+        // row window, so there is no page size for SEC-3 to check here. The cap itself is applied —
+        // never rejected — by ResourceLimitsValidator.ResolveSetValuesLimit, which the compiler calls
+        // for the number it renders.
+        ResourceLimitsValidator.Validate(allowlisted, new NonePage(), limits);
+
+        var coerced = TypeCoercionValidator.Coerce(allowlisted, schema);
+
+        return StaticFilterInjector.Inject(coerced, schema);
+    }
+
+    /// <summary>
+    /// SEM-7/SEM-5: a <see cref="SetValuesSpec.SearchPrefix"/> only has a defined meaning against a
+    /// text column, so a prefix aimed at any other declared type is rejected here, at the
+    /// <c>typeCoercion</c> stage, as the wrongly-typed request it is.
+    ///
+    /// <para>An explicit check rather than letting coercion catch it: most non-string types reject
+    /// <c>"eu"</c> on their own, but a prefix that happens to parse (<c>"2024"</c> against an
+    /// <c>int64</c> column) would coerce cleanly and then hit <c>SqlQueryBuilder</c>'s
+    /// declared-type substring guard — a CALLER-precondition failure on ordinary client input, which
+    /// is precisely the defect class the group-key type check beside it was added to close.</para>
+    /// </summary>
+    private static ComparisonNode? RequireTextTarget(SetValuesSpec setValues, GridSchema schema)
+    {
+        var predicate = SetValuesFilter.SearchPrefixPredicate(setValues);
+
+        if (predicate is not null && schema.Fields[setValues.ColId].Type != FieldType.String)
+        {
+            throw new TypeCoercionException(
+            [
+                new TypeCoercionViolation(
+                    setValues.ColId,
+                    schema.Fields[setValues.ColId].Type,
+                    $"searchPrefix stringValue('{setValues.SearchPrefix}')",
+                    Reason: "uncoercible-value")
+            ]);
+        }
+
+        return predicate;
     }
 
     /// <summary>

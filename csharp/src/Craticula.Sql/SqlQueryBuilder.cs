@@ -32,9 +32,15 @@ namespace Craticula.Sql;
 /// keys reuse <see cref="ISqlDialect.RenderScalarComparison"/> and
 /// <see cref="ISqlDialect.RenderSortKey"/> unchanged.</para>
 ///
-/// <para><b>Still out of scope.</b> The set-filter distinct-values query is BM-3 (#1641), and
-/// <c>exportScope</c>/the export column list belong to the export feature — which is also why an
-/// <em>ungrouped</em> query still projects <c>SELECT *</c> (GRP-3).</para>
+/// <para><b>Set-filter values (#1641, BM-3).</b> <see cref="BuildSetValues"/> is the second entry
+/// point, compiling <c>spec/semantics.md</c>'s GRP-6 — a distinct-values query over one column, its
+/// own filter dropped, capped by SEC-3. It is a separate method rather than a mode of
+/// <see cref="Build"/> because it shares every clause renderer but none of the request shape (no
+/// page, no sort model, no aggregation); see <see cref="SqlSetValuesRequest"/>.</para>
+///
+/// <para><b>Still out of scope.</b> <c>exportScope</c> and the export column list belong to the
+/// export feature — which is also why an <em>ungrouped</em> query still projects <c>SELECT *</c>
+/// (GRP-3).</para>
 /// </summary>
 public static class SqlQueryBuilder
 {
@@ -86,6 +92,91 @@ public static class SqlQueryBuilder
         {
             sql.Append(' ').Append(dialect.RenderPaging(window.Offset, window.Limit, parameters));
         }
+
+        return new SqlQuery
+        {
+            Dialect = dialect.Name,
+            Sql = sql.ToString(),
+            Parameters = parameters.Values
+        };
+    }
+
+    /// <summary>
+    /// GRP-6/BM-3: compiles the set-filter distinct-values query —
+    /// <c>SELECT DISTINCT &lt;column&gt; FROM &lt;source&gt; [WHERE &lt;tree&gt;]
+    /// ORDER BY &lt;column&gt; &lt;cap&gt;</c>.
+    ///
+    /// <para>Everything that varies from <see cref="Build"/> is in this method; every clause it emits
+    /// is rendered by the same members. <c>DISTINCT</c> is ANSI and spelled identically on all four v1
+    /// dialects, so it is the builder's to emit — the row cap is the one thing BM-3 had to add to
+    /// <see cref="ISqlDialect"/>, and that member's own doc says why it could not be
+    /// <see cref="ISqlDialect.RenderPaging"/> with a zero offset.</para>
+    ///
+    /// <list type="bullet">
+    /// <item><description><b>No projection alias.</b> A distinct-values query returns one column of
+    /// scalars, not rows a grid maps by key, so GRP-3's naming rule — which exists because
+    /// <c>SELECT *</c> hands back physical column names — has nothing to name here.
+    /// <c>group-aggregation/016</c> pins the bare form.</description></item>
+    /// <item><description><b>No SEM-6 tiebreaker.</b> The single <c>ORDER BY</c> key is the distinct
+    /// column itself, whose values are unique across the result rows by construction — appending the
+    /// schema's <see cref="GridSchema.StableKey"/> would order by a column the statement does not
+    /// select, which is the same invalid SQL GRP-4 avoids at a grouped level.</description></item>
+    /// <item><description><b>Neither the <c>DISTINCT</c> nor its <c>ORDER BY</c> folds case</b>
+    /// (GRP-6), even on a case-insensitive string: they compute and order a distinct set exactly as a
+    /// <c>GROUP BY</c> does, and the values are handed straight back to the grid to be sent again as
+    /// <c>in</c> values or a <c>groupKey</c>, which GRP-2 matches exactly.</description></item>
+    /// </list>
+    /// </summary>
+    /// <exception cref="SqlCompilationException">A field the <see cref="GridSchema"/> does not
+    /// declare, an unsupported <see cref="SqlMapping"/> form, or a non-positive
+    /// <see cref="SqlSetValuesRequest.RowLimit"/>.</exception>
+    public static SqlQuery BuildSetValues(SqlSetValuesRequest request, ISqlDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(dialect);
+
+        FilterNodeValidator.Validate(request.Filter);
+
+        // Defense in depth against a caller that skipped ResourceLimitsValidator.ResolveSetValuesLimit:
+        // a zero or negative cap compiles to a statement that can never return a value, and on SQL
+        // Server `FETCH NEXT 0 ROWS ONLY` is an outright error (msg 10744) rather than an empty result.
+        if (request.RowLimit <= 0)
+        {
+            throw new SqlCompilationException(
+                $"A set-values row limit must be positive, got {request.RowLimit} — resolve it through " +
+                "ResourceLimitsValidator.ResolveSetValuesLimit, which clamps the client's request to the host's " +
+                "configured maximum and never yields a non-positive answer.");
+        }
+
+        var parameters = new SqlParameterBag(dialect);
+        var context = new Context(request.Schema, dialect, parameters);
+
+        var column = ResolveColumn(request.ColId, context);
+        var field = ResolveField(request.ColId, context);
+
+        var sql = new StringBuilder("SELECT DISTINCT ")
+            .Append(column)
+            .Append(" FROM ")
+            .Append(dialect.QuoteIdentifier(request.Schema.Source));
+
+        if (RenderWhere(request.Filter, drillDown: null, context) is { } predicate)
+        {
+            sql.Append(" WHERE ").Append(predicate);
+        }
+
+        // GRP-6, through GRP-2's own resolver: the distinct key decides bucket identity exactly as a
+        // GROUP BY key does, so it resolves Grouped and folds no case. Ascending / nulls last is
+        // MINTED here rather than read from a request — there is no sort model to read — which is the
+        // same thing AppendStableKeyTiebreaker does for the key it mints, and is why SEM-3's "never
+        // re-derive nullsPosition from direction" does not apply: nothing carried one to begin with.
+        var caseSensitivity = SemanticsResolver
+            .ResolveOrderingAndGroupKeyCaseSensitivity(field, SemanticsResolver.GroupingMode.Grouped)
+            .Mode;
+
+        sql.Append(" ORDER BY ")
+            .Append(dialect.RenderSortKey(column, SortDirection.Asc, NullsPosition.Last, caseSensitivity))
+            .Append(' ')
+            .Append(dialect.RenderRowLimit(request.RowLimit, parameters));
 
         return new SqlQuery
         {

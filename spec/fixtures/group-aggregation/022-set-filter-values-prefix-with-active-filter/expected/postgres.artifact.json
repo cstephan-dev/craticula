@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT DISTINCT \"region\" FROM \"sales_fact\" WHERE (\"segment\" COLLATE craticula_ci = $1 AND \"region\" ILIKE $2 || '%' ESCAPE '\\') ORDER BY \"region\" ASC NULLS LAST LIMIT $3",
+  "params": [
+    "Enterprise",
+    "eu",
+    1000
+  ]
+}

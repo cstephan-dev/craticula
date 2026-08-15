@@ -228,4 +228,24 @@ public sealed class MssqlDialect : ISqlDialect
     // unconditional stableKey tiebreaker guarantees for free.)
     public string RenderPaging(int offset, int limit, ISqlParameterSink parameters) =>
         $"OFFSET {parameters.Bind(offset)} ROWS FETCH NEXT {parameters.Bind(limit)} ROWS ONLY";
+
+    /// <summary>
+    /// GRP-6's row cap, and the one dialect where it is not simply <c>RenderPaging</c> minus a clause:
+    /// T-SQL has no <c>LIMIT</c>, and its <c>FETCH NEXT</c> is not legal without an <c>OFFSET</c>
+    /// before it. The zero is therefore written as a <b>literal</b> rather than bound.
+    ///
+    /// <para>That is not a SEC-2 exception. SEC-2 requires client-supplied <em>values</em> to be
+    /// parameters; this <c>0</c> is not a value the request carries at all — it is the syntax that
+    /// makes "no offset" expressible on this engine, in the same register as the <c>'%'</c> anchors
+    /// and the <c>ESCAPE</c> character this file already emits as literals. Binding it instead would
+    /// put a parameter into the mssql arm of every BM-3 artifact that the other three dialects do not
+    /// have, making <c>params</c> differ across dialects for a number no client ever sent.</para>
+    ///
+    /// <para>The alternative spelling, <c>SELECT DISTINCT TOP (@p1) …</c>, is idiomatic T-SQL and is
+    /// deliberately not used: it would have to be injected into the select list, so the builder would
+    /// need a second statement shape for one engine — the structural coupling
+    /// <see cref="ISqlDialect"/> exists to prevent.</para>
+    /// </summary>
+    public string RenderRowLimit(int limit, ISqlParameterSink parameters) =>
+        $"OFFSET 0 ROWS FETCH NEXT {parameters.Bind(limit)} ROWS ONLY";
 }

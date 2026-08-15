@@ -142,6 +142,41 @@ public class DialectIndependenceTests
     }
 
     /// <summary>
+    /// GRP-6's row cap is the one member BM-3 added to the seam, and this is the assertion that it
+    /// really is a dialect's own. All three spellings here are trailing clauses over the same
+    /// statement structure — <c>LIMIT $1</c>, and a <c>FETCH FIRST</c> form that is neither the real
+    /// dialects' <c>LIMIT</c> nor SQL Server's literal-zero <c>OFFSET</c> — so a builder that spelled
+    /// the cap itself would fail here rather than only against an artifact.
+    ///
+    /// <para>The <c>DISTINCT</c> keyword, by contrast, is identical in both: it is ANSI, so it stays
+    /// the builder's and no dialect may vary it.</para>
+    /// </summary>
+    [Fact]
+    public void Only_The_Row_Cap_Varies_In_A_Set_Values_Statement_Because_DISTINCT_Is_ANSI()
+    {
+        var request = new SqlSetValuesRequest { Schema = Schema, ColId = "department", RowLimit = 1000 };
+
+        var postgres = SqlQueryBuilder.BuildSetValues(request, PostgresDialect.Instance);
+        var probe = SqlQueryBuilder.BuildSetValues(request, ProbeDialect.Instance);
+
+        Assert.Equal(
+            "SELECT DISTINCT \"department\" FROM \"employees\" " +
+            "ORDER BY \"department\" ASC NULLS LAST LIMIT $1",
+            postgres.Sql);
+
+        Assert.Equal(
+            "SELECT DISTINCT [department] FROM [employees] " +
+            "ORDER BY CASE WHEN [department] IS NULL THEN 1 ELSE 0 END ASC, [department] ASC " +
+            "FETCH FIRST :p1 ROWS ONLY",
+            probe.Sql);
+
+        // Same single parameter either way: what the cap resolves to is SEC-3's decision, upstream of
+        // every dialect, so only its spelling and position can differ.
+        Assert.Equal([1000], postgres.Parameters);
+        Assert.Equal([1000], probe.Parameters);
+    }
+
+    /// <summary>
     /// The other half of the guard: even a builder that happens to produce the right answer today
     /// would violate BM-1 if it did so via a dialect-specific branch, and behavioral tests cannot see
     /// the difference between "delegated correctly" and "guessed correctly for these two dialects".

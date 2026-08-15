@@ -88,8 +88,12 @@ had a rendering rewritten (`dialect-parity/008`, `/017`, `/018`, `/019`; `filter
 `operators/001`, `/004`, `/007`; `page-export/005`) — so the previously-recorded "cross-category
 quoting contradiction" (`ag-grid-majors/README.md`) is **resolved for Postgres**.
 
-One arm of it is deliberately still open; the other closed in #1639. Both are recorded where the
-affected artifacts live rather than only here:
+Both arms of it have since closed — one in #1639, the other in #1640 and #1641 — and both are
+recorded where the affected artifacts live rather than only here. **The register is therefore empty:
+`grep -rn "Known open contradiction" spec/` finding nothing is the convention working, not a record
+that went missing.** An artifact that disagrees with a compiler is a bug in one of the two, never an
+expected divergence, with the single exception recorded in the paragraph above (the zero-width page
+window, owned by #1624 at the execution tier).
 
 - **CLOSED (#1639): the `mysql`/`mssql`/`sqlite` artifacts in `dialect-parity/` are now quoted too.**
   The *rule* was always universal; only the quote character (`"` vs `[…]` vs backticks) was each
@@ -104,9 +108,9 @@ affected artifacts live rather than only here:
   Server's explicit case-**sensitive** collation, and its `[` escaping) — now normative in
   `spec/semantics.md` as **SQL-5**/**SQL-6** — along with the host DDL obligations and the one known
   divergence deferred to T-1b (#1624).
-- **CLOSED by #1640 (BM-2) for the 16 grouped cases; `016`-`019` remain open and are now #1641's.**
+- **CLOSED by #1640 (BM-2) for the 16 grouped cases, and by #1641 (BM-3) for `016`-`019`.**
   Both splits turned on BM-2 design calls, and both are now normative in `spec/semantics.md`'s
-  **grouping addendum (GRP-1..GRP-5)** rather than in a fixture README: a grouping request is
+  **grouping addendum (GRP-1..GRP-6)** rather than in a fixture README: a grouping request is
   **exact** on the protocol's own keys, so its `GROUP BY`, drill-down `WHERE` and a **grouped
   level's** `ORDER BY` render with no case-folding mechanism (GRP-2 — which is why those `ORDER BY`
   keys carry no `COLLATE craticula_ci` and the drill-down predicates lost theirs), and the drill-down
@@ -120,9 +124,22 @@ affected artifacts live rather than only here:
   was **narrowed**: a fully-consumed drill-down **leaf**'s `ORDER BY` is not one of the protocol's
   keys (it has no `GROUP BY` and no buckets), so SEM-1 governs it and `005`/`006` collate again on
   the dialects that spell it. And the original register's entry (a) claimed all 20 of this category's
-  artifacts; only 16 were settled. **`016`-`019` are re-registered as open and owned by #1641** —
-  they carry a `setValuesRequest`, not a `groupSpec`, so GRP-2 never reached them, and whether BM-3's
-  distinct-values query is itself a bucket-identity query is a BM-3 design call.
+  artifacts; only 16 were settled, leaving `016`-`019` open for #1641.
+
+  *#1641 closed those four, as **GRP-6**.* A distinct-values query **is** a bucket query: its
+  `SELECT DISTINCT` column and that column's `ORDER BY` are exact, on GRP-2's own argument — the
+  entries are handed straight back to the grid as `in` values or a `groupKey`, which a grouped query
+  matches exactly, so a folded entry would match neither original row. The four artifacts already
+  rendered that way and none was re-authored for it. GRP-6 also pins the three things around it that
+  no artifact stated: the own-field exclusion (BM-3's defining semantic), the search prefix as an
+  ordinary `startsWith` predicate governed by SEM-1/SEM-7, and the cap as
+  `min(requested ?? default, maximum)` — clamped rather than rejected, and rendered as a row limit
+  with no offset, which is the one place BM-3 had to widen the dialect seam. The same story authored
+  those four cases' missing `mssql`/`mysql`/`sqlite` arms, so the whole category is now
+  six-backend. Its review pass then added `group-aggregation/022`, because one of those three — the
+  `WHERE` order when a filter model and a `searchPrefix` are both present — was `params`-visible and
+  pinned by **no** artifact: `017` had filters and no prefix, `018` a prefix and no filters, so a port
+  could emit the two conjuncts in either order and pass everything. `022` carries both.
 
 ## Case-insensitivity mechanism policy (SEM-1)
 
@@ -131,12 +148,14 @@ use a case-insensitive COLLATION** (Postgres: the `craticula_ci` ICU collation; 
 their native CI collations; Mongo: query-level `collation: {locale, strength:2}`; ES/OpenSearch:
 `term`+`case_insensitive` for equality, a schema-declared `search.normalizedSubField` for ordering).
 **`contains`/`notContains`/`startsWith`/`endsWith` use `ILIKE`/pattern-match** (SEM-7 owns the
-substring mechanics and escaping). **The row-group protocol's own keys are the documented third case:
-they use neither** — the `GROUP BY` key, the `groupKeys` drill-down match and a **grouped level's**
+substring mechanics and escaping). **Bucket-identity keys are the documented third case: they use
+neither** — the `GROUP BY` key, the `groupKeys` drill-down match and a **grouped level's**
 `ORDER BY` are all exact, per `spec/semantics.md`'s grouping addendum (**GRP-2**), because they must
-agree with one another and a collated `GROUP BY` key is not valid SQL. That scope is narrow and both
-edges matter: a user filter inside the same grouped request still follows the split above, and so
-does a fully-consumed drill-down **leaf**'s `ORDER BY`, which orders raw rows rather than buckets. Do not reach for `ILIKE`/`$regex` for an exact-match or
+agree with one another and a collated `GROUP BY` key is not valid SQL; BM-3's `SELECT DISTINCT`
+column and its `ORDER BY` join them (**GRP-6**). That scope is narrow and every edge matters: a user
+filter inside the same grouped request still follows the split above, so does a fully-consumed
+drill-down **leaf**'s `ORDER BY`, which orders raw rows rather than buckets, and so does a set
+filter's own search prefix, which filters the distinct column rather than being its key. Do not reach for `ILIKE`/`$regex` for an exact-match or
 set-membership operator "because it's already case-insensitive that way" — it reintroduces an
 escaping trap (a literal `%`/`_` in the value silently becomes a wildcard) that a collation doesn't
 have. See `spec/semantics.md` SEM-1 for the full rationale.

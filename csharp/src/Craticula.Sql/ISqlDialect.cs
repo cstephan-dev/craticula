@@ -191,4 +191,31 @@ public interface ISqlDialect
     /// this interface's "rendering only, never semantics" line exists to prevent.</para>
     /// </summary>
     string RenderPaging(int offset, int limit, ISqlParameterSink parameters);
+
+    /// <summary>
+    /// GRP-6: the trailing clause that caps a BM-3 distinct-values query at
+    /// <paramref name="limit"/> rows, with <b>no offset at all</b>.
+    ///
+    /// <para><b>Why this is not <see cref="RenderPaging"/> with a zero offset — the one place BM-3
+    /// had to widen this seam.</b> A distinct-values query is not paged: the set filter asks for the
+    /// column's values up to a ceiling and there is no second page to fetch, which is why
+    /// <c>group-aggregation/016</c> pins <c>LIMIT $1</c> and its Mongo/Search arms pin a bare
+    /// <c>$limit</c>/<c>size</c> rather than a <c>$skip</c>/<c>from</c> pair. Passing
+    /// <c>offset: 0</c> to <see cref="RenderPaging"/> would emit an <c>OFFSET</c> those artifacts do
+    /// not have and bind a parameter the query has no value for.</para>
+    ///
+    /// <para>And a bare row cap is genuinely per-engine, in position as well as spelling: three of the
+    /// four v1 dialects spell it <c>LIMIT ?</c>, while T-SQL has no <c>LIMIT</c> at all and reaches it
+    /// through <c>OFFSET 0 ROWS FETCH NEXT … ROWS ONLY</c> (or a <c>TOP (…)</c> that would have to be
+    /// injected into the select list instead — the reason this member returns a trailing clause, so
+    /// the builder's statement shape stays one shape). That is exactly the axis this interface exists
+    /// for; a builder that spelled it itself would be the BM-1 smell, and
+    /// <c>DialectIndependenceTests</c>' forbidden-token list contains <c>LIMIT</c> for that reason.</para>
+    ///
+    /// <para><paramref name="limit"/> arrives already resolved by
+    /// <c>Craticula.Core.Schema.ResourceLimitsValidator.ResolveSetValuesLimit</c> — clamping the
+    /// client's request to the host's configured maximum is a SEC-3 decision, not a spelling, so no
+    /// dialect ever sees the unclamped number.</para>
+    /// </summary>
+    string RenderRowLimit(int limit, ISqlParameterSink parameters);
 }

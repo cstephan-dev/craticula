@@ -93,4 +93,11 @@ internal sealed class ProbeDialect : ISqlDialect
     // axis of paging that really is a dialect's own, now that the builder resolves the row window.
     public string RenderPaging(int offset, int limit, ISqlParameterSink parameters) =>
         $"OFFSET {parameters.Bind(offset)} ROWS FETCH NEXT {parameters.Bind(limit)} ROWS ONLY";
+
+    // GRP-6's row cap, spelled a third way again: neither the real dialects' `LIMIT ?` nor SQL
+    // Server's literal-zero `OFFSET 0 ROWS FETCH ...`, but a `TOP`-style keyword in the trailing
+    // position, so a builder that assumed either real spelling is caught here rather than by an
+    // artifact.
+    public string RenderRowLimit(int limit, ISqlParameterSink parameters) =>
+        $"FETCH FIRST {parameters.Bind(limit)} ROWS ONLY";
 }

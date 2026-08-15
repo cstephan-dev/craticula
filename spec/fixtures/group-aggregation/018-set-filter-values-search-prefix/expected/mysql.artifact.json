@@ -1,0 +1,8 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT DISTINCT `region` FROM `sales_fact` WHERE `region` LIKE CONCAT(?, '%') ESCAPE '\\\\' ORDER BY ISNULL(`region`) ASC, `region` ASC LIMIT ?",
+  "params": [
+    "eu",
+    1000
+  ]
+}

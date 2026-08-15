@@ -27,14 +27,20 @@ public class PostgresConformanceFixtureTests
     ///
     /// <para><c>group-aggregation</c> joined in #1640 (BM-2), which is also why
     /// <c>ag-grid-majors</c> went from 5 to 6: its <c>004</c> is a grouped request and was excluded
-    /// by name until a grouping compiler existed.</para>
+    /// by name until a grouping compiler existed. It reached all 21 of its cases in #1641, when
+    /// <c>016</c>-<c>019</c>'s BM-3 distinct-values path gained a compiler
+    /// (<see cref="SqlQueryBuilder.BuildSetValues"/>); <see cref="FixtureCompiler"/> dispatches on the
+    /// request document, so both kinds run through this same theory. #1641's review pass added
+    /// <c>022</c> — the one case carrying a filter model AND a <c>searchPrefix</c>, which is what
+    /// makes GRP-6(c)'s <c>WHERE</c> order artifact-pinned rather than unit-test-pinned — taking it
+    /// to 22.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
         ("operators", 47),
         ("date-presets", 26),
         ("dialect-parity", 18),
-        ("group-aggregation", 17),
+        ("group-aggregation", 22),
         ("filter-tree", 15),
         ("sort-paging", 11),
         ("ag-grid-majors", 6)
@@ -65,11 +71,6 @@ public class PostgresConformanceFixtureTests
     /// </summary>
     private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal)
     {
-        ["group-aggregation/016-set-filter-values-no-active-filters"] = SetValues,
-        ["group-aggregation/017-set-filter-values-excludes-own-field-filter"] = SetValues,
-        ["group-aggregation/018-set-filter-values-search-prefix"] = SetValues,
-        ["group-aggregation/019-set-filter-values-server-side-cap"] = SetValues,
-
         ["sort-paging/012-page-none-unpaginated-export"] =
             "BLOCKED UPSTREAM, not out of scope: the fixture resolves page:none from EXP-1's " +
             "exportScope:\"all\", and AgGridRequestParser has no exportScope handling (a gap #1635 " +
@@ -79,11 +80,6 @@ public class PostgresConformanceFixtureTests
             "which asserts against the same artifact with only the PageSpec supplied. Delete this " +
             "entry the moment the adapter learns exportScope."
     };
-
-    private const string SetValues =
-        "BM-3 (#1641), not BM-2: these four compile the set-filter DISTINCT-values query from " +
-        "Craticula's own synthetic setValuesRequest shape (see the category README), which is neither " +
-        "an IServerSideGetRowsRequest nor something AgGridRequestParser parses at all.";
 
     public static TheoryData<string, string> InScopeFixtures
     {
@@ -171,17 +167,16 @@ public class PostgresConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_140_Of_The_145_Fixtures_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_145_Of_The_146_Fixtures_In_The_Scoped_Categories()
     {
-        // 145 minus the five named in ExcludedFixtures: group-aggregation/016-019 (BM-3, #1641) and
-        // sort-paging/012, which the SQL builder compiles correctly but the AG Grid adapter cannot
-        // yet FEED correctly (see ExcludedFixtures for the full reason, and
-        // SqlQueryBuilderPageAndSortTests for the assertion that closes the loop on the builder's
-        // half). This number going up without ExcludedFixtures shrinking means a fixture was added.
-        // It last moved in #1640's review pass, which added group-aggregation/021 (AG-6's auto
-        // group column colId) on top of the 20 cases and ag-grid-majors/004 that #1640 itself
-        // brought into scope once the grouping compiler existed.
-        Assert.Equal(140, InScopeFixtures.Count);
+        // 146 minus the ONE remaining entry in ExcludedFixtures: sort-paging/012, which the SQL
+        // builder compiles correctly but the AG Grid adapter cannot yet FEED correctly (see
+        // ExcludedFixtures for the full reason, and SqlQueryBuilderPageAndSortTests for the
+        // assertion that closes the loop on the builder's half). This number going up without
+        // ExcludedFixtures shrinking means a fixture was added. It last moved in #1641's review
+        // pass, which added group-aggregation/022; the pass before that built BM-3's compiler and
+        // released group-aggregation/016-019 from the exclusion list.
+        Assert.Equal(145, InScopeFixtures.Count);
     }
 
     [Fact]
