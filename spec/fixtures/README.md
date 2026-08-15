@@ -19,6 +19,7 @@ own framing of the same principle for the rules these fixtures enforce.
     postgres.artifact.json   — present only for the backends this case targets (see policy below)
     mssql.artifact.json
     mysql.artifact.json
+    oracle.artifact.json     — community-tested tier (see below); added by #1642
     sqlite.artifact.json
     mongo.artifact.json
     search.artifact.json     — shared OpenSearch/Elasticsearch artifact (OQ-7: one compiler, one DSL subset)
@@ -27,7 +28,7 @@ own framing of the same principle for the rules these fixtures enforce.
 ```
 
 Every `expected/<backend>.artifact.json` validates against its shape schema in `schemas/`
-(`sql-artifact.schema.json` for the four SQL dialects, `mongo-artifact.schema.json`,
+(`sql-artifact.schema.json` for every SQL dialect, `mongo-artifact.schema.json`,
 `search-artifact.schema.json`). Every `schema.json` validates against `../grid-schema.schema.json`
 — itself a spec-level assumption authored here ahead of the actual `GridSchema` model (#1631), which
 must conform to this shape rather than the reverse.
@@ -48,9 +49,24 @@ files with no proportional gain in what's actually being proven:
 - **Dialect-specific fixtures**: exactly the one dialect whose mechanics the case exists to pin
   (MySQL's `ISNULL` null-ordering emulation, SQL Server's `OFFSET/FETCH` paging, SQLite as the
   cheap in-proc CI target).
-- **Cross-backend parity showcase fixtures**: all four SQL dialects + Mongo + Search, reserved for
+- **Cross-backend parity showcase fixtures**: all five SQL dialects + Mongo + Search, reserved for
   the handful of cases whose entire point is proving identical semantics across every backend
   (SEM-1 case sensitivity, SEM-2 null handling) — these back T-3's property-test intent directly.
+
+### Dialect support tiers
+
+Not every dialect this suite grades is supported to the same level, and the fixture tree does not
+distinguish them — a passing artifact means the same thing for all five. The difference is what runs
+outside T-1a:
+
+| Tier | Dialects | What that means |
+|---|---|---|
+| **v1 supported** (§5) | Postgres, SQL Server, MySQL/MariaDB, SQLite | Graded by T-1a; on the release path; execution-equality (T-1b, Feature #1624) will cover them. |
+| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 39 arms across `dialect-parity/006`-`022` and all of `group-aggregation/` — but **no CI job runs it against a real Oracle instance and no release is blocked on it**. OQ-6 stays open. Its host obligations (12.2+, `MAX_STRING_SIZE = EXTENDED`, quoted DDL) are recorded in `dialect-parity/README.md`. |
+
+An Oracle artifact disagreeing with a compiler is still a bug in one of the two, on the same terms as
+any other arm; the tier is about *coverage beyond the artifact*, not about how seriously the artifact
+is taken. Do not quietly promote it — nothing here has been executed.
 
 ## Deferred: `dataset.json` / `expectedRows.json` (execution-equality tier, T-1b)
 
@@ -63,17 +79,20 @@ containers exist (a later Feature #1624 story) — this is additive, not a schem
 
 Every `expected/*.artifact.json` for a SQL dialect is byte-compared under T-1a, so "correct SQL" is
 not enough — there is exactly one accepted spelling per construct, and it is normative in
-`spec/semantics.md`'s **"Addendum — canonical SQL rendering"** (SQL-0..SQL-6), not here. In short:
+`spec/semantics.md`'s **"Addendum — canonical SQL rendering"** (SQL-0..SQL-7), not here. In short:
 identifiers are **always quoted**, including the table and every alias (`SELECT "region" AS "region"
 FROM "sales_fact"`); a composite `and`/`or` wraps itself and renders its children bare; a SEM-2
 null-inclusive negative is always wrapped; `notContains` renders `NOT ILIKE`, not `NOT (... ILIKE
-...)`; `notBlank` is literally `NOT (<blank>)`; and Postgres set membership is `= ANY($1)` /
-`<> ALL($1)` against **one array parameter**. Two rules there are per dialect rather than universal
+...)`; `notBlank` is literally `NOT (<blank>)` applied to whatever text that engine's `blank` produced
+(**SQL-7**); and Postgres set membership is `= ANY($1)` /
+`<> ALL($1)` against **one array parameter**. Three rules there are per dialect rather than universal
 and are the ones a port is most likely to get silently wrong: **SQL-5** (the substring family's
 operator, `ESCAPE` clause and escape alphabet all vary — MySQL spells `ESCAPE '\\'`, SQLite's
-case-sensitive path is `GLOB` with no `ESCAPE` clause at all, SQL Server escapes `[` as well) and
+case-sensitive path is `GLOB` with no `ESCAPE` clause at all, SQL Server escapes `[` as well),
 **SQL-6** (an engine whose default collation folds case must spell the case-**sensitive** mechanism
-explicitly, not leave it bare). Read that addendum before authoring or reviewing any SQL artifact.
+explicitly, not leave it bare) and **SQL-7** (an engine whose empty string *is* NULL — Oracle —
+compiles `blank` on a text field to a bare `IS NULL`; emitting the `= ''` disjunct there makes
+`notBlank` return no rows at all). Read that addendum before authoring or reviewing any SQL artifact.
 
 **One cross-dialect divergence is known and deliberately unfixed**, because T-1a compares strings and
 cannot grade it: a zero-width page window (`{"startRow": 100, "endRow": 100}`) yields an empty page on
@@ -108,6 +127,16 @@ window, owned by #1624 at the execution tier).
   Server's explicit case-**sensitive** collation, and its `[` escaping) — now normative in
   `spec/semantics.md` as **SQL-5**/**SQL-6** — along with the host DDL obligations and the one known
   divergence deferred to T-1b (#1624).
+- **CLOSED by #1642: the `blank`/`notBlank` composition was scoped to four dialects and Oracle
+  falsified it.** `ISqlDialect` had recorded, since #1638, that `IS NULL`/`= ''` were pushed down to
+  the query builder because "every v1 dialect spells them identically" — true of four engines and
+  false of the fifth, where the empty string *is* NULL. It was not a redundant disjunct: `"c" = ''`
+  is `"c" = NULL`, hence UNKNOWN for every row, so `notBlank` (which negates the whole composition)
+  returned the **empty result set** on Oracle. Now normative as **SQL-7**; the composition stays
+  builder-owned and only a `bool EmptyStringIsNull` engine fact varies inside it (the seam's third
+  widening — see `dialect-parity/README.md`'s **D6**). `dialect-parity/019`'s oracle arm pins it and
+  is the only artifact in the suite whose structure differs from its Postgres arm rather than only
+  its tokens.
 - **CLOSED by #1640 (BM-2) for the 16 grouped cases, and by #1641 (BM-3) for `016`-`019`.**
   Both splits turned on BM-2 design calls, and both are now normative in `spec/semantics.md`'s
   **grouping addendum (GRP-1..GRP-6)** rather than in a fixture README: a grouping request is
@@ -145,7 +174,8 @@ window, owned by #1624 at the execution tier).
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,
 use a case-insensitive COLLATION** (Postgres: the `craticula_ci` ICU collation; SQL Server/MySQL:
-their native CI collations; Mongo: query-level `collation: {locale, strength:2}`; ES/OpenSearch:
+their native CI collations; Oracle: `COLLATE BINARY_CI`, which is also how it reaches the substring
+family, having no `ILIKE`; Mongo: query-level `collation: {locale, strength:2}`; ES/OpenSearch:
 `term`+`case_insensitive` for equality, a schema-declared `search.normalizedSubField` for ordering).
 **`contains`/`notContains`/`startsWith`/`endsWith` use `ILIKE`/pattern-match** (SEM-7 owns the
 substring mechanics and escaping). **Bucket-identity keys are the documented third case: they use
@@ -164,11 +194,13 @@ have. See `spec/semantics.md` SEM-1 for the full rationale.
 **SQL-6**, added in #1639's review pass). Where an engine's own default collation folds case — SQL
 Server's stock `SQL_Latin1_General_CP1_CI_AS`, MySQL's `_ci` server default — leaving a field
 declared `caseSensitivity: "sensitive"` bare silently discards the declaration. SQL Server therefore
-spells `COLLATE Latin1_General_CS_AS` (`dialect-parity/014`, `/018`, `/021`); MySQL cannot express it
-in the statement at all and defers to a `_bin`/`_as_cs` column collation in host DDL. Postgres and
-SQLite spell nothing, because their defaults already distinguish case — three different answers that
-happen to share a spelling on two of the four, which is why an artifact showing "no collation" says
-nothing on its own about which reason applies.
+spells `COLLATE Latin1_General_CS_AS` (`dialect-parity/014`, `/018`, `/021`); Oracle spells
+`COLLATE BINARY` in the same three, because its default collation resolves through the *session*'s
+`NLS_COMP`/`NLS_SORT`; MySQL cannot express it in the statement at all and defers to a
+`_bin`/`_as_cs` column collation in host DDL. Postgres and SQLite spell nothing, because their
+defaults already distinguish case — four different answers that happen to share a spelling on two of
+the five, which is why an artifact showing "no collation" says nothing on its own about which reason
+applies.
 
 ## `agGridRequest.json` wire shape (grounded in `github/ag-grid`, the local reference clone)
 
@@ -275,7 +307,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
 | `page-export/` | AG-3/EXP-2 page spec, EXP-1/EXP-6/EXP-8 export + hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits | ~20 |
-| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7) | ~22 |
+| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7) | ~22 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |
 
 Each category directory has its own `README.md` enumerating its cases and the specific requirement

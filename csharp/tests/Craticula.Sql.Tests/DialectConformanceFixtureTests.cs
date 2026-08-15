@@ -4,30 +4,38 @@ using System.Text.RegularExpressions;
 namespace Craticula.Sql.Tests;
 
 /// <summary>
-/// T-1a artifact equality for the three dialects #1639 adds, the exact counterpart of
-/// <see cref="PostgresConformanceFixtureTests"/>: for every fixture carrying an
-/// <c>expected/&lt;dialect&gt;.artifact.json</c>, run the same end-to-end path
+/// T-1a artifact equality for every non-Postgres dialect (the three #1639 adds, plus #1642's
+/// Oracle), the exact counterpart of <see cref="PostgresConformanceFixtureTests"/>: for every
+/// fixture carrying an <c>expected/&lt;dialect&gt;.artifact.json</c>, run the same end-to-end path
 /// (<c>AgGridRequestParser.Parse</c> -&gt; <c>GridFilterPipeline.Process</c> -&gt;
 /// <see cref="SqlQueryBuilder.Build"/>, via <see cref="FixtureCompiler"/>) and compare byte-for-byte
 /// against that arm.
 ///
-/// <para><b>The artifact is the oracle, never a literal repeated here.</b> All 55 non-Postgres arms
-/// were produced by mechanical transformation — the 19 pre-existing ones by applying each engine's
-/// quote character to their own fixture's <c>schema.json</c> identifiers, the 30 promoted ones by
-/// substituting documented per-dialect tokens into that fixture's own <b>Postgres</b> arm, and
+/// <para><b>The artifact is the oracle, never a literal repeated here.</b> Every non-Postgres arm
+/// was produced by mechanical transformation — #1639's 19 pre-existing ones by applying each
+/// engine's quote character to their own fixture's <c>schema.json</c> identifiers, its 30 promoted
+/// ones by substituting documented per-dialect tokens into that fixture's own <b>Postgres</b> arm,
 /// <c>021</c>/<c>022</c>'s six by transforming the arms of the fixture whose schema they reuse
-/// verbatim (<c>014</c> and <c>020</c> respectively) — and never by running these dialects and
-/// recording the output. That is what keeps this comparison between two independently-derived
-/// answers instead of a tautology. A disagreement is informative in both directions and must be
-/// investigated, never resolved by editing the fixture.</para>
+/// verbatim (<c>014</c> and <c>020</c> respectively), and #1642's 39 Oracle arms the same way from
+/// the Postgres arm again — and never by running these dialects and recording the output. That is
+/// what keeps this comparison between two independently-derived answers instead of a tautology. A
+/// disagreement is informative in both directions and must be investigated, never resolved by
+/// editing the fixture.</para>
 ///
 /// <para><b>Why the parity showcases are the real assertion.</b> <c>dialect-parity/006</c>-<c>022</c>
-/// carry the same request compiled for all four SQL dialects. Because the predicate structure,
+/// carry the same request compiled for all five SQL dialects. Because the predicate structure,
 /// SQL-2's parenthesisation, the ORDER BY key sequence, SEM-6's tiebreaker and the parameter
-/// <em>values</em> are the builder's and cannot vary per dialect, four arms passing at once is a
+/// <em>values</em> are the builder's and cannot vary per dialect, five arms passing at once is a
 /// direct check of BM-1's "adding a dialect changes only spellings" — the same claim
 /// <see cref="DialectIndependenceTests"/> makes against a synthetic dialect, here against real
 /// engines and a hand-authored oracle.</para>
+///
+/// <para><b>One arm in the suite breaks that reading, and it is the whole point of #1642.</b>
+/// <c>dialect-parity/019</c>'s oracle arm is not a token substitution of its Postgres arm: SQL-7's
+/// empty-string-is-NULL collapse makes <c>blank</c> a bare <c>IS NULL</c> there, where the other
+/// four spell the two-disjunct form. That divergence lives behind
+/// <see cref="ISqlDialect.EmptyStringIsNull"/> — an engine fact, not a rendering — so BM-1 still
+/// holds; the artifact is what proves the builder consulted it.</para>
 /// </summary>
 public class DialectConformanceFixtureTests
 {
@@ -42,11 +50,20 @@ public class DialectConformanceFixtureTests
     /// <c>dialect-parity/</c>. Discovery below
     /// deliberately scans <em>every</em> category: an arm added elsewhere must show up as a count
     /// mismatch here, not disappear because this suite only looked in one directory.</para>
+    ///
+    /// <para><b>Oracle's 39 is the full-parity count and is deliberately two short of MySQL's 41.</b>
+    /// #1642 authored an arm everywhere a case carries all six backends — <c>dialect-parity/006</c>-
+    /// <c>022</c> (17) and all of <c>group-aggregation/</c> (22) — and none in
+    /// <c>dialect-parity/001</c>-<c>005</c>, which are single-engine mechanics showcases (MySQL's
+    /// <c>ISNULL</c>, T-SQL's <c>OFFSET/FETCH</c>, SQLite's ASCII-CI <c>LIKE</c>, Postgres's
+    /// <c>ILIKE</c>) that exist to document one named engine and have no Postgres arm to transform.
+    /// The asymmetry in this table is therefore the coverage policy, not a gap.</para>
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [
         ("mssql", MssqlDialect.Instance, 40),
         ("mysql", MySqlDialect.Instance, 41),
+        ("oracle", OracleDialect.Instance, 39),
         ("sqlite", SqliteDialect.Instance, 40)
     ];
 
@@ -117,13 +134,14 @@ public class DialectConformanceFixtureTests
     /// SEC-2's structural invariant, generalised past Postgres: the statement's placeholders and the
     /// parameter list are the same length.
     ///
-    /// <para>Only SQL Server can keep the Postgres suite's stronger form. A <c>@pN</c> placeholder
-    /// carries its ordinal, so <c>@p1..@pN</c> can be asserted ascending in first-appearance order;
-    /// a MySQL/SQLite <c>?</c> carries no ordinal at all — position in the text <em>is</em> the
-    /// binding — so there is nothing to compare and the check is necessarily count-only. That is not
-    /// a weaker test by accident but the actual difference between a named and a positional protocol,
-    /// and it is why <c>params</c> ordering on those two dialects is guarded by the artifact
-    /// comparison above rather than by arithmetic here.</para>
+    /// <para>Only the two NAMED protocols can keep the Postgres suite's stronger form — SQL Server's
+    /// <c>@pN</c> and Oracle's <c>:pN</c>. Such a placeholder carries its ordinal, so <c>p1..pN</c>
+    /// can be asserted ascending in first-appearance order; a MySQL/SQLite <c>?</c> carries no
+    /// ordinal at all — position in the text <em>is</em> the binding — so there is nothing to compare
+    /// and the check is necessarily count-only. That is not a weaker test by accident but the actual
+    /// difference between a named and a positional protocol, and it is why <c>params</c> ordering on
+    /// those two dialects is guarded by the artifact comparison above rather than by arithmetic
+    /// here.</para>
     /// </summary>
     [Theory]
     [MemberData(nameof(Arms))]
@@ -131,7 +149,7 @@ public class DialectConformanceFixtureTests
     {
         var actual = FixtureCompiler.Compile(category, fixtureDir, DialectNamed(dialect));
 
-        if (dialect == "mssql")
+        if (dialect is "mssql" or "oracle")
         {
             var ordinals = NamedPlaceholder.Matches(actual.Sql)
                 .Select(match => int.Parse(match.Groups[1].Value))
@@ -145,7 +163,9 @@ public class DialectConformanceFixtureTests
         Assert.Equal(actual.Parameters.Count, PositionalPlaceholder.Matches(actual.Sql).Count);
     }
 
-    private static readonly Regex NamedPlaceholder = new(@"@p([0-9]+)", RegexOptions.Compiled);
+    // Both named protocols in one pattern: the sigil differs (`@` on T-SQL, `:` on Oracle) but the
+    // `pN` body and its ascending-first-appearance contract do not.
+    private static readonly Regex NamedPlaceholder = new(@"[@:]p([0-9]+)", RegexOptions.Compiled);
 
     /// <summary>
     /// A bare <c>?</c> is also SQLite's GLOB single-character wildcard, so counting every <c>?</c>
@@ -169,9 +189,14 @@ public class DialectConformanceFixtureTests
     }
 
     [Fact]
-    public void The_Suite_Is_All_121_Non_Postgres_Arms_In_The_Fixture_Tree()
+    public void The_Suite_Is_All_160_Non_Postgres_Arms_In_The_Fixture_Tree()
     {
-        // #1641's review pass added the last 3: group-aggregation/022, the one case carrying both a
+        // #1642 added 39: Oracle at full parity coverage (dialect-parity/006-022 and all of
+        // group-aggregation/), derived by transformation from each fixture's own Postgres arm like
+        // every arm below it. Only ONE of the 39 differs from what the other dialects' arms say
+        // structurally — dialect-parity/019, where SQL-7's empty-string-is-NULL collapse makes
+        // `blank` a bare `IS NULL`; the rest differ in tokens alone, which is the claim.
+        // #1641's review pass added the 3 before that: group-aggregation/022, the one case carrying both a
         // filter model and a searchPrefix, which is what turns GRP-6(c)'s WHERE order from a
         // normative sentence plus a C# unit test into something every port is graded on.
         // #1641 itself added 12: three dialects for each of group-aggregation/016-019, BM-3's
@@ -184,14 +209,15 @@ public class DialectConformanceFixtureTests
         // which is what makes BM-2's "identical grouping protocol across all four dialects"
         // checkable at all. This number going up without the per-dialect table above changing with
         // it means an arm was added and went unexercised.
-        Assert.Equal(121, Arms.Count);
+        Assert.Equal(160, Arms.Count);
     }
 
     [Fact]
     public void Every_Non_Postgres_Sql_Artifact_On_Disk_Belongs_To_A_Dialect_This_Suite_Runs()
     {
         // The reverse direction of the count guard: catches an arm named for a dialect nobody
-        // implements (a typo'd filename, or #1642's Oracle landing artifacts before its dialect).
+        // implements — a typo'd filename, or a future engine's artifacts landing before its dialect
+        // does (which is exactly what this guard caught for Oracle up to #1642).
         var known = Dialects.Select(entry => entry.Name).Append("postgres").ToHashSet(StringComparer.Ordinal);
 
         var unknown = Directory
@@ -222,10 +248,15 @@ public class DialectConformanceFixtureTests
     }
 
     /// <summary>
-    /// SQL-1 made checkable on the arms this story re-authored: every artifact quotes its table and
-    /// its columns, so none of the 49 can silently regress to the pre-#1639 bare form. Deliberately
-    /// asserted on the <em>file</em> rather than on compiler output — that is where the regression
-    /// would live, and the compiler is what this suite is trying to grade.
+    /// SQL-1 made checkable on every arm this suite discovers: an artifact quotes its table and its
+    /// columns, so none can silently regress to the pre-#1639 bare form. Deliberately asserted on
+    /// the <em>file</em> rather than on compiler output — that is where the regression would live,
+    /// and the compiler is what this suite is trying to grade.
+    ///
+    /// <para>Oracle falls through to the standard <c>"</c> pair, and there the rule earns its keep
+    /// twice over: that engine folds an unquoted identifier to UPPERCASE, so a regression to the
+    /// bare form would not merely look different, it would query a different (and on these fixtures,
+    /// nonexistent) table.</para>
     /// </summary>
     [Theory]
     [MemberData(nameof(Arms))]

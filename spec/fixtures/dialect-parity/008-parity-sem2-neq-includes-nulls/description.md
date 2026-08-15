@@ -10,9 +10,9 @@ in one fixture (a case-insensitive `neq` on a string field) would obscure which 
 Choosing a numeric field sidesteps the interaction entirely — see `017` for a fixture that
 deliberately combines SEM-1+SEM-2+SEM-7 on `notContains` instead.
 
-- **Postgres/SQL Server/MySQL/SQLite**: a bare `<>` would silently drop every NULL row under
+- **Postgres/SQL Server/MySQL/SQLite/Oracle**: a bare `<>` would silently drop every NULL row under
   three-valued logic (SEM-2's core rationale) — the explicit `OR age IS NULL` is mandatory on all
-  four dialects.
+  five dialects.
 - **MongoDB**: `$ne` alone already matches missing/null-valued documents (MongoDB's own semantics).
   The compiler nonetheless emits the explicit `$or`-composed form, per SEM-2's own stated reasons:
   parallel compiled shape across backends, and correctness inside a future `$expr` context. This
@@ -27,6 +27,6 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** cross-backend parity showcase — all four SQL dialects + Mongo + Search.
+**Coverage tier:** cross-backend parity showcase — all five SQL dialects + Mongo + Search.
 
 **Requirement ids:** SEM-2, SEM-6 (tiebreaker, incidental), AR-6.

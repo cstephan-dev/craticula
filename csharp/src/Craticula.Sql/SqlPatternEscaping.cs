@@ -7,7 +7,7 @@ namespace Craticula.Sql;
 ///
 /// <para><b>Why this is not a method on <see cref="ISqlDialect"/> and not copied into each one.</b>
 /// The <em>algorithm</em> — escape the escape character itself first, then <c>%</c> and <c>_</c>,
-/// and nothing else — is identical in all four v1 dialects; only the escape <em>character</em>
+/// and nothing else — is identical in every dialect that has an <c>ESCAPE</c> clause at all; only the escape <em>character</em>
 /// differs (Postgres names <c>\</c>, a dialect whose <c>\</c> is already special names something
 /// else). Duplicating the loop per dialect would mean four places to get "escape the escape first"
 /// wrong, and a dialect that dropped one of the three characters would silently turn a user's

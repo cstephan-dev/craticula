@@ -289,6 +289,15 @@ public static class SemanticsResolver
     /// Boolean negation — a compiler must negate the compiled <c>blank</c> condition, never
     /// re-derive it independently (SEM-2's "must NOT" — the two could otherwise drift apart at the
     /// edges).
+    ///
+    /// <para><b>This answers the FIELD-TYPE half only, and deliberately so.</b> There is a second,
+    /// independent question — does the target engine treat <c>''</c> as NULL? — which collapses the
+    /// text arm onto the non-text one on Oracle (<c>spec/semantics.md</c> SQL-7, where emitting the
+    /// <c>= ''</c> disjunct anyway makes <c>notBlank</c> match no row at all). That question is NOT
+    /// answered here: this assembly knows the schema and nothing about backends, and giving it a
+    /// dialect would invert the layering the compiler seams exist to draw. The SQL compiler composes
+    /// the two answers (<c>Craticula.Sql.ISqlDialect.EmptyStringIsNull</c>); a Mongo or Search
+    /// compiler will have its own second half or none.</para>
     /// </summary>
     public static BlankCondition ResolveBlankCondition(FieldType fieldType) =>
         fieldType == FieldType.String ? BlankCondition.NullOrEmptyString : BlankCondition.NullOnly;

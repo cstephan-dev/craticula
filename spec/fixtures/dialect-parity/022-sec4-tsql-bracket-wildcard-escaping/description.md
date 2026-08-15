@@ -16,7 +16,7 @@ the fourth character only one SQL dialect has.
 Filter value: `"A[BC]"` on `remarks`, `contains`. It carries both halves of the rule at once:
 
 - `[` is escaped **on SQL Server only**, as `\[`, under the `ESCAPE '\'` clause that arm already
-  emits. The bound value therefore differs across the four SQL arms of one fixture — the same shape
+  emits. The bound value therefore differs across the five SQL arms of one fixture — the same shape
   `021` produces for SQLite's GLOB, and the reason this belongs in `dialect-parity/` rather than in
   `operators/`.
 - `]` is **not** escaped, on any dialect. It is special only *inside* a character class, and after
@@ -51,7 +51,7 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Authored during
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Authored during
 #1639's review pass, when the `[` gap was found in `MssqlDialect`: the escaping fix without a fixture
 would have left T-SQL's fourth wildcard with unit tests alone, which is exactly the state `021` was
 authored to fix for GLOB.

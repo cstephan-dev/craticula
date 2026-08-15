@@ -1,0 +1,8 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT DISTINCT \"region\" FROM \"sales_fact\" WHERE \"region\" COLLATE BINARY_CI LIKE :p1 || '%' ESCAPE '\\' ORDER BY \"region\" ASC NULLS LAST FETCH FIRST :p2 ROWS ONLY",
+  "params": [
+    "eu",
+    1000
+  ]
+}

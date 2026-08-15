@@ -1,0 +1,5 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT * FROM \"employees\" WHERE (\"lastName\" COLLATE BINARY_CI NOT LIKE '%' || :p1 || '%' ESCAPE '\\' OR \"lastName\" IS NULL) ORDER BY \"id\" ASC NULLS LAST OFFSET :p2 ROWS FETCH NEXT :p3 ROWS ONLY",
+  "params": ["smith", 0, 100]
+}

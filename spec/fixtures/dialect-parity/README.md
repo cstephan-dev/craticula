@@ -9,9 +9,14 @@ specific SEM rule/mechanism it pins):
    paging syntax, SQLite's default ASCII-case-insensitive `LIKE`, Postgres's `pg_trgm`-index-eligible
    `ILIKE`. One artifact per fixture, targeting only the dialect under test.
 2. **Cross-backend parity showcases** (`006`-`022`): the same rule proved to reach an *identical
-   logical outcome* on **every** backend — all four SQL dialects (Postgres/MSSQL/MySQL/SQLite) +
-   MongoDB + Search — through each backend's own native mechanism. 17 fixture directories × 6
-   backend artifacts = 102 artifact files, still only 17 fixture cases.
+   logical outcome* on **every** backend — all five SQL dialects (Postgres/MSSQL/MySQL/SQLite, plus
+   **Oracle** since #1642) + MongoDB + Search — through each backend's own native mechanism.
+   17 fixture directories × 7 backend artifacts = 119 artifact files, still only 17 fixture cases.
+
+   *Identical logical outcome, not identical text — and `019` is where that distinction stops being
+   pedantic.* Oracle's `''` is NULL, so `blank`'s text arm collapses there (**SQL-7**); its arm is the
+   one artifact in this category whose structure differs from its Postgres arm rather than only its
+   tokens, and it differs precisely in order to reach the same rows.
 
 `011`-`020` cover the SEM-7 `contains`-vs-tokenized-`match` trap (correct artifact + anti-pattern
 documentation), the `searchMode: "analyzed"` escape hatch, and further SEM-1/2/7 mechanics not
@@ -38,23 +43,23 @@ confusing to bolt onto a field reused elsewhere in this category.
 | 003 | `mssql-offset-fetch-paging` | dialect-specific (SQL Server) | `OFFSET`/`FETCH NEXT` paging syntax at a non-zero offset; incidental `CASE WHEN` null emulation | AG-3, SEM-3, SEM-6 |
 | 004 | `sqlite-ascii-case-insensitive-like` | dialect-specific (SQLite) | Default ASCII-CI `LIKE`, no `COLLATE` needed (contrast with `eq`'s `COLLATE NOCASE` in `006`) | SEM-1, SEM-7 |
 | 005 | `postgres-ilike-pg-trgm-contains` | dialect-specific (Postgres) | `ILIKE`, `pg_trgm`-index-eligible pattern shape | SEM-1, SEM-7, PERF-4 |
-| 006 | `parity-sem1-case-insensitive-eq` | parity showcase (all 6) | `eq` case-insensitive by default, one native mechanism per backend | SEM-1, AR-6 |
-| 007 | `parity-sem1-case-insensitive-contains` | parity showcase (all 6) | `contains` case-insensitive by default, SEM-7's substring mechanism per backend | SEM-1, SEM-7, AR-6 |
-| 008 | `parity-sem2-neq-includes-nulls` | parity showcase (all 6) | `neq` includes NULL rows, one composition per backend | SEM-2, AR-6 |
-| 009 | `parity-sem3-null-order-asc` | parity showcase (all 6) | `nullsPosition: "last"` (adapter default on `asc`), one mechanism per backend | SEM-3, SEM-6, AR-9, AG-3 |
-| 010 | `parity-sem3-null-order-desc` | parity showcase (all 6) | `nullsPosition: "first"` (adapter default on `desc`), mirror of `009` | SEM-3, SEM-6, AR-9, AG-3 |
-| 011 | `sem7-contains-wildcard-correct` | parity showcase (all 6) | Correct `wildcard` artifact for `contains` (positive half of the `012` pair) | SEM-7, SEM-1 |
-| 012 | `sem7-contains-tokenized-match-antipattern` | parity showcase (all 6) | The forbidden tokenized-`match` form, documented in prose only; `expected/` ships only the correct `wildcard` form | SEM-7 |
-| 013 | `sem7-searchmode-analyzed-optin` | parity showcase (all 6) | Explicit per-field `searchMode: "analyzed"` opt-in compiles `contains` to `match` on Search only | SEM-7, SC-3 |
-| 014 | `sem1-case-sensitive-optin-eq` | parity showcase (all 6) | Per-field case-**sensitive** opt-in — and, per **D4**, that each engine reaches it differently: SQL Server spells `COLLATE Latin1_General_CS_AS`, the other three spell nothing (for three different reasons) | SEM-1, SC-3 |
-| 015 | `sem1-case-insensitive-ordering-gt` | parity showcase (all 6) | CI on an ordering comparison (`gt`) on a text field; ES's `physical.search.normalizedSubField` + value lowercasing (no `case_insensitive` on `range`); Postgres uses the canonical `craticula_ci` collation | SEM-1, OQ-11 |
-| 016 | `sem1-case-insensitive-in-set` | parity showcase (all 6) | CI on `in` via the `craticula_ci` collation (`= ANY($1)`), never `ILIKE ANY`; ES decomposes into `bool`/`should` of `term` queries (`terms` has no `case_insensitive`) | SEM-1, AR-6 |
-| 017 | `sem2-notcontains-includes-nulls` | parity showcase (all 6) | Null-inclusion on `notContains`, composed with SEM-1 CI + SEM-7 substring mechanism | SEM-2, SEM-1, SEM-7 |
-| 018 | `sem2-notin-includes-nulls` | parity showcase (all 6) | Null-inclusion on `notIn`, on a case-sensitive field (orthogonal to SEM-1); reached via the `customFilters` wire extension (AG Grid's `set` filter alone cannot express `notIn`) | SEM-2, SC-3, OQ-11 |
-| 019 | `sem2-blank-notblank-exact-negation` | parity showcase (all 6) | `notBlank` rendered as an explicit negation of `blank`'s own compiled form, never derived independently | SEM-2 |
-| 020 | `sem7-mongo-regex-full-metacharacter-escaping` | parity showcase (all 6) | A filter value exercising SEC-4's LIKE-wildcard set and the wider regex-metacharacter set side by side | SEM-7, SEC-4 |
-| 021 | `sem1-case-sensitive-contains` | parity showcase (all 6) | Case-**sensitive** `contains` — `014`'s schema verbatim with only the operator changed. The one case where a dialect changes operator rather than token: SQLite renders `GLOB` (D3), since its `LIKE` is unconditionally ASCII-CI. Its `*` filter value is a metacharacter in two of the four escape alphabets | SEM-1, SEM-7, SC-3, SEC-4 |
-| 022 | `sec4-tsql-bracket-wildcard-escaping` | parity showcase (all 6) | `[` is a **fourth** `LIKE` wildcard on SQL Server and on no other v1 dialect — `020`'s schema verbatim with only the filter value changed, so the mssql arm is the only one whose bound value is escaped (D5) | SEM-7, SEC-4 |
+| 006 | `parity-sem1-case-insensitive-eq` | parity showcase (all 7) | `eq` case-insensitive by default, one native mechanism per backend | SEM-1, AR-6 |
+| 007 | `parity-sem1-case-insensitive-contains` | parity showcase (all 7) | `contains` case-insensitive by default, SEM-7's substring mechanism per backend | SEM-1, SEM-7, AR-6 |
+| 008 | `parity-sem2-neq-includes-nulls` | parity showcase (all 7) | `neq` includes NULL rows, one composition per backend | SEM-2, AR-6 |
+| 009 | `parity-sem3-null-order-asc` | parity showcase (all 7) | `nullsPosition: "last"` (adapter default on `asc`), one mechanism per backend | SEM-3, SEM-6, AR-9, AG-3 |
+| 010 | `parity-sem3-null-order-desc` | parity showcase (all 7) | `nullsPosition: "first"` (adapter default on `desc`), mirror of `009` | SEM-3, SEM-6, AR-9, AG-3 |
+| 011 | `sem7-contains-wildcard-correct` | parity showcase (all 7) | Correct `wildcard` artifact for `contains` (positive half of the `012` pair) | SEM-7, SEM-1 |
+| 012 | `sem7-contains-tokenized-match-antipattern` | parity showcase (all 7) | The forbidden tokenized-`match` form, documented in prose only; `expected/` ships only the correct `wildcard` form | SEM-7 |
+| 013 | `sem7-searchmode-analyzed-optin` | parity showcase (all 7) | Explicit per-field `searchMode: "analyzed"` opt-in compiles `contains` to `match` on Search only | SEM-7, SC-3 |
+| 014 | `sem1-case-sensitive-optin-eq` | parity showcase (all 7) | Per-field case-**sensitive** opt-in — and, per **D4**, that each engine reaches it differently — **four answers across five dialects**: SQL Server spells `COLLATE Latin1_General_CS_AS`, Oracle spells `COLLATE BINARY` (SQL-6/D6: its bare default is the *session*'s `NLS_COMP`), and Postgres, MySQL and SQLite spell nothing (for three different reasons) | SEM-1, SC-3 |
+| 015 | `sem1-case-insensitive-ordering-gt` | parity showcase (all 7) | CI on an ordering comparison (`gt`) on a text field; ES's `physical.search.normalizedSubField` + value lowercasing (no `case_insensitive` on `range`); Postgres uses the canonical `craticula_ci` collation | SEM-1, OQ-11 |
+| 016 | `sem1-case-insensitive-in-set` | parity showcase (all 7) | CI on `in` via the `craticula_ci` collation (`= ANY($1)`), never `ILIKE ANY`; ES decomposes into `bool`/`should` of `term` queries (`terms` has no `case_insensitive`) | SEM-1, AR-6 |
+| 017 | `sem2-notcontains-includes-nulls` | parity showcase (all 7) | Null-inclusion on `notContains`, composed with SEM-1 CI + SEM-7 substring mechanism | SEM-2, SEM-1, SEM-7 |
+| 018 | `sem2-notin-includes-nulls` | parity showcase (all 7) | Null-inclusion on `notIn`, on a case-sensitive field (orthogonal to SEM-1); reached via the `customFilters` wire extension (AG Grid's `set` filter alone cannot express `notIn`) | SEM-2, SC-3, OQ-11 |
+| 019 | `sem2-blank-notblank-exact-negation` | parity showcase (all 7) | `notBlank` rendered as an explicit negation of `blank`'s own compiled form, never derived independently — **and, since #1642, the one case where the form being negated is itself per engine** (Oracle's `''` is NULL, so its text arm collapses to `IS NULL`; the uncollapsed form would make `notBlank` match no row at all) | SEM-2, **SQL-7** |
+| 020 | `sem7-mongo-regex-full-metacharacter-escaping` | parity showcase (all 7) | A filter value exercising SEC-4's LIKE-wildcard set and the wider regex-metacharacter set side by side | SEM-7, SEC-4 |
+| 021 | `sem1-case-sensitive-contains` | parity showcase (all 7) | Case-**sensitive** `contains` — `014`'s schema verbatim with only the operator changed. The one case where a dialect changes operator rather than token: SQLite renders `GLOB` (D3), since its `LIKE` is unconditionally ASCII-CI. Its `*` filter value is a metacharacter in two of the four escape alphabets | SEM-1, SEM-7, SC-3, SEC-4 |
+| 022 | `sec4-tsql-bracket-wildcard-escaping` | parity showcase (all 7) | `[` is a **fourth** `LIKE` wildcard on SQL Server and on no other v1 dialect — `020`'s schema verbatim with only the filter value changed, so the mssql arm is the only one whose bound value is escaped (D5) | SEM-7, SEC-4 |
 
 ## Notes on artifact construction
 
@@ -79,9 +84,11 @@ confusing to bolt onto a field reused elsewhere in this category.
   `should` of per-value `term` queries rather than a single `terms` query.
 - **Every SQL `LIKE`/`ILIKE` artifact in this category carries an explicit `ESCAPE` clause** —
   including Postgres, whose own default escape character already happens to be `\`, per SEM-7's
-  dialect-independent Must-Not. The escape *character* is `\` on all four dialects (so the bound
+  dialect-independent Must-Not. The escape *character* is `\` on all five dialects (so the bound
   value, escaped by the shared SEC-4 routine, is byte-identical across the arms), but **MySQL spells
-  it `ESCAPE '\\'` and the other three spell it `ESCAPE '\'`** — see D1 below.
+  it `ESCAPE '\\'` and the other four — Postgres, SQL Server, SQLite and Oracle — spell it
+  `ESCAPE '\'`** — see D1 below. (SQLite's case-**sensitive** path is the exception to the clause
+  existing at all: `GLOB` takes none, D3.)
 - **Every MongoDB `$regex` artifact escapes the full regex-metacharacter class** (not just SEC-4's
   four LIKE/wildcard characters) and carries the `"i"` option — visibly exercised (not just a
   structural no-op) in `020`.
@@ -101,7 +108,8 @@ confusing to bolt onto a field reused elsewhere in this category.
   into the operator (`"lastName" NOT ILIKE ...`, SQL-3) and gained the same wrap; `018` moved from
   `NOT IN ($1, $2)` with two scalar parameters to `<> ALL($1)` with one array parameter (SQL-4) and
   gained the wrap; `019`'s `notBlank` became the literal negation of `blank`'s own compiled text,
-  `NOT (("lastName" IS NULL OR "lastName" = ''))` (SQL-2). All 16 Postgres artifacts also gained
+  `NOT (("lastName" IS NULL OR "lastName" = ''))` (SQL-2) — the form four of the five SQL dialects
+  now carry, Oracle's collapsing to `NOT ("lastName" IS NULL)` under SQL-7. All 16 Postgres artifacts also gained
   identifier quoting — which matters most *here*, since this category is the one that declares
   camelCase physical columns (`lastName`, `employeeCode`, `jobTitle`) that unquoted PostgreSQL would
   fold to lowercase.
@@ -149,8 +157,10 @@ rendered `ESCAPE '\'`. With `NO_BACKSLASH_ESCAPES` off (MySQL's default) a backs
 string-literal escape character, so `'\'` escapes the closing quote: the literal never terminates and
 **the statement does not parse**. Postgres (`standard_conforming_strings = on`), SQLite and SQL
 Server all read `'\'` as a one-character string, which is why the same spelling is correct in their
-arms and wrong only here. The escape *character* is unchanged on every dialect, so SEC-4's escaping
-and the bound value are identical across the four arms — only the SQL text differs. This is exactly
+arms and wrong only here. Oracle reads it that way too — a backslash in an Oracle string literal is an
+ordinary character — so #1642 added no new answer here. The escape *character* is unchanged on every
+dialect, so SEC-4's escaping and the bound value are identical across the five arms — only the SQL
+text differs. This is exactly
 the class of defect the artifact tier (T-1a) cannot see, since it compares strings; it was found by
 reading, like SQL-1's camelCase-folding bug.
 
@@ -164,8 +174,15 @@ tree-level `NOT`, composite `and`/`or`, `inRange`, and the unary `true`/`false` 
 **builder-owned structure that cannot vary per dialect by construction** — the `Dialect` seam has no
 say in any of them (`spec/semantics.md` SQL-2 says so for parenthesisation in as many words). Arms
 for them would re-prove the query builder rather than the dialects, while multiplying files against
-this suite's own backend-coverage policy. `019` is included precisely to make that claim *visible*
-once: its four SQL arms differ in nothing but the quote character.
+this suite's own backend-coverage policy. `019` was included precisely to make that claim *visible*
+once: its four SQL arms differed in nothing but the quote character.
+
+**That last sentence is no longer true of `019`, and #1642 is the reason** — see **D6**. Its five SQL
+arms now differ in the `blank` composition itself. What survived is the stronger half of the claim:
+the composition is still builder-owned and still emitted in one place; only a single yes/no engine
+fact varies inside it, and no *other* construct in this list gained a per-dialect arm.
+
+D2's reading of `019` was **narrowed by #1642**: see D6 below. The rest of D2 stands.
 
 D2 surfaced one hole, and **`021` closes it.** Promoting `011`-`020` made it visible that *no fixture
 anywhere in the suite reached a case-SENSITIVE substring match*: the only two case-sensitive fields
@@ -173,7 +190,9 @@ declared were `014`'s `employeeCode` (used with `eq`) and `018`'s `department` (
 which left D3's `GLOB` path — the single place a dialect changes *operator* rather than *token*, with
 a silent failure mode — resting on unit tests alone. `021` reuses `014`'s `schema.json` **verbatim**
 so the operator is the only variable between the two cases, and its filter value carries a `*`, a
-metacharacter in exactly two of the four escape alphabets this category deals in. It has an artifact
+metacharacter in exactly two of the four *distinct* escape alphabets this category deals in (LIKE's
+`\ % _`, T-SQL's `\ % _ [`, GLOB's class-wrapping `* ? [`, and Mongo's regex class — Oracle shares the
+first and so added no fifth). It has an artifact
 oracle now; `DialectRenderingTests` still covers the escaping's edges (`?`, `[`, an
 already-class-shaped value, the deliberately-unescaped `]`/`^`) that one fixture value cannot reach.
 
@@ -229,6 +248,62 @@ no escaping, by the same closed-class argument D3 writes down for GLOB: all thre
 *inside* a class, and once the opener is neutralised no class from the value can exist. Pinned by
 `022`; normative as part of **SQL-5**.
 
+## #1642's decision, recorded
+
+**D6 — the `blank` composition stays in the builder; the dialect supplies one engine fact.** Oracle
+treats the zero-length string as NULL, so SEM-2's text arm `("c" IS NULL OR "c" = '')` does not merely
+carry a redundant disjunct there: `"c" = ''` is `"c" = NULL`, i.e. **UNKNOWN for every row**, which
+leaves `blank` accidentally right and makes `notBlank` — `NOT (FALSE OR UNKNOWN)` = `NOT UNKNOWN` =
+UNKNOWN — match **no row at all**. Normative as **SQL-7**, with the truth table; pinned by `019`'s
+oracle arm, the only artifact in this category that is not its Postgres arm with tokens substituted.
+
+The fix is a `bool EmptyStringIsNull` on the `Dialect` seam, consulted by the query builder, rather
+than a `Dialect.renderBlank` method:
+
+- four of five dialects would otherwise carry a byte-identical `renderBlank`, the
+  duplicate-instead-of-share pattern #1639's review flagged for the comparison symbols;
+- every one of the five would additionally have to reach into the *semantics* layer for the
+  field-type half of the answer (`SemanticsResolver.ResolveBlankCondition`) — a dependency no dialect
+  has today, and one that would have to be repeated five times;
+- resolving it where that field-type half is decided (Craticula's `SemanticsResolver`) was rejected
+  as a layering inversion: that component knows the schema and nothing about engines.
+
+*One argument was considered and dropped, because it does not discriminate*: "`blank` and `notBlank`
+must not be able to drift apart". They cannot under either design — `notBlank` is composed as
+`NOT (<blank>)` over whatever text the `blank` half produced, and a `renderBlank` member would have
+fed that same composition. It reads persuasively and rules nothing out, so it is not part of the
+record.
+
+**This is the seam's third widening** (#1639's tri-state case sensitivity, #1641's `RenderRowLimit`,
+this) and it is not free — every existing dialect and every language port pays for it. It is also a
+**different kind** of member from the nine rendering methods: an engine *fact* the builder consumes,
+not SQL text the builder splices. Recorded as such so the next contributor knows which of the two
+shapes to reach for.
+
+**D6(b) — Oracle is also the one dialect that REJECTS an input the IR allows, and that is the same
+fact pointed the other way.** `stringValue.value` has no `minLength`, so `""` is a legal filter value;
+on Oracle it binds as NULL, so `eq ""` returns nothing, `neq ""` returns **only the NULL rows** (wrong
+rows, not no rows), `contains ""` matches nothing because the whole anchored pattern is NULL, and a
+`notIn` list carrying an empty member matches no row at all. `OracleDialect` therefore throws a
+`SqlCompilationException` on every path a string value can reach — scalar comparison, set membership,
+substring match — rather than emit a statement that is valid SQL and silently wrong. Normative as
+**SQL-7(b)**.
+
+The obvious alternative, a `minLength: 1` on `stringValue` in `ir.schema.json`, was **considered and
+deferred**: it would forbid across the whole `/v1/` contract, on every backend, an input the other
+four engines handle correctly — a compatibility decision that deserves its own story rather than
+riding along with a dialect. No fixture in this suite binds an empty value, so no artifact changed;
+the behaviour rests on unit tests, which is the correct place for a request that does not compile.
+
+**Oracle's other renderings are ordinary, and its version floor is not.** `"` quoting with `"`→`""`
+(as Postgres/SQLite), `:pN` named binds, `||` concatenation, native `NULLS FIRST`/`NULLS LAST`,
+`IN (...)` with N scalars (SQL-4), `OFFSET … ROWS FETCH NEXT … ROWS ONLY` binding the offset first
+(as T-SQL), `FETCH FIRST … ROWS ONLY` for GRP-6's bare cap — legal without an `OFFSET` here, unlike
+T-SQL's, which is the spelling #1641 predicted would fit `RenderRowLimit` unchanged. SEM-1 is
+`COLLATE BINARY_CI` / `COLLATE BINARY`, which **pins Oracle Database 12.2+**; SQL-6 records why
+`NLSSORT` was rejected despite pinning nothing, and SQL-1 records the upper-casing trap and the
+identifier-length limit that 12.2 also settles.
+
 **Two further per-dialect facts worth stating, both non-obvious and both now pinned by artifacts:**
 
 - **SQLite attaches `COLLATE NOCASE` to the VALUE in a scalar comparison but to the COLUMN in an
@@ -246,8 +321,9 @@ no escaping, by the same closed-class argument D3 writes down for GLOB: all thre
 
 ## Host obligations these artifacts imply (PERF-4's per-backend index-guidance page owns the DDL)
 
-The compiled statement is only half the contract on two of the four dialects. Recorded here because
-the index-guidance page does not exist yet; move them there when it does.
+The compiled statement is only half the contract on **four of the five** dialects — SQL Server is the
+only one that owes nothing. Recorded here because the index-guidance page does not exist yet; move
+them there when it does.
 
 | Dialect | Obligation | Consequence if unmet |
 |---|---|---|
@@ -255,19 +331,27 @@ the index-guidance page does not exist yet; move them there when it does.
 | MySQL / MariaDB | A field declared `caseSensitivity: "sensitive"` needs a `_bin`/`_as_cs` **column** collation. | The declaration is silently ignored — the compiler's output says nothing either way, so comparisons run case-**in**sensitively under the server's `_ci` default. |
 | SQL Server | **None.** Handled inline as of D4 (`COLLATE Latin1_General_CS_AS` / `Latin1_General_CI_AS`), so neither direction depends on the database's own collation. | — |
 | SQLite | Library **≥ 3.30.0**, for the native `NULLS FIRST`/`NULLS LAST` every `sqlite` arm pins. | The statement is rejected outright — a loud failure, unlike MySQL's. |
+| Oracle | Server **≥ 12.2** with `COMPATIBLE >= 12.2` and `MAX_STRING_SIZE = EXTENDED`, for the `COLLATE` operator every `oracle` arm's SEM-1 mechanism uses (SQL-6). | The statement is rejected outright (ORA-43929) — loud, like SQLite's. |
+| Oracle | The table and every column must be **created with quoted identifiers** matching the fixture's `source`/`column` spelling exactly. Oracle folds an unquoted-`CREATE`d name to UPPERCASE, and every identifier in this suite is lowercase or camelCase. | `ORA-00942: table or view does not exist` — loud, but it names the table rather than the cause. |
+| Oracle | Every **groupable** column and the `stableKey` need `COLLATE BINARY` in DDL, or the session must run `NLS_COMP = BINARY`. GRP-2's bucket-identity keys (the `GROUP BY`, the drill-down `WHERE`, a grouped level's `ORDER BY`, and BM-3's `SELECT DISTINCT`) spell **no** collation at all, and on Oracle bare means the session's `NLS_COMP`/`NLS_SORT` — the same fact that makes `COLLATE BINARY` mandatory in the *filter* direction (SQL-6/D4). | Grouped buckets fold case with **no error**: `"EMEA"` and `"emea"` land in one bucket and expanding it returns both, so child rows stop summing to the parent's aggregate. Same class as the MySQL row above, and invisible to T-1a. |
 
 ## Known divergences deferred to the execution-equality tier (T-1b, Feature #1624)
 
 T-1a compares strings, so a difference that only appears when the statement *runs* is invisible to
 this suite by construction. Recorded rather than fixed:
 
-- **A zero-width page window is an error on SQL Server and an empty page on the other three.**
+- **A zero-width page window is an error on SQL Server and an empty page on Postgres, MySQL and
+  SQLite** (Oracle unmeasured — see below).
   `{"startRow": 100, "endRow": 100}` is a structurally valid `RangePage` — `PageSpecValidator` rejects
   only `endRow < startRow` — and compiles to `LIMIT 0 OFFSET 100` on Postgres/MySQL/SQLite, which
   returns zero rows, but to `OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY` with a limit of `0` on SQL
   Server, where `FETCH NEXT 0 ROWS ONLY` raises **msg 10744** ("The number of rows provided for a
   FETCH clause must be greater than zero"). Same request, empty result on three engines and a server
-  error on the fourth. **Owner: Feature #1624 (T-1b).** Deliberately not fixed here: whether the
+  error on the fourth. **Oracle's behaviour here is not stated, deliberately**: its row-limiting
+  clause is spelled like T-SQL's but is not T-SQL's, nothing in this repo has ever executed against an
+  Oracle instance, and guessing which side of the divergence it falls on would put an unverified claim
+  into a register whose whole point is recording what T-1a cannot grade. **Owner: Feature #1624
+  (T-1b).** Deliberately not fixed here: whether the
   right answer is a validator rejection, a builder short-circuit to a no-row query, or a per-dialect
   rendering is a behavioural decision that needs the execution tier to grade it, and any of the three
   would change artifacts this tier cannot evaluate. No fixture exercises it (every fixture pages

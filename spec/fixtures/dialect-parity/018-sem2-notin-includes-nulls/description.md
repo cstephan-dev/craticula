@@ -17,10 +17,10 @@ structural gap `operators/036-notin-string` documents). This fixture reaches `no
   is mandatory, and the whole disjunction is parenthesised per `spec/semantics.md`'s "Canonical SQL
   rendering" section. The set itself is **one array parameter** (`<> ALL($1)`), not N scalar
   placeholders — Postgres's array form, chosen so the placeholder count does not depend on the
-  value count. The other three dialects render identically *in shape* but not in text: neither SQL
-  Server, MySQL nor SQLite has `ANY(array)`, so their arms (added in #1639) render `NOT IN (...)`
-  with N scalar parameters behind the same dialect method — which is why this fixture's four SQL
-  arms do not even agree on `params.length`.
+  value count. The other four dialects render identically *in shape* but not in text: none of SQL
+  Server, MySQL, SQLite or Oracle has `ANY(array)`, so their arms (added in #1639, and in #1642 for
+  Oracle) render `NOT IN (...)` with N scalar parameters behind the same dialect method — which is
+  why this fixture's five SQL arms do not even agree on `params.length`.
 - **MongoDB**: `$nin` already matches missing/null-valued documents on its own, mirroring `$ne`'s
   behavior (`008`'s own note) — the compiler nonetheless emits the explicit `$or`-composed form for
   the same two reasons SEM-2 gives for `$ne`: parallel compiled shape across backends, and
@@ -32,7 +32,7 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2): the negated half of SQL-4's split (`<> ALL($1)` vs `NOT IN (?, ?)`) on
 a case-**sensitive** field.
 

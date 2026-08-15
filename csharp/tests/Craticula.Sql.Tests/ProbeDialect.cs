@@ -27,6 +27,12 @@ internal sealed class ProbeDialect : ISqlDialect
 
     public string Name => "probe";
 
+    // Deliberately `false`, i.e. the majority answer, so this chimera stays the control against which
+    // OracleDialect's `true` is the single variable: DialectIndependenceTests compares the two
+    // spellings of everything else, and a probe that also collapsed `blank` would make SQL-7's arm
+    // untestable from this side.
+    public bool EmptyStringIsNull => false;
+
     public string QuoteIdentifier(string identifier) => '[' + identifier + ']';
 
     public string ParameterPlaceholder(int ordinal) => ":p" + (ordinal + 1).ToString(CultureInfo.InvariantCulture);

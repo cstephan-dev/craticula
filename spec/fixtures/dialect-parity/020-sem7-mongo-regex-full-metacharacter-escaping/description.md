@@ -32,9 +32,9 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2), and the case where **D1** bites: the bound value is byte-identical on
-all four SQL arms (SEC-4 escaping is shared), but MySQL spells the escape character `'\\'` where the
+all five SQL arms (SEC-4 escaping is shared), but MySQL spells the escape character `'\\'` where the
 other three spell `'\'`, because a backslash is MySQL's own string-literal escape unless
 `NO_BACKSLASH_ESCAPES` is on (it is off by default) and `ESCAPE '\'` therefore never terminates.
 

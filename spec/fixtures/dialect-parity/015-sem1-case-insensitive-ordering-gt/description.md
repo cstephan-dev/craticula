@@ -35,7 +35,7 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2): an ordering comparison is where the collation's *position* diverges
 most visibly — the column side on Postgres and SQL Server, the **value** side on SQLite
 (`"lastName" > ? COLLATE NOCASE`), and nowhere at all on MySQL.

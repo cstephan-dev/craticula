@@ -1,0 +1,10 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT \"id\", \"region\", \"segment\", \"product\", \"fiscal_year\" AS \"fiscalYear\", \"amount\", \"quantity\" FROM \"sales_fact\" WHERE (\"region\" = :p1 AND \"segment\" = :p2) ORDER BY \"product\" COLLATE BINARY_CI ASC NULLS LAST, \"id\" ASC NULLS LAST OFFSET :p3 ROWS FETCH NEXT :p4 ROWS ONLY",
+  "params": [
+    "EMEA",
+    "Enterprise",
+    0,
+    100
+  ]
+}

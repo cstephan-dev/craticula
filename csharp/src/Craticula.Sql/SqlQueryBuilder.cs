@@ -17,7 +17,7 @@ namespace Craticula.Sql;
 /// the <c>blank</c> condition and the SEM-6 tiebreaker all come from
 /// <see cref="SemanticsResolver"/> (#1634) — the one place SEM-* rules live, so the SQL, Mongo and
 /// Search compilers cannot drift apart (G3/G4). What IS this compiler's own responsibility is the
-/// SQL <em>shape</em> those decisions render into: <c>spec/semantics.md</c>'s SQL-0..SQL-6 addendum,
+/// SQL <em>shape</em> those decisions render into: <c>spec/semantics.md</c>'s SQL-0..SQL-7 addendum,
 /// and specifically the tree-level <c>NOT</c> fan-out, which SemanticsResolver deliberately has no
 /// method for because it is a statement about tree shape rather than about one operator.</para>
 ///
@@ -107,8 +107,8 @@ public static class SqlQueryBuilder
     /// ORDER BY &lt;column&gt; &lt;cap&gt;</c>.
     ///
     /// <para>Everything that varies from <see cref="Build"/> is in this method; every clause it emits
-    /// is rendered by the same members. <c>DISTINCT</c> is ANSI and spelled identically on all four v1
-    /// dialects, so it is the builder's to emit — the row cap is the one thing BM-3 had to add to
+    /// is rendered by the same members. <c>DISTINCT</c> is ANSI and spelled identically on every
+    /// dialect, so it is the builder's to emit — the row cap is the one thing BM-3 had to add to
     /// <see cref="ISqlDialect"/>, and that member's own doc says why it could not be
     /// <see cref="ISqlDialect.RenderPaging"/> with a zero offset.</para>
     ///
@@ -306,11 +306,13 @@ public static class SqlQueryBuilder
         $"{Function(aggregation.Func)}({ResolveColumn(aggregation.Field, context)})";
 
     /// <summary>
-    /// AR-8's closed v1 function set. These five spellings are ANSI SQL and identical on all four v1
-    /// dialects (and on Oracle), which is why the aggregate call is composed here rather than behind
+    /// AR-8's closed v1 function set. These five spellings are ANSI SQL and identical on every
+    /// dialect this project implements, which is why the aggregate call is composed here rather than behind
     /// an <see cref="ISqlDialect"/> member: an override point no dialect would ever use differently
     /// is the mirror image of the BM-1 smell — see <see cref="ISqlDialect"/>'s own note on why
-    /// <c>IS NULL</c> and <c>= ''</c> likewise stay in the builder.
+    /// <c>IS NULL</c> and <c>= ''</c> likewise stay in the builder (with the one engine fact that
+    /// decides whether the second appears at all arriving as
+    /// <see cref="ISqlDialect.EmptyStringIsNull"/>, SQL-7).
     /// </summary>
     private static string Function(AggregationFunc func) => func switch
     {
@@ -479,8 +481,8 @@ public static class SqlQueryBuilder
 
         return node.Op switch
         {
-            ComparisonOperator.Blank => RenderBlank(column, field),
-            ComparisonOperator.NotBlank => $"NOT ({RenderBlank(column, field)})",
+            ComparisonOperator.Blank => RenderBlank(column, field, context),
+            ComparisonOperator.NotBlank => $"NOT ({RenderBlank(column, field, context)})",
 
             // AR-6's unary boolean shorthand carries no value of its own, so the compiler mints one
             // rather than inlining a `TRUE`/`FALSE` literal — SEC-2 wants every compared value bound,
@@ -521,12 +523,22 @@ public static class SqlQueryBuilder
     /// other type. <c>notBlank</c> negates THIS text literally (giving the doubled parentheses in the
     /// string case, SQL-2) rather than re-deriving <c>IS NOT NULL AND &lt;&gt; ''</c> independently,
     /// so the two can never drift apart at the edges.
+    ///
+    /// <para>SQL-7: on an engine that treats <c>''</c> as NULL the text arm collapses to the
+    /// non-text one, because the <c>= ''</c> disjunct is not merely redundant there but UNKNOWN for
+    /// every row — which leaves <c>notBlank</c> matching nothing at all. That is the single engine
+    /// fact <see cref="ISqlDialect.EmptyStringIsNull"/> supplies; the composition stays here, so
+    /// <c>blank</c> and <c>notBlank</c> still cannot disagree on any dialect. Note this is NOT a
+    /// dialect-specific branch of the BM-1 kind: the builder asks a question and never learns which
+    /// engine answered it.</para>
     /// </summary>
-    private static string RenderBlank(string column, FieldConfig field) =>
+    private static string RenderBlank(string column, FieldConfig field, Context context) =>
         SemanticsResolver.ResolveBlankCondition(field.Type) switch
         {
-            SemanticsResolver.BlankCondition.NullOrEmptyString => $"({column} IS NULL OR {column} = '')",
-            SemanticsResolver.BlankCondition.NullOnly => $"{column} IS NULL",
+            SemanticsResolver.BlankCondition.NullOrEmptyString when !context.Dialect.EmptyStringIsNull =>
+                $"({column} IS NULL OR {column} = '')",
+            SemanticsResolver.BlankCondition.NullOrEmptyString or SemanticsResolver.BlankCondition.NullOnly =>
+                $"{column} IS NULL",
             var condition => throw new SqlCompilationException($"Unknown blank condition '{condition}'.")
         };
 
@@ -752,10 +764,10 @@ public static class SqlQueryBuilder
     /// "has to stand alone, that is, it cannot be used in an expression", and T-SQL binds the same
     /// way — an alias inside a <c>CASE</c> resolves against the <c>FROM</c> scope and raises "Invalid
     /// column name". That matters here and not in the projection because SEM-3's null placement is
-    /// EMULATED on two of the four dialects: <see cref="MssqlDialect"/> wraps every sort key in
+    /// EMULATED on two of the five dialects: <see cref="MssqlDialect"/> wraps every sort key in
     /// <c>CASE WHEN … IS NULL</c> and <see cref="MySqlDialect"/> in <c>ISNULL(…)</c>, so on those two
     /// the ordering target is never standing alone. Emitting the expression is unambiguously legal in
-    /// both positions on all four engines, so it is done uniformly rather than only where the wrapper
+    /// both positions on every engine, so it is done uniformly rather than only where the wrapper
     /// forces it — a per-dialect split here would be a semantic difference dressed as a spelling one,
     /// which is exactly what <see cref="ISqlDialect"/>'s seam exists to keep out.</para>
     ///

@@ -187,6 +187,10 @@ per field, never assume it exists.
 **Rule.** The unary operators `blank`/`notBlank` (`$defs/unaryOperator`) resolve as: `blank` ⇔
 `IS NULL OR = ''` for text fields, `IS NULL` for every other type; `notBlank` is `blank`'s exact
 Boolean negation (never a separately-derived condition that could disagree with it at the edges).
+*(The text arm is per-engine as well as per-type: on a backend whose empty string **is** NULL —
+Oracle among the SQL dialects — it collapses to `IS NULL`, and emitting the `= ''` disjunct there
+makes `notBlank` match nothing at all. The negation rule above is unaffected. See **SQL-7** in the
+canonical-SQL-rendering addendum for the truth table and the reason it is a correctness rule.)*
 Negative binary/set operators — `neq`, `notContains`, `notIn` — MUST include NULL-valued rows in
 their match set. A negative comparison compiles as, e.g., `col <> :v OR col IS NULL`, never a bare
 `col <> :v`. **The same null-inclusive rule applies to a tree-level `$defs/notNode` wrapping any
@@ -260,11 +264,15 @@ non-SSRM behavior.
   opposite of this rule and a Mongo-specific regression introduced by SQL-shaped intuition.
 - Must NOT derive `notBlank` independently from `blank` (e.g. hand-writing `IS NOT NULL AND <> ''`
   separately from `blank`'s own `IS NULL OR = ''`) — always negate the compiled `blank` condition so
-  the two can never drift apart.
-- Must NOT apply the text-specific `= ''` clause of `blank`/`notBlank` to non-text field types.
+  the two can never drift apart. This holds unchanged under SQL-7: an engine that collapses the text
+  arm negates *its own* collapsed text, so the two operators stay in step there too.
+- Must NOT apply the text-specific `= ''` clause of `blank`/`notBlank` to non-text field types — nor
+  to a text field on an engine where `''` is NULL (**SQL-7**), where it is not merely redundant but
+  turns `notBlank` into a predicate no row satisfies.
 
 **Cross-links.** `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`neq`),
-`$defs/setOperator` (`notIn`), `$defs/nullValue`.
+`$defs/setOperator` (`notIn`), `$defs/nullValue`, SQL-2 and **SQL-7** (the compiled shapes of
+`blank`/`notBlank`, per construct and per engine).
 
 ---
 
@@ -588,7 +596,7 @@ nullsPosition: "last" }`.
 > already unique across the result rows by this blockquote's own by-construction argument, leaving no
 > tie for a tiebreaker to break. A port that appends here emits
 > `ORDER BY "region" ASC NULLS LAST, "id" ASC NULLS LAST LIMIT $1` and fails
-> `group-aggregation/016`-`019` on all six arms.
+> `group-aggregation/016`-`019` on all seven arms.
 >
 > Everything else — an ordinary row query, and a fully-consumed drill-down
 > **leaf**, which projects rows — keeps `stableKey` exactly as written here. Recorded rather than
@@ -619,7 +627,7 @@ nullsPosition: "last" }`.
 > `ORDER BY "last_name" COLLATE craticula_ci ASC NULLS LAST, "id" ASC NULLS LAST`, a collated user key
 > beside a bare tiebreaker, and `spec/fixtures/sort-paging/001` pins it. Recorded rather than folded
 > into the rule because `group-aggregation/005`/`006` are the only artifacts in the whole suite that
-> ever pinned the collated form — measured across all six backends — and both were authored, and
+> ever pinned the collated form — measured across all seven backends — and both were authored, and
 > re-authored, inside #1640.
 
 **Rationale.** Paging over a sort key that isn't unique is non-deterministic at the database level:
@@ -745,9 +753,9 @@ deliberately, per field, instead of getting it by accident.
   opt-in since neither needs one: SQL `LIKE`-based substring matching, with the pattern's own
   `%`/`_` wildcard characters escaped per SEC-4 **and an explicit `ESCAPE` clause naming the escape
   character used** — required because, unlike PostgreSQL (whose default `LIKE` escape character is
-  `\` unless overridden), SQL Server and SQLite have **no default escape character at all** and
-  MySQL's depends on the `NO_BACKSLASH_ESCAPES` session mode; without a compiler-supplied `ESCAPE`
-  clause, SEC-4's escaping is silently a no-op on three of the four v1 SQL dialects, and a
+  `\` unless overridden), SQL Server, SQLite and Oracle have **no default escape character at all**
+  and MySQL's depends on the `NO_BACKSLASH_ESCAPES` session mode; without a compiler-supplied
+  `ESCAPE` clause, SEC-4's escaping is silently a no-op on four of the five SQL dialects, and a
   user-supplied literal `%`/`_` still behaves as a wildcard:
   ```sql
   WHERE name LIKE '%' || :escapedPattern || '%' ESCAPE '\'
@@ -950,14 +958,26 @@ The one thing that must never happen is the mix SEM-1 does forbid: a **grouped l
 
 *Accepted divergence, and the host obligation it creates.* "Spell nothing" means "exact" only where
 the engine's own default already is. It is on Postgres (deterministic default collation) and SQLite
-(`BINARY`). It is **not** on SQL Server / Azure SQL (stock `SQL_Latin1_General_CP1_CI_AS`) or MySQL /
-MariaDB (a `_ci` family default): there, a grouped string column folds case and `"EMEA"`/`"emea"`
-land in one bucket. A host that wants exact buckets on those engines must declare the groupable
-column with a binary / `_as_cs` collation in its DDL — the same kind of obligation SQL-6 already
-records for MySQL's case-sensitive direction, and for the same reason (no portable in-statement
-spelling exists that does not break the `GROUP BY`). Recorded here as a documented divergence rather
-than papered over; the execution-equality tier (T-1b, #1624) is what can grade it, and T-1a cannot
-see it at all.
+(`BINARY`). It is **not** on SQL Server / Azure SQL (stock `SQL_Latin1_General_CP1_CI_AS`), MySQL /
+MariaDB (a `_ci` family default), or **Oracle** (default column collation `USING_NLS_COMP`, resolved
+through the *session*'s `NLS_COMP`/`NLS_SORT` — the same fact SQL-6 cites as why the case-**sensitive**
+direction must be spelled `COLLATE BINARY` there): on all three, a grouped string column folds case
+and `"EMEA"`/`"emea"` land in one bucket. A host that wants exact buckets on those engines must
+declare the groupable column with a binary / `_as_cs` / `BINARY` collation in its DDL — or, on
+Oracle, run the session with `NLS_COMP = BINARY` — the same kind of obligation SQL-6 already records
+for MySQL's case-sensitive direction, and for the same reason (no portable in-statement spelling
+exists that does not break the `GROUP BY`). Recorded here as a documented divergence rather than
+papered over; the execution-equality tier (T-1b, #1624) is what can grade it, and T-1a cannot see it
+at all.
+
+*Oracle is on that list for exactly the reason SQL-6 puts it there, and the two must not drift apart.*
+A bucket-identity key resolves to `NotApplicable`, so on Oracle it emits nothing — while a
+`caseSensitivity: "sensitive"` **filter** on the same column emits `COLLATE BINARY`, precisely because
+bare is not exact there. A host running `ALTER SESSION SET NLS_COMP = LINGUISTIC NLS_SORT = BINARY_CI`
+therefore gets a drill-down `"region" = :p1` that folds case, so expanding the `"EMEA"` bucket also
+returns `'emea'`'s rows and the children stop summing to the parent's aggregate — silently, on
+well-formed SQL, and invisibly to T-1a. Stated because the two paragraphs sit four lines apart in this
+document and an earlier draft of #1642 had them disagreeing.
 
 *Per-backend consequences beyond SQL.* ES/OpenSearch drops the `case_insensitive: true` parameter
 from a drill-down `term`, leaving `{"term": {"<field>.keyword": {"value": "EMEA"}}}`, the same
@@ -987,7 +1007,7 @@ draft used hid a real choice rather than describing a consequence-free one. Thre
 correctness property — get it wrong and a child level's rows stop summing to the parent's aggregate,
 silently — while a case-folded filter or sort is a narrower, visible difference in which rows come
 back and in what order. So on MongoDB a user's own filter compares case-**sensitively**, and a
-leaf's `$sort` orders case-sensitively, where the four SQL dialects collate both. Recorded here as a
+leaf's `$sort` orders case-sensitively, where the five SQL dialects collate both. Recorded here as a
 documented, host-visible divergence, in the same register as GRP-2's SQL Server/MySQL DDL obligation
 and AGG-5: no fixture reaches the first shape (no grouped case carries both `groupKeys` and a
 `filterModel`), `005`/`006`'s Mongo arms pin the second, and `016`–`019`/`022`'s pin the third. The
@@ -1028,10 +1048,10 @@ compose with. *"Ordinary row query" and not "ungrouped"*: BM-3's distinct-values
   *conditionally* usable in `ORDER BY`: PostgreSQL's `SELECT` documentation states that it "has to
   stand alone, that is, it cannot be used in an expression", and T-SQL binds the same way — an alias
   inside a `CASE` resolves against the `FROM` scope and raises "Invalid column name". It rarely
-  stands alone here, because SEM-3's null placement is **emulated** on two of the four dialects
+  stands alone here, because SEM-3's null placement is **emulated** on two of the five dialects
   (`CASE WHEN … IS NULL THEN 1 ELSE 0 END` on SQL Server, `ISNULL(…)` on MySQL), so the ordering
   target sits inside an expression on both. The expression form is unambiguously legal in either
-  position on all four engines, so it is used uniformly rather than only where the wrapper forces
+  position on all five engines, so it is used uniformly rather than only where the wrapper forces
   it — a per-dialect split would make a *semantic* difference look like a spelling one. (#1640's
   first draft emitted the name; its review found `020`'s mssql and mysql arms were the T-SQL failure
   above.) Mongo and Search are unaffected and keep the name: after `$group` the aggregate is a real
@@ -1194,7 +1214,7 @@ identity) applied to a single column. *Order:* the user's filter leads and the p
 because the choice is visible in `params`, which is compared exactly, and #1641's review then gave it
 an artifact of its own: `spec/fixtures/group-aggregation/022` carries a filter on another column, the
 target column's own filter, and a `searchPrefix`, all in one request, so the order is now pinned on
-six backends instead of resting on this sentence. (It is also the only case where the exclusion and
+seven backends instead of resting on this sentence. (It is also the only case where the exclusion and
 the prefix act on the **same** column, which is what makes "prune the model, then inject the prefix"
 distinguishable from "prune the finished tree".) A prefix against a column that is not declared `string` has no meaning and
 is a wrongly-typed request, rejected at the `typeCoercion` stage with SEM-5's `uncoercible-value`.
@@ -1223,12 +1243,17 @@ member for it, distinct from the paging clause:
 | MySQL / MariaDB | `LIMIT ?` | 1 |
 | SQLite | `LIMIT ?` | 1 |
 | SQL Server | `OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY` | 1 — the `0` is **literal** |
+| Oracle (#1642) | `FETCH FIRST :p1 ROWS ONLY` | 1 |
 
 SQL Server's zero is written rather than bound because it is not a value the request carries: it is
 the syntax that makes "no offset" expressible on an engine whose `FETCH` requires one, in the same
-register as the `'%'` anchors and the `ESCAPE` character a compiler already emits as literals. Every
-dialect therefore binds exactly one parameter here, and `params` stays identical across the four arms
-of a BM-3 fixture. (`SELECT DISTINCT TOP (@p1) …` is idiomatic T-SQL and is deliberately not used: it
+register as the `'%'` anchors and the `ESCAPE` character a compiler already emits as literals. Oracle's
+row is a genuinely **fifth** answer and not SQL Server's with a different placeholder style — a
+**third clause family** across the five: its row-limiting clause admits a bare `FETCH FIRST` with no
+`OFFSET` before it at all, so it needs neither that literal zero nor Postgres's `LIMIT`. A port that
+assumes T-SQL's spelling generalises to every `FETCH` engine emits an `OFFSET 0` Oracle does not want
+and fails the arm. Every dialect therefore binds exactly one parameter here,
+and `params` stays identical across the five arms of a BM-3 fixture. (`SELECT DISTINCT TOP (@p1) …` is idiomatic T-SQL and is deliberately not used: it
 would put the cap in the select list, giving one engine a different statement shape.)
 
 For the same reason SEM-6's tiebreaker does **not**
@@ -1309,9 +1334,9 @@ blank scaffolding are all left exactly as they are.
 **Postgres** artifacts, because the *rule* ("always quote") is dialect-independent while the *quote
 character* is not, and choosing each engine's is part of writing that engine's `Dialect`. #1639 wrote
 the other three and closed the gap: **all 55 `mysql`/`mssql`/`sqlite` arms in
-`spec/fixtures/dialect-parity/` are now quoted**, so `006`-`022`'s six-artifact parity sets are no
-longer mixed. The characters, with the escape each engine uses for one appearing *inside* an
-identifier:
+`spec/fixtures/dialect-parity/` are now quoted**, so `006`-`022`'s parity sets are no longer mixed —
+seven artifacts each since #1642 added the `oracle` arm, six before it. The characters, with the
+escape each engine uses for one appearing *inside* an identifier:
 
 | Dialect | Quote | Escape inside an identifier |
 |---|---|---|
@@ -1319,12 +1344,27 @@ identifier:
 | SQL Server | `[…]` | `]` → `]]` |
 | MySQL / MariaDB | `` ` `` | `` ` `` → ```` `` ```` |
 | SQLite | `"` | `"` → `""` |
+| Oracle (#1642) | `"` | `"` → `""` |
 
 MySQL uses backticks rather than `"` because `"` only quotes an identifier under `ANSI_QUOTES`, which
-is off by default and is a session mode a compiler must not assume of a host's connection. SQL-3 and
-SQL-4 are now exercised on every dialect too (`017`/`018`'s new arms), and SQL-4 is where the four
-genuinely part company: Postgres binds one array parameter, the other three bind N scalars, so even
-`params.length` differs across the arms of one fixture.
+is off by default and is a session mode a compiler must not assume of a host's connection.
+
+**Oracle is the second engine where quoting is a correctness rule rather than a hygiene one**, and it
+folds the *other* way from Postgres: an unquoted identifier is upper-cased, so `FROM employees`
+reaches the server as `FROM EMPLOYEES`. Always-quoting neutralises that in the statement but moves
+the obligation into the host's DDL, because Oracle also *stores* an unquoted-`CREATE`d name folded —
+so a table created as `CREATE TABLE employees` cannot be reached by `FROM "employees"` at all
+(ORA-00942). Every `source` and physical column in this fixture suite is lowercase or camelCase
+(`employees`, `sales_fact`, `lastName`, `fiscal_year`), so on Oracle they all require quoted DDL;
+that is recorded as a host obligation in `spec/fixtures/dialect-parity/README.md`, not silently
+assumed. Identifier **length** is a non-issue in the other direction: Oracle's limit is 30 bytes
+before 12.2 and 128 from 12.2, this project's Oracle dialect assumes 12.2+ (see SQL-6), and the
+longest identifier any fixture declares is `employeeCode` at 12 characters.
+
+SQL-3 and
+SQL-4 are now exercised on every dialect too (`017`/`018`'s new arms), and SQL-4 is where the five
+genuinely part company: Postgres binds one array parameter, the other **four** — SQL Server, MySQL,
+SQLite and Oracle — bind N scalars, so even `params.length` differs across the arms of one fixture.
 
 **SQL-2. Parenthesisation is structural, not cosmetic — one rule per construct, applied always.**
 Correct SQL admits many equivalent bracketings; artifact equality admits one. The four cases:
@@ -1352,6 +1392,8 @@ Correct SQL admits many equivalent bracketings; artifact equality admits one. Th
   `NOT ("c" IS NULL)` otherwise. The doubled parentheses in the string case are not an accident to be
   tidied away: they are SEM-2's "negate the compiled `blank` condition, never re-derive it" made
   visible in the output. Collapsing them by hand is the first step toward the two forms drifting.
+  **On an engine whose empty string *is* NULL the text arm is not this text — see SQL-7**, which
+  varies the arm and leaves the `NOT (<blank>)` composition above untouched.
 
 **SQL-3. A negative operator renders with the negated operator, not an outer `NOT (...)`.**
 `notContains` is `"c" NOT ILIKE '%' || $1 || '%' ESCAPE '\'`, not `NOT ("c" ILIKE ...)`.
@@ -1389,6 +1431,7 @@ keeps the story-level rationale):
 | SQL Server | `LIKE` (both, + a collation — SQL-6) | `ESCAPE '\'` | `\` `%` `_` **`[`** |
 | MySQL / MariaDB | `LIKE` (both) | **`ESCAPE '\\'`** | `\` `%` `_` |
 | SQLite | `LIKE` (CI) / **`GLOB`** (CS) | `ESCAPE '\'` / **none** | `\` `%` `_` / **class-wrapping** |
+| Oracle (#1642) | `LIKE` (both, + a collation — SQL-6) | `ESCAPE '\'` | `\` `%` `_` |
 
 Three of those cells are correctness, not spelling, and each is invisible to the artifact-equality
 tier if a port gets it wrong in isolation:
@@ -1396,8 +1439,8 @@ tier if a port gets it wrong in isolation:
 - **MySQL spells the escape character `'\\'`.** With `NO_BACKSLASH_ESCAPES` off — MySQL's default —
   a backslash is the string-literal escape character, so `ESCAPE '\'` escapes the closing quote: the
   literal never terminates and *the statement does not parse*. The escape **character** is still `\`
-  on all four dialects, so the bound value is byte-identical across the arms; only the SQL text
-  differs.
+  on all five dialects (Oracle included — a backslash is an ordinary character in an Oracle literal),
+  so the bound value is byte-identical across the arms; only the SQL text differs.
 - **SQLite renders `GLOB` for a case-sensitive substring match, and drops the `ESCAPE` clause.**
   Its `LIKE` is ASCII-case-insensitive unconditionally (it is a function call, ignores collating
   sequences, and `PRAGMA case_sensitive_like` is a connection-level setting a compiler must not
@@ -1413,20 +1456,29 @@ tier if a port gets it wrong in isolation:
   all three are special only *inside* a class, and once the opener is neutralised no class from the
   value can exist.
 
+**Oracle contributes no fourth surprise, and that is worth stating** so a port does not copy the
+wrong neighbour: it has no `ILIKE` (so the case-insensitive direction is a collation, like SQL
+Server's), but a backslash inside an Oracle string literal is an *ordinary character*, so the clause
+is `ESCAPE '\'` and MySQL's doubled spelling would be wrong; and its `LIKE` has exactly two
+metacharacters, `%` and `_`, so the shared escape alphabet is the whole alphabet and T-SQL's `[` is
+T-SQL's alone.
+
 *Must NOT.* A port MUST NOT read SEM-7's "`LIKE` … with a matching `ESCAPE` clause" as universal:
 on the SQLite case-sensitive path there is no `LIKE` and no `ESCAPE` clause to attach one to, and a
 port that emits them anyway both fails `dialect-parity/021`'s sqlite arm and returns the wrong rows.
-It MUST NOT widen the shared escape alphabet to the union of all four either — `\[` in a Postgres
-pattern is a literal backslash followed by a bracket, which is not what the user searched for.
+It MUST NOT widen the shared escape alphabet to the union of all five either — `\[` in a
+Postgres/MySQL/SQLite/Oracle pattern is a literal backslash followed by a bracket, which is not what
+the user searched for.
 
 **SQL-6. Where an engine's default collation disagrees with the field's declared case sensitivity,
 the compiler MUST spell the mechanism explicitly — in *both* directions.** SEM-1's second Must-Not
 ("must NOT default to case-sensitive because the engine's default is") has a mirror image that is
 just as wrong and much easier to ship: leaving a field declared `caseSensitivity: "sensitive"`
 *bare* on an engine whose default collation folds case. SQL Server and Azure SQL ship
-`SQL_Latin1_General_CP1_CI_AS`; MySQL's server default is a `_ci` family. On both, "emit no
-case-insensitivity mechanism" means "compare case-insensitively", so the host's explicit opt-in is
-silently discarded and the SQL reads as though it were correct.
+`SQL_Latin1_General_CP1_CI_AS`; MySQL's server default is a `_ci` family; Oracle's default column
+collation is `USING_NLS_COMP`, which resolves through the *session*'s `NLS_COMP`/`NLS_SORT`. On all
+three, "emit no case-insensitivity mechanism" can mean "compare case-insensitively", so the host's
+explicit opt-in is silently discarded and the SQL reads as though it were correct.
 
 | Dialect | Case-insensitive | Case-sensitive |
 |---|---|---|
@@ -1434,6 +1486,29 @@ silently discarded and the SQL reads as though it were correct.
 | SQL Server | `COLLATE Latin1_General_CI_AS` | **`COLLATE Latin1_General_CS_AS`** |
 | MySQL / MariaDB | nothing — column's declared collation | nothing — **host DDL obligation** (see below) |
 | SQLite | `COLLATE NOCASE` | nothing — default sequence is `BINARY` |
+| Oracle (#1642) | `COLLATE BINARY_CI` | **`COLLATE BINARY`** |
+
+*Why Oracle spells both, and what version that pins.* Oracle has no `ILIKE`, so there is exactly one
+mechanism to choose and it has to serve the exact-match family, ordering, set membership, the
+`ORDER BY` **and** the substring family. Two candidates exist and only one can:
+
+- **`COLLATE BINARY_CI`** — the 12.2 data-bound-collation operator. Applies to `LIKE` as well as to
+  `=`/`IN`/`ORDER BY`, which is what makes SEM-1's "the same mechanism in every context on a field"
+  achievable at all. **This is the choice**, and it pins **Oracle Database 12.2 or later** (with
+  `COMPATIBLE >= 12.2` and `MAX_STRING_SIZE = EXTENDED`, data-bound collation's documented
+  prerequisite) — a hard version floor of the same kind SQLite's 3.30.0 `NULLS FIRST/LAST` floor is,
+  and equally a loud failure when unmet (ORA-43929) rather than a silent one.
+- **`NLSSORT(col, 'NLS_SORT=BINARY_CI')`** — works back to 9i and pins no version, and is **rejected**:
+  it cannot express a case-insensitive *substring* match, because a collation key of a substring is
+  not a substring of that string's collation key. The substring family would have to fall back to
+  `UPPER(col) LIKE UPPER(:v)`, leaving one field folding case by two different mechanisms depending
+  on the operator — precisely what SEM-1 forbids. It also wraps the bound *value* in a function call.
+
+Setting `NLS_COMP = LINGUISTIC` on the session is rejected on the same ground as SQLite's
+`PRAGMA case_sensitive_like`: connection-level state a compiler must not depend on. And because the
+default is that session state, the case-**sensitive** direction cannot be left bare either — hence
+`COLLATE BINARY`. Unlike MySQL, Oracle has one portable spelling for it, so it is a token rather than
+a host DDL obligation.
 
 Whatever a dialect spells, it spells on **every construct where SEM-1 applies at all**, per SEM-1's
 "same mechanism in every context on a field": the scalar comparison, the set membership, the
@@ -1443,9 +1518,10 @@ substring match and the `ORDER BY`. `dialect-parity/014` (`eq`), `/018` (`notIn`
 The **exception is the bucket-identity keys**, where SEM-1 does not apply in either
 direction: a `GROUP BY` key, a `groupKeys` drill-down match and a grouped level's `ORDER BY` spell
 nothing at all (GRP-2), and so do BM-3's `SELECT DISTINCT` column and its `ORDER BY` (GRP-6). This
-table therefore has no column for them, and on the two engines whose default folds case that
-"nothing" is a host DDL obligation of exactly the kind the MySQL row below records — see GRP-2's own
-accepted-divergence paragraph. A drill-down **leaf**'s `ORDER BY` is not one of these keys and is
+table therefore has no column for them, and on the **three** engines whose default folds case — SQL
+Server, MySQL and Oracle, i.e. every row of this table that spells the case-sensitive direction as
+something other than "nothing" — that "nothing" is a host DDL obligation of exactly the kind the MySQL
+row below records — see GRP-2's own accepted-divergence paragraph. A drill-down **leaf**'s `ORDER BY` is not one of these keys and is
 covered by the table normally; so is a set filter's search prefix, which is a filter on the distinct
 column rather than the distinct key itself.
 
@@ -1461,8 +1537,97 @@ gap the compiler silently fills with a guessed collation name.
 mechanism, and a `Dialect` seam MUST NOT carry this decision as a boolean: `false` would have to
 mean both "text, compare case-sensitively" and "not a text comparison at all", and the two need
 opposite renderings — SQL Server rejects a `COLLATE` clause on an `int`/`date` expression outright
-("COLLATE clause cannot be used on expressions of type int"). The decision is three-valued at the
-seam or it is wrong at one end of it.
+("COLLATE clause cannot be used on expressions of type int"), and Oracle likewise accepts `COLLATE`
+only on a character operand. The decision is three-valued at the seam or it is wrong at one end
+of it.
+
+**SQL-7. On an engine that treats the empty string as NULL, `blank`'s text arm is `IS NULL` and
+nothing more.** SEM-2 and SQL-2 give `blank` two shapes chosen by *field type*:
+`("c" IS NULL OR "c" = '')` for `string`, `"c" IS NULL` for everything else. On **Oracle** the first
+one is wrong, and the second is what a `string` field must compile to as well.
+
+| Dialect | `blank` on a `string` field | `blank` on any other type |
+|---|---|---|
+| Postgres | `("c" IS NULL OR "c" = '')` | `"c" IS NULL` |
+| SQL Server | `("c" IS NULL OR "c" = '')` | `"c" IS NULL` |
+| MySQL / MariaDB | `("c" IS NULL OR "c" = '')` | `"c" IS NULL` |
+| SQLite | `("c" IS NULL OR "c" = '')` | `"c" IS NULL` |
+| **Oracle** | **`"c" IS NULL`** | `"c" IS NULL` |
+
+*Why this is a correctness rule and not a redundant-disjunct tidy-up.* Oracle documents that a
+character value of length zero is NULL. So `"c" = ''` is `"c" = NULL`, which under SQL's three-valued
+logic is **UNKNOWN for every row** — not FALSE, and that distinction is the whole rule:
+
+| operator | a row whose value is NULL | a row whose value is `'abc'` |
+|---|---|---|
+| `blank` = `(c IS NULL OR c = '')` | `TRUE OR UNKNOWN` → TRUE → **matched** ✓ | `FALSE OR UNKNOWN` → UNKNOWN → **not matched** ✓ |
+| `notBlank` = `NOT (…)` | `NOT TRUE` → FALSE → not matched ✓ | `NOT UNKNOWN` → **UNKNOWN → not matched** ✗ |
+
+A `WHERE` clause keeps only rows evaluating to TRUE, so `blank` is accidentally right and
+**`notBlank` returns the empty result set** — every row filtered out, on syntactically valid SQL,
+with no error. That is a silently empty grid, and the artifact-equality tier (T-1a) cannot see it,
+which puts it in the same class as MySQL's unparseable `ESCAPE '\'` (SQL-5) and a bare `LIKE` on a
+case-sensitive SQLite field (SQL-5's second bullet).
+
+*Where the decision belongs.* This is an **engine fact**, not a rendering: the `blank` composition —
+and therefore SEM-2's "`notBlank` is `blank`'s compiled text negated, never re-derived" — stays in
+the query builder, which asks the dialect a single yes/no question ("is `''` NULL here?") and picks
+the arm. A `Dialect.renderBlank` method would instead have four of five implementations byte-identical,
+and every one of the five would have to reach back into the semantics layer for the *field-type* half
+of the answer. Equally, the question must NOT be answered wherever that field-type half is resolved
+(Craticula's `SemanticsResolver`): that layer knows the schema and nothing about engines, and teaching
+it a dialect name inverts the dependency the `Dialect` seam exists to draw. ("Otherwise `blank` and
+`notBlank` could drift apart" is *not* one of the reasons, though it is the first one a reader
+reaches for: the negation is composed over whatever text the `blank` half returned either way, so no
+design in the running admits drift.)
+
+*Must NOT.* A compiler MUST NOT emit the `= ''` disjunct on an engine where `''` is NULL "because it
+is harmless" — it is not harmless, it poisons the negation. It MUST NOT fix only `blank` and leave
+`notBlank` alone: `blank` is the operator that already worked, and a port that tests only the
+positive direction will see nothing wrong. And it MUST NOT reach the collapsed form by special-casing
+the *field type* (e.g. treating `string` as non-text on Oracle) — the type answer and the engine
+answer are different questions that happen to coincide here, and conflating them changes SEM-1's
+mechanism selection for the same field.
+
+*The Must-NOTs above are not the whole truth about Oracle, and this list is not exhaustive.* One
+Oracle value escapes the rule entirely: `EMPTY_CLOB()` produces a **zero-length LOB that is not
+NULL**, so a column holding it is found by neither `IS NULL` nor `= ''`, and `blank` misses it on
+either arm. Detecting it needs `dbms_lob.getlength(c) = 0`, which the compiler cannot emit because
+`grid-schema.schema.json` carries no physical *type* — a field declares `string`, and whether the
+host stored that as `VARCHAR2`, `NVARCHAR2` or `CLOB` is not in the contract. This is therefore a
+**documented limitation of `blank` on Oracle CLOB columns**, not a defect in the rule: a host that
+maps a `string` field onto a CLOB and writes `EMPTY_CLOB()` into it gets a row that `blank` does not
+match and `notBlank` does. Recorded so the list above reads as complete about what it covers rather
+than complete about Oracle. Closing it would need a physical-type declaration in the schema, which is
+a `/v1/` contract change and belongs to a story of its own.
+
+**SQL-7(b). The same engine fact makes an empty bound *value* uncompilable on Oracle, and a compiler
+targeting it MUST reject rather than render.** `$defs/stringValue`'s `value` carries a `maxLength` and
+no `minLength`, so `""` is a legal IR value on every backend. On Oracle it binds as NULL, and the
+resulting statement is valid SQL that returns the wrong rows in silence:
+
+| Request | Postgres / SQL Server / MySQL / SQLite | Oracle, if rendered |
+|---|---|---|
+| `eq ""` | the rows whose value is the empty string | **no rows** (`c = NULL` is UNKNOWN) |
+| `neq ""` | every row except those, NULLs included (SEM-2) | **only the NULL rows** — wrong rows, not no rows |
+| `contains ""` | every non-NULL row (`LIKE '%%'`) | **no rows** — `'%' \|\| NULL \|\| '%'` is itself NULL |
+| `in ["", "x"]` | either value matches | the `""` member is inert; `notIn` matches **no row at all** |
+
+So the rejection covers **all three paths a string value can reach** — the scalar comparison family,
+set membership, and the substring family — and not merely `eq`. It is a compiler error naming the
+engine fact, in the same register as GRP-4's "a sort key the projection does not contain is rejected
+rather than rendered": a plausible statement returning wrong rows is worse than a refusal.
+
+*Why this is scoped to the dialect and not to the IR.* Adding `minLength: 1` to `stringValue` would
+forbid, across the whole contract and every backend, an input the other four engines handle correctly
+— a `/v1/` schema change with its own compatibility question, deliberately **deferred to its own
+story** rather than taken as a side effect of adding a dialect. A caller that wants to ask "is this
+value empty or absent" is asking for SEM-2's `blank`/`notBlank`, which SQL-7 above compiles correctly
+on Oracle. No fixture binds an empty value on any backend, so nothing in the suite changes.
+
+*Pinned by* `dialect-parity/019`, whose `oracle` arm is the only one of that fixture's five SQL arms
+that is not its Postgres arm with tokens substituted; SQL-7(b) is pinned by unit tests alone
+(`DialectRenderingTests`), there being no artifact for a request that does not compile.
 
 **Cross-links.** `grid-schema.schema.json` (`source`), `$defs/andNode`, `$defs/orNode`,
 `$defs/notNode`, `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`notContains`,

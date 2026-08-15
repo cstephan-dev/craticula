@@ -19,9 +19,12 @@ substring/prefix mechanism applies, and the artifacts are the same shapes `opera
 
   > *Corrected in #1641.* This arm previously read `ILIKE $1 ESCAPE '\'` with `params: ["eu%"]`,
   > i.e. the pattern built inside the bound parameter. That contradicted the suite's own canonical
-  > `startsWith` rendering — `operators/025`-`028` pin the composed form on all six backends — and
-  > SQL-3/SEM-7 describe it. One artifact against twenty-four is not a disagreement about which is
-  > canonical, so this one was re-authored. Its **mongo** arm was already identical to
+  > `startsWith` rendering — `operators/025`-`028` pin the composed form on each of their three
+  > backends (Postgres + Mongo + Search, this suite's default coverage for a general/structural
+  > case) — and SQL-3/SEM-7 describe it. One artifact against twelve is not a disagreement about
+  > which is canonical, so this one was re-authored. *(The counts read "six backends" and
+  > "twenty-four" until #1642's review pass; `operators/` carries no per-dialect arms at all, so both
+  > were an over-count of the same fixtures.)* Its **mongo** arm was already identical to
   > `operators/027`'s and its **search** arm is a different mechanism entirely (below); neither
   > changed.
 

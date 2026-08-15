@@ -24,9 +24,9 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2). The SQL arms are deliberately identical in shape to `011`'s: the
-`searchMode: "analyzed"` opt-in is a *Search-only* divergence, and four SQL artifacts that ignore it
+`searchMode: "analyzed"` opt-in is a *Search-only* divergence, and five SQL artifacts that ignore it
 in unison is the clearest available statement of that.
 
 **Requirement ids:** SEM-7, SC-3 (per-field text configuration), SEM-6 (tiebreaker, incidental).

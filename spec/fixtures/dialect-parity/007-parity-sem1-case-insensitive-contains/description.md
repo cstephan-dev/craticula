@@ -25,6 +25,6 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6 exactly as in `006`.
 
-**Coverage tier:** cross-backend parity showcase — all four SQL dialects + Mongo + Search.
+**Coverage tier:** cross-backend parity showcase — all five SQL dialects + Mongo + Search.
 
 **Requirement ids:** SEM-1, SEM-7, SEM-6 (tiebreaker, incidental), AR-6.

@@ -1,0 +1,5 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT * FROM \"employees\" WHERE (\"department\" COLLATE BINARY NOT IN (:p1, :p2) OR \"department\" IS NULL) ORDER BY \"id\" ASC NULLS LAST OFFSET :p3 ROWS FETCH NEXT :p4 ROWS ONLY",
+  "params": ["SALES", "SUPPORT", 0, 100]
+}

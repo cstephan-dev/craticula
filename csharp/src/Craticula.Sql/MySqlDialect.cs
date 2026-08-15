@@ -7,7 +7,7 @@ namespace Craticula.Sql;
 /// <summary>
 /// The MySQL / MariaDB dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/dialect-parity/*/expected/mysql.artifact.json</c> and follows
-/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-6) for everything the
+/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-7) for everything the
 /// rule declares universal: backtick quoting, <c>?</c> positional placeholders,
 /// <c>LIMIT ? OFFSET ?</c> paging, <c>LIKE</c> over a <c>CONCAT(...)</c> pattern for SEM-7's
 /// substring family, and <c>IN (...)</c>/<c>NOT IN (...)</c> with N scalar parameters for SQL-4 set
@@ -61,7 +61,7 @@ public sealed class MySqlDialect : ISqlDialect
     /// the statement does not parse. Postgres (<c>standard_conforming_strings = on</c>), SQLite and
     /// SQL Server all treat <c>'\'</c> as a one-character string, which is why the same spelling is
     /// correct in their artifacts and wrong only here. The escape <em>character</em> is unchanged, so
-    /// <see cref="SqlPatternEscaping.Escape"/> and the bound value are identical across all four
+    /// <see cref="SqlPatternEscaping.Escape"/> and the bound value are identical across all
     /// dialects — this affects the SQL text alone. T-1a artifact equality cannot see this class of
     /// defect (it compares strings); it was found by reading, like SQL-1's camelCase-folding bug, and
     /// <c>dialect-parity/007</c>'s mysql artifact was re-authored for it.</para>
@@ -69,6 +69,9 @@ public sealed class MySqlDialect : ISqlDialect
     private const string PatternEscapeLiteral = @"\\";
 
     public string Name => "mysql";
+
+    // SQL-7: MySQL/MariaDB distinguish '' from NULL, so SEM-2's text arm keeps both disjuncts.
+    public bool EmptyStringIsNull => false;
 
     public string QuoteIdentifier(string identifier) =>
         // A literal backtick inside a backtick-quoted identifier is doubled — MySQL's own escape.

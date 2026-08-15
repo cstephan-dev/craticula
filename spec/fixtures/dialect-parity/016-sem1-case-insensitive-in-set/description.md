@@ -20,10 +20,10 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2): this is SQL-4's dividing line made visible — Postgres binds ONE array
-parameter (`= ANY($1)`), the other three bind N scalars (`IN (?, ?)`), so even `params.length`
-differs across the four arms. It also pins SQLite's one internal asymmetry: `x IN (...)` resolves
+parameter (`= ANY($1)`), the other four bind N scalars (`IN (?, ?)`), so even `params.length`
+differs across the five arms. It also pins SQLite's one internal asymmetry: `x IN (...)` resolves
 its collating sequence from `x` alone, so `COLLATE NOCASE` sits on the **column** here where the
 scalar comparison in `015` puts it on the value.
 

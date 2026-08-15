@@ -5,9 +5,10 @@ namespace Craticula.Sql;
 ///
 /// <para><b>Why this is not a method on <see cref="ISqlDialect"/> and not copied into each one</b>
 /// — the same reasoning <see cref="SqlPatternEscaping"/> records for SEC-4's escaping loop. These
-/// six are ANSI and vary in no v1 SQL dialect: the table was byte-identical in all four
-/// implementations, and <c>DialectRenderingTests.Every_Dialect_Spells_The_Comparison_Symbols_Identically</c>
-/// asserts that it must stay so. Four copies of one invariant table means four places for a dialect
+/// six are ANSI and vary in no SQL dialect this project implements: the table was byte-identical in all
+/// five implementations (four when #1639 shared it, and Oracle added no sixth spelling in #1642), and
+/// <c>DialectRenderingTests.Every_Dialect_Spells_The_Comparison_Symbols_Identically</c>
+/// asserts that it must stay so. Five copies of one invariant table means five places for a dialect
 /// to "helpfully" emit T-SQL's <c>!=</c> or MySQL's <c>&lt;=&gt;</c> — spellings which are accepted by
 /// those engines, so the mistake produces a running query and a fixture diff rather than an error,
 /// and only in whichever dialect happens to have a fixture for that operator.</para>

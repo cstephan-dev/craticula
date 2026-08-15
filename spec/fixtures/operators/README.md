@@ -111,7 +111,7 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
 | 026 | `026-notcontains-string/` | AR-6 `notContains` on `string`: SEM-7 substring semantics negated, SEM-2 NULL-inclusive. |
 | 027 | `027-startswith-string/` | AR-6 `startsWith` on `string`, case-insensitive anchored substring (SEM-1). |
 | 028 | `028-endswith-string/` | AR-6 `endsWith` on `string`, case-insensitive anchored substring (SEM-1). |
-| 029 | `029-blank-string/` | AR-6 `blank` on `string`: SEM-2's `IS NULL OR = ''` text-specific form. |
+| 029 | `029-blank-string/` | AR-6 `blank` on `string`: SEM-2's `IS NULL OR = ''` text-specific form — on Postgres. The *engine* half of the rule (SQL-7: a backend whose `''` is NULL collapses this arm) is pinned by `dialect-parity/019`, not here. |
 | 030 | `030-notblank-string/` | AR-6 `notBlank` on `string`: exact negation of `blank` (SEM-2). |
 | 031 | `031-blank-int64/` | AR-6 `blank` on non-text `int64`: SEM-2 `IS NULL`-only form. |
 | 032 | `032-notblank-int64/` | AR-6 `notBlank` on non-text `int64`, negating `blank` (SEM-2). |

@@ -8,8 +8,8 @@
   "required": ["dialect", "sql", "params"],
   "properties": {
     "dialect": {
-      "enum": ["postgres", "mssql", "mysql", "sqlite"],
-      "description": "Which of the four v1 SQL dialects this artifact targets (§5) — Oracle is community-tested/OQ-6-open and excluded from this fixture suite for now."
+      "enum": ["postgres", "mssql", "mysql", "oracle", "sqlite"],
+      "description": "Which SQL dialect this artifact targets. Four are v1-supported (§5); 'oracle' was added in #1642 and is COMMUNITY-TESTED — it is graded by this artifact suite exactly like the other four, but no CI job runs it against a real Oracle instance and no release is blocked on it (OQ-6 stays open). See spec/fixtures/README.md's support tiering."
     },
     "sql": {
       "type": "string",

@@ -7,7 +7,7 @@ no `ILIKE`, no CI collation, no Mongo `collation` option, no ES `case_insensitiv
 **But "no CI mechanism" is not the same as "nothing at all", and the difference is per engine.** The
 compiler must actually *achieve* case-sensitive comparison, not merely decline to fold case: an
 engine whose own default already distinguishes case needs no clause, and an engine whose default
-does **not** must spell one, or the declaration is silently ignored. The four SQL arms therefore do
+does **not** must spell one, or the declaration is silently ignored. The five SQL arms therefore do
 not agree, which is the whole point of promoting this case to parity coverage:
 
 | Dialect | Renders | Because its default is |
@@ -16,6 +16,7 @@ not agree, which is the whole point of promoting this case to parity coverage:
 | SQLite | nothing | `BINARY` (`004`) |
 | SQL Server | `COLLATE Latin1_General_CS_AS` | **case-INsensitive** (`SQL_Latin1_General_CP1_CI_AS` ships as the stock server collation) |
 | MySQL | nothing — **host DDL obligation** | **case-INsensitive** (`utf8mb4_0900_ai_ci` family), and no portable case-sensitive collation name exists to emit |
+| Oracle (#1642) | `COLLATE BINARY` | **session-derived** — a column's default collation is `USING_NLS_COMP`, resolved through `NLS_COMP`/`NLS_SORT`, so bare means "whatever this connection is set to" and not "case-sensitive". Unlike MySQL, one portable spelling exists, so it is a token rather than a DDL obligation |
 
 This is the deliberate per-field override SEM-1's second Must-Not protects: a compiler must NOT
 default to case-sensitive "because the engine's own default happens to be case-sensitive" — but
@@ -26,7 +27,7 @@ This fixture's `agGridRequest.json` carries no `sortModel`, so the only sort key
 artifact is SEM-6's `stableKey` tiebreaker (`id`, `asc`, `nullsPosition: "last"`), appended
 unconditionally per SEM-6.
 
-**Coverage tier:** all six backends — all four SQL dialects + MongoDB + Search. Promoted from
+**Coverage tier:** all seven backends — all five SQL dialects + MongoDB + Search. Promoted from
 Postgres-only in #1639 (D2), and the first fixture in the suite to reach the **case-sensitive**
 scalar path at all.
 
@@ -40,6 +41,13 @@ seam could not express it until then: it carried a single boolean, which spells 
 case-sensitively" and "not text at all" identically — and SQL Server rejects a `COLLATE` clause on
 an `int` column, so the bare branch could not simply start emitting one. See the category README's
 **D4**.
+
+**#1642 added the `oracle` arm on exactly that argument, which is why the table above has five rows
+and four answers.** Oracle is the second engine where bare is not case-sensitive, and the tri-state
+seam D4 introduced for SQL Server is what let it be spelled without also emitting a `COLLATE` on the
+non-text `id` tiebreaker — Oracle rejects a `COLLATE` on a non-character operand exactly as SQL Server
+does. A reader who takes this table as "SQL Server is the only engine that needs a clause" reaches the
+silent failure D4 exists to prevent, one engine over.
 
 **MySQL's arm stays bare, and that is a deferral rather than an answer.** Its columns carry a `_ci`
 collation by default, so honouring this schema requires a `_bin`/`_as_cs` **column** collation (host

@@ -1,1 +1,1 @@
-Proves AR-6's `blank` operator on a non-text (`int64`) field: SEM-2 pins `blank` as `IS NULL` alone for non-text types — the text-specific `= ''` clause must NOT be applied here.
+Proves AR-6's `blank` operator on a non-text (`int64`) field: SEM-2 pins `blank` as `IS NULL` alone for non-text types — the text-specific `= ''` clause must NOT be applied here. This form is engine-invariant: it is also what a *text* field compiles to under SQL-7 on a backend whose `''` is NULL, which is why a compiler must reach it from the field type rather than by widening this case's rule.
