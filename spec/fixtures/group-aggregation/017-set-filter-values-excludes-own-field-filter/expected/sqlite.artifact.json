@@ -1,0 +1,8 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT DISTINCT \"region\" FROM \"sales_fact\" WHERE \"segment\" = ? COLLATE NOCASE ORDER BY \"region\" ASC NULLS LAST LIMIT ?",
+  "params": [
+    "Enterprise",
+    1000
+  ]
+}

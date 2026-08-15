@@ -328,6 +328,31 @@
       "required": ["groupCols", "groupKeys"]
     },
 
+    "setValuesSpec": {
+      "description": "BM-3's set-filter distinct-values request (GRP-6 in spec/semantics.md). Deliberately a $def rather than a property of the root document: the root models a row-fetch query and REQUIRES 'page', while a distinct-values query has no page at all (its limit is a ceiling, not a window), no sort and no aggregation — and restructuring the root into a two-armed oneOf would be a breaking change to a published /v1/ contract. The wire envelope this mirrors ('setValuesRequest') is Craticula's own synthetic shape, not AG Grid's: AG Grid Community has no request/response type for set-filter values at all and delegates the whole job to a host-supplied SetFilterParams.values callback. See spec/fixtures/group-aggregation/README.md for the envelope and 016-019 for its artifact oracle.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colId": {
+          "$ref": "#/$defs/fieldName",
+          "description": "The column whose distinct values are being resolved: the SELECT DISTINCT expression, the sole ORDER BY key, and the field whose OWN conditions are dropped from the accompanying filter (GRP-6). Client-controlled, and unlike a filter's colId it is the question rather than a condition on it — so it must pass the SC-1 allowlist in EVERY GridSchema mode, Lenient included."
+        },
+        "searchPrefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192,
+          "description": "The set filter's own inline search box text. Compiled into an ordinary startsWith predicate against colId (GRP-6), so SEM-1's per-field mechanism and SEM-7's escaping govern it exactly as they would a user's own prefix filter — it is not a construct of its own, and it survives the own-field exclusion that removes every other condition on colId. An empty search box OMITS this property; minLength:1 rejects \"\", which would otherwise compile to a predicate matching every row. maxLength repeats stringValue's own bound, since it compiles into exactly one.",
+          "$comment": "A prefix against a column not declared 'string' has no defined meaning and is rejected at the typeCoercion stage (SEM-5's uncoercible-value), which JSON Schema cannot express: it depends on the GridSchema, not on this document."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A client-requested cap on how many distinct values come back. Never authoritative: the host's configured maximum always wins and an absent value falls back to the host's configured default, i.e. the compiled cap is min(limit ?? default, maximum) — GRP-6. Exceeding the maximum is NOT a rejection (the server clamps and answers), which is why no maxItems-style bound appears here; those two numbers are SEC-3 limits and, per the root description, stay host-configurable and out of this schema. minimum:1 is structural rather than a SEC-3 limit: a non-positive cap is not 'no cap', it is a request that can never return a value."
+        }
+      },
+      "required": ["colId"]
+    },
+
     "aggregation": {
       "description": "A single (field, func) aggregation pair (AR-8). func is limited to {sum, min, max, avg, count} in v1 — first/last are explicitly excluded (v2 roadmap).",
       "type": "object",

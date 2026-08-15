@@ -91,11 +91,16 @@ public static class SemanticsResolver
         /// <summary>An ordinary key, governed by SEM-1 exactly as a filter predicate is —
         /// <c>spec/fixtures/sort-paging/001</c> renders
         /// <c>ORDER BY "last_name" COLLATE craticula_ci ASC NULLS LAST</c> and pins it. Reached by
-        /// every key of a query carrying no <c>groupSpec</c>, and also by the <c>ORDER BY</c> of a
+        /// every key of an ordinary row query, and also by the <c>ORDER BY</c> of a
         /// fully-consumed drill-down <b>leaf</b>: a leaf has no <c>GROUP BY</c> and no buckets, so
         /// its ordering decides nothing about bucket identity and there is nothing for GRP-2 to
         /// govern (<c>spec/fixtures/group-aggregation/005</c> sorts on <c>product</c>, which is
-        /// neither a group column nor a group key).</summary>
+        /// neither a group column nor a group key).
+        ///
+        /// <para><b>"Carries no <c>groupSpec</c>" is NOT the test</b>, tempting as it is: a BM-3
+        /// distinct-values request carries none either and is
+        /// <see cref="GroupingMode.Grouped"/> — see there. The test is whether the key decides or
+        /// reproduces a bucket's identity.</para></summary>
         Ungrouped,
 
         /// <summary>
@@ -104,6 +109,15 @@ public static class SemanticsResolver
         /// including the leaf's, whose whole <c>WHERE</c> must select exactly the rows that produced
         /// the bucket being expanded), and a <b>grouped level's</b> <c>ORDER BY</c>, which orders the
         /// buckets the <c>GROUP BY</c> just produced and so has to agree with it.
+        ///
+        /// <para><b>And BM-3's <c>SELECT DISTINCT</c> key with its own <c>ORDER BY</c></b> (GRP-6(a),
+        /// added in #1641) — reached from <c>SqlQueryBuilder.BuildSetValues</c>, on a request that
+        /// carries no <c>groupSpec</c> at all. A distinct set is a set of buckets with no aggregate
+        /// attached, and its entries are handed straight back to the grid as an <c>in</c> value or a
+        /// <c>groupKey</c>, which a grouped request then matches exactly. That caller is why this
+        /// mode is named for what the key <em>does</em> rather than for the request shape it appears
+        /// in; a set filter's own <c>searchPrefix</c> over that same column is a filter, and stays
+        /// <see cref="GroupingMode.Ungrouped"/>.</para>
         /// </summary>
         Grouped
     }

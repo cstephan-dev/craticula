@@ -515,6 +515,32 @@ public class DialectRenderingTests
         Assert.Equal([first, second], sink.Values);
     }
 
+    /// <summary>
+    /// GRP-6's row cap, side by side across all four v1 dialects — the axis that made it a seam
+    /// member rather than something the builder could spell. Three of the four are the paging clause
+    /// minus its offset; SQL Server's <c>FETCH</c> cannot appear without one, so it writes a literal
+    /// zero it never binds.
+    ///
+    /// <para>The fixtures pin each of these once, inside a whole statement
+    /// (<c>group-aggregation/016</c>-<c>019</c>); putting them in one table is what makes the
+    /// divergence legible, and pins the parameter count, which is the part a reader is most likely to
+    /// assume is uniform.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("postgres", "LIMIT $1")]
+    [InlineData("mysql", "LIMIT ?")]
+    [InlineData("sqlite", "LIMIT ?")]
+    [InlineData("mssql", "OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY")]
+    public void The_Row_Cap_Binds_Exactly_One_Value_On_Every_Dialect_However_It_Spells_The_Clause(
+        string dialect, string expected)
+    {
+        var target = Dialect(dialect);
+        var sink = new RecordingSink(target);
+
+        Assert.Equal(expected, target.RenderRowLimit(1000, sink));
+        Assert.Equal([1000], sink.Values);
+    }
+
     [Fact]
     public void Each_Dialect_Names_Itself_As_Its_Artifacts_Discriminator()
     {

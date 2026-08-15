@@ -156,4 +156,71 @@ public class ResourceLimitsValidatorTests
         Assert.Contains(ex.Violations, v => v.LimitName == "max-depth-exceeded");
         Assert.Contains(ex.Violations, v => v.LimitName == "max-page-size-exceeded");
     }
+
+    // ---- GRP-6: the set-values cap, which is APPLIED rather than enforced ---------------------------
+
+    /// <summary>
+    /// <c>spec/fixtures/group-aggregation/016</c>-<c>018</c>: no cap requested, so the host's default
+    /// applies. A distinct-values query is never unbounded — "the client asked for no limit" is not
+    /// "no limit".
+    /// </summary>
+    [Fact]
+    public void No_Requested_Limit_Resolves_To_The_Hosts_Default()
+    {
+        Assert.Equal(1000, ResourceLimitsValidator.ResolveSetValuesLimit(null, DefaultLimits));
+    }
+
+    /// <summary>
+    /// <c>spec/fixtures/group-aggregation/019</c>: 50,000 requested against a 10,000 ceiling compiles
+    /// to 10,000. Deliberately NOT a rejection — a set filter asks for as many values as it can get by
+    /// design, and making the ceiling a contract the client has to know is the opposite of what a
+    /// server-side cap is for.
+    /// </summary>
+    [Fact]
+    public void A_Request_Above_The_Configured_Maximum_Is_Clamped_Not_Rejected()
+    {
+        Assert.Equal(10_000, ResourceLimitsValidator.ResolveSetValuesLimit(50_000, DefaultLimits));
+    }
+
+    [Fact]
+    public void A_Request_Below_The_Maximum_Is_Honoured_Even_Below_The_Default()
+    {
+        Assert.Equal(25, ResourceLimitsValidator.ResolveSetValuesLimit(25, DefaultLimits));
+    }
+
+    [Fact]
+    public void A_Request_Exactly_At_The_Maximum_Is_Honoured()
+    {
+        Assert.Equal(10_000, ResourceLimitsValidator.ResolveSetValuesLimit(10_000, DefaultLimits));
+    }
+
+    /// <summary>
+    /// The two knobs are independent and no ordering between them is enforced at construction time,
+    /// so a host that configures a default above its own ceiling still gets the ceiling rather than a
+    /// startup failure — the minimum is taken over both.
+    /// </summary>
+    [Fact]
+    public void A_Default_Above_The_Maximum_Still_Yields_The_Maximum()
+    {
+        var limits = new ResourceLimits { DefaultSetValuesResults = 5000, MaxSetValuesResults = 500 };
+
+        Assert.Equal(500, ResourceLimitsValidator.ResolveSetValuesLimit(null, limits));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void A_NonPositive_Request_Is_A_Caller_Error_Because_SetValuesSpecValidator_Already_Rejects_It(int requested)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => ResourceLimitsValidator.ResolveSetValuesLimit(requested, DefaultLimits));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void A_NonPositive_Default_Cap_Is_Refused_By_ResourceLimits_Itself(int value)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ResourceLimits { DefaultSetValuesResults = value });
+    }
 }

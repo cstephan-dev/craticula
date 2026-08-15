@@ -3,11 +3,13 @@ using Craticula.Core.Ir;
 namespace Craticula.AgGrid.Tests;
 
 /// <summary>
-/// Fixture-driven coverage against the real <c>spec/fixtures/group-aggregation/</c> suite (21 cases,
-/// BM-2/BM-3/AR-8). Cases <c>016</c>-<c>019</c> are the distinct <c>setValuesRequest</c> envelope
-/// (BM-3, not the row-fetch request this parser handles — see
-/// <see cref="AgGridRequestParserRejectionTests"/> for their explicit-rejection coverage) and are
-/// deliberately not re-exercised here.
+/// Fixture-driven coverage against the real <c>spec/fixtures/group-aggregation/</c> suite (22 cases,
+/// BM-2/BM-3/AR-8), for the 17 that are row-fetch requests. Cases <c>016</c>-<c>019</c> and
+/// <c>022</c> are the
+/// distinct <c>setValuesRequest</c> envelope, which <see cref="AgGridRequestParser.Parse"/> still
+/// rejects and <see cref="AgGridRequestParser.ParseSetValues"/> handles — they are covered by
+/// <see cref="AgGridRequestParserSetValuesTests"/>, and their rejection from this entry point by
+/// <see cref="AgGridRequestParserRejectionTests"/>.
 /// </summary>
 public class AgGridRequestParserGroupAggregationFixtureTests
 {

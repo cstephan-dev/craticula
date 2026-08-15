@@ -1,0 +1,8 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT DISTINCT `region` FROM `sales_fact` WHERE `segment` = ? ORDER BY ISNULL(`region`) ASC, `region` ASC LIMIT ?",
+  "params": [
+    "Enterprise",
+    1000
+  ]
+}

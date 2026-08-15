@@ -12,7 +12,9 @@ namespace Craticula.Core.Schema;
 /// count (every <see cref="ComparisonNode"/> counts as one leaf, regardless of branch), while also
 /// collecting every set-operator's (<c>in</c>/<c>notIn</c>) values-array length that exceeds
 /// <see cref="ResourceLimits.MaxInValues"/> along the way. <see cref="ResourceLimits.MaxSetValuesResults"/>
-/// is deliberately not checked here — see its own doc comment.
+/// is deliberately not <em>checked</em> here — it bounds a compiled query's result size rather than
+/// rejecting an input shape, so it is <em>applied</em> instead, by
+/// <see cref="ResolveSetValuesLimit"/>.
 /// </summary>
 public static class ResourceLimitsValidator
 {
@@ -70,6 +72,40 @@ public static class ResourceLimitsValidator
         {
             throw new ResourceLimitExceededException(violations);
         }
+    }
+
+    /// <summary>
+    /// GRP-6/SEC-3: resolves how many distinct values a BM-3 query may return —
+    /// <c>min(requested ?? <see cref="ResourceLimits.DefaultSetValuesResults"/>,
+    /// <see cref="ResourceLimits.MaxSetValuesResults"/>)</c>.
+    ///
+    /// <para>Unlike the four limits <see cref="Validate"/> enforces, exceeding this one is <b>not</b> a
+    /// rejection. A client asking for more values than the host will serve has not malformed anything
+    /// — a set filter that opens on a high-cardinality column asks for as many as it can get by
+    /// design — so the server clamps and answers, exactly as
+    /// <c>spec/fixtures/group-aggregation/019</c> pins (requested 50000, configured maximum 10000,
+    /// compiled 10000). Rejecting instead would make the maximum a contract the client has to know,
+    /// which is the opposite of what a server-side cap is for.</para>
+    ///
+    /// <para>Both ends are guarded by construction: <see cref="ResourceLimits"/> refuses a
+    /// non-positive ceiling or default, and <see cref="Ir.SetValuesSpecValidator"/> refuses a
+    /// non-positive request — so the minimum below is always positive and no caller has to
+    /// re-check it. Living here rather than in a compiler is what stops the SQL, Mongo and Search
+    /// backends from each deciding what "no limit requested" means (<c>LIMIT 1000</c> /
+    /// <c>$limit: 1000</c> / <c>"size": 1000</c> all come from this one answer).</para>
+    /// </summary>
+    public static int ResolveSetValuesLimit(int? requested, ResourceLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(limits);
+
+        if (requested is { } value && value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(requested), value,
+                "A requested set-values limit must be a positive integer — run SetValuesSpecValidator (which rejects it) before resolving.");
+        }
+
+        return Math.Min(requested ?? limits.DefaultSetValuesResults, limits.MaxSetValuesResults);
     }
 
     /// <summary>

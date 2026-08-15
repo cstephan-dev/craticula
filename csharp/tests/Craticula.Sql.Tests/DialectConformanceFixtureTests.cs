@@ -37,16 +37,17 @@ public class DialectConformanceFixtureTests
     /// <see cref="Each_Dialect_Contributes_Exactly_The_Arm_Count_It_Declares"/> rather than being
     /// silently unexercised — the same discovery-based anti-rot shape the Postgres suite uses.
     ///
-    /// <para>#1640 added 16 arms per dialect in <c>group-aggregation/</c>; the rest live in
-    /// <c>dialect-parity/</c>. Discovery below deliberately scans
-    /// <em>every</em> category: an arm added elsewhere must show up as a count mismatch here, not
-    /// disappear because this suite only looked in one directory.</para>
+    /// <para>#1640 added 16 arms per dialect in <c>group-aggregation/</c> and #1641 five more
+    /// (<c>016</c>-<c>019</c>, BM-3, plus <c>022</c> from its review pass); the rest live in
+    /// <c>dialect-parity/</c>. Discovery below
+    /// deliberately scans <em>every</em> category: an arm added elsewhere must show up as a count
+    /// mismatch here, not disappear because this suite only looked in one directory.</para>
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [
-        ("mssql", MssqlDialect.Instance, 35),
-        ("mysql", MySqlDialect.Instance, 36),
-        ("sqlite", SqliteDialect.Instance, 35)
+        ("mssql", MssqlDialect.Instance, 40),
+        ("mysql", MySqlDialect.Instance, 41),
+        ("sqlite", SqliteDialect.Instance, 40)
     ];
 
     /// <summary>
@@ -168,8 +169,14 @@ public class DialectConformanceFixtureTests
     }
 
     [Fact]
-    public void The_Suite_Is_All_106_Non_Postgres_Arms_In_The_Fixture_Tree()
+    public void The_Suite_Is_All_121_Non_Postgres_Arms_In_The_Fixture_Tree()
     {
+        // #1641's review pass added the last 3: group-aggregation/022, the one case carrying both a
+        // filter model and a searchPrefix, which is what turns GRP-6(c)'s WHERE order from a
+        // normative sentence plus a C# unit test into something every port is graded on.
+        // #1641 itself added 12: three dialects for each of group-aggregation/016-019, BM-3's
+        // set-filter distinct-values query, which had no dialect arms because no compiler built it.
+        // Derived by transformation from each fixture's own Postgres arm, like everything below.
         // #1639 left 55 (19 re-authored + 30 from promoting `011`-`020` to full parity coverage +
         // 3 for `021`, the case-sensitive substring case, + 3 for `022`, T-SQL's `[` wildcard).
         // #1640 added 51: three dialects for each of `group-aggregation/001`-`015`, `020` and
@@ -177,7 +184,7 @@ public class DialectConformanceFixtureTests
         // which is what makes BM-2's "identical grouping protocol across all four dialects"
         // checkable at all. This number going up without the per-dialect table above changing with
         // it means an arm was added and went unexercised.
-        Assert.Equal(106, Arms.Count);
+        Assert.Equal(121, Arms.Count);
     }
 
     [Fact]

@@ -40,9 +40,15 @@ namespace Craticula.AgGrid;
 /// date preset the request gives the adapter no way to type (no <see cref="AgGridParseOptions.Schema"/>,
 /// or a field that is neither <c>date</c> nor <c>datetime</c>), an unresolvable
 /// <c>requestContext.zone</c>, <c>pivotMode:true</c>/non-empty <c>pivotCols</c> (AG-5, out of scope),
-/// and the distinct <c>setValuesRequest</c> envelope (BM-3, not the row-fetch request this parser
-/// handles). See <see cref="AgGridRequestParseException"/> for the two reason codes these rejections
-/// carry.</para>
+/// and — from <see cref="Parse"/> specifically — the distinct <c>setValuesRequest</c> envelope, which
+/// is not a row-fetch request. See <see cref="AgGridRequestParseException"/> for the two reason codes
+/// these rejections carry.</para>
+///
+/// <para><b>Two entry points, one per request kind (#1641).</b> <see cref="Parse"/> reads AG Grid's
+/// own <c>IServerSideGetRowsRequest</c>; <see cref="ParseSetValues"/> reads BM-3's
+/// <c>setValuesRequest</c> envelope, which is Craticula's own shape and shares only the
+/// <c>filterModel</c> grammar. Keeping them apart is what lets each one's output record carry exactly
+/// the fields its request actually has.</para>
 /// </summary>
 public static class AgGridRequestParser
 {
@@ -74,7 +80,8 @@ public static class AgGridRequestParser
             throw new AgGridRequestParseException(
                 "malformed-request",
                 "'setValuesRequest' is BM-3's distinct set-filter-values envelope, not the row-fetch " +
-                "request (out of scope for this adapter) — see spec/fixtures/group-aggregation/README.md.");
+                "request this method parses — call ParseSetValues instead (see " +
+                "spec/fixtures/group-aggregation/README.md for the envelope's shape).");
         }
 
         if (root.TryGetProperty("pivotMode", out var pivotModeEl) && pivotModeEl.ValueKind == JsonValueKind.True)
@@ -116,6 +123,122 @@ public static class AgGridRequestParser
             Group = group,
             Aggregations = aggregations,
             Page = page
+        };
+    }
+
+    /// <summary>
+    /// BM-3: parses the distinct <c>setValuesRequest</c> envelope — the set filter's "which values may
+    /// I offer?" request — into an <see cref="AgGridParsedSetValuesRequest"/>.
+    ///
+    /// <para>A second entry point rather than a branch inside <see cref="Parse"/>, because the two
+    /// documents share nothing but their <c>filterModel</c>: this one carries no
+    /// <c>startRow</c>/<c>endRow</c>, no <c>sortModel</c> and no <c>rowGroupCols</c>, and
+    /// <see cref="Parse"/> continues to reject it for exactly that reason. Its shape is Craticula's
+    /// own (<c>spec/fixtures/group-aggregation/README.md</c>), not AG Grid's — AG Grid Community has
+    /// no wire type for set-filter values at all, delegating the whole job to a host-supplied
+    /// <c>SetFilterParams.values</c> callback.</para>
+    ///
+    /// <para>The <c>filterModel</c> is parsed by the identical machinery the row-fetch path uses, so
+    /// every AG-1 condition shape, AG-2's date presets (which read
+    /// <c>requestContext</c> from the document ROOT, beside the envelope, as they do for a row fetch)
+    /// and the boolean set-filter rewrite all behave the same here. The <b>own-field exclusion is
+    /// deliberately not applied here</b> — see <see cref="AgGridParsedSetValuesRequest.NativeFilter"/>.</para>
+    /// </summary>
+    public static AgGridParsedSetValuesRequest ParseSetValues(string requestJson, AgGridParseOptions? options = null)
+    {
+        options ??= AgGridParseOptions.Default;
+
+        using var document = ParseDocument(requestJson);
+        var root = document.RootElement;
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new AgGridRequestParseException("malformed-request", "The set-filter values request root must be a JSON object.");
+        }
+
+        if (!root.TryGetProperty("setValuesRequest", out var envelope) || envelope.ValueKind != JsonValueKind.Object)
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                "A set-filter values request must carry a 'setValuesRequest' object (BM-3's envelope) — a row-fetch " +
+                "IServerSideGetRowsRequest goes through Parse instead.");
+        }
+
+        var setValues = ParseSetValuesSpec(envelope);
+
+        // The envelope's own filterModel/customFilters, not the document root's: everything BM-3
+        // filters by lives inside the envelope, and a stray root-level filterModel is not part of
+        // this shape.
+        var nativeFilter = ParseFilterModel(envelope, DateResolutionContext.From(root, options));
+        var customFilters = ParseCustomFilters(envelope);
+
+        FilterNodeValidator.Validate(nativeFilter);
+        FilterNodeValidator.Validate(customFilters);
+        SetValuesSpecValidator.Validate(setValues);
+
+        return new AgGridParsedSetValuesRequest
+        {
+            SetValues = setValues,
+            NativeFilter = nativeFilter,
+            CustomFilters = customFilters
+        };
+    }
+
+    /// <summary>
+    /// Reads the envelope's own four properties. <c>colId</c> and <c>filterModel</c> are required (the
+    /// latter may be <c>{}</c> or JSON <c>null</c> — "the grid has no other active filters"), while
+    /// <c>searchPrefix</c> and <c>limit</c> are optional. A required-but-absent <c>filterModel</c> is
+    /// rejected rather than read as <c>{}</c>: the two mean the same thing to a compiler, but
+    /// accepting the absence would make the envelope's documented contract untrue and leave a client
+    /// unable to tell a dropped property from an empty one.
+    /// </summary>
+    private static SetValuesSpec ParseSetValuesSpec(JsonElement envelope)
+    {
+        // Spelled out rather than routed through ReadRequiredString, whose message is built around a
+        // column name ("Column 'x': expected a string …") and would here read
+        // "Column '<setValuesRequest>'", as though a column were literally called that. This property
+        // names the column, so there is no column to name in the error; the three checks below are the
+        // house style for this envelope and this one now matches them.
+        if (!envelope.TryGetProperty("colId", out var colIdEl) || colIdEl.ValueKind != JsonValueKind.String)
+        {
+            var found = envelope.TryGetProperty("colId", out var actual) ? actual.ValueKind.ToString() : "no property";
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                $"'setValuesRequest.colId' is required and must be a string (the column whose distinct values are being requested), got {found}.");
+        }
+
+        var colId = colIdEl.GetString()!;
+
+        if (!envelope.TryGetProperty("filterModel", out var filterModelEl))
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                "'setValuesRequest.filterModel' is required — send {} when the grid has no other active filters.");
+        }
+
+        if (filterModelEl.ValueKind is not (JsonValueKind.Object or JsonValueKind.Null))
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request", $"'setValuesRequest.filterModel' must be a JSON object or null, got {filterModelEl.ValueKind}.");
+        }
+
+        string? searchPrefix = null;
+        if (envelope.TryGetProperty("searchPrefix", out var searchPrefixEl) && searchPrefixEl.ValueKind != JsonValueKind.Null)
+        {
+            if (searchPrefixEl.ValueKind != JsonValueKind.String)
+            {
+                throw new AgGridRequestParseException(
+                    "malformed-request", $"'setValuesRequest.searchPrefix' must be a string or null, got {searchPrefixEl.ValueKind}.");
+            }
+
+            searchPrefix = searchPrefixEl.GetString();
+        }
+
+        return new SetValuesSpec
+        {
+            ColId = colId,
+            SearchPrefix = searchPrefix,
+            Limit = ReadOptionalInt(envelope, "limit")
         };
     }
 

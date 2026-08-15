@@ -1,0 +1,9 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT DISTINCT [region] FROM [sales_fact] WHERE ([segment] COLLATE Latin1_General_CI_AS = @p1 AND [region] COLLATE Latin1_General_CI_AS LIKE @p2 + '%' ESCAPE '\\') ORDER BY CASE WHEN [region] IS NULL THEN 1 ELSE 0 END ASC, [region] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY",
+  "params": [
+    "Enterprise",
+    "eu",
+    1000
+  ]
+}

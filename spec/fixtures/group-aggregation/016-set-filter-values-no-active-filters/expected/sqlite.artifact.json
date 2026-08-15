@@ -1,0 +1,7 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT DISTINCT \"region\" FROM \"sales_fact\" ORDER BY \"region\" ASC NULLS LAST LIMIT ?",
+  "params": [
+    1000
+  ]
+}

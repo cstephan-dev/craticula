@@ -5,14 +5,15 @@ aggregation spec, closed v1 function set) from `docs/TRD-grid-query-compiler.md`
 `spec/fixtures/README.md` for the general fixture shape and backend-coverage policy; every case
 here is a **general/structural** fixture, so each carries `expected/postgres.artifact.json` +
 `expected/mongo.artifact.json` + `expected/search.artifact.json`. #1640 added
-`mssql`/`mysql`/`sqlite` arms to the sixteen BM-2 cases as well (see "Per-dialect arms" below) —
-not because any of them is dialect-*specific*, but because BM-2's DoD is "identical grouping
-protocol verified across all four dialects" and three of the four had no artifact to verify against.
+`mssql`/`mysql`/`sqlite` arms to the sixteen BM-2 cases as well and #1641 to the five BM-3 ones (see
+"Per-dialect arms" below) — not because any of them is dialect-*specific*, but because BM-2's DoD is
+"identical grouping protocol verified across all four dialects" and three of the four had no artifact
+to verify against. Every case here is therefore six-backend.
 
-All 20 cases share one `schema.json` ("sales" grid: `id` stableKey; `region`/`segment`/`product`
+All 22 cases share one `schema.json` ("sales" grid: `id` stableKey; `region`/`segment`/`product`
 groupable strings; `fiscalYear` groupable int64; `amount` a decimal aggregatable over
 `sum`/`min`/`max`/`avg`; `quantity` an int64 aggregatable over all five funcs including `count`).
-All 20 read one base SQL table / Mongo collection / Search index, `sales_fact`. That name used to
+All 22 read one base SQL table / Mongo collection / Search index, `sales_fact`. That name used to
 appear only in the expected artifacts — `spec/grid-schema.schema.json` did not model the FROM
 target at all, so it was recoverable from nothing but the artifacts themselves. #1638 added a
 required `source` to the schema (SQL-0 in `spec/semantics.md`'s canonical-rendering addendum); each
@@ -33,8 +34,8 @@ not `1000`).
 This section held two "known open contradictions" that #1638 deliberately refused to guess at,
 because both turned on a **BM-2 design call** it did not own. #1640 settled both, re-authored the
 affected artifacts in the same commit, and — the part that matters for a port — put the answers in
-`spec/semantics.md` as the normative **grouping addendum (GRP-1..GRP-5)** rather than leaving them
-in this file. Read GRP-1..GRP-5, not the summary below; the summary exists so a reader who
+`spec/semantics.md` as the normative **grouping addendum (GRP-1..GRP-5, joined by GRP-6 in #1641)**
+rather than leaving them in this file. Read those rules, not the summary below; the summary exists so a reader who
 remembers the old artifacts can tell what changed and why.
 
 **(a) Grouped `ORDER BY` keys omit the collation → GRP-2: a grouping request is exact on the
@@ -97,27 +98,43 @@ therefore applies with no exception and `003`/`004`/`005` now read
 `WHERE ("region" = $1 AND "segment" = $2)`. A single consumed key is not a composite and stays bare
 (`002`, `006`).
 
-## Still open, and owned by #1641 — `016`-`019`
+## Settled by #1641 (BM-3) — `016`-`019`, the last register entry
 
-Entry (a) above covered **20** artifacts, but only 16 of them were settled: `016`-`019` were dropped
-from the register without an answer, and #1640's review put them back. They are not covered by
-GRP-2, which is scoped to a request carrying a `groupSpec` — these four carry only a synthetic
-`setValuesRequest` (no `rowGroupCols`, no `groupKeys`), so the rule does not reach them. What is
-left is therefore a genuine open question rather than an oversight:
+Entry (a) above covered **20** artifacts, but only 16 of them were settled: `016`-`019` carry a
+synthetic `setValuesRequest` (no `rowGroupCols`, no `groupKeys`), so GRP-2 — scoped to a request
+carrying a `groupSpec` — never reached them, and the question of whether BM-3's distinct-values query
+is *itself* a bucket-identity query was left as a BM-3 design call.
 
-> **Is BM-3's distinct-values query itself a bucket-identity query?** `016` renders
-> `SELECT DISTINCT "region" … ORDER BY "region" ASC NULLS LAST` over a case-**insensitive** string.
-> Read as an ordinary query, SEM-1 says both the `DISTINCT` and the `ORDER BY` must collate. Read as
-> a bucket query, GRP-2's whole argument transfers verbatim: `SELECT DISTINCT` computes a distinct
-> set exactly as `GROUP BY` does, so a collated one folds `"EMEA"` and `"emea"` into one entry whose
-> label is unspecified — and that entry is precisely what the grid then sends back as a set-filter
-> value, or as a `groupKey`, where a grouped query would match it **exactly** and return nothing.
-> The two readings disagree, and picking one is a BM-3 design call.
+**It is.** `spec/semantics.md`'s **GRP-6** now says so normatively: `SELECT DISTINCT` computes a
+distinct set exactly as `GROUP BY` does, and its entries are handed straight back to the grid to be
+resent as `in` values or as a `groupKey`, which a grouped query matches **exactly** (GRP-2) — so a
+collated `DISTINCT` would fold `"EMEA"` and `"emea"` into one entry whose label is unspecified and
+which then matches neither original row. All four artifacts already rendered that way, so **none was
+re-authored for this**. Read GRP-6, not this summary; it also pins the four things around the
+distinct key that no artifact could state — the own-field exclusion, the search prefix's status as an
+ordinary `startsWith` predicate, the cap's `min(requested ?? default, maximum)` resolution, and the
+row-limit-without-offset shape (the one place BM-3 widened the dialect seam).
 
-**#1641 owns this**, for the reason #1638 gave for handing (a) to #1640: it turns on a design call
-the story that owns the feature should make, and the four artifacts must be re-authored in the same
-commit that settles it. Not pre-empted here. Until then `016`-`019` keep their current rendering, and
-they have no SQL-dialect arms and no compiler exercising them.
+**`017` was a fixture whose name asserted a property its data could not exercise**, and #1641 fixed
+it in place. Its `filterModel` carried a `segment` filter and *no* `region` one, while its own name
+is `set-filter-values-excludes-own-field-filter` — so it proved that another column's filter is
+honoured and said nothing at all about the target column's being dropped. A compiler that omitted the
+exclusion entirely passed it. It now carries a `region` filter beside the `segment` one, and because
+the exclusion removes it, **all six artifacts are byte-identical** to what they were: a vacuous
+fixture became a real test at zero artifact cost, and a compiler that forgets the exclusion now fails
+against the *existing* oracle. (Verified rather than assumed — compiling the corrected request
+reproduces every arm exactly.)
+
+**`018`'s Postgres arm was wrong, and this is the one artifact #1641 re-authored.** It rendered the
+prefix pattern *inside the bound parameter* — `"region" ILIKE $1 ESCAPE '\'` with `params: ["eu%"]` —
+where the suite's own canonical `startsWith` rendering composes the pattern in SQL and binds the
+escaped literal alone: `operators/027` (and `025`/`026`/`028` for the rest of the family) pin
+`ILIKE $1 || '%' ESCAPE '\'` with `params: ["Smart"]`, and SQL-3/SEM-7 describe that form. One
+artifact against twenty-four is not a disagreement about which is canonical. Corrected to
+`"region" ILIKE $1 || '%' ESCAPE '\'` / `params: ["eu", 1000]`. Its **mongo** arm was already right
+(`{"$regex": "^eu", "$options": "i"}` is exactly `operators/027`'s) and its **search** arm is
+untouched — a `terms` aggregation's `include` is an aggregation-level filter with its own mechanism,
+which that case's `description.md` explains at length.
 
 **One further defect, found by compiling the category rather than reading it.** `013`'s three
 aggregations carry distinct `ColumnVO.id`s (`amountSum`/`amountMin`/`amountMax`) over one field, so
@@ -148,8 +165,19 @@ never produce. AG Grid's default single display column carries `showRowGroup: tr
 unchanged, because the collapse still yields the single `segment` key, which is what makes the
 re-derivation evidence rather than bookkeeping.
 
-`016`-`019` deliberately have **no** SQL-dialect arms: they are BM-3's set-filter distinct-values
-query (#1641), which no compiler in this repo builds yet.
+`016`-`019` gained theirs in **#1641**, once BM-3's compiler existed — 12 more artifacts, derived the
+same way from each case's own Postgres arm, so every case in this category is now six-backend. `022`
+was added in that story's review pass and is six-backend from the start, derived the same way but
+from **two** sibling arms rather than one: `017`'s for the surviving `segment` predicate and `018`'s
+for the prefix, conjoined under SQL-2's composite rule. It exists because GRP-6(c)'s `WHERE` order is
+normative and `params`-visible while no artifact carried both halves — the gap that rule's own text
+admitted to. Two
+tokens are specific to this shape and appear nowhere else in the suite: the row cap renders
+`LIMIT ?` on MySQL/SQLite (no `OFFSET` — a distinct-values query is not paged) and
+`OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY` on SQL Server, whose `FETCH` is illegal without an `OFFSET`
+and whose zero is therefore a literal rather than a bound parameter. All four dialects bind exactly
+one value for it, so `params` is identical across the arms. See `spec/semantics.md` GRP-6(e) for the
+table and the reasoning.
 
 *The T-1b risk this section used to record is closed — as a defect, not a risk.* It said `020`'s
 `mssql` and `mysql` arms order by the aggregate's **alias** inside a null-bucket expression
@@ -222,22 +250,40 @@ concrete request shape to compile against, so this fixture suite defines one:
 {
   "setValuesRequest": {
     "colId": "region",
-    "filterModel": { "<otherColId>": { "...": "..." } },
+    "filterModel": { "<anyColId>": { "...": "..." } },
+    "customFilters": { "type": "and", "nodes": [] },
     "searchPrefix": "eu",
     "limit": 10000
   }
 }
 ```
 
-- `colId` (required) — the field whose distinct values are being resolved.
-- `filterModel` (required, may be `{}`) — the grid's *current* filter model **minus** `colId`'s
-  own filter, per BM-3's stated AG Grid convention (mirrors how AG Grid's real
-  `SetFilterParams.filterModel` behaves for the equivalent client-side feature). Never includes an
-  entry keyed by `colId` itself.
-- `searchPrefix` (optional) — the set filter's own inline search box text.
-- `limit` (optional) — a client-requested cap; the server enforces its own configured maximum
-  regardless of what's requested (see 019). When absent, this fixture suite's illustrative default
-  cap is 1,000; case 019's illustrative configured maximum is 10,000.
+- `colId` (required) — the field whose distinct values are being resolved. It is the *question*, not
+  a condition on it, so SC-1's Lenient mode may not drop it: an unknown `colId` is rejected in every
+  schema mode (GRP-6).
+- `filterModel` (required, may be `{}`) — the grid's *current* filter model, **exactly as the grid
+  holds it**, including any entry keyed by `colId` itself. **The server is what drops that entry**
+  (GRP-6's own-field exclusion), not the client.
+
+  > *Changed in #1641, deliberately.* This note used to say the model "never includes an entry keyed
+  > by `colId` itself", i.e. that the host had already stripped it. That made the exclusion
+  > unobservable: `017` is named for it and carried no `region` entry, so nothing in the suite could
+  > tell a compiler that implements the rule from one that ignores it. Putting the entry back is what
+  > makes the fixture a test, and it costs nothing — the compiled artifacts are unchanged, because
+  > the exclusion removes it. It also puts the rule where every backend inherits it, instead of
+  > relying on each host to reimplement it correctly.
+- `customFilters` (optional) — OQ-11's extension fragment, deserialized as IR, exactly as on the
+  row-fetch request. A set filter's value list must honour the same conditions the grid's rows do, or
+  it offers values no visible row has. Merged before the own-field exclusion, so it is scoped by it
+  too. No case in this category carries one; the shape is the row-fetch request's, unchanged.
+- `searchPrefix` (optional) — the set filter's own inline search box text, compiled into an ordinary
+  `startsWith` predicate on `colId` (GRP-6). Omitted when the box is empty; `""` is rejected rather
+  than read as "no prefix".
+- `limit` (optional) — a client-requested cap; the server clamps it to its own configured maximum and
+  answers, never rejects (see 019). When absent, the host's configured **default** applies. This
+  suite's illustrative numbers are a 1,000 default and a 10,000 maximum, which is why `016`-`018`
+  compile to 1,000 and `019` — requesting 50,000 — compiles to 10,000. Both are host-configured SEC-3
+  values, not constants of the format.
 
 The field is still named `agGridRequest.json` in each of these four directories (per the shared
 fixture directory convention) even though its *content* is this synthetic `setValuesRequest`
@@ -262,9 +308,10 @@ object, not an `IServerSideGetRowsRequest` — called out again in each case's `
 | 013 | `aggregation-multiple-sum-min-max` | AR-8, BM-2 | 3 funcs together, top-level group, distinct `ColumnVO.id` aliases (AGG-2) |
 | 014 | `aggregation-alias-explicit` | AR-8 | `alias` present (`"totalRevenue"`) |
 | 015 | `aggregation-alias-default-name` | AR-8 | `alias` absent, compiler default `<field>_<func>` |
-| 016 | `set-filter-values-no-active-filters` | BM-3 | empty `filterModel`, no cap requested (illustrative default applies) |
-| 017 | `set-filter-values-excludes-own-field-filter` | BM-3 | another column's filter honored, own field's filter never present |
-| 018 | `set-filter-values-search-prefix` | BM-3 | `searchPrefix` narrows candidate values, case-insensitive prefix match |
-| 019 | `set-filter-values-server-side-cap` | BM-3 | client requests a huge `limit`; server clamps to its configured max |
+| 016 | `set-filter-values-no-active-filters` | BM-3, GRP-6 | empty `filterModel`, no cap requested (host default applies) |
+| 017 | `set-filter-values-excludes-own-field-filter` | BM-3, GRP-6 | own field's filter **present and dropped**; another column's honored — artifacts identical either way |
+| 018 | `set-filter-values-search-prefix` | BM-3, GRP-6, SEM-7 | `searchPrefix` narrows candidate values, case-insensitive prefix match |
+| 019 | `set-filter-values-server-side-cap` | BM-3, GRP-6 | client requests a huge `limit`; server clamps to its configured max |
 | 020 | `grouped-query-with-filter-and-sort` | BM-2, AR-5, AR-9, AR-8 | grouped query + row-level filter (pre-aggregation) + sort on the aggregate |
 | 021 | `group-column-sort-via-auto-column-colid` | BM-2, AR-9, GRP-4, AG-6 | `sortModel` addresses the group column through `ag-Grid-AutoColumn`, plus the whole coupled row-group set (1 + N entries) |
+| 022 | `set-filter-values-prefix-with-active-filter` | BM-3, GRP-6(b), GRP-6(c) | the **only** case carrying the own-field exclusion and a `searchPrefix` on that same column in one statement — pins GRP-6(c)'s `WHERE` order (user's filter leads, prefix trails), which `params` compares exactly |

@@ -188,7 +188,8 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   contradictions it left behind, one has since closed: `dialect-parity/`'s `mysql`/`mssql`/`sqlite`
   artifacts were unquoted pending #1639's choice of each engine's quote character, and **#1639
   quoted all 52 of them** (`dialect-parity/README.md`). The other closed in **#1640**, which settled
-  BM-2's two open design calls as `spec/semantics.md`'s grouping addendum (GRP-1..GRP-5). **Case 004
+  BM-2's two open design calls as `spec/semantics.md`'s grouping addendum (GRP-1..GRP-5; #1641 later
+  added GRP-6 for BM-3's distinct-values query, which reaches no case here). **Case 004
   was inside that one**, and the outcome is that its **artifacts** were already right — though not
   its stated reasons, which #1640's review had to correct (see the bullet below and 004's own
   `description.md`). GRP-2 makes a grouped level exact, so `ORDER BY "department" ASC NULLS LAST` —

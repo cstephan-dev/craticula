@@ -238,4 +238,8 @@ public sealed class SqliteDialect : ISqlDialect
     // OFFSET/FETCH. EXP-2's unpaginated case never reaches here.
     public string RenderPaging(int offset, int limit, ISqlParameterSink parameters) =>
         $"LIMIT {parameters.Bind(limit)} OFFSET {parameters.Bind(offset)}";
+
+    // GRP-6: a row cap with no offset. SQLite's OFFSET is optional after LIMIT, like Postgres's.
+    public string RenderRowLimit(int limit, ISqlParameterSink parameters) =>
+        $"LIMIT {parameters.Bind(limit)}";
 }

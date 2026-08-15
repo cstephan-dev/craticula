@@ -17,13 +17,29 @@ internal static class FixtureCompiler
     /// <summary>
     /// The exact pipeline a host runs, with nothing stubbed: the fixture's own <c>schema.json</c>,
     /// its own request, SEC-3's default <see cref="ResourceLimits"/>, and the dialect under test.
+    ///
+    /// <para>Dispatches on the request document itself, exactly as a host endpoint would: a
+    /// <c>setValuesRequest</c> envelope is BM-3's distinct-values query and takes the
+    /// <see cref="AgGridRequestParser.ParseSetValues"/> -&gt;
+    /// <see cref="GridFilterPipeline.ProcessSetValues"/> -&gt;
+    /// <see cref="SqlQueryBuilder.BuildSetValues"/> path, anything else is a row fetch. Both paths run
+    /// end to end here — neither the parser nor the pipeline is stubbed for either.</para>
     /// </summary>
     public static SqlQuery Compile(string category, string fixtureDir, ISqlDialect dialect)
     {
         var schema = GridSchema.Parse(Read(category, fixtureDir, "schema.json"));
-        var parsed = AgGridRequestParser.Parse(
-            Read(category, fixtureDir, "agGridRequest.json"),
-            OptionsFor(category, fixtureDir, schema));
+        var requestJson = Read(category, fixtureDir, "agGridRequest.json");
+        var options = OptionsFor(category, fixtureDir, schema);
+
+        return IsSetValuesRequest(requestJson)
+            ? CompileSetValues(requestJson, options, schema, dialect)
+            : CompileRowFetch(requestJson, options, schema, dialect);
+    }
+
+    private static SqlQuery CompileRowFetch(
+        string requestJson, AgGridParseOptions options, GridSchema schema, ISqlDialect dialect)
+    {
+        var parsed = AgGridRequestParser.Parse(requestJson, options);
 
         var filter = GridFilterPipeline.Process(
             parsed.NativeFilter,
@@ -45,6 +61,37 @@ internal static class FixtureCompiler
                 Aggregations = parsed.Aggregations
             },
             dialect);
+    }
+
+    private static SqlQuery CompileSetValues(
+        string requestJson, AgGridParseOptions options, GridSchema schema, ISqlDialect dialect)
+    {
+        var limits = new ResourceLimits();
+        var parsed = AgGridRequestParser.ParseSetValues(requestJson, options);
+
+        var filter = GridFilterPipeline.ProcessSetValues(
+            parsed.NativeFilter,
+            parsed.CustomFilters,
+            parsed.SetValues,
+            schema,
+            limits);
+
+        return SqlQueryBuilder.BuildSetValues(
+            new SqlSetValuesRequest
+            {
+                Schema = schema,
+                ColId = parsed.SetValues.ColId,
+                Filter = filter,
+                RowLimit = ResourceLimitsValidator.ResolveSetValuesLimit(parsed.SetValues.Limit, limits)
+            },
+            dialect);
+    }
+
+    private static bool IsSetValuesRequest(string requestJson)
+    {
+        using var document = JsonDocument.Parse(requestJson);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty("setValuesRequest", out _);
     }
 
     /// <summary>

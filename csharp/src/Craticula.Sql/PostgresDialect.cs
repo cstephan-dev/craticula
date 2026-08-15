@@ -149,4 +149,10 @@ public sealed class PostgresDialect : ISqlDialect
     // resolves it to "no clause" before asking.
     public string RenderPaging(int offset, int limit, ISqlParameterSink parameters) =>
         $"LIMIT {parameters.Bind(limit)} OFFSET {parameters.Bind(offset)}";
+
+    // GRP-6: a row cap with no offset — PostgreSQL's LIMIT stands alone, so this is the paging
+    // clause minus its second half rather than a different construct (contrast MssqlDialect, where
+    // FETCH cannot appear without an OFFSET).
+    public string RenderRowLimit(int limit, ISqlParameterSink parameters) =>
+        $"LIMIT {parameters.Bind(limit)}";
 }

@@ -43,9 +43,13 @@ because they have to agree with one another or a child level stops summing to it
 aggregate — and because collating a `GROUP BY` key produces a statement the engines reject outright.
 That is a per-*statement* rule, not a per-construct one, so it cannot reintroduce the mix this
 section forbids; a user's own filter predicate inside that same grouped request is still governed
-here, in full. See the grouping addendum (GRP-2) for the whole argument, the accepted divergence on
-engines whose default collation folds case, and why an earlier draft of this section — which read
-the drill-down match as an ordinary comparison — was wrong on this one point.
+here, in full. **BM-3's distinct-values query answers to the same carve-out** (GRP-6): its
+`SELECT DISTINCT` column and that column's `ORDER BY` are exact, because a distinct set is a set of
+buckets and its entries are handed back to the grid to be matched exactly — while the set filter's
+own search prefix over that very same column is a filter, and so is still governed here. See the
+grouping addendum (GRP-2, GRP-6) for the whole argument, the accepted divergence on engines whose
+default collation folds case, and why an earlier draft of this section — which read the drill-down
+match as an ordinary comparison — was wrong on this one point.
 
 **Two distinct mechanisms, not one — pick per shape, not per whim.** This document previously left
 it ambiguous whether Postgres case-insensitive *equality* (`eq`/`in`/`notIn`, and by extension sort)
@@ -67,8 +71,9 @@ mechanism is appropriate there because the operator itself is a pattern match; t
 > #1640 made wrong and #1640's own review found still standing here — in the very sentence this
 > section labels *the rule, pinned* — after the carve-out had been written into the intro and the
 > Must-NOTs. A `groupSpec.groupKeys` drill-down match, a `GROUP BY` key and a **grouped level's**
-> `ORDER BY` use **no** case-folding mechanism at all (GRP-2). A port implementing SEM-1 from the
-> pinned sentence alone would emit the collation and fail `group-aggregation/002`.
+> `ORDER BY` use **no** case-folding mechanism at all (GRP-2) — as do BM-3's `SELECT DISTINCT` key
+> and its `ORDER BY` (GRP-6). A port implementing SEM-1 from the pinned sentence alone would emit the
+> collation and fail `group-aggregation/002` (and `016`).
 
 **Rationale.** AG Grid's in-memory (client-side) row model filters text case-insensitively by
 default. If the SSRM compiler defaults to case-sensitive comparison instead, the exact same filter
@@ -162,7 +167,10 @@ per field, never assume it exists.
 - Must NOT apply case-folding inconsistently between the comparison and any related `ORDER BY`/sort
   on the same field — case sensitivity is a per-field property, not a per-operator *or per-context*
   one. (A `groupSpec.groupKeys` drill-down match is the documented carve-out: it is exact, together
-  with the `GROUP BY` and `ORDER BY` of the same statement — GRP-2, not this rule.)
+  with the `GROUP BY` and `ORDER BY` of the same statement — GRP-2, not this rule. So is BM-3's
+  `SELECT DISTINCT` key with its own `ORDER BY` — GRP-6, and note that a set filter's search prefix
+  over that same column IS governed here, which is why one such statement legitimately spells two
+  mechanisms.)
 - Must NOT use `ILIKE`/pattern-match as the mechanism for `eq`/`neq`/`in`/`notIn`/ordering/sort —
   that mechanism is a collation. Reserve `ILIKE`/pattern-match for
   `contains`/`notContains`/`startsWith`/`endsWith`, where the operator itself is a pattern match.
@@ -561,15 +569,28 @@ as to any other sort key): since a `stableKey` is required to be unique but not 
 no direction the user chose) — i.e. the appended key is always `{ field: stableKey, direction: "asc",
 nullsPosition: "last" }`.
 
-> **Superseded in part by GRP-4 (#1640), for a grouped level only.** This rule says the appended key
-> is *always* the schema's `stableKey`, and its second Must-NOT below forbids treating anything else
-> as unique. On a **grouped level** that is now wrong: the `stableKey` is not in the grouped
+> **Superseded in part by GRP-4 (#1640) for a grouped level, and by GRP-6 (#1641) for BM-3's
+> distinct-values query.** This rule says the appended key is *always* the schema's `stableKey`, and
+> its first Must-NOT below forbids treating anything else as unique. On a **grouped level** that is
+> now wrong: the `stableKey` is not in the grouped
 > projection at all, so ordering by it is invalid SQL rather than merely undesirable, and the
 > **group column** plays its role instead — appended last, ascending, nulls last, and not appended
 > twice when the sort already ends in it, all of which are this rule's own mechanics unchanged. The
 > Must-NOT's *intent* is untouched and still binds: the substitute is not a key that "merely looks
 > unique", it is unique across the level's rows **by construction**, since a `GROUP BY` emits one row
-> per distinct value of it. Everything else — an ungrouped query, and a fully-consumed drill-down
+> per distinct value of it.
+>
+> A **BM-3 distinct-values query appends nothing at all** (GRP-6(e)) — and it is the exclusion this
+> enumeration is most likely to be read past, because it carries no `groupSpec` and so answers to
+> "not grouped" on the only test a compiler has in front of it. It is nonetheless not a row query:
+> the `stableKey` is absent from its one-column projection exactly as it is from a grouped one, so
+> appending it is the same invalid SQL, and its single `ORDER BY` key — the distinct column — is
+> already unique across the result rows by this blockquote's own by-construction argument, leaving no
+> tie for a tiebreaker to break. A port that appends here emits
+> `ORDER BY "region" ASC NULLS LAST, "id" ASC NULLS LAST LIMIT $1` and fails
+> `group-aggregation/016`-`019` on all six arms.
+>
+> Everything else — an ordinary row query, and a fully-consumed drill-down
 > **leaf**, which projects rows — keeps `stableKey` exactly as written here. Recorded rather than
 > deleted, since the affected artifacts (`group-aggregation/001`-`004`, `007`-`015`, `020`, `021` on
 > every arm) were authored against the original.
@@ -663,7 +684,10 @@ keyset-paging mode; see the "must NOT" below.
   the theory that `stableKey` is "probably never null" — there is no schema state that licenses this
   omission (see the worked example above); every tiebreaker in every artifact carries the marker,
   unconditionally, including under `page: none` (EXP-2) and export scopes (EXP-1), which use the
-  identical sort-compilation path as ordinary paged requests.
+  identical sort-compilation path as ordinary paged requests. (This bullet is about the *marker* on a
+  tiebreaker that exists. It is not an enumeration of the shapes that get one, and in particular
+  "unpaginated" does not imply "still appends": a BM-3 distinct-values query is also unpaginated and
+  appends no tiebreaker at all — GRP-6(e), and the first blockquote above.)
 
 **Cross-links.** `$defs/sortItem` (the array the compiler appends to), `$defs/fieldName`
 (`stableKey` is resolved through the schema the same way any other IR field reference is),
@@ -835,9 +859,10 @@ pinning three-way-identical output that ES/OpenSearch cannot actually produce.
 
 ---
 
-## Addendum — grouping semantics (GRP-1..GRP-5; not numbered SEM-*, for the same reason as the
+## Addendum — grouping semantics (GRP-1..GRP-6; not numbered SEM-*, for the same reason as the
 aggregation addendum, and added by #1640 because BM-2's own two open contradictions could not be
-settled anywhere a fixture README would be the only record)
+settled anywhere a fixture README would be the only record; GRP-6 added by #1641 for BM-3, which is
+subsidiary to BM-2 and answers the same bucket-identity question about a different construct)
 
 BM-2 (row grouping over AG Grid SSRM) is a *protocol*, not a single query shape: one request per
 expanded level, each carrying the whole group path so far. #1630's fixtures pinned that protocol's
@@ -878,6 +903,9 @@ spelled on any of them.** There are exactly three: the `GROUP BY` key, the drill
 predicates a consumed `groupKeys` entry compiles into, and a **grouped level's** `ORDER BY` keys.
 All render bare, whatever the column's declared `caseSensitivity`. So `"EMEA"` and `"emea"` are two
 buckets with two unambiguous labels — which is also what AG Grid's own client-side grouping does.
+(A fourth key answers to this rule without being part of BM-2's protocol at all: BM-3's
+`SELECT DISTINCT` column and its `ORDER BY`. GRP-6 makes the argument for it; everything below
+applies to it unchanged.)
 
 *Why the three must agree, and why "exact" is the only coherent answer.* Bucket identity is decided
 by the `GROUP BY`; the drill-down that expands a bucket must select **exactly** the rows that
@@ -943,22 +971,35 @@ time.* MongoDB's `collation` is a **query-level** option: it governs `$match`, `
 together, and there is no per-stage form. So a grouping request whose scope carve-outs ask for a
 case-insensitive comparison somewhere and an exact one somewhere else has no pipeline that expresses
 both, and the "a grouping request's pipeline carries no `collation` at all" shorthand an earlier
-draft used hid a real choice rather than describing a consequence-free one. Two shapes reach it:
+draft used hid a real choice rather than describing a consequence-free one. Three shapes reach it:
 
 - a grouped request carrying a **user `eq`/`in` filter** on a case-insensitive string (SEM-1 wants
-  the collation; the `GROUP BY` and drill-down forbid it), and
+  the collation; the `GROUP BY` and drill-down forbid it),
 - a **drill-down leaf** sorting a case-insensitive string (SEM-1 wants it; the drill-down `WHERE`
-  forbids it) — which `group-aggregation/005` and `006` now are.
+  forbids it) — which `group-aggregation/005` and `006` now are, and
+- a **BM-3 distinct-values request** (GRP-6) carrying a user filter on some *other* case-insensitive
+  string — SEM-1 wants the collation for that `$match`, while GRP-6(a)'s exact buckets forbid it on
+  the `$group` that computes the distinct set. This one is easy to miss because the conflicting pair
+  sits on **two different fields**: the collation is wanted for `segment` and forbidden for `region`,
+  yet MongoDB has only one switch for both.
 
-**The protocol's keys win, on both: the pipeline carries no `collation`.** Bucket identity is a
+**The protocol's keys win, on all three: the pipeline carries no `collation`.** Bucket identity is a
 correctness property — get it wrong and a child level's rows stop summing to the parent's aggregate,
 silently — while a case-folded filter or sort is a narrower, visible difference in which rows come
 back and in what order. So on MongoDB a user's own filter compares case-**sensitively**, and a
 leaf's `$sort` orders case-sensitively, where the four SQL dialects collate both. Recorded here as a
 documented, host-visible divergence, in the same register as GRP-2's SQL Server/MySQL DDL obligation
 and AGG-5: no fixture reaches the first shape (no grouped case carries both `groupKeys` and a
-`filterModel`), and `005`/`006`'s Mongo arms pin the second. The execution-equality tier (T-1b,
-#1624) is what can grade it; T-1a cannot see it.
+`filterModel`), `005`/`006`'s Mongo arms pin the second, and `016`–`019`/`022`'s pin the third. The
+execution-equality tier (T-1b, #1624) is what can grade it; T-1a cannot see it.
+
+*How the third shape was found, because the same trap is waiting for every other backend with a
+query-level switch.* `017`'s Mongo arm was authored in #1641 carrying a query-level `collation`
+beside a `$group` on `region` — the exact combination #1640 had already stripped from every grouped
+arm, reintroduced on a query nobody thought of as "grouped" because it carries no `groupSpec`. The
+SQL arms were right the whole time; only Mongo, where one option governs every stage at once, could
+express the contradiction at all. **The test is not "does this request have a `groupSpec`" but "does
+this pipeline compute a distinct set" —** and under GRP-6 a BM-3 request always does.
 
 **GRP-3. A grouping request names its output columns at every level; an ungrouped one does not.**
 A grouped level projects `<group column> AS <logical field name>` — aliased **always**, even when
@@ -971,10 +1012,12 @@ whatever map the schema was deserialized into — is a language-specific acciden
 in .NET, `dict` in Python and `Map` in JS happen to preserve insertion order; Go's `map` and Java's
 `HashMap` emphatically do not), and `group-aggregation/005`/`006` compare this column list byte for
 byte. `SELECT *` is not available to the protocol at either level: it returns *physical*
-column names, and a grid that asked for `fiscalYear` cannot read a `fiscal_year` key. An **ungrouped**
-query is out of GRP-3's scope and still renders `SELECT *`; widening that belongs to the export
+column names, and a grid that asked for `fiscalYear` cannot read a `fiscal_year` key. An **ordinary
+row query** is out of GRP-3's scope and still renders `SELECT *`; widening that belongs to the export
 feature, which owns the request-supplied column list (EXP-3) any general projection rule has to
-compose with.
+compose with. *"Ordinary row query" and not "ungrouped"*: BM-3's distinct-values query also carries no
+`groupSpec` and is emphatically not `SELECT *` — it projects the one target column, unaliased
+(GRP-6(e)). The same distinction as in SEM-6's first blockquote, for the same reason.
 
 **GRP-4. A grouped level orders by what it projects, and breaks ties on its group column.**
 - A sort key naming an **aggregated column** orders by that aggregate's **expression**
@@ -1107,9 +1150,112 @@ therefore a **wrongly-typed request**, rejected at the `typeCoercion` stage with
 `uncoercible-value` reason — never repaired, and never allowed to surface further downstream as a
 compiler precondition failure on ordinary client input.
 
+**GRP-6. BM-3's distinct-values query is a bucket query, and its cap is a ceiling rather than a
+page.** A set filter asks the server "which values may I offer for this column, given the filters
+currently in effect?". The answer compiles to `SELECT DISTINCT <col> … ORDER BY <col> <cap>` (a
+`terms` aggregation on ES/OpenSearch, a `$group` on `_id` on MongoDB), and five things about it are
+decided here because each of them is a place a port would otherwise guess differently.
+
+*(a) The `DISTINCT` key and its `ORDER BY` are exact — GRP-2's rule, reached by GRP-2's argument.*
+`SELECT DISTINCT` computes a distinct set exactly as `GROUP BY` does; it is a bucketing operation
+whose buckets happen to have no aggregate attached. A collated one folds `"EMEA"` and `"emea"` into a
+single entry whose label is unspecified — and that entry is precisely what the grid hands straight
+back, as an `in` value in the column's own filter or as a `groupKey` into a grouped request, where
+GRP-2 matches it **exactly** and it selects neither original row. So the values a set filter offers
+must be the values the data actually holds, one entry per distinct spelling. Read as an ordinary
+query instead, SEM-1 would collate both positions; that reading is rejected, and the reason is the
+same one GRP-2 gives: SEM-1 governs how a field's *values* are compared, not what a bucket *is*.
+The consequences GRP-2 records carry over verbatim — including that "spell nothing" is exact only
+where the engine's own default already is, so exact set-filter values on SQL Server and MySQL are the
+same host DDL obligation, gradeable only at the execution tier (T-1b, #1624).
+
+*(b) The target column's own filter is dropped; every other column's is honoured.* This is BM-3's
+defining semantic and the AG Grid convention it names. A value list narrowed by the selection already
+made on its own column collapses to what is already selected, and the user can never widen it again.
+Everything else in the filter model still applies, so the list stays consistent with the rows the grid
+is showing. **Where it happens matters**: it is a semantic rule every backend shares, so it belongs in
+the request pipeline, not in one compiler and not in a frontend adapter — a host building the IR
+directly must get it too. Conditions are pruned, not branches: `(region eq "EMEA" AND segment eq
+"Enterprise")` targeting `region` leaves `segment eq "Enterprise"`, and a `not` whose only condition
+was on the target vanishes with it rather than becoming a negation of nothing. Pinned by
+`spec/fixtures/group-aggregation/017`, whose artifacts are byte-identical with and without the
+`region` entry in its `filterModel` — which is the whole point of the fixture and, until #1641, was
+not true of it: it carried no `region` filter at all and therefore tested nothing.
+
+*(c) The search prefix is an ordinary `startsWith` predicate on the target column.* The set filter's
+inline search box narrows the candidate values; modelled as IR it is a `startsWith` comparison
+carrying the raw text, so SEM-1 picks the field's own mechanism for it and SEM-7's escaping applies
+unchanged — a literal `%` typed into the box cannot widen into a wildcard, and no backend needs a
+second prefix-matching path. It is therefore **not** exempt from (a)'s exactness in the way that
+looks contradictory: one statement legitimately matches the column case-insensitively and orders it
+exactly, which is GRP-2's own first carve-out (a filter selects rows, it does not decide bucket
+identity) applied to a single column. *Order:* the user's filter leads and the prefix trails —
+`WHERE (<filter model, minus this column> AND <prefix>)`. It was stated here rather than left open
+because the choice is visible in `params`, which is compared exactly, and #1641's review then gave it
+an artifact of its own: `spec/fixtures/group-aggregation/022` carries a filter on another column, the
+target column's own filter, and a `searchPrefix`, all in one request, so the order is now pinned on
+six backends instead of resting on this sentence. (It is also the only case where the exclusion and
+the prefix act on the **same** column, which is what makes "prune the model, then inject the prefix"
+distinguishable from "prune the finished tree".) A prefix against a column that is not declared `string` has no meaning and
+is a wrongly-typed request, rejected at the `typeCoercion` stage with SEM-5's `uncoercible-value`.
+
+*(d) The cap is applied, never enforced, and never absent.* The compiled limit is
+`min(requested ?? default, maximum)`, from two host-configured SEC-3 numbers: a **default** for a
+request that asks for no cap of its own, and a **maximum** no request may exceed. A client asking for
+more values than the host will serve has not malformed anything — a set filter over a
+high-cardinality column asks for as many as it can get by design — so the server clamps and answers
+rather than rejecting; `group-aggregation/019` requests 50,000 against a 10,000 maximum and compiles
+to 10,000, while `016`-`018` request none and compile to the 1,000 default. The two numbers are
+separate knobs, because they answer different questions (what a quiet client gets versus what the
+loudest one may ever get) and a host raising the ceiling for one explicit request has not agreed to
+send that many values to every set filter that opens. "No cap" is not an available answer at all.
+
+*(e) It is a cap, not a page — so there is no offset, and no tiebreaker.* The list is fetched once;
+there is no second page. So the compiled statement carries the row limit **alone**: `LIMIT $1` with no
+`OFFSET`, `$limit` with no `$skip`, `"size"` with no `"from"`. On engines whose row-limiting syntax
+cannot stand alone this is a real per-dialect difference rather than a shortened clause — T-SQL has no
+`LIMIT`, and its `FETCH NEXT` is illegal without an `OFFSET` — so a `Dialect` seam needs its own
+member for it, distinct from the paging clause:
+
+| Dialect | Row cap | Parameters bound |
+|---|---|---|
+| Postgres | `LIMIT $1` | 1 |
+| MySQL / MariaDB | `LIMIT ?` | 1 |
+| SQLite | `LIMIT ?` | 1 |
+| SQL Server | `OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY` | 1 — the `0` is **literal** |
+
+SQL Server's zero is written rather than bound because it is not a value the request carries: it is
+the syntax that makes "no offset" expressible on an engine whose `FETCH` requires one, in the same
+register as the `'%'` anchors and the `ESCAPE` character a compiler already emits as literals. Every
+dialect therefore binds exactly one parameter here, and `params` stays identical across the four arms
+of a BM-3 fixture. (`SELECT DISTINCT TOP (@p1) …` is idiomatic T-SQL and is deliberately not used: it
+would put the cap in the select list, giving one engine a different statement shape.)
+
+For the same reason SEM-6's tiebreaker does **not**
+apply: the distinct column's values are unique across the result rows by construction, and the
+schema's `stableKey` is not in the projection at all, so ordering by it would be the invalid SQL GRP-4
+avoids at a grouped level. The single `ORDER BY` key is the distinct column, ascending, nulls last.
+The projection carries **no alias**, unlike GRP-3's: the response is one column of scalars, not rows a
+grid maps by key, so there is no name for a client to look anything up by.
+
+*The target `colId` is client-controlled, and no mode may drop it.* It passes the SC-1 allowlist in
+**every** schema mode, on GRP-1's reasoning taken one step further: a `groupCol` that Lenient dropped
+would at least leave a differently-shaped answer, whereas the `colId` here *is* the question — drop it
+and a compiler has no column to select, while an empty value list would tell the grid that the column
+has no values rather than that the server declined to say. The capability flag it would be held to is
+SC-2's `filterable` (a set filter's value list is the filter UI's own data source, so `groupable` and
+`sortable` are the wrong questions even though the compiled query buckets and orders the column) —
+that flag is enforced nowhere today, on this path or on the filter path, and closing the gap must
+close both at once: refusing a column's set-filter values while still honouring that same column's
+`filterModel` entry would be incoherent. The gap is named and owned rather than merely noted —
+**#1872**, "Enforce SC-2 capability flags: `filterable` on the filter and set-values paths" — so a
+port reading this rule knows it is reading a deferral with a date on it rather than a silent
+omission.
+
 **Cross-links.** `$defs/groupSpec` (`groupCols`, `groupKeys`), `$defs/aggregation`,
-`$defs/sortItem`, AGG-1..AGG-3, SEM-1, SEM-6, SQL-2, SQL-6, and BM-2/AR-8/AR-9 in the TRD.
-`spec/fixtures/group-aggregation/` is the artifact oracle for all five.
+`$defs/sortItem`, `$defs/setValuesSpec`, AGG-1..AGG-4 (AGG-4 pins the `terms` ordering GRP-6(a)'s
+ES/OpenSearch arm depends on), SEM-1, SEM-5, SEM-6, SEM-7, SQL-2, SQL-6, and BM-2/BM-3/AR-8/AR-9 in
+the TRD. `spec/fixtures/group-aggregation/` is the artifact oracle for all six.
 
 ---
 
@@ -1294,12 +1440,14 @@ Whatever a dialect spells, it spells on **every construct where SEM-1 applies at
 substring match and the `ORDER BY`. `dialect-parity/014` (`eq`), `/018` (`notIn`) and `/021`
 (`contains`) pin the case-sensitive direction; `/006`, `/016`, `/007` pin the insensitive one.
 
-The **exception is the row-group protocol's own keys**, where SEM-1 does not apply in either
+The **exception is the bucket-identity keys**, where SEM-1 does not apply in either
 direction: a `GROUP BY` key, a `groupKeys` drill-down match and a grouped level's `ORDER BY` spell
-nothing at all (GRP-2). This table therefore has no column for them, and on the two engines whose
-default folds case that "nothing" is a host DDL obligation of exactly the kind the MySQL row below
-records — see GRP-2's own accepted-divergence paragraph. A drill-down **leaf**'s `ORDER BY` is not
-one of the protocol's keys and is covered by the table normally.
+nothing at all (GRP-2), and so do BM-3's `SELECT DISTINCT` column and its `ORDER BY` (GRP-6). This
+table therefore has no column for them, and on the two engines whose default folds case that
+"nothing" is a host DDL obligation of exactly the kind the MySQL row below records — see GRP-2's own
+accepted-divergence paragraph. A drill-down **leaf**'s `ORDER BY` is not one of these keys and is
+covered by the table normally; so is a set filter's search prefix, which is a filter on the distinct
+column rather than the distinct key itself.
 
 *Why MySQL is the exception, and what a host owes.* Case sensitivity there is a property of the
 **column's** declared collation, which the statement cannot override portably — MySQL's
