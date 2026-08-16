@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Craticula.Mongo</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- AR-3: no MongoDB driver package, deliberately. The compiled artifact is Extended JSON that
+         this project emits by hand through System.Text.Json.Nodes, so the compiler carries no
+         transitive dependency on any one driver's document model or its version. -->
+    <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
+  </ItemGroup>
+
+</Project>

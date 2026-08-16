@@ -2,7 +2,9 @@
   {
     "$match": {
       "unitCost": {
-        "$numberDecimal": "19.99"
+        "$eq": {
+          "$numberDecimal": "19.99"
+        }
       }
     }
   },
@@ -27,6 +29,9 @@
       "__idNullBucket": 1,
       "id": 1
     }
+  },
+  {
+    "$unset": "__idNullBucket"
   },
   {
     "$skip": 0

@@ -2,7 +2,9 @@
   {
     "$match": {
       "amount": {
-        "$gt": 1000
+        "$gt": {
+          "$numberDecimal": "1000"
+        }
       }
     }
   },

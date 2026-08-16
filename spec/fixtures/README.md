@@ -62,7 +62,7 @@ outside T-1a:
 | Tier | Dialects | What that means |
 |---|---|---|
 | **v1 supported** (§5) | Postgres, SQL Server, MySQL/MariaDB, SQLite | Graded by T-1a; on the release path; execution-equality (T-1b, Feature #1624) will cover them. |
-| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 39 arms across `dialect-parity/006`-`022` and all of `group-aggregation/` — but **no CI job runs it against a real Oracle instance and no release is blocked on it**. OQ-6 stays open. Its host obligations (12.2+, `MAX_STRING_SIZE = EXTENDED`, quoted DDL) are recorded in `dialect-parity/README.md`. |
+| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 40 arms across `dialect-parity/006`-`023` and all of `group-aggregation/` — but **no CI job runs it against a real Oracle instance and no release is blocked on it**. OQ-6 stays open. Its host obligations (12.2+, `MAX_STRING_SIZE = EXTENDED`, quoted DDL) are recorded in `dialect-parity/README.md`. |
 
 An Oracle artifact disagreeing with a compiler is still a bug in one of the two, on the same terms as
 any other arm; the tier is about *coverage beyond the artifact*, not about how seriously the artifact
@@ -151,8 +151,10 @@ window, owned by #1624 at the execution tier).
 
   *Two corrections from #1640's own review, both recorded in `group-aggregation/README.md`.* GRP-2
   was **narrowed**: a fully-consumed drill-down **leaf**'s `ORDER BY` is not one of the protocol's
-  keys (it has no `GROUP BY` and no buckets), so SEM-1 governs it and `005`/`006` collate again on
-  the dialects that spell it. And the original register's entry (a) claimed all 20 of this category's
+  keys (it has no `GROUP BY` and no buckets), so SEM-1 governs it and `005`'s user-chosen `product`
+  key collates again on the dialects that spell it. (`005` and `006` were re-authored together, but
+  only `005` ends up collating anything: `006` carries no `sortModel`, and the same review's second
+  round settled the appended tiebreaker as exact on every backend.) And the original register's entry (a) claimed all 20 of this category's
   artifacts; only 16 were settled, leaving `016`-`019` open for #1641.
 
   *#1641 closed those four, as **GRP-6**.* A distinct-values query **is** a bucket query: its
@@ -170,6 +172,57 @@ window, owned by #1624 at the execution tier).
   pinned by **no** artifact: `017` had filters and no prefix, `018` a prefix and no filters, so a port
   could emit the two conjuncts in either order and pass everything. `022` carries both.
 
+## Mongo artifact rendering — pinned by compiling it (#1643)
+
+Until #1643 nothing compiled a pipeline: the 157 `mongo.artifact.json` files were hand-authored
+across #1630-#1642 as a secondary arm no runner had ever executed. Compiling 144 of
+them found six disagreements. Five had a clear verdict from an existing rule and the losing side was
+corrected — the SEM-3 `$unset` (missing from all 47 `operators/` artifacts), GRP-5's composite
+drill-down (`group-aggregation/003`-`005`), SEM-2's derived-not-negated `notBlank`
+(`dialect-parity/019`), AR-7's Decimal128 literal (`group-aggregation/020`) and SEM-1's collation
+wrapper on two pipelines with no text comparison in them (`filter-tree/004`, `/006`). Each is
+recorded in the affected category's own README.
+
+**The forms themselves are NOT written down here.** #1643 first recorded the nine rules it had
+settled in this README, which is the repo's own named recurring defect class — a rendering rule
+living in a fixture README rather than in the normative document is exactly the state the SQL
+addendum was written to end, and #1630's parallel hand-authoring produced it on the SQL arm for the
+same reason. Its review pass moved them: `spec/semantics.md` now carries an **"Addendum — canonical
+MongoDB rendering" (MDB-1..MDB-12)**, parallel in status and structure to the SQL one, and that is
+where a port reads them. The rules that had no normative home before it — the explicit `$eq`, the
+`$and`/`$or`/`$nor` mapping, the uncollapsed single-child composite, SEM-2's null-inclusive `$or`,
+`notContains`'s `$not`, `blank`/`notBlank`'s `$in`/`$nin`, `inRange`'s single field document, SEM-3's
+two grouping bucket names, and the wrapper-iff-collation shape — are MDB-1..MDB-8. MDB-9..MDB-12 were
+added by the same review pass and are new rules rather than relocated ones (the `$expr` escape, the
+stage-document collision checks, SEM-7's ASCII scope, and the MongoDB 4.2 floor).
+
+**One call was genuinely close and is recorded as a ratified decision rather than a self-evident
+one: the spelling of `eq` (MDB-1).** MongoDB admits both `{"status": {"$eq": "active"}}` and the
+implicit `{"status": "active"}`, they are semantically identical for every value the IR can carry,
+and the hand-authored suite used **both, in adjacent cases of one category** —
+`operators/001-eq-string` explicit against `operators/003`/`005`/`007`/`046` implicit, all of
+`filter-tree/` explicit against every `group-aggregation/` drill-down implicit. SEM-1's own Mongo
+snippet shows the implicit form but the document disclaims its SEM-1..SEM-7 snippets as illustrative
+rather than literal. #1643 chose the **explicit** form on three grounds: SEM-2's Mongo paragraph,
+which is normative prose rather than a snippet, emits the explicit composed form for `$ne` *even
+though the naive one is correct*, "to keep the compiled shape parallel to the SQL and ES forms" and
+to stay valid in an `$expr` context where only `{"$eq": [...]}` exists; a uniform operator table
+needs no carve-out, which is SQL-1's "always quote, no second rule" applied here; and the suite's own
+canonical `eq` fixture (`operators/001`) plus its two most recently authored artifacts
+(`group-aggregation/017`, `/022`, #1641) already spelled it. 21 artifacts were re-authored for it.
+It is now MDB-1; re-settling it the other way means re-authoring those 21 artifacts,
+`MongoPipelineBuilder.ScalarOperator`, and `CrossCompilerGroupingTests`'s drill-down reader, which
+matches on the explicit form's `{`.
+
+**One coverage gap, recorded rather than closed: SC-4's Mongo path mapping.** Every in-scope
+fixture's `physical.mongo.path` is the identity mapping, so the code that turns `customerName` into
+`customer.name` in a `$match` key, a `$sort` key, `$group._id`, a `$cond` reference and a `$project`
+value is exercised by unit tests alone. The only schemas in the suite declaring a differing path
+belong to `page-export/`, whose whole category is excluded from the runner for an unrelated reason
+(EXP-1..EXP-8 owns the projection). `MongoConformanceFixtureTests` asserts the gap
+(`Records_That_No_In_Scope_Fixture_Maps_A_Mongo_Path_Away_From_Its_ColId`), so it fails — and this
+paragraph becomes deletable — the day a fixture closes it.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,
@@ -185,7 +238,14 @@ agree with one another and a collated `GROUP BY` key is not valid SQL; BM-3's `S
 column and its `ORDER BY` join them (**GRP-6**). That scope is narrow and every edge matters: a user
 filter inside the same grouped request still follows the split above, so does a fully-consumed
 drill-down **leaf**'s `ORDER BY`, which orders raw rows rather than buckets, and so does a set
-filter's own search prefix, which filters the distinct column rather than being its key. Do not reach for `ILIKE`/`$regex` for an exact-match or
+filter's own search prefix, which filters the distinct column rather than being its key.
+
+**MongoDB is the one backend where "per field" and "per statement" collide** (**MDB-9**,
+`dialect-parity/023`): its collation is a query-level option, so a request comparing one
+case-insensitive field and one case-sensitive field cannot spell both mechanisms the way a `COLLATE`
+clause does. The sensitive comparison is moved into an `$expr`, where aggregation expressions compare
+binarily and the collation does not apply; a sensitive *sort* key in the same pipeline has no
+equivalent escape and is a compiler error. Do not reach for `ILIKE`/`$regex` for an exact-match or
 set-membership operator "because it's already case-insensitive that way" — it reintroduces an
 escaping trap (a literal `%`/`_` in the value silently becomes a wildcard) that a collation doesn't
 have. See `spec/semantics.md` SEM-1 for the full rationale.
@@ -307,7 +367,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
 | `page-export/` | AG-3/EXP-2 page spec, EXP-1/EXP-6/EXP-8 export + hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits | ~20 |
-| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7) | ~22 |
+| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7, MDB-9) | ~23 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |
 
 Each category directory has its own `README.md` enumerating its cases and the specific requirement

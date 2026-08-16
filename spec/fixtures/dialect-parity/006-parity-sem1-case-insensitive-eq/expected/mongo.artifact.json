@@ -1,6 +1,6 @@
 {
   "pipeline": [
-    { "$match": { "lastName": "smith" } },
+    { "$match": { "lastName": { "$eq": "smith" } } },
     {
       "$addFields": {
         "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }

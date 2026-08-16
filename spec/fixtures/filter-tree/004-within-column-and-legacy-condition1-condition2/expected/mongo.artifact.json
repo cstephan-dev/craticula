@@ -1,55 +1,49 @@
-{
-  "pipeline": [
-    {
-      "$match": {
-        "$and": [
-          {
-            "amount": {
-              "$gt": 50
-            }
-          },
-          {
-            "amount": {
-              "$lt": 500
-            }
+[
+  {
+    "$match": {
+      "$and": [
+        {
+          "amount": {
+            "$gt": 50
           }
+        },
+        {
+          "amount": {
+            "$lt": 500
+          }
+        }
+      ]
+    }
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
         ]
       }
-    },
-    {
-      "$addFields": {
-        "__idNullBucket": {
-          "$cond": [
-            {
-              "$eq": [
-                "$id",
-                null
-              ]
-            },
-            1,
-            0
-          ]
-        }
-      }
-    },
-    {
-      "$sort": {
-        "__idNullBucket": 1,
-        "id": 1
-      }
-    },
-    {
-      "$unset": "__idNullBucket"
-    },
-    {
-      "$skip": 0
-    },
-    {
-      "$limit": 100
     }
-  ],
-  "collation": {
-    "locale": "en",
-    "strength": 2
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
   }
-}
+]

@@ -30,6 +30,9 @@
     }
   },
   {
+    "$unset": "__idNullBucket"
+  },
+  {
     "$skip": 0
   },
   {

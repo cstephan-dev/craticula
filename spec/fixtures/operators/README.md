@@ -22,9 +22,18 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   deliberately **not** exercised here — that is `sort-paging/`'s job. What is NOT optional, per SEM-3's
   own "must NOT omit the null-ordering marker on the theory that the field is probably never null"
   rule: every artifact's `id ASC` sort still carries its adapter-default `nullsPosition: "last"`
-  marker — `NULLS LAST` in Postgres, an `__idNullBucket` null-bucket `$addFields`/`$sort` pair in
-  Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 47 cases, exactly as
-  `filter-tree/` and `sort-paging/` already do for their own bare `id` sort.
+  marker — `NULLS LAST` in Postgres, an `__idNullBucket` null-bucket `$addFields`/`$sort`/`$unset`
+  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 47 cases,
+  exactly as `filter-tree/` and `sort-paging/` already do for their own bare `id` sort.
+
+  *Corrected in #1643, on all 47.* This bullet used to say "`$addFields`/`$sort` **pair**", and the
+  artifacts matched it: none of them carried the `$unset`. SEM-3 makes that stage mandatory — a
+  result document carrying `__idNullBucket` beside the real fields is a shape divergence from the
+  Postgres and Search results for the identical IR, on top of leaking a compiler-internal detail —
+  and every other category (`filter-tree/`, `sort-paging/`, `dialect-parity/`, `date-presets/`,
+  `group-aggregation/`, `ag-grid-majors/`, `page-export/`) already emitted it. `operators/` was the
+  one category the 2026-08-10 SEM-3 audit never reached, and nothing could contradict it until a
+  Mongo compiler existed.
 - **Mongo case-insensitivity: `collation` for exact-match/set ops, `$regex` for substring ops.**
   Per SEM-1's pinned collation-vs-pattern-match split, `mongo-artifact.schema.json`'s wrapper-object
   shape (`{pipeline, collation}`) is used for the `eq`/`neq`/`in`/`notIn` cases that need

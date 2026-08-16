@@ -8,10 +8,10 @@ specific SEM rule/mechanism it pins):
    semantics rule — MySQL's `ISNULL` null-ordering emulation, SQL Server's `OFFSET`/`FETCH NEXT`
    paging syntax, SQLite's default ASCII-case-insensitive `LIKE`, Postgres's `pg_trgm`-index-eligible
    `ILIKE`. One artifact per fixture, targeting only the dialect under test.
-2. **Cross-backend parity showcases** (`006`-`022`): the same rule proved to reach an *identical
+2. **Cross-backend parity showcases** (`006`-`023`): the same rule proved to reach an *identical
    logical outcome* on **every** backend — all five SQL dialects (Postgres/MSSQL/MySQL/SQLite, plus
    **Oracle** since #1642) + MongoDB + Search — through each backend's own native mechanism.
-   17 fixture directories × 7 backend artifacts = 119 artifact files, still only 17 fixture cases.
+   18 fixture directories × 7 backend artifacts = 126 artifact files, still only 18 fixture cases.
 
    *Identical logical outcome, not identical text — and `019` is where that distinction stops being
    pedantic.* Oracle's `''` is NULL, so `blank`'s text arm collapses there (**SQL-7**); its arm is the
@@ -27,6 +27,12 @@ arms) — see **D2** below for which constructs earned arms and which deliberate
 exposed: nothing in the suite reached a case-sensitive substring match, which is the single place a
 dialect changes *operator* rather than *token* (SQLite's `GLOB`, **D3**); and no filter value
 contained a `[`, which is a `LIKE` wildcard on SQL Server and nowhere else (**D5**).
+
+`023` was authored the same way in **#1643's review pass**, closing the equivalent hole on the other
+artifact family: every fixture in the suite compared **one** string field, so nothing could show what
+a *pipeline-wide* mechanism does to a second field that declared the opposite case sensitivity. It is
+the first case whose interesting arm is the MongoDB one (**MDB-9**'s `$expr` escape) while all five
+SQL arms are unremarkable — the mirror image of `021`/`022`.
 
 All cases model the same `employees` domain `sort-paging/` uses (`id` int64 stableKey, `lastName`
 string, `age` int64, `salary` decimal, `department` string), plus a few fixture-local additions
@@ -60,6 +66,7 @@ confusing to bolt onto a field reused elsewhere in this category.
 | 020 | `sem7-mongo-regex-full-metacharacter-escaping` | parity showcase (all 7) | A filter value exercising SEC-4's LIKE-wildcard set and the wider regex-metacharacter set side by side | SEM-7, SEC-4 |
 | 021 | `sem1-case-sensitive-contains` | parity showcase (all 7) | Case-**sensitive** `contains` — `014`'s schema verbatim with only the operator changed. The one case where a dialect changes operator rather than token: SQLite renders `GLOB` (D3), since its `LIKE` is unconditionally ASCII-CI. Its `*` filter value is a metacharacter in two of the four escape alphabets | SEM-1, SEM-7, SC-3, SEC-4 |
 | 022 | `sec4-tsql-bracket-wildcard-escaping` | parity showcase (all 7) | `[` is a **fourth** `LIKE` wildcard on SQL Server and on no other v1 dialect — `020`'s schema verbatim with only the filter value changed, so the mssql arm is the only one whose bound value is escaped (D5) | SEM-7, SEC-4 |
+| 023 | `sem1-mixed-case-sensitivity-one-request` | parity showcase (all 7) | An insensitive **and** a sensitive string compared in one request — `006`'s and `014`'s schemas merged. The five SQL dialects attach `COLLATE` per operand and need nothing new; MongoDB's collation is query-level, so the sensitive comparison escapes into `{"$expr": …}` (**MDB-9**). The suite's only `$expr` artifact | SEM-1, SC-3, SQL-6, **MDB-9** |
 
 ## Notes on artifact construction
 
@@ -91,7 +98,28 @@ confusing to bolt onto a field reused elsewhere in this category.
   existing at all: `GLOB` takes none, D3.)
 - **Every MongoDB `$regex` artifact escapes the full regex-metacharacter class** (not just SEC-4's
   four LIKE/wildcard characters) and carries the `"i"` option — visibly exercised (not just a
-  structural no-op) in `020`.
+  structural no-op) in `020`. `021` is the exception to the *option*, not to the escaping: a field
+  declared `caseSensitivity: "sensitive"` drops `$options` entirely, because MongoDB's own default
+  regex matching is already case-sensitive (unlike the SQL engines SQL-6 makes spell that direction).
+- **A pipeline-wide `collation` reaches every construct in it, so a case-**sensitive** comparison
+  beside a case-insensitive one is rendered as an `$expr`** (`023`, **MDB-9**). This is the one place
+  where MongoDB needs a mechanism the five SQL dialects do not: `COLLATE` attaches per operand, so a
+  SQL arm simply spells two different things in one `WHERE`, while MongoDB has a single query-level
+  switch. Aggregation-expression comparison ignores that switch, which is what makes the escape
+  correct rather than merely different. The escaped value operand is wrapped in `{"$literal": …}`,
+  which is the *only* place in the suite a value is bound by something other than a parameter or a
+  request slot — see MDB-9 for why an unwrapped one stops being a value at all. A case-sensitive
+  *sort key* has no such escape and is a compiler error instead — hence no artifact for it, the same
+  shape as SQL-7(b).
+- **`019`'s MongoDB arm was wrong, and #1643 re-authored it.** It rendered `notBlank` as
+  `{"$nor": [{"lastName": null}, {"lastName": ""}]}` — the negation of a `$or` form that no `blank`
+  artifact in the suite ever compiles to, i.e. a *separately-derived* condition, which is exactly what
+  SEM-2's third Must-NOT forbids and what this very fixture is named for. The suite's compiled `blank`
+  on a `string` is `{"status": {"$in": [null, ""]}}` (`operators/029`) and its operator-level negation
+  is `$nin` (`operators/030`), so the arm is now `{"lastName": {"$nin": [null, ""]}}`. Spelling it
+  `$nor` also made a leaf operator indistinguishable from a one-child tree-level `notNode`, which is
+  what `$nor` renders everywhere else in the suite (`filter-tree/007`-`015`) — the same conflation
+  SQL-3 rules out for `notContains`.
 - **`eq`/`in` (exact-match and set-membership) on a case-insensitive field use a collation, never
   `ILIKE`** (SEM-1's mechanism-note split, pinned this session): Postgres uses this project's
   canonical `craticula_ci` ICU collation (`COLLATE craticula_ci = $1` for `eq`, `COLLATE
@@ -321,12 +349,13 @@ identifier-length limit that 12.2 also settles.
 
 ## Host obligations these artifacts imply (PERF-4's per-backend index-guidance page owns the DDL)
 
-The compiled statement is only half the contract on **four of the five** dialects — SQL Server is the
-only one that owes nothing. Recorded here because the index-guidance page does not exist yet; move
-them there when it does.
+The compiled statement is only half the contract on **four of the five** SQL dialects — SQL Server is
+the only one that owes nothing — and, since #1643 compiled the Mongo arm, on MongoDB too. Recorded
+here because the index-guidance page does not exist yet; move them there when it does.
 
 | Dialect | Obligation | Consequence if unmet |
 |---|---|---|
+| MongoDB | Server **≥ 4.2**, for `$unset` as an aggregation stage — which SEM-3's null-bucket trio emits in *every* pipeline, since SEM-6 makes the sort tiebreaker unconditional. `{"$not": {"$regex": …}}` (MDB-4's `notContains`) additionally needs **≥ 4.0.7**, so 4.2 is the binding floor. | The server rejects the pipeline — an unrecognised stage is a loud failure, in the same class as SQLite's 3.30.0 and Oracle's 12.2 floors rather than MySQL's silent one. |
 | Postgres | `CREATE COLLATION craticula_ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false);` | Every case-insensitive comparison fails: the collation does not exist. |
 | MySQL / MariaDB | A field declared `caseSensitivity: "sensitive"` needs a `_bin`/`_as_cs` **column** collation. | The declaration is silently ignored — the compiler's output says nothing either way, so comparisons run case-**in**sensitively under the server's `_ci` default. |
 | SQL Server | **None.** Handled inline as of D4 (`COLLATE Latin1_General_CS_AS` / `Latin1_General_CI_AS`), so neither direction depends on the database's own collation. | — |

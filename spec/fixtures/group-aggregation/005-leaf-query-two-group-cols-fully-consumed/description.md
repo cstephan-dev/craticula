@@ -32,10 +32,14 @@ craticula_ci`, SQL Server `COLLATE Latin1_General_CI_AS` (inside the null-bucket
 `COLLATE NOCASE`. **MySQL's arm is unchanged**, because there case-insensitive *is* the column's own
 declared collation and there is nothing to spell (SQL-6). The **search** arm sorts `product` on the
 `search.normalizedSubField` (`product.normalized`) this case's `schema.json` now declares, which
-SEM-1 requires for case-insensitive ordering on ES/OpenSearch. The **mongo** arm is unchanged, and
-that is a divergence GRP-2 records rather than a gap: Mongo's `collation` is query-level, so
-collating this `$sort` would also fold the drill-down `$match` that reproduces the bucket -- and
-bucket identity wins.
+SEM-1 requires for case-insensitive ordering on ES/OpenSearch. The **mongo** arm carries no
+`collation`, and that is a divergence GRP-2 records rather than a gap: Mongo's `collation` is
+query-level, so collating this `$sort` would also fold the drill-down `$match` that reproduces the
+bucket -- and bucket identity wins. *(This sentence read "the mongo arm is unchanged" until #1643's
+review pass. It stopped being true in #1643 itself, which gave this arm GRP-5's `$and` wrap around
+the two drill-down predicates and MDB-1's explicit `$eq`; only the **collation** claim was ever the
+point, and it still holds. `spec/semantics.md` names this fixture as one of exactly three that reach
+accepted divergence #3.)*
 
 **The appended tiebreaker is the exception, and this case is where the two forms sit side by side.**
 `stableKey` here is `id`, also declared `string` with no `text` block, so SEM-1 alone would collate

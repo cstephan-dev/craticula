@@ -15,8 +15,13 @@ backend-native mechanisms, an explicit "must NOT" list, and cross-links to the I
 All SQL/Mongo/OpenSearch examples in the SEM-1..SEM-7 sections below are illustrative snippets to
 convey intent, not the literal compiler output for any one dialect. The literal rendering — identifier
 quoting, parenthesisation, which operator carries a negation, how a set is parameterized — is pinned
-separately in the **"Addendum — canonical SQL rendering"** at the end of this document, which *is*
-normative and *is* byte-for-byte what the `spec/fixtures/` Postgres artifacts contain.
+separately in **two addenda** at the end of this document, both of which *are* normative and *are*
+byte-for-byte what the `spec/fixtures/` artifacts contain: **"Addendum — canonical SQL rendering"**
+(SQL-0..SQL-7(b)) for the Postgres reference arm and its four sibling dialects, and **"Addendum —
+canonical MongoDB rendering"** (MDB-1..MDB-12) for the `mongo.artifact.json` arm. A Mongo snippet
+below is illustrative in exactly the way a SQL one is; where the two disagree — SEM-1's implicit
+`{name: "Smith"}` against MDB-1's explicit `$eq`, for instance — the addendum is what a compiler
+follows.
 
 ---
 
@@ -996,7 +1001,10 @@ draft used hid a real choice rather than describing a consequence-free one. Thre
 - a grouped request carrying a **user `eq`/`in` filter** on a case-insensitive string (SEM-1 wants
   the collation; the `GROUP BY` and drill-down forbid it),
 - a **drill-down leaf** sorting a case-insensitive string (SEM-1 wants it; the drill-down `WHERE`
-  forbids it) — which `group-aggregation/005` and `006` now are, and
+  forbids it) — which `group-aggregation/005` is, sorting on `product`. **Not `006`**, despite
+  #1640's re-authoring touching the two together: `006` carries no `sortModel`, so its only key is
+  SEM-6's appended tiebreaker, which resolves exact and never wanted a collation in the first
+  place — and
 - a **BM-3 distinct-values request** (GRP-6) carrying a user filter on some *other* case-insensitive
   string — SEM-1 wants the collation for that `$match`, while GRP-6(a)'s exact buckets forbid it on
   the `$group` that computes the distinct set. This one is easy to miss because the conflicting pair
@@ -1009,9 +1017,19 @@ silently — while a case-folded filter or sort is a narrower, visible differenc
 back and in what order. So on MongoDB a user's own filter compares case-**sensitively**, and a
 leaf's `$sort` orders case-sensitively, where the five SQL dialects collate both. Recorded here as a
 documented, host-visible divergence, in the same register as GRP-2's SQL Server/MySQL DDL obligation
-and AGG-5: no fixture reaches the first shape (no grouped case carries both `groupKeys` and a
-`filterModel`), `005`/`006`'s Mongo arms pin the second, and `016`–`019`/`022`'s pin the third. The
-execution-equality tier (T-1b, #1624) is what can grade it; T-1a cannot see it.
+and AGG-5. **Exactly three fixtures reach it, and the list was wider than the truth until #1643
+compiled the Mongo arm and could check:** no fixture reaches the first shape (no grouped case carries
+both `groupKeys` and a `filterModel`); **`005`** pins the second — its leaf sorts on `product`, a
+case-insensitive string, while `006`'s only sort key is the exact-resolved SEM-6 tiebreaker, so `006`
+never wanted a collation and is not an instance of the divergence at all; and **`017`/`022`** pin the
+third, `016`/`018`/`019` carrying no collation-mechanism construct in the first place (`016` and
+`019` carry no filter at all, and `018`'s only predicate is its search prefix, which GRP-6(b) makes
+an ordinary `startsWith` and SEM-1 therefore assigns the *pattern-match* mechanism). The
+distinction is not bookkeeping: "suppressed a collation it wanted" and "never wanted one" are
+different compiler states, and only the first is evidence about this rule.
+`CrossCompilerGroupingTests.The_Divergence_Is_Reached_By_Exactly_The_Three_Fixtures_The_Spec_Names`
+asserts the set against this sentence. The execution-equality tier (T-1b, #1624) is what can grade
+the divergence itself; T-1a cannot see it.
 
 *How the third shape was found, because the same trap is waiting for every other backend with a
 query-level switch.* `017`'s Mongo arm was authored in #1641 carrying a query-level `collation`
@@ -1633,3 +1651,229 @@ that is not its Postgres arm with tokens substituted; SQL-7(b) is pinned by unit
 `$defs/notNode`, `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`notContains`,
 `contains`), `$defs/setOperator` (`in`, `notIn`), `$defs/textOptions` (`caseSensitivity`), SEM-1,
 SEM-7, SEC-4, and BM-1's `Dialect` interface.
+
+---
+
+## Addendum — canonical MongoDB rendering (MDB-1..MDB-12; not numbered SEM-*, for the same reason as
+the SQL addendum above, of which this is the exact parallel for the other artifact family)
+
+The SQL addendum exists because #1638 found the *same IR construct rendered several different ways
+from identical inputs* across a fixture suite seven parallel agents had hand-authored with no
+compiler to check it. #1643 compiled the **Mongo** arm of that same suite for the first time and
+reproduced the finding on the other side: `operators/001` spelled `eq` explicitly while
+`operators/003` spelled it implicitly, all 47 `operators/` artifacts were missing SEM-3's mandatory
+`$unset`, and three drill-downs were flat where five SQL arms of the same fixtures composed. So the
+answers are pinned here, once, for the same reason and in the same register — and **not** as prose
+under SEM-1..SEM-7, whose snippets this document's own preamble disclaims as illustrative. A
+normative sentence there would contradict the framing, and that ambiguity is precisely what let
+`operators/001` and `operators/003` disagree in the first place.
+
+Each rule below is the form the `spec/fixtures/*/expected/mongo.artifact.json` files now contain.
+There is **one** MongoDB, so unlike the SQL addendum nothing here is "the reference engine's
+spelling, other engines differ" — every rule is universal, which is also why there is no
+`MongoDialect` seam to hang any of it on (BM-1's smell, mirrored: a single-implementation interface).
+SQL-0 is *not* SQL-specific and is not restated: a compiled pipeline takes its collection from
+`schema.source` and never from the request.
+
+**MDB-1. A comparison is a field document holding an explicit operator — including `$eq`.**
+`{"age": {"$gt": 30}}`, and `{"status": {"$eq": "active"}}` rather than MongoDB's implicit
+`{"status": "active"}`.
+
+*Why, given the two are semantically identical for every value the IR can carry.* SEM-2's MongoDB
+paragraph is the tiebreaker, and it is normative prose rather than a disclaimed snippet: it emits the
+explicit composed form for `neq` **even though the naive one is correct**, "to keep the compiled
+shape parallel to the SQL and ES forms" and to stay valid in an `$expr` context, where only
+`{"$eq": [...]}` exists at all. A uniform operator table also needs no carve-out, which is SQL-1's
+"always quote, no second rule" applied to the other backend. The hand-authored suite spelled it
+**both** ways in adjacent cases of one category (`operators/001` explicit against
+`003`/`005`/`007`/`046` implicit; all of `filter-tree/` explicit against every `group-aggregation/`
+drill-down implicit), which is why it is pinned rather than left to taste; 21 artifacts were
+re-authored onto this form in #1643.
+
+**MDB-2. The composites, and what a tree-level `NOT` does *not* get.** `andNode` → `$and`,
+`orNode` → `$or`, and a tree-level `notNode` → `$nor` with the child as its single member. A
+single-child composite is **not** collapsed (`{"$and": [x]}`), mirroring SQL-2's `(x)`: the tree's
+own depth is what `filter-tree/011`-`013` pin against SEC-3's budget, and collapsing it would make a
+boundary fixture indistinguishable from a shallower one.
+
+A tree-level `NOT` gets **no null fan-out**. `$nor` already returns documents whose referenced field
+is null or entirely missing, so the one `OR col IS NULL` disjunct per referenced field that SQL-2's
+third bullet requires has no counterpart here — and adding one anyway is SEM-2's second MongoDB
+Must-NOT, which *excludes* null documents rather than including them.
+
+**MDB-3. SEM-2's null inclusion is an explicit `$or` with a `{field: null}` clause.**
+`{"$or": [{"name": {"$ne": "Alice"}}, {"name": null}]}` — emitted for `neq`, `notContains` and
+`notIn` alike, and (per MDB-1's reasoning) emitted even though MongoDB's own `$ne` already matches a
+missing field. `{field: null}` covers a stored null and a missing field together, so it is one
+clause rather than two.
+
+**MDB-4. `notContains` keeps the negation on the operator: `{"c": {"$not": {"$regex": …}}}`.**
+SQL-3's rule reached by a different route. `$nor` is this document's rendering of a **tree-level**
+`notNode` (MDB-2), so spelling a single negated comparison that way makes one leaf's negation
+indistinguishable from a one-child `NOT` node in the artifact, on top of losing the field-scoped
+form MongoDB can index. MDB-3's null-inclusive `$or` still wraps it: `$not` alone drops
+missing-field documents.
+
+**MDB-5. `blank`/`notBlank` are `$in`/`$nin` over `[null, ""]` on a `string`, and
+`null`/`{"$ne": null}` on every other type.** SEM-2 requires `notBlank` to be `blank`'s *compiled*
+negation and never a re-derived condition; MongoDB has an operator-level negation for each arm
+(`$nin` for `$in`, `$ne` for the implicit equality), so the negation is applied to the very operator
+the positive arm chose. SQL-7's second question does not arise here: MongoDB stores `""` as a value
+distinct from null, so the field-type half is the whole answer.
+
+**MDB-6. `inRange` is ONE field document carrying both bounds, never an `$and` of two clauses.**
+`{"age": {"$gte": 18, "$lt": 65}}`, each bound spelled from its own explicit inclusivity flag
+(SEM-4). This is the only place in MongoDB's query language where two constraints on one field
+compose without a composite, and it is available here because `inRange` is a single
+`rangeComparisonNode` — one IR leaf, not an `and` of two. It is **not** GRP-5's flattening being
+readmitted: an AG Grid within-column AND of two conditions is two IR leaves and **is** an `$and`
+(`ag-grid-majors/002`), and the two look nearly identical on the wire.
+
+**MDB-7. The artifact is the bare pipeline array, or the `{pipeline, collation}` wrapper — the
+wrapper if and only if a query-level collation is present.** MongoDB's `collation` is an
+`aggregate()` **command** option, not a stage, so it cannot be an element of the pipeline array;
+`spec/fixtures/schemas/mongo-artifact.schema.json` admits both shapes and this rule is what chooses
+between them. A collation is present exactly when some construct resolved to SEM-1's *collation*
+mechanism case-insensitively — a user's `$eq`/`$ne`/`$gt`/`$gte`/`$lt`/`$lte`/`$in`/`$nin` on a
+case-insensitive `string`, or a `$sort` key on one. `$regex` never contributes (SEM-1 assigns the
+substring family the pattern-match mechanism, which carries its own `$options: "i"`), and neither
+does any pipeline that computes bucket identity (GRP-2's accepted divergence #3).
+
+**MDB-8. SEM-3's bucket names, including the two SEM-3 does not define.** SEM-3 pins
+`__<field>NullBucket` for an ordinary sort key. A grouping request needs two more names, and they
+are pinned here because nothing else names them:
+
+| Sort key | Bucket field | Sorted path |
+|---|---|---|
+| an ordinary field | `__<field>NullBucket` | the field's physical path |
+| a grouped level's group column | **`__groupNullBucket`** | `_id` |
+| an aggregate output | **`__<output name>NullBucket`** | the output name |
+
+The group key's bucket is named for the **role**, not for the column, because the column changes per
+level while the key it lands on (`_id`) does not. The trio is contiguous — `$addFields`, `$sort`,
+`$unset`, nothing between them — the bucket key precedes its own field in the `$sort` document, and
+the bucket's sign follows `nullsPosition` **independently** of the field's direction (`1` = nulls
+last), since the bucket is `1` for null and `0` otherwise.
+
+**MDB-9. Where a pipeline carries a collation, a case-*sensitive* string comparison renders as an
+`$expr`; a case-sensitive *sort key* in that pipeline is a compiler error.** MongoDB's collation is
+query-level: it governs `$match`, `$group` and `$sort` together and has no per-stage form. So a
+request comparing an insensitive field and a sensitive one — which the five SQL dialects render side
+by side, each spelling its own mechanism per SQL-6 — has, naively, no MongoDB pipeline that honours
+both, and the naive rendering silently folds case on the field SC-3 declared sensitive. That is
+SEM-1's third Must-NOT inverted, and it is a *wrong rows* bug rather than an ordering one.
+
+The escape is the aggregation-expression form, which compares by simple binary comparison and does
+not consult the collation — the same property SEM-2's own MongoDB paragraph relies on when it notes
+that a case-**in**sensitive comparison inside an `$expr` has to be spelled with `$strcasecmp`:
+
+| Family | Under no collation | Under a collation, on a `sensitive` field |
+|---|---|---|
+| scalar (`eq`…`lte`) | `{"c": {"$eq": v}}` | `{"$expr": {"$eq": ["$c", {"$literal": v}]}}` |
+| set (`in`/`notIn`) | `{"c": {"$in": [...]}}` / `$nin` | `{"$expr": {"$in": ["$c", [{"$literal": v₁}, …]]}}` / `{"$expr": {"$not": [{"$in": …}]}}` |
+| `inRange` | one field document (MDB-6) | `{"$expr": {"$and": [{"$gte": ["$c", {"$literal": a}]}, {"$lt": ["$c", {"$literal": b}]}]}}` |
+| substring | `{"c": {"$regex": …}}` | **unchanged** — a collation does not reach a `$regex` at all |
+| sort key | `{"c": 1}` | **rejected** — see below |
+
+Four consequences worth spelling out, because each is a place a port will guess:
+
+- **The escape is per *field*, not per request.** The insensitive comparison stays in the query
+  language and keeps the collation (and its index); only the sensitive one moves.
+- **Every value operand MUST be wrapped in `{"$literal": v}` — this is a correctness *and* a
+  security requirement, not a formatting one, and it is MDB-9's easiest rule to omit.** In the
+  aggregation-expression language, and *only* there, a string beginning with `$` is a **field path
+  reference**: MongoDB's own `$literal` reference states it and gives this example —
+  `{"$eq": ["$price", "$1"]}` compares the `price` field against the field named `1`. So a client
+  filter value of `"$salary"` on a `sensitive` field compiles, unwrapped, to
+  `{"$expr": {"$eq": ["$employeeCode", "$salary"]}}`, which compares one column against **another
+  column** instead of against the string the user typed. Two defects at once: silently wrong rows,
+  and a client reaching any path the grid never exposed — nested (`"$salary.amount"`) and variables
+  (`"$$ROOT"`) included. SEC-2 requires every compared value to be bound; the aggregation language
+  has no parameters, and `{"$literal": v}` is its equivalent. The **field** operand is not wrapped —
+  a compiler mints it from the schema and it is *meant* to resolve as a path.
+  - **Wrap unconditionally, whatever the value's type.** Only a string can spell a path today, so a
+    type-conditional wrap would be correct and is still forbidden: it is a second rule where MDB-1
+    and SQL-1 both insist on one, and "only strings are at risk" is already false at the JSON level
+    — a `decimal` is `{"$numberDecimal": "1000"}`, a document whose first key starts with `$`, which
+    in expression position is an *operator* position. That is unreachable only because SEM-1 makes
+    `Sensitive` string-only, an invariant of the *resolver* that MDB-9's correctness must not depend
+    on. `$literal` returns any BSON value unevaluated, so the uniform rule costs nothing.
+  - The set family's second operand is an **array expression**, whose elements are parsed as
+    expressions in turn — so each member is wrapped individually rather than the array as a whole.
+    The unit is "one IR value", the same unit the scalar and range rows use.
+- **`inRange` is the one construct whose SHAPE changes**, from MDB-6's single field document to a
+  two-clause `$and`, because an expression operator takes operands and has no field to hang two of
+  them off. It is still one IR leaf.
+- **A `$sort` has no escape and is therefore refused.** The aggregation language has no "order these
+  documents" expression, so a key on a `sensitive` string in a pipeline that carries a collation
+  cannot be rendered exactly. The compiler MUST raise an error naming both constructs rather than
+  emit a plausible pipeline that returns the right rows in the wrong order — SQL-7(b)'s register,
+  and GRP-4's. SEM-6's **appended** tiebreaker never triggers this: an appended key resolves
+  `NotApplicable`, not `Sensitive`.
+
+The `$`-as-path rewriting is confined to the aggregation-expression language. The *query* language
+performs no such thing — in `{"c": {"$eq": "$salary"}}` the value is the four-character string, and
+the only value the query language reinterprets is a BSON regex — so no ordinary field document,
+`$in` array, `$regex` pattern or `blank` sentinel elsewhere in this addendum needs binding. That
+asymmetry is the whole reason the requirement is easy to lose: the escape moves a value that was
+safe into the one place it is not.
+
+*Pinned by* `dialect-parity/023`, the suite's only artifact containing an `$expr`. The `$literal`
+binding of a `$`-prefixed value and the sort refusal are pinned by unit tests alone
+(`MongoPipelineOperatorTests`, `MongoPipelineSortAndPagingTests`) — the sort refusal because there
+is no artifact for a request that does not compile (exactly as for SQL-7(b)), the binding because
+the other six backends bind such a value through their own parameter mechanism and would show
+nothing the existing arms do not already show.
+
+**MDB-10. Every stage MongoDB emits is a document, so every name a request can influence needs a
+collision check.** A repeated key in a BSON document is last-wins, not an error, and three of the
+names in a compiled pipeline are client-influenced: the `$sort` keys (a grid may send a colId twice
+in `sortModel`), the aggregate output names and hence their buckets (AGG-2 derives them from
+`valueCols[].id`), and MDB-8's reserved `__groupNullBucket`. Each collision is silent and each
+changes the answer:
+
+- **two sort keys on one field** (`region asc, region desc`) — the second `$sort` entry replaces the
+  first, so the *secondary* key becomes primary;
+- **an aggregate whose output name is `group`** — its bucket is `__groupNullBucket`, which the group
+  key also claims, so `_id` becomes the primary sort key, a null sorts last where nulls-first was
+  requested, and `$unset` lists one name twice;
+- **two aggregates with one output name** — the second accumulator replaces the first in `$group`,
+  and the grid reads one column holding another column's number.
+
+All three MUST be rejected. Renaming either side is not an alternative: the emitted bucket name would
+then depend on what else the request happened to contain, which is a worse oracle than an error.
+There is no SQL counterpart to any of this — the SQL compiler renders null placement as an inline
+expression rather than as a named field, and a repeated `ORDER BY` key is merely redundant there.
+
+**MDB-11. SEM-7's escape set is "every **ASCII** character outside `[A-Za-z0-9]`", and "character"
+means one ASCII byte.** SEM-7 states the rule as "a full backslash-escape of every character outside
+`[A-Za-z0-9]`" and leaves *character* undefined, which is a real ambiguity rather than a pedantic
+one: a compiler iterating UTF-16 code units inserts a backslash **between the two halves of a
+surrogate pair**, producing two lone surrogates — and a JSON writer then replaces each with U+FFFD,
+so `contains "😀"` compiles to a pattern matching nothing, silently. Restricting the escape to ASCII
+answers the question by removing it, at no semantic cost: PCRE2, the engine `$regex` uses, has no
+metacharacter above U+007F, so escaping a non-ASCII character can only change the pattern's spelling.
+A port that reads SEM-7 as "every character" and iterates code points emits a *different pattern for
+the same IR*, which is a G4 divergence; this rule is what both ports have to agree on.
+`dialect-parity/020` and `/022` pin the ASCII half (`50% off (bonus)` → `50\%\ off\ \(bonus\)`).
+
+**MDB-12. The pinned floor is MongoDB 4.2.** Two constructs put it there, and both are emitted by
+essentially every pipeline this compiler produces, so the floor is not conditional on the request:
+
+| Construct | Introduced | Emitted by |
+|---|---|---|
+| `$unset` as an **aggregation stage** | **4.2** | SEM-3's null-bucket trio — i.e. every pipeline, since SEM-6 makes the tiebreaker unconditional |
+| `{"$not": {"$regex": …}}` in a query | **4.0.7** | MDB-4's `notContains`; earlier servers require the BSON regex type instead of the `$regex` operator here |
+
+Recorded explicitly, in the same register as Oracle's 12.2 floor (SQL-6) and SQLite's 3.30.0 one:
+both of those are loud failures when unmet, and so is this — an unrecognised pipeline stage is a
+server error, not a silent difference. A host on 4.0/4.2 that wants `$unset` avoided would need
+`$project` with the buckets excluded, which changes every artifact in the suite and is therefore a
+different rendering rule rather than a configuration option.
+
+**Cross-links.** `spec/fixtures/schemas/mongo-artifact.schema.json` (the two artifact shapes),
+`$defs/andNode`, `$defs/orNode`, `$defs/notNode`, `$defs/unaryOperator`, `$defs/binaryOperator`,
+`$defs/setOperator`, `$defs/rangeComparisonNode`, `$defs/sortItem`, SEM-1, SEM-2, SEM-3, SEM-4,
+SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, GRP-2..GRP-6, and the SQL addendum's SQL-0 (`source`),
+SQL-2 (the composite wrap this one parallels) and SQL-3 (the negation-on-the-operator rule MDB-4
+reaches independently).

@@ -39,7 +39,7 @@ public class PostgresConformanceFixtureTests
     [
         ("operators", 47),
         ("date-presets", 26),
-        ("dialect-parity", 18),
+        ("dialect-parity", 19),
         ("group-aggregation", 22),
         ("filter-tree", 15),
         ("sort-paging", 11),
@@ -176,7 +176,7 @@ public class PostgresConformanceFixtureTests
         // ExcludedFixtures shrinking means a fixture was added. It last moved in #1641's review
         // pass, which added group-aggregation/022; the pass before that built BM-3's compiler and
         // released group-aggregation/016-019 from the exclusion list.
-        Assert.Equal(145, InScopeFixtures.Count);
+        Assert.Equal(146, InScopeFixtures.Count);
     }
 
     [Fact]

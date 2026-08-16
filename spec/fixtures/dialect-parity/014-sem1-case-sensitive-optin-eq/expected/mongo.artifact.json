@@ -1,5 +1,5 @@
 [
-  { "$match": { "employeeCode": "AB-100" } },
+  { "$match": { "employeeCode": { "$eq": "AB-100" } } },
   {
     "$addFields": {
       "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
