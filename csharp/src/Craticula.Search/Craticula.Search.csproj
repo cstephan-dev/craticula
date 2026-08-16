@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Craticula.Search</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- AR-3: no OpenSearch/Elasticsearch client package, deliberately. The compiled artifact is the
+         search-request body as plain JSON, emitted by hand through System.Text.Json.Nodes, so the
+         compiler carries no transitive dependency on either vendor's client model — which is also
+         what makes ONE assembly able to target both (OQ-7): the two clients' object models have
+         diverged since the 7.10 fork, the wire JSON this subset uses has not. -->
+    <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
+  </ItemGroup>
+
+</Project>

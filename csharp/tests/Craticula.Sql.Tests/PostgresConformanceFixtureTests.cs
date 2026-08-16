@@ -40,7 +40,7 @@ public class PostgresConformanceFixtureTests
         ("operators", 47),
         ("date-presets", 26),
         ("dialect-parity", 19),
-        ("group-aggregation", 22),
+        ("group-aggregation", 23),
         ("filter-tree", 15),
         ("sort-paging", 11),
         ("ag-grid-majors", 6)
@@ -167,16 +167,18 @@ public class PostgresConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_145_Of_The_146_Fixtures_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_146_Of_The_147_Fixtures_In_The_Scoped_Categories()
     {
-        // 146 minus the ONE remaining entry in ExcludedFixtures: sort-paging/012, which the SQL
+        // 147 minus the ONE remaining entry in ExcludedFixtures: sort-paging/012, which the SQL
         // builder compiles correctly but the AG Grid adapter cannot yet FEED correctly (see
         // ExcludedFixtures for the full reason, and SqlQueryBuilderPageAndSortTests for the
         // assertion that closes the loop on the builder's half). This number going up without
-        // ExcludedFixtures shrinking means a fixture was added. It last moved in #1641's review
-        // pass, which added group-aggregation/022; the pass before that built BM-3's compiler and
-        // released group-aggregation/016-019 from the exclusion list.
-        Assert.Equal(146, InScopeFixtures.Count);
+        // ExcludedFixtures shrinking means a fixture was added. It last moved in #1644's review
+        // pass, which added group-aggregation/023 — the one case carrying both a consumed groupKeys
+        // and a filterModel, which is what pins GRP-5's drill-down-leads clause order in `params`;
+        // before that #1641's review pass added group-aggregation/022, and the pass before that
+        // built BM-3's compiler and released group-aggregation/016-019 from the exclusion list.
+        Assert.Equal(147, InScopeFixtures.Count);
     }
 
     [Fact]

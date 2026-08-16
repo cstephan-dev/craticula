@@ -223,6 +223,71 @@ belong to `page-export/`, whose whole category is excluded from the runner for a
 (`Records_That_No_In_Scope_Fixture_Maps_A_Mongo_Path_Away_From_Its_ColId`), so it fails — and this
 paragraph becomes deletable — the day a fixture closes it.
 
+## Search artifact rendering — pinned by compiling it (#1644)
+
+The third and last arm, and the same story a third time: the 158 `search.artifact.json` files were
+hand-authored across #1630-#1643 as a **tertiary** arm — the least-scrutinised of the three — that
+nothing had ever executed. Compiling 145 of them found **five disagreeing artifacts** in **four rule
+classes** — six clause-level corrections, since `dialect-parity/019` was wrong on two counts at once
+— every one decided against the artifact by an existing rule and a near-unanimous set of siblings:
+
+- a `term` on a `string` spelled with the bare shorthand instead of the long `{"value": …}` form —
+  three artifacts (`operators/029`, `/030`, `dialect-parity/019`), against 64 that already spelled it
+  long and GRP-2's own hand-written drill-down form. A **fourth** was found by the review pass in the
+  excluded `page-export/004` and corrected there too (see below);
+- a `term` on a `boolean` spelled long instead of short — one artifact (`filter-tree/001`), for the
+  identical construct `operators/044` spells short, against 13 non-string terms that already did;
+- a `notBlank` whose `must_not` took an array instead of a single clause object
+  (`dialect-parity/019`), which is the spelling reserved for a tree-level `notNode` — nine
+  `filter-tree/` artifacts use it that way and three `operators/` ones use the object form for a leaf;
+- a bound value **lowercased by the compiler** to match a normalizer (`dialect-parity/015`), where
+  the fixture's own six other arms bind it as typed and its own description said so twice.
+
+**The forms themselves are NOT written down here** — the same discipline #1643 had to be corrected
+into. `spec/semantics.md` carries an **"Addendum — canonical OpenSearch/Elasticsearch rendering"
+(OSE-0..OSE-14)**, parallel in status and structure to the SQL and MongoDB ones, and that is where a
+port reads them. Beyond the four rules the disagreements above settle, it pins the things that had no
+normative home at all: object key order being outside the contract (OSE-0), the two `query` forms and
+the `bool.filter` container (OSE-3), which of SC-4's three search names each construct addresses
+(OSE-6), the `range` `format` names (OSE-8), the `composite` grouping shape with AGG-5's silence and
+the orderings and row windows that are refused (OSE-11), the `terms.include` prefix and its Lucene
+escape (OSE-12), the absence of any projection member (OSE-13), and the 7.10 floor that makes one
+compiler serve both engines with no target flag (OSE-14).
+
+**No genuinely contested call.** The nearest thing to one — `term`'s long-versus-short form, this
+backend's analogue of MDB-1's `eq` spelling — is settled by GRP-2's own normative sentence naming
+`{"term": {"<field>.keyword": {"value": "EMEA"}}}` for a drill-down, and by counts of 64-to-4 and
+13-to-1 rather than MDB-1's 21-to-21.
+
+### The review pass: two capability findings and four more artifacts (#1644 review)
+
+Neither of the first two is a spelling:
+
+- **`group-aggregation/020` lost its Search arm entirely.** A grouped level ordered by an aggregate
+  has **no rendering on this backend**: a `composite` enumerates buckets in key order and returns
+  `size` of them, and a `bucket_sort` reorders only that page, so "the top 100 regions by revenue"
+  would have compiled to "the first 100 regions alphabetically, rearranged". Elasticsearch states the
+  general rule — a composite aggregation is not compatible with pipeline aggregations. The arm was
+  deleted and the compiler now refuses (OSE-11(c)); see that fixture's own `description.md`. It is a
+  real user-visible gap on OpenSearch/Elasticsearch, owned by #1622/#1624.
+- **`group-aggregation/023` was authored to close a suite-wide hole.** No fixture anywhere carried
+  both a consumed `groupKeys` and a `filterModel`, so GRP-5's clause **order** was unpinned on **all
+  three backends** — a reviewer's mutation reversing it passed every test. `023` pins it, plus each
+  backend's composition of two conjunctions, on all seven arms.
+- **`page-export/004`-`007` were corrected** although the category is excluded from all three
+  runners: four wrapped an ordinary row query in OSE-3's grouping-only `{"bool": {"filter": […]}}`
+  container, and `004` also carried the suite's fourth short-form string `term`. The exclusion is
+  about `exportScope` (#1623), not about the rendering rules. See `page-export/README.md`.
+
+**One coverage gap, recorded rather than closed: SC-4's Search *base*-field mapping.** Every in-scope
+fixture's `physical.search.field` is the identity mapping, so the code that would turn `customerName`
+into `customer_name` in a `term` key, an `exists` clause, a `sort` key, a composite source and an
+aggregation metric is exercised by unit tests alone. The **sub-field** halves of the same mapping
+(`keywordSubField`, `normalizedSubField`) are richly covered; it is only the base field that is always
+the identity. `SearchConformanceFixtureTests` asserts the gap
+(`Records_That_No_In_Scope_Fixture_Maps_A_Search_Field_Away_From_Its_ColId`), so it fails — and this
+paragraph becomes deletable — the day a fixture closes it.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,
@@ -249,6 +314,18 @@ equivalent escape and is a compiler error. Do not reach for `ILIKE`/`$regex` for
 set-membership operator "because it's already case-insensitive that way" — it reintroduces an
 escaping trap (a literal `%`/`_` in the value silently becomes a wildcard) that a collation doesn't
 have. See `spec/semantics.md` SEM-1 for the full rationale.
+
+**ES/OpenSearch is the opposite case, and #1644 measured it rather than assuming it.** Its mechanism
+is a **per-clause** parameter — `case_insensitive` sits on the individual `term`/`wildcard` that wants
+it — so the same request can spell SEM-1 on a user's filter and GRP-2's exactness on the protocol's
+keys, with a drill-down `term` and a `composite` source simply not carrying the parameter. Nothing is
+ever suppressed there, which is why the three fixtures MongoDB's accepted divergence #3 reaches
+(`group-aggregation/005`, `/017`, `/022`) show a Search arm that agrees with the five SQL dialects
+instead. `CrossCompilerGroupingTests.Only_Mongo_Suppresses_Case_Insensitivity_For_Bucket_Identity`
+asserts both halves, so "the divergence disappeared" and "the divergence spread" both fail. The one
+place this backend does lose the mechanism is a *bucket* filter rather than a query clause: GRP-6(c)'s
+set-filter search prefix compiles to a `terms.include`, a Lucene regex with no case-insensitivity
+option (OSE-12) — a second accepted divergence, in AGG-5's register.
 
 **The case-SENSITIVE direction is a mechanism too, not the absence of one** (`spec/semantics.md`
 **SQL-6**, added in #1639's review pass). Where an engine's own default collation folds case — SQL

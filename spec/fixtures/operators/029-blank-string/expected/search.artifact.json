@@ -13,7 +13,9 @@
         },
         {
           "term": {
-            "status.keyword": ""
+            "status.keyword": {
+              "value": ""
+            }
           }
         }
       ],

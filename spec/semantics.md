@@ -15,13 +15,14 @@ backend-native mechanisms, an explicit "must NOT" list, and cross-links to the I
 All SQL/Mongo/OpenSearch examples in the SEM-1..SEM-7 sections below are illustrative snippets to
 convey intent, not the literal compiler output for any one dialect. The literal rendering — identifier
 quoting, parenthesisation, which operator carries a negation, how a set is parameterized — is pinned
-separately in **two addenda** at the end of this document, both of which *are* normative and *are*
+separately in **three addenda** at the end of this document, all of which *are* normative and *are*
 byte-for-byte what the `spec/fixtures/` artifacts contain: **"Addendum — canonical SQL rendering"**
-(SQL-0..SQL-7(b)) for the Postgres reference arm and its four sibling dialects, and **"Addendum —
-canonical MongoDB rendering"** (MDB-1..MDB-12) for the `mongo.artifact.json` arm. A Mongo snippet
-below is illustrative in exactly the way a SQL one is; where the two disagree — SEM-1's implicit
-`{name: "Smith"}` against MDB-1's explicit `$eq`, for instance — the addendum is what a compiler
-follows.
+(SQL-0..SQL-7(b)) for the Postgres reference arm and its four sibling dialects, **"Addendum —
+canonical MongoDB rendering"** (MDB-1..MDB-12) for the `mongo.artifact.json` arm, and **"Addendum —
+canonical OpenSearch/Elasticsearch rendering"** (OSE-0..OSE-14) for the `search.artifact.json` arm. A
+Mongo or OpenSearch snippet below is illustrative in exactly the way a SQL one is; where the two
+disagree — SEM-1's implicit `{name: "Smith"}` against MDB-1's explicit `$eq`, or its bare
+`{"term": {"name.keyword": …}}` shorthand against OSE-1's — the addendum is what a compiler follows.
 
 ---
 
@@ -153,12 +154,23 @@ sub-field** (`SC-3`'s `search.normalizedSubField` — a `keyword` sub-field main
 ICU-folding normalizer *at index time*, distinct from the plain `.keyword` exact-match sub-field
 `search.keywordSubField` used by `term`/`in`/`notIn` above) instead of the raw field:
 ```json
-{ "range": { "name.normalized": { "gt": "smith" } } }
+// filtering `name > "Smith"` on a case-insensitive field:
+{ "range": { "name.normalized": { "gt": "Smith" } } }
 ```
 A field that needs case-insensitive ordering on ES/OpenSearch MUST declare
 `search.normalizedSubField`; a field that only needs case-insensitive equality/substring ops does
 not need one. This is a genuine index-time cost (SC-3, PERF-4), not a query-time toggle — document it
 per field, never assume it exists.
+
+**The compared VALUE is bound as typed — the sub-field is the mechanism, not a licence to fold the
+value too.** The snippet above binds `"Smith"`, unchanged, exactly as the collation arms bind it. A
+normalizer is applied at search time as well as at index time for a term-level query (which `range`
+is), so pre-folding is redundant; worse, it is unknowable — the schema declares the sub-field's
+*name* and nothing about what its normalizer does, and an ICU-folding one folds diacritics and width
+as well as case, so a compiler lowering `"ÉCOLE"` to `"école"` would miss every document the
+normalizer had reduced to `"ecole"`. "Lowercase" is also not one operation across the four language
+ports G4 requires to agree. See **OSE-6**, and `spec/fixtures/dialect-parity/015`, whose Search arm
+pinned the folded value until #1644 compiled it.
 
 **Must NOT.**
 - Must NOT wrap the column/field in a bare `lower()`/`LOWER()`/`toLowerCase` when the dialect offers
@@ -1018,8 +1030,10 @@ back and in what order. So on MongoDB a user's own filter compares case-**sensit
 leaf's `$sort` orders case-sensitively, where the five SQL dialects collate both. Recorded here as a
 documented, host-visible divergence, in the same register as GRP-2's SQL Server/MySQL DDL obligation
 and AGG-5. **Exactly three fixtures reach it, and the list was wider than the truth until #1643
-compiled the Mongo arm and could check:** no fixture reaches the first shape (no grouped case carries
-both `groupKeys` and a `filterModel`); **`005`** pins the second — its leaf sorts on `product`, a
+compiled the Mongo arm and could check:** no fixture reaches the first shape — `group-aggregation/023`
+is the only case in the suite carrying both a consumed `groupKeys` and a `filterModel` (#1644's review
+pass authored it for GRP-5's clause order), and its filter is on two `int64` columns, so nothing in it
+ever wants a collation; **`005`** pins the second — its leaf sorts on `product`, a
 case-insensitive string, while `006`'s only sort key is the exact-resolved SEM-6 tiebreaker, so `006`
 never wanted a collation and is not an instance of the divergence at all; and **`017`/`022`** pin the
 third, `016`/`018`/`019` carrying no collation-mechanism construct in the first place (`016` and
@@ -1072,9 +1086,10 @@ compose with. *"Ordinary row query" and not "ungrouped"*: BM-3's distinct-values
   position on all five engines, so it is used uniformly rather than only where the wrapper forces
   it — a per-dialect split would make a *semantic* difference look like a spelling one. (#1640's
   first draft emitted the name; its review found `020`'s mssql and mysql arms were the T-SQL failure
-  above.) Mongo and Search are unaffected and keep the name: after `$group` the aggregate is a real
-  field of the document a later `$sort` stage reads, and ES's `bucket_sort` addresses a
-  sub-aggregation by a `buckets_path`, not by an alias.
+  above.) Mongo is unaffected and keeps the name: after `$group` the aggregate is a real field of the
+  document a later `$sort` stage reads, not an alias in a scope. **Search does not order a grouped
+  level by an aggregate at all** — the request has no rendering there and is refused (OSE-11(c)), so
+  this bullet has no Search arm to reach.
 - An aggregate with no alias takes the compiler default **`<field>_<func>`** (`amount_sum`,
   `id_count`) — stated here because it lands in query text as an identifier and every port must
   choose the same one. It names the aggregate in the projection and in the response, which is what
@@ -1223,19 +1238,36 @@ not true of it: it carried no `region` filter at all and therefore tested nothin
 *(c) The search prefix is an ordinary `startsWith` predicate on the target column.* The set filter's
 inline search box narrows the candidate values; modelled as IR it is a `startsWith` comparison
 carrying the raw text, so SEM-1 picks the field's own mechanism for it and SEM-7's escaping applies
-unchanged — a literal `%` typed into the box cannot widen into a wildcard, and no backend needs a
-second prefix-matching path. It is therefore **not** exempt from (a)'s exactness in the way that
-looks contradictory: one statement legitimately matches the column case-insensitively and orders it
-exactly, which is GRP-2's own first carve-out (a filter selects rows, it does not decide bucket
-identity) applied to a single column. *Order:* the user's filter leads and the prefix trails —
+unchanged — a literal `%` typed into the box cannot widen into a wildcard. It is therefore **not**
+exempt from (a)'s exactness in the way that looks contradictory: on the SQL dialects and on MongoDB
+one statement legitimately matches the column case-insensitively and orders it exactly, which is
+GRP-2's own first carve-out (a filter selects rows, it does not decide bucket identity) applied to a
+single column. *Order:* the user's filter leads and the prefix trails —
 `WHERE (<filter model, minus this column> AND <prefix>)`. It was stated here rather than left open
 because the choice is visible in `params`, which is compared exactly, and #1641's review then gave it
 an artifact of its own: `spec/fixtures/group-aggregation/022` carries a filter on another column, the
-target column's own filter, and a `searchPrefix`, all in one request, so the order is now pinned on
-seven backends instead of resting on this sentence. (It is also the only case where the exclusion and
-the prefix act on the **same** column, which is what makes "prune the model, then inject the prefix"
-distinguishable from "prune the finished tree".) A prefix against a column that is not declared `string` has no meaning and
-is a wrongly-typed request, rejected at the `typeCoercion` stage with SEM-5's `uncoercible-value`.
+target column's own filter, and a `searchPrefix`, all in one request. (It is also the only case where
+the exclusion and the prefix act on the **same** column, which is what makes "prune the model, then
+inject the prefix" distinguishable from "prune the finished tree".) A prefix against a column that is
+not declared `string` has no meaning and is a wrongly-typed request, rejected at the `typeCoercion`
+stage with SEM-5's `uncoercible-value`.
+
+> **Superseded in part by OSE-12 (#1644).** Three claims above were written before a compiler for the
+> third backend existed and are false there:
+> - *"no backend needs a second prefix-matching path"* — **OpenSearch/Elasticsearch does.** OSE-12
+>   compiles this predicate to the `terms` aggregation's `include`, a **Lucene regex** evaluated at
+>   aggregation time, which is a third pattern language: different from the `wildcard` query's syntax
+>   and different again from PCRE2. Its escape alphabet is MDB-11's, not SEM-7's.
+> - *"one statement legitimately matches the column case-insensitively and orders it exactly"* — not
+>   on that backend. `include` has **no case-insensitivity option** in the pinned subset, so the
+>   prefix matches case-**sensitively as typed** where Postgres's `ILIKE` and Mongo's `$regex`/`"i"`
+>   fold. That is an accepted divergence in AGG-5's register, recorded in OSE-12 and in
+>   `group-aggregation/018`'s description, and asserted as an expected difference by
+>   `CrossCompilerGroupingTests`.
+> - *"the order is now pinned on **seven** backends"* — on **six**. `022`'s Search arm carries no
+>   query-level prefix at all: the prefix leaves the query entirely and becomes `include: "eu.*"`
+>   inside `aggs`, so there is no sequence there for a port to get backwards. The `params` argument
+>   for stating the order still holds on the five SQL dialects and on MongoDB's `$and`.
 
 *(d) The cap is applied, never enforced, and never absent.* The compiled limit is
 `min(requested ?? default, maximum)`, from two host-configured SEC-3 numbers: a **default** for a
@@ -1877,3 +1909,459 @@ different rendering rule rather than a configuration option.
 SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, GRP-2..GRP-6, and the SQL addendum's SQL-0 (`source`),
 SQL-2 (the composite wrap this one parallels) and SQL-3 (the negation-on-the-operator rule MDB-4
 reaches independently).
+
+---
+
+## Addendum — canonical OpenSearch/Elasticsearch rendering (OSE-0..OSE-14; not numbered SEM-*, for the
+same reason as the SQL and MongoDB addenda above, of which this is the exact parallel for the third
+artifact family)
+
+The SQL addendum exists because #1638 found the *same IR construct rendered several different ways
+from identical inputs* across a fixture suite seven parallel agents had hand-authored with no
+compiler to check it; the MongoDB one because #1643 reproduced the finding on the second arm. #1644
+compiled the **Search** arm for the first time and reproduced it on the third and last: a `term` on a
+`string` was spelled long 64 times and short 4, a `term` on a `boolean` short 13 times and long once
+*for the identical construct in two categories*, `must_not` took an array in one `notBlank` and an
+object in three, and one artifact folded a bound value that its own six sibling arms bound as typed.
+So the answers are pinned here, once, and every language port inherits them instead of rediscovering
+them — and **not** as prose under SEM-1..SEM-7, whose snippets this document's own preamble disclaims
+as illustrative. A normative sentence there would contradict the framing, and that ambiguity is
+precisely what let those pairs disagree in the first place.
+
+Each rule below is the form the `spec/fixtures/*/expected/search.artifact.json` files now contain —
+**all 158 of them, including `page-export/`'s twelve**, whose exclusion from the conformance runners is
+about `exportScope` (#1623) and never about these rules. (Four of those twelve had drifted precisely
+because nothing could compile them; #1644's review pass corrected them under OSE-1 and OSE-3.) Where a
+rule is a **refusal**, there is no artifact by construction, and the fixture that used to carry one
+says so in its own `description.md` — `group-aggregation/020` is the only such case.
+**There is ONE compiler and ONE artifact for both engines** (OQ-7), so unlike the SQL addendum
+nothing here is "the reference engine's spelling, other engines differ" — see OSE-14 for why that is
+a fact about the pinned subset rather than an aspiration. SQL-0 is *not* SQL-specific and is not
+restated: a compiled request takes its index from `schema.source` and never from the request.
+
+**OSE-0. Object key order is NOT part of this artifact contract; array order is.** Nowhere in a
+search request body does a JSON object's key order carry meaning, so a conformance harness compares
+these artifacts with object keys canonicalised and arrays left as written. That is the opposite of
+MDB-7's arm, and deliberately: MongoDB's `$sort` document *is* order-sensitive — its key order is the
+tiebreak order — so the Mongo comparison is order-sensitive too. Here the order-bearing structures
+are arrays: `sort`'s element order is the tiebreak order and `composite.sources`' is the composite
+key order, and both are compared as written.
+
+*Why this is a rule rather than a harness convenience.* The hand-authored suite spells `size` before
+`from` in 78 files and after it in 50. Neither is more correct, no engine reads the difference, and
+picking one would have re-authored half the suite to agree about nothing. What a compiler still owes
+is **determinism** — four language ports emitting one IR in four member orders would produce four
+different files — so a compiler MUST fix its own order and pin it. The reference implementation emits
+`query`, `sort`, `from`, `size`, `aggs`, absent members omitted.
+
+**OSE-1. A `term` query's form is decided by the field's declared TYPE: the long form for a
+`string`, the short form for every other type.**
+
+```json
+{ "term": { "status.keyword": { "value": "active", "case_insensitive": true } } }
+{ "term": { "status.keyword": { "value": "EMEA" } } }
+{ "term": { "age": 30 } }
+```
+
+*Why the type and not "whether a parameter is present".* SEM-1 governs `stringValue` comparisons
+only, so `case_insensitive` — the parameter the long form exists to carry — can only ever appear on a
+string. Keying the spelling on the type therefore gives **one field one spelling**, whatever its
+declared `caseSensitivity`, which is the property the alternative loses: GRP-2 pins the parameterless
+string form by hand ("ES/OpenSearch drops the `case_insensitive: true` parameter from a drill-down
+`term`, leaving `{"term": {"<field>.keyword": {"value": "EMEA"}}}`") and `dialect-parity/014` uses the
+identical shape for the case-sensitive opt-in, so a rule of "long only when the parameter is there"
+is already contradicted twice over. 64 string terms in the suite are long and **4** were short; 13
+non-string terms are short and 1 was long (`filter-tree/001`'s boolean, whose own construct
+`operators/044` spells short). **Five** artifacts were re-authored onto this rule in #1644 and its
+review pass.
+
+*The fourth short one is worth naming, because it weakens the argument this rule would otherwise lean
+on.* Three of the four were `blank`'s empty-string sentinel (`operators/029`, `/030`,
+`dialect-parity/019`) — a compiler-minted value, an easy special case to explain away. The fourth,
+found by the review pass in `page-export/004`, is an ordinary **client** value on a `sensitive`
+`string` (`{"term": {"status.keyword": "shipped"}}`), and it survived only because `page-export` is
+excluded from all three conformance runners. So the artifact evidence for "the type, not the
+parameter" is 64-to-4 rather than 64-to-3-plus-a-sentinel, and the rule rests where it always really
+did: on GRP-2's normative sentence and `dialect-parity/014`, not on the counts. It was corrected
+rather than left for #1623 to re-adjudicate.
+
+**OSE-2. The composites, and the one that is spelled differently from the negation a compiler
+composes itself.** `andNode` → `{"bool": {"must": [...]}}`, `orNode` →
+`{"bool": {"should": [...], "minimum_should_match": 1}}`, and a tree-level `notNode` →
+`{"bool": {"must_not": [<child>]}}` — an **array**. A single-child composite is **not** collapsed
+(`{"bool": {"must": [x]}}`), mirroring SQL-2's `(x)` and MDB-2's `{"$and": [x]}`: the tree's own depth
+is what `filter-tree/011`-`013` pin against SEC-3's budget, and collapsing it would make a boundary
+fixture indistinguishable from a shallower one.
+
+`minimum_should_match: 1` is spelled **explicitly and unconditionally**, and it is not decoration: a
+`bool` that also carries `must` or `filter` defaults it to **0**, at which point the `should` clauses
+become scoring hints that constrain nothing. Every `or` a compiler emits is a real constraint, and
+spelling the parameter always means the same subtree renders the same way wherever it lands in the
+tree — SQL-2's "one rule per construct, applied always".
+
+A tree-level `NOT` gets **no null fan-out**. `must_not` already matches documents whose referenced
+field is missing — a document that cannot satisfy the inner clause satisfies its negation — so the one
+`OR col IS NULL` disjunct per referenced field that SQL-2's third bullet requires has no counterpart,
+exactly as MDB-2 records for `$nor`.
+
+**OSE-3. The `query` member has two forms, chosen by the request shape.** An ordinary row query
+renders its filter tree directly, and `{"match_all": {}}` when it has none — a hit-returning request
+always carries an explicit query. A **grouping or distinct-values** request wraps everything in
+`{"bool": {"filter": [...]}}`, and omits the member entirely when there is nothing to filter.
+
+*Why the second form exists.* Its clauses come from two provenances that must be conjoined (GRP-5's
+drill-down leads, the user's own filter follows — GRP-5 pins that order), and `filter` is both this
+DSL's conjunction container and its non-scoring context, which is what a request asking for buckets
+rather than ranked hits wants. A top-level `and` on either side contributes its **children** to that
+array rather than a nested `bool.must`, because the array already is the conjunction —
+`ag-grid-majors/004` pins two range clauses side by side, `group-aggregation/003`/`004` pin the
+drill-down's two and three, and **`group-aggregation/023` pins both halves at once**: a two-key
+drill-down and a two-column filter model flattening into one four-element array, in GRP-5's order.
+That is not SQL-2's "every composite wraps" being readmitted through the back door: the wrap is still
+there, spelled as the `filter` array itself. A top-level `or` is a single element of it, wrapped
+normally.
+
+`023` was authored by #1644's review pass because **no fixture in the suite carried both a consumed
+`groupKeys` and a `filterModel`**, which left GRP-5's order unpinned on all three backends at once —
+reversing the two compositions passed every test in every suite. Neither `003` nor `004` has a user
+filter, so citing them for the order (as an earlier draft of this rule did) proved only the
+drill-down's own flattening.
+
+**OSE-4. `blank`/`notBlank`, and the array-versus-object spelling of `must_not`.**
+
+```json
+// blank, string:      absent OR the empty term
+{ "bool": { "should": [ { "bool": { "must_not": { "exists": { "field": "status" } } } },
+                        { "term": { "status.keyword": { "value": "" } } } ],
+            "minimum_should_match": 1 } }
+// blank, any other type:
+{ "bool": { "must_not": { "exists": { "field": "age" } } } }
+// notBlank: THAT clause, negated
+{ "bool": { "must_not": { <blank> } } }
+```
+
+`notBlank` is the compiled `blank` under a `must_not` and never a separately derived condition —
+SEM-2's third Must-NOT, satisfied structurally rather than by two renderings that happen to agree.
+There is no counterpart to SQL-7's second question ("does this engine treat `''` as NULL?"): both
+engines store the empty string as an ordinary term distinct from a missing field, so the field-type
+half is the whole answer.
+
+**`must_not` takes a single clause OBJECT for a negation the compiler composed, and an ARRAY for a
+tree-level `notNode` (OSE-2).** This DSL has one negation keyword where SQL has two constructs
+(SQL-3's negated operator versus an outer `NOT (...)`) and MongoDB has two operators (MDB-4's `$not`
+versus MDB-2's `$nor`), so the array is what keeps a one-child tree `NOT` distinguishable, in the
+artifact, from a single negated comparison. `dialect-parity/019` spelled its `notBlank` as an array
+until #1644; nine `filter-tree/` artifacts spell the tree form that way and three `operators/` ones
+spell the leaf form as an object.
+
+**The empty-string sentinel carries no `case_insensitive`, whatever the field declares.** That is not
+the conditional spelling OSE-1 forbids: the parameter governs how a CLIENT's value is compared and
+this value is not one — it is the sentinel SEM-2's own definition of `blank` mints. An empty string
+has no case to fold, so the parameter is provably inert, and GRP-2's precedent is that a
+compiler-minted key spells no mechanism.
+
+**OSE-5. SEM-2's null inclusion is a `should` of two `must_not`s, and the `exists` clause names the
+BASE field.**
+
+```json
+{ "bool": { "should": [ { "bool": { "must_not": <the affirmative clause> } },
+                        { "bool": { "must_not": { "exists": { "field": "name" } } } } ],
+            "minimum_should_match": 1 } }
+```
+
+Emitted for `neq`, `notContains` and `notIn` alike, and the affirmative clause is compiled first and
+then negated, so the two directions cannot drift. SEM-2's own ES worked example spells both `should`
+clauses and says why: the first alone *happens* to cover the missing-field case for a `term` query,
+but that is a property of `term` specifically and is not guaranteed for every query type an operator
+might compile to, so the second is explicit on every operator, unconditionally.
+
+The `exists` clause names `search.field`, never `search.keywordSubField`: a `.keyword` sub-field's own
+presence is an indexing detail (`ignore_above` can drop a long value from it while the base field
+still holds one), so "this document has no value for this column" is a question only the base field
+answers.
+
+**OSE-6. Which of SC-4's three search names each construct addresses.** They are three independent
+names and a compiler picks per construct, never once per field:
+
+| Construct | Target |
+|---|---|
+| `exists` (OSE-5, OSE-4) | `search.field` — always, whatever the comparison beside it uses |
+| `term` / `terms` on a `string` | `search.keywordSubField` |
+| `wildcard` (SEM-7's substring family) | `search.keywordSubField` |
+| `match` (SEM-7's `searchMode: analyzed` opt-in) | `search.field` — the analyzed one is the point |
+| `range` / `sort` on a case-**insensitive** `string` | **`search.normalizedSubField`** (SEM-1's one real gap) — **except SEM-6's appended tiebreaker, which resolves exact and takes `search.keywordSubField`** |
+| `range` / `sort` on a case-**sensitive** `string` | `search.keywordSubField` |
+| anything on a non-`string` field, and an aggregation metric | `search.field` |
+| a `composite` source / a BM-3 `terms` key on a `string` | `search.keywordSubField` |
+
+`search.keywordSubField` falls back to `search.field` when a schema declares none (the identity the
+schema is implicitly declaring by omitting it, the same fallback the other two compilers make for a
+missing mapping), and `search.field` falls back to the colId. **`search.normalizedSubField` has no
+fallback: its absence is a compiler error.** SEM-1 states it as a MUST on the schema, and both
+alternatives are wrong in the way this project refuses — `.keyword` would order `"Zebra"` before
+`"apple"` on a field the schema declared case-insensitive, and the analyzed base field is not
+sortable at all. Wrong rows in the wrong order on a request both engines accept, invisible to the
+artifact tier: SQL-7(b)'s and MDB-9's register.
+
+**The one carve-out, and it is load-bearing: SEM-6's appended tiebreaker resolves EXACT** (see the
+"Superseded in part by #1640's review" note under SEM-6), so it takes `search.keywordSubField` even on
+a case-insensitive `string` and a schema declaring no `normalizedSubField` is **not** an error for
+that key. Without the carve-out the table above would demand `normalizedSubField` or a refusal for a
+key the compiler minted, which would fail two fixtures that are otherwise entirely ordinary:
+`group-aggregation/005` and `006` declare `id` as a `string` with no `text` block — case-insensitive
+by SEM-1's default — and no `normalizedSubField`, and their leaf queries sort on the bare appended
+`id`. The rule is a property of the **key's provenance**, not of the field: the *same* `id`, sorted on
+because the user asked, would take `normalizedSubField` and refuse without one.
+
+**The bound value is never transformed.** See SEM-1's own note above: the sub-field is the mechanism,
+a term-level query has the normalizer applied to its value at search time anyway, the compiler cannot
+see what that normalizer does, and "lowercase" is not one operation across four language ports.
+
+**`searchMode: "analyzed"` on a case-SENSITIVE field is refused, not compiled.** The `match` row
+above is the SEM-7 opt-in, and a `match` has no `case_insensitive` parameter and no case control of
+any kind: it is resolved entirely by the field's own analyzer, and every stock text analyzer in both
+engines lowercases. So the combination emits a query that folds case on a field the schema declared
+sensitive — SEM-1's **second Must-NOT**, and the same failure the missing `normalizedSubField` is
+refused for, in the other direction. There is no third rendering to fall back to: a `wildcard` would
+honour the case and lose the tokenization the opt-in exists to ask for. The two declarations
+contradict each other, so the schema is what changes. No fixture reaches this combination —
+`dialect-parity/013` is the suite's only `analyzed` field and it is case-insensitive — which is
+precisely why it is written down here.
+
+**OSE-7. Set membership is a `terms` query — except on a case-insensitive `string`, where it is a
+`should` of `term` queries.**
+
+```json
+{ "terms": { "age": [30, 40] } }
+{ "bool": { "should": [ { "term": { "status.keyword": { "value": "active",  "case_insensitive": true } } },
+                        { "term": { "status.keyword": { "value": "pending", "case_insensitive": true } } } ],
+            "minimum_should_match": 1 } }
+```
+
+Not a stylistic split: **`terms` has no `case_insensitive` parameter** in the pinned subset (the
+parameter exists on `term`, `prefix`, `wildcard` and `regexp` only), so it cannot realize SEM-1's
+mechanism at all, and emitting it anyway would silently make `in` case-sensitive on a field the schema
+declared insensitive — SEM-1's second Must-NOT. The disjunction is the same set membership with the
+parameter available on each member. `operators/035` and `dialect-parity/016` pin the disjunction;
+`operators/037` and `dialect-parity/018` (a `sensitive` column) pin the compact form.
+
+**OSE-8. `range` carries every bound of one IR leaf, plus an explicit `format` for a date-typed
+field and nothing else.** The four ordering operators and `inRange` are all one `range` query —
+`inRange` included, because it is a single `rangeComparisonNode`, the same argument MDB-6 makes for
+MongoDB's single field document. An AG Grid within-column AND of two conditions IS two leaves and
+does render as two clauses (`ag-grid-majors/002`).
+
+- Each bound is spelled from its OWN explicit inclusivity flag (SEM-4), never `BETWEEN`'s familiar
+  inclusive-inclusive assumption.
+- `format` is **`strict_date`** for a `date` field and **`strict_date_optional_time`** for a
+  `datetime` one, and absent for every other type. The two are not interchangeable: `strict_date` is
+  `yyyy-MM-dd` and nothing else, which is exactly what a `dateValue` is, while spelling the datetime
+  form for a calendar date would accept a time-of-day the IR guarantees is absent — SEM-4's third
+  Must-NOT as a parser setting. Spelling it at all pins the accepted string shape rather than leaving
+  it to the index mapping's own `format` list.
+- **No `time_zone`, ever** (SEM-4's second Must-NOT names the parameter). It would also be inert:
+  `time_zone` shifts only *unqualified* date-math strings, and every boundary reaching a compiler is
+  already an absolute instant or a calendar date.
+- A `datetimeValue` is normalised to UTC with a trailing `Z`, so the same instant written `+02:00`
+  and written `Z` produces one artifact.
+- A `decimalValue` is written as a **JSON number whose text is the IR's own exact decimal literal**.
+  This DSL's request body has no arbitrary-precision numeric literal the way Extended JSON's
+  `$numberDecimal` does, so the only correct answer is to pass the token through unparsed rather than
+  round-trip it through an IEEE double — which is what makes `decimal` and `double` different types in
+  the first place. A host needing exact decimal arithmetic maps the field accordingly, a PERF-4
+  index-guidance obligation of the same kind as GRP-2's DDL ones.
+
+**OSE-9. Every `sort` element spells both `order` and `missing`.** SEM-3's null placement is a native
+parameter here — no emulation, nothing to unset afterwards, unlike MySQL's `ISNULL` prefix key or
+MongoDB's synthetic bucket. It is spelled on every key **unconditionally**, including SEM-6's appended
+tiebreaker: SEM-3's first Must-NOT forbids relying on an engine's implicit default even when it
+happens to match today, and SEM-6's fourth forbids "the stable key is probably never null" as a
+licence to omit the marker.
+
+A repeated sort key needs **no rejection** here, and the contrast with MDB-10's first collision is
+structural rather than a judgement call: `sort` is an ARRAY, so a colId the grid sent twice is
+redundant and the primary key stays primary, whereas a `$sort` **document** silently replaces the
+first entry and promotes the secondary key.
+
+**Which sub-field each key addresses is OSE-6's table, including its one carve-out**, which is easy to
+lose sight of here because this rule is about the two parameters rather than the target: a user's own
+key on a case-insensitive `string` takes `search.normalizedSubField` and refuses when the schema
+declares none, while **SEM-6's appended tiebreaker resolves exact and takes
+`search.keywordSubField`** — the same field can therefore be a hard error in one position and
+perfectly ordinary in the other. `group-aggregation/005` and `006` are the fixtures that depend on it:
+both sort a leaf on the appended `id`, a `string` with no `text` block and no `normalizedSubField`.
+
+**OSE-10. `from` and `size`, and the two members a bucket request does not have.** `from` takes
+`startRow` and `size` the row COUNT (`endRow - startRow`, because `endRow` is exclusive). Both are
+emitted for a range page even when the offset is zero. EXP-2's `page: none` emits **neither**
+(`sort-paging/012`). A grouping or distinct-values request emits `"size": 0` — it wants buckets and no
+hits — and no `sort` and no `from` at all; the two request shapes are structurally different bodies
+rather than one body with optional members, and `size: 0` beside a `sort` orders nothing.
+
+**`search_after` is deliberately never emitted.** PERF-2 scopes it to deep paging beyond
+`max_result_window`, with a cursor cache it assigns by name to the **execution adapter** (#1622).
+`max_result_window` is index configuration absent from `GridSchema` and from the IR; the cursor is
+the previous page's last sort values, which an offset-based AG Grid SSRM request never sends and
+`$defs/pageSpec` has nowhere to carry. All 158 `search.artifact.json` files pin the offset form.
+`spec/fixtures/schemas/search-artifact.schema.json` admits the member so that #1622 can use it
+without a schema change; nothing does today.
+
+**OSE-11. The grouped level is a `composite` aggregation, and five of its details are decided
+here.**
+
+```json
+{ "size": 0,
+  "aggs": { "<group column>": {
+    "composite": { "size": <row window>,
+                   "sources": [ { "<group column>": { "terms": { "field": "<keyword sub-field>",
+                                                                 "missing_bucket": true } } } ] },
+    "aggs": { "<output name>": { "<sum|min|max|avg|value_count>": { "field": "<base field>" } } } } } }
+```
+
+*(a) `composite` rather than `terms`, and `missing_bucket` rather than nothing.* A grouped level is
+paged, and `composite` is the only bucket aggregation in this subset that enumerates every bucket in
+key order rather than returning an approximate top-N by doc count. It is also the only one with
+`missing_bucket`, which is what keeps a null group key from being silently dropped (AR-8/BM-2's
+intent). `count` needs no special construction: `value_count` already skips missing values, so AGG-1
+is satisfied natively — unlike MongoDB, where AGG-1 has to forbid `{"$sum": 1}` by name. The metric's
+`field` is the **base** field.
+
+*(b) **AGG-5's accepted divergence, honoured rather than worked around.*** `missing_bucket: true` has
+no `missing_order` control in the pinned 7.10-era subset: the null bucket sorts **first regardless of
+the direction requested**, while Postgres (`NULLS FIRST`/`NULLS LAST`) and MongoDB (its bucket
+emulation) both honour it. The group key's own `nullsPosition` therefore compiles to **nothing at
+all** here, and that silence is the rule rather than an omission. A client-side reorder would defeat
+server-side paging's whole purpose for the grouped case.
+
+*(c) The bucket ordering: the group column alone, and every other ordering is REFUSED.* AGG-4 exists
+because a bare `terms` aggregation defaults to doc-count-descending, an order no other backend would
+produce. A composite source is ordered by its key *by construction*, so there is no wrong default to
+guard against, and its `order` parameter carries the DIRECTION the request asked for (GRP-4) rather
+than a fixed `asc`. It is spelled **only for `desc`**, the source's documented default being
+ascending — `group-aggregation/021` pins the one, the other **fifteen** composite artifacts pin its
+absence.
+
+**A grouped level ordered by anything other than its own group column is a compiler error.** A
+composite source can only order by its own key, and the obvious workaround — a `bucket_sort`
+sub-aggregation — does not answer the question that was asked. A composite **always** enumerates
+buckets in composite-key order and returns `size` of them; `bucket_sort` is post-processing that
+reorders only the buckets that page already contains. So "the 100 largest regions by revenue" would
+compile to *the first 100 regions in key order, rearranged by revenue* — with more distinct regions
+than the window, a **different set of groups**, silently, and invisibly to the artifact tier.
+Elasticsearch's own composite documentation states the general form of this rather than a "limit": a
+composite aggregation is **not compatible with pipeline aggregations**, and gives exactly this reason.
+
+So the refusal is in OSE-11(d)'s own register, and in SQL-7(b)'s and MDB-9's: a plausible request that
+answers a different question is worse than an error naming the reason. **This is a real, user-visible
+capability gap on this backend and must be stated as one** — ordering a grouped level by an aggregate
+does not work on OpenSearch/Elasticsearch. Closing it needs a different grouped-ordering *strategy* (a
+two-pass `terms`-then-`composite` plan, or a full bucket enumeration reordered client-side), not a
+different spelling; that is the execution adapter's business (**#1622**) and gradeable only against a
+live cluster (**#1624**).
+
+> **Superseded in part by #1644's review pass.** This rule previously rendered such an ordering as a
+> `bucket_sort` sub-aggregation named `sortBy<PascalCase(first sort colId)>`, pinned by
+> `group-aggregation/020`, with a recorded T-1b risk asking #1624 whether 7.10-era servers *accept* a
+> pipeline aggregation under a composite. **Acceptance was never the real question**: even when
+> accepted, the result answers a different question from every other backend's arm, which is settled
+> here and needs no cluster. `020`'s Search arm has been deleted, the rule is a refusal, and the
+> `bucket_sort` naming and its collision rule are gone with it.
+
+*(d) The two row windows that are refused.* A composite pages forward with an `after` key rather than
+an offset, so a grouped level asked for a **non-zero `startRow`** has no rendering, and one asked for
+EXP-2's **`page: none`** has no bucket count to give. Both are compiler errors. Emitting `size` and
+dropping the offset would answer every page with the first one — a plausible request answering a
+different question, silently — which is SQL-7(b)'s and MDB-9's register again.
+
+**The offset half is a first-page-only limitation, not a deep-paging one**, and conflating it with
+PERF-2's `search_after` (OSE-10) understates it badly. `search_after` escalates only beyond
+`max_result_window`, 10 000 rows by default, so an ordinary grid never reaches it; AG Grid SSRM's
+default block size is **100 rows**, so the **second block of any grouped level** — one screen of
+scrolling past the first hundred groups — lands here. Every grouped grid on this backend hits it, not
+only the deep ones. The owner is the same (the execution adapter, **#1622**, because the `after` key
+is the previous response's own `after_key` and neither `$defs/pageSpec` nor `GridSchema` can carry
+it), but the urgency is not.
+
+*(e) Aggregation names are validated, not assumed.* An aggregate's output name is AGG-2's `alias` when
+one is set and `<field>_<func>` otherwise, and **the default is held to the same
+`^[A-Za-z_][A-Za-z0-9_]*$` pattern `ir.schema.json` already imposes on `alias`**. That pattern exists
+because the name "lands in generated query text as an identifier … where SEC-2's values-are-parameters
+rule cannot apply", but `$defs/fieldName` carries no pattern at all, so a nested colId such as
+`customer.name` composes a default `customer.name_sum` that no validator has ever seen — and here an
+aggregation name is read through a `buckets_path` mini-language in which `>` navigates into a
+sub-aggregation and `.` selects a metric. A default name failing the pattern is refused, naming
+`alias` as the fix. The **bucket** aggregation's own name (the group column, or BM-3's colId) is held
+to the engines' own narrower rule instead — no `[`, `]` or `>`, which both engines reject outright —
+because a dotted colId is a perfectly good container key and refusing it would break a nested-document
+schema for nothing. Two names, two standards, because they are read by two different things: one is an
+identifier the grid reads a number back by, the other is only ever a key. MDB-10's third collision
+also applies here verbatim: two aggregates resolving to one output name are refused, since the `aggs`
+container is a JSON object and the second would silently replace the first.
+
+**OSE-12. BM-3's distinct values are a `terms` aggregation, and GRP-6(c)'s search prefix is its
+`include`.**
+
+```json
+{ "size": 0,
+  "aggs": { "<colId>": { "terms": { "field": "<keyword sub-field>",
+                                    "size": <resolved cap>,
+                                    "include": "<escaped prefix>.*",
+                                    "order": { "_key": "asc" } } } } }
+```
+
+- **AGG-4 DOES reach this one**, and is spelled explicitly and unconditionally: a bare `terms`
+  aggregation defaults to doc-count-descending, which would hand the grid its value list in a
+  different order from Postgres's `ORDER BY` and Mongo's `$sort` on the identical request.
+- **GRP-6(a)'s exactness costs nothing to arrange**: an aggregation has no `case_insensitive`
+  parameter in the first place, so the distinct key is exact by construction.
+- **GRP-6(e)**: the cap is a ceiling, so there is no `from` and no SEM-6 tiebreaker.
+- **The prefix leaves the query entirely.** Filtering the *buckets* rather than the documents is
+  equivalent for this one construct — a bucket exists exactly when some document holds its value, and
+  the predicate is on the very column being bucketed — and `group-aggregation/018`/`022` pin the move.
+  The escaped prefix is followed by the compiler's own `.*`, appended AFTER the escape so a literal
+  `.` the user typed cannot merge into it.
+- **The escape set is "every ASCII character outside `[A-Za-z0-9]`", MDB-11's rule for MDB-11's
+  reason.** `include` is a **Lucene** regex — a third pattern language, different again from the
+  `wildcard` query's syntax (OSE-2's SEC-4 alphabet) and from PCRE2. Lucene's `RegExp` reads `\` as
+  "the next character, literally" for any next character, so over-escaping an ordinary ASCII
+  character costs nothing and removes the need to carry a metacharacter table; under-escaping widens
+  the bucket filter and reopens the ReDoS surface SEC-5 excludes user-controlled regex to avoid. The
+  ASCII scope is what stops a backslash landing between the two halves of a surrogate pair, which a
+  JSON writer then turns into two U+FFFD and a pattern matching nothing.
+- **Accepted divergence: `include` has no case-insensitivity option** in the pinned subset, unlike the
+  query-time `case_insensitive` on `term`/`wildcard`/`prefix`/`regexp`. So a set filter's search
+  prefix matches **case-sensitively as typed** here, where Postgres's `ILIKE` and Mongo's
+  `$regex`/`"i"` fold — SEM-1 assigning that predicate the pattern-match mechanism on both. Recorded
+  in the same register as AGG-5; a field needing a case-insensitive value search would have to fold at
+  index time, which is SEM-1's `search.normalizedSubField` obligation reappearing on the bucket side.
+  `group-aggregation/018`'s description states it and `CrossCompilerGroupingTests` asserts it as an
+  expected difference.
+
+**OSE-13. There is no projection member: GRP-3 has no counterpart on this backend.**
+`spec/fixtures/schemas/search-artifact.schema.json` declares `additionalProperties: false` over a
+member set with no `_source` in it, so this is a contract rather than an omission. GRP-3's concern is
+a *physical* column name reaching a grid that asked for a logical one; a hit's `_source` carries the
+document's own field names, which the index mapping decides once rather than per query, so the
+question is answered at index time. A drill-down leaf therefore emits no column list where SQL emits
+an aliased one and MongoDB emits a `$project` — asserted as an expected difference rather than left
+as an absence.
+
+**OSE-14. One compiler, both engines, and no target flag — a fact about the pinned subset, not an
+aspiration.** #1621's DoD asks for OpenSearch-versus-Elasticsearch divergences to sit "behind a target
+flag, not a second compiler". **No such divergence exists in this subset**, so there is no flag: a
+one-setting flag is the same smell as a one-implementation dialect seam, which is why there is no
+`IMongoDialect` either. Every construct this addendum names predates the fork (OpenSearch forked
+Elasticsearch 7.10.2) and is spelled identically on both sides of it. The one parameter worth checking
+is `case_insensitive`, SEM-1's mechanism here, which Elasticsearch added in **7.10** — the very
+release OpenSearch forked from — so OpenSearch 1.0 inherited it and every supported version of both
+engines has it. That is also this compiler's version floor, recorded in the same register as Oracle's
+12.2 (SQL-6), SQLite's 3.30.0 and MongoDB's 4.2 (MDB-12), and it is a loud failure when unmet
+(`unknown parameter [case_insensitive]`) rather than a silent one. If a future construct genuinely
+does diverge, the seam to add is the one this project already uses for that shape of problem
+(BM-1's `Dialect`), not a boolean threaded through a builder.
+
+**Cross-links.** `spec/fixtures/schemas/search-artifact.schema.json` (the member set OSE-13 rests on),
+`$defs/andNode`, `$defs/orNode`, `$defs/notNode`, `$defs/unaryOperator`, `$defs/binaryOperator`,
+`$defs/setOperator`, `$defs/rangeComparisonNode`, `$defs/sortItem`, `$defs/setValuesSpec`, SEM-1,
+SEM-2, SEM-3, SEM-4, SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, AGG-4, **AGG-5**, GRP-2..GRP-6, and the
+SQL addendum's SQL-0 (`source`) and SQL-2 (the composite wrap OSE-2 parallels).

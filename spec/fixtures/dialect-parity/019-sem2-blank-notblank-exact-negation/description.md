@@ -27,7 +27,16 @@ mechanism visible rather than its algebraically-equivalent expansion:
   emitted the wrong shape, which is why the prose is corrected too — a case description is the
   normative unit a port reads.*
 - **Search**: a `bool.must_not` wrapping `blank`'s own compiled `bool.should` query verbatim (field
-  missing, via negated `exists`, OR an empty-string `term`).
+  missing, via negated `exists`, OR an empty-string `term`). *Two details of that arm were wrong until
+  #1644 compiled it, and both are the same class of defect as the Mongo bullet above — a spelling this
+  artifact used and its siblings did not. (1) The `must_not` carried an **array**; OSE-4 reserves that
+  spelling for a tree-level `notNode` (nine `filter-tree/` artifacts) and gives a compiler-composed
+  negation a single clause **object**, which `operators/030`/`032`/`034` already used, so the array
+  made this leaf negation indistinguishable from a one-child `NOT` — the same conflation the `$nor`
+  above created on the other backend. (2) The empty-string `term` used the bare shorthand
+  `{"lastName.keyword": ""}`; OSE-1 spells every `string` term long, which GRP-2 pins by hand for a
+  drill-down and `014` uses for the case-sensitive opt-in. Note the sentinel still carries no
+  `case_insensitive`: it is compiler-minted and an empty string has no case to fold (OSE-4).*
 
 `blank`'s own text-specific rule (`IS NULL OR = ''`) applies here since `lastName` is a `string`
 field (SEM-2's fourth Must-Not: never apply the `= ''` clause to a non-text type).

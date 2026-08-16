@@ -1,0 +1,55 @@
+using Craticula.Core.Ir;
+using Craticula.Core.Schema;
+
+namespace Craticula.Search;
+
+/// <summary>
+/// Everything <see cref="SearchQueryBuilder.Build"/> needs to compile one row/grouped query — the
+/// exact counterpart of <c>Craticula.Sql.SqlQueryRequest</c> and
+/// <c>Craticula.Mongo.MongoQueryRequest</c>, property for property, and deliberately so: all three
+/// compilers consume the identical IR produced by the identical
+/// <c>Craticula.AgGrid.AgGridRequestParser</c> -&gt; <see cref="GridFilterPipeline.Process"/> path,
+/// so anything one of them needed and the others did not would be a semantics decision that had
+/// leaked into a backend.
+/// </summary>
+public sealed record SearchQueryRequest
+{
+    /// <summary>SC-1..SC-5: the field allowlist, physical mappings (SC-4's
+    /// <c>search.field</c>/<c>keywordSubField</c>/<c>normalizedSubField</c>),
+    /// <see cref="GridSchema.Source"/> (the index) and <see cref="GridSchema.StableKey"/> (SEM-6's
+    /// tiebreaker).</summary>
+    public required GridSchema Schema { get; init; }
+
+    /// <summary>The final filter tree — merged, allowlisted, limit-checked, coerced and
+    /// static-filter-injected by <see cref="GridFilterPipeline.Process"/>. <see langword="null"/>
+    /// compiles to <c>{"match_all": {}}</c> on a row query and to no <c>query</c> member at all on an
+    /// aggregation request (OSE-3).</summary>
+    public FilterNode? Filter { get; init; }
+
+    /// <summary>The request's own sort keys, before SEM-6's tiebreaker (which
+    /// <see cref="SearchQueryBuilder"/> appends via
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker"/>).</summary>
+    public IReadOnlyList<SortItem>? Sort { get; init; }
+
+    public required PageSpec Page { get; init; }
+
+    /// <summary>
+    /// BM-2's row-group state, and the switch <see cref="SearchQueryBuilder"/> dispatches on (GRP-1):
+    /// <see langword="null"/> compiles the plain row query, fewer <see cref="GroupSpec.GroupKeys"/>
+    /// than <see cref="GroupSpec.GroupCols"/> compiles the grouped level (a <c>composite</c>
+    /// aggregation), and equal counts compile the drill-down leaf (raw hits).
+    ///
+    /// <para><b>Client-controlled input that must reach here already allowlisted</b>, exactly like
+    /// <see cref="Filter"/>: pass it and <see cref="Aggregations"/> to
+    /// <see cref="GridFilterPipeline.Process"/>, which applies SC-1, SC-2's
+    /// <c>groupable</c>/<c>aggregatable</c> flags and SEC-3's leaf budget over the <c>groupKeys</c>
+    /// drill-down.</para>
+    /// </summary>
+    public GroupSpec? Group { get; init; }
+
+    /// <summary>AR-8's <c>valueCols</c>, compiled into the <c>composite</c> aggregation's
+    /// sub-aggregations. Ignored on the drill-down leaf and on an ungrouped request, both of which
+    /// return hits rather than buckets. Subject to the same allowlist precondition as
+    /// <see cref="Group"/>.</summary>
+    public IReadOnlyList<Aggregation>? Aggregations { get; init; }
+}

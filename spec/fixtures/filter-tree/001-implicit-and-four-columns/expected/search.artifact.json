@@ -27,9 +27,7 @@
         },
         {
           "term": {
-            "isActive": {
-              "value": true
-            }
+            "isActive": true
           }
         }
       ]

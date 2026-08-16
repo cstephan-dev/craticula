@@ -51,3 +51,13 @@ Four columns each carry a single, independent simple filter (`customerName conta
   ]
 }
 ```
+
+*Search-arm correction (#1644, the story that compiled this arm for the first time):* the `isActive`
+clause was spelled `{"term": {"isActive": {"value": true}}}` and is now
+`{"term": {"isActive": true}}`. It is the same construct `operators/044-true-boolean` pins from the
+identical wire shape (a `set` filter carrying `["true"]`, which AR-6 resolves to the unary `true`
+operator), and that fixture already used the short form — one IR construct rendered two ways from
+identical inputs, which is the defect class the rendering addenda exist to end. **OSE-1** keys the
+spelling on the field's declared type: the long form for a `string`, because only a string can ever
+acquire SEM-1's `case_insensitive` parameter, and the short form for every other type. Thirteen
+non-string `term` clauses in the suite already used it; this was the one that did not.

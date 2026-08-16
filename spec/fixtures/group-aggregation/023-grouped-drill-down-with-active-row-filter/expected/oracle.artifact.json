@@ -1,0 +1,12 @@
+{
+  "dialect": "oracle",
+  "sql": "SELECT \"product\" AS \"product\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE ((\"region\" = :p1 AND \"segment\" = :p2) AND (\"fiscal_year\" >= :p3 AND \"quantity\" < :p4)) GROUP BY \"product\" ORDER BY \"product\" ASC NULLS LAST OFFSET :p5 ROWS FETCH NEXT :p6 ROWS ONLY",
+  "params": [
+    "EMEA",
+    "Enterprise",
+    2023,
+    500,
+    0,
+    100
+  ]
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/search-artifact.schema.json",
   "title": "OpenSearch/Elasticsearch Query DSL artifact (fixture expected/ shape)",
-  "description": "One shared artifact per fixture for both OpenSearch and Elasticsearch, per OQ-7's resolution (one compiler, one shared 7.10-era DSL subset). Deliberately lightweight: catches gross shape mistakes only, no Search compiler exists yet to check this semantically.",
+  "description": "One shared artifact per fixture for both OpenSearch and Elasticsearch, per OQ-7's resolution (one compiler, one shared 7.10-era DSL subset). Deliberately lightweight: it catches gross shape mistakes only. The semantic check is spec/semantics.md's 'Addendum — canonical OpenSearch/Elasticsearch rendering' (OSE-0..OSE-14), compiled and compared artifact-for-artifact since #1644. Note additionalProperties:false is load-bearing rather than hygiene — the absent '_source' member is what OSE-13 rests on (GRP-3 has no counterpart on this backend), and 'search_after' is admitted for #1622's benefit although nothing emits it today (OSE-10).",
   "type": "object",
   "additionalProperties": false,
   "properties": {

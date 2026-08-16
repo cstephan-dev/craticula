@@ -92,3 +92,25 @@ shared Search, except:
   Search artifact schema (`search-artifact.schema.json`) has no source-filtering property, so
   Search's own column narrowing cannot be shown structurally there (documented in that fixture's
   `description.md`).
+
+### Search arms of 004-007 corrected (#1644 review pass)
+
+This category is excluded from `SearchConformanceFixtureTests` because #1623 owns `exportScope`, not
+because its Search artifacts are exempt from `spec/semantics.md`'s OSE-* addendum — and four of them
+had drifted while nothing could compile them:
+
+- **004-007 wrapped an ordinary hit-returning query in `{"bool": {"filter": [...]}}`.** OSE-3 reserves
+  that container for a **grouping or distinct-values** request; a row query renders its filter tree
+  directly. Corrected on all four.
+- **004 also spelled its `term` with the bare shorthand** (`{"status.keyword": "shipped"}`). OSE-1
+  keys a `term`'s form on the field's declared **type**, so a `string` always takes the long
+  `{"value": …}` form — `status` is declared `sensitive`, which is exactly why it carries no
+  `case_insensitive` and why "long only when a parameter is present" is not the rule. This was the
+  **fourth** short-form string `term` in the suite, and the only one that was an ordinary client value
+  rather than `blank`'s empty-string sentinel; the other three (`operators/029`, `/030`,
+  `dialect-parity/019`) were corrected in #1644 itself.
+
+The four are compiled and compared by
+`SearchQuerySortAndPagingTests.PageExport004To007_Compile_To_Their_Own_Artifacts_Once_The_Page_Is_Supplied`,
+with only the `PageSpec` supplied directly — the same treatment `sort-paging/012` already gets, and
+the reason the exclusion does not have to mean "unchecked".

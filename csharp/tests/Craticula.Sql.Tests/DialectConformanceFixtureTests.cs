@@ -61,10 +61,10 @@ public class DialectConformanceFixtureTests
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [
-        ("mssql", MssqlDialect.Instance, 41),
-        ("mysql", MySqlDialect.Instance, 42),
-        ("oracle", OracleDialect.Instance, 40),
-        ("sqlite", SqliteDialect.Instance, 41)
+        ("mssql", MssqlDialect.Instance, 42),
+        ("mysql", MySqlDialect.Instance, 43),
+        ("oracle", OracleDialect.Instance, 41),
+        ("sqlite", SqliteDialect.Instance, 42)
     ];
 
     /// <summary>
@@ -189,8 +189,11 @@ public class DialectConformanceFixtureTests
     }
 
     [Fact]
-    public void The_Suite_Is_All_160_Non_Postgres_Arms_In_The_Fixture_Tree()
+    public void The_Suite_Is_All_164_Non_Postgres_Arms_In_The_Fixture_Tree()
     {
+        // #1644's review pass added the most recent 4: group-aggregation/023, the one case carrying
+        // both a consumed groupKeys and a filterModel, which is what turns GRP-5's drill-down-leads
+        // clause order from a normative sentence into something every dialect's `params` is graded on.
         // #1642 added 39: Oracle at full parity coverage (dialect-parity/006-022 and all of
         // group-aggregation/), derived by transformation from each fixture's own Postgres arm like
         // every arm below it. Only ONE of the 39 differs from what the other dialects' arms say
@@ -209,7 +212,7 @@ public class DialectConformanceFixtureTests
         // which is what makes BM-2's "identical grouping protocol across all four dialects"
         // checkable at all. This number going up without the per-dialect table above changing with
         // it means an arm was added and went unexercised.
-        Assert.Equal(164, Arms.Count);
+        Assert.Equal(168, Arms.Count);
     }
 
     [Fact]
