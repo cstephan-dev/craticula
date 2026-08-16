@@ -58,7 +58,8 @@ internal static class FixtureCompiler
                 Sort = parsed.Sort,
                 Page = parsed.Page,
                 Group = parsed.Group,
-                Aggregations = parsed.Aggregations
+                Aggregations = parsed.Aggregations,
+                Projection = parsed.Export?.ProjectionColumns
             },
             dialect);
     }

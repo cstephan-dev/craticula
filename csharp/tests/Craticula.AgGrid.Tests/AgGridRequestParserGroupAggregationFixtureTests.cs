@@ -3,8 +3,8 @@ using Craticula.Core.Ir;
 namespace Craticula.AgGrid.Tests;
 
 /// <summary>
-/// Fixture-driven coverage against the real <c>spec/fixtures/group-aggregation/</c> suite (22 cases,
-/// BM-2/BM-3/AR-8), for the 17 that are row-fetch requests. Cases <c>016</c>-<c>019</c> and
+/// Fixture-driven coverage against the real <c>spec/fixtures/group-aggregation/</c> suite (23 cases,
+/// BM-2/BM-3/AR-8), for the 18 that are row-fetch requests. Cases <c>016</c>-<c>019</c> and
 /// <c>022</c> are the
 /// distinct <c>setValuesRequest</c> envelope, which <see cref="AgGridRequestParser.Parse"/> still
 /// rejects and <see cref="AgGridRequestParser.ParseSetValues"/> handles — they are covered by
@@ -173,7 +173,8 @@ public class AgGridRequestParserGroupAggregationFixtureTests
         "014-aggregation-alias-explicit",
         "015-aggregation-alias-default-name",
         "020-grouped-query-with-filter-and-sort",
-        "021-group-column-sort-via-auto-column-colid"
+        "021-group-column-sort-via-auto-column-colid",
+        "023-grouped-drill-down-with-active-row-filter"
     };
 
     [Theory]

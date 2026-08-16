@@ -183,7 +183,8 @@ only the per-dialect token table in `spec/semantics.md` SQL-1/SQL-5/SQL-6 and
 the paging clause with its binding order), never by running a compiler and recording its output.
 That is what makes BM-2's "identical grouping protocol verified across all four dialects" checkable.
 #1642 added a fifth arm to every case in this category (Oracle, at full parity coverage), so the
-claim now spans five dialects; **not one of the 22 needed a structural change for it** — BM-2's
+claim now spans five dialects; **not one of the 22 cases then in the category needed a structural
+change for it** — BM-2's
 grouping protocol is entirely ANSI, and Oracle's only genuine divergence (SQL-7's `blank` collapse)
 is not reachable from any request in this category.
 

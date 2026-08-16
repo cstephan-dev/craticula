@@ -31,7 +31,7 @@ inventing a new domain per case.
 | 009 | `stablekey-tiebreaker-appended-boolean-primary` | Tiebreaker appended after a two-valued `boolean` primary sort key, `desc` direction | SEM-6, SEM-3, AR-9, AG-3 |
 | 010 | `stablekey-tiebreaker-not-appended-sort-ends-in-key` | Negative case: `sortModel` already ends in `stableKey` — no duplicate tiebreaker appended | SEM-6, SEM-3, AR-9, AG-3 |
 | 011 | `page-range-with-tiebreaker` | `page: { mode: "range" }` at a non-zero offset (`startRow: 20, endRow: 40`), tiebreaker makes the offset read deterministic | AG-3, SEM-6, SEM-3, AR-9 |
-| 012 | `page-none-unpaginated-export` | `page: { mode: "none" }` via `exportScope: "all"` (EXP-1): full unpaginated artifact, no row-range clause in any backend | EXP-1, EXP-2, SEM-3, SEM-6, AR-9 |
+| 012 | `page-none-unpaginated-export` | `page: { mode: "none" }` via `exportScope: "all"` (EXP-1): full unpaginated artifact, no row-range clause in any backend — and, being an export, EXP-1(b)'s named output columns on Postgres and MongoDB | EXP-1, EXP-2, SEM-3, SEM-6, AR-9 |
 
 ## Notes on artifact construction
 
@@ -43,7 +43,9 @@ inventing a new domain per case.
   per SEM-1's "same collation mechanism across every context on that field" (the identical
   collation `eq`/`in` would use, not `ILIKE`) — the `id` tiebreaker never needs this since
   `stableKey` is `int64` here. Paging renders as `LIMIT $1 OFFSET $2` with `params`
-  `[endRow - startRow, startRow]`; case 012 omits `LIMIT`/`OFFSET` and both params entirely.
+  `[endRow - startRow, startRow]`; case 012 omits `LIMIT`/`OFFSET` and both params entirely. Every
+  case selects `*` **except 012**, which is an export and therefore names its output columns
+  (`SELECT "id", "created_at" AS "createdAt"`) — EXP-1(b), not a paging concern.
 - **MongoDB**: SEM-3's null-bucket emulation (no native "nulls last/first" `$sort` behavior) — a
   single `$addFields` stage computes one `__<field>NullBucket` per sort key (`1` if null, `0`
   otherwise), then a single `$sort` stage orders by `(bucket, field)` pairs **in that order** for
@@ -56,7 +58,10 @@ inventing a new domain per case.
   document states its snippets are illustrative, not literal compiler output. Every pipeline's
   `$sort` stage is immediately followed by a `$unset` stage dropping every `__<field>NullBucket` key
   it used, per SEM-3's mandatory bucket-cleanup rule. Range paging renders as trailing
-  `$skip`/`$limit` stages; case 012 omits both. Cases with a `string`-typed sort key (001, 004, 006,
+  `$skip`/`$limit` stages; case 012 omits both — and 012 alone ends in a trailing
+  `{"$project": {"id": 1, "createdAt": 1, "_id": 0}}`, EXP-1(b)'s export column list, written after
+  the `$unset` for the same reason a `$project` always lands last. Cases with a `string`-typed sort
+  key (001, 004, 006,
   007, 010, 011) use the artifact's wrapper-object form (`{"pipeline": [...], "collation": {"locale":
   "en", "strength": 2}}`, per `mongo-artifact.schema.json`) instead of the bare-array form, so the
   query-level collation reaches `$sort` the same way it would reach `$eq`/`$in` on that field.
@@ -67,4 +72,6 @@ inventing a new domain per case.
   so case-insensitive ordering needs the ICU-folded normalized sub-field instead of the plain
   `.keyword` exact-match sub-field `term`/`in` use. Range paging renders as `from`/`size`; case 012
   omits both. Every case includes `{ "query": { "match_all": {} } }` since none of these cases
-  exercise `filterModel`.
+  exercise `filterModel`. Case 012's export gives this arm **nothing** the other eleven do not have:
+  there is no projection member on this backend at all (OSE-13), which is why it is the one arm of
+  012 that a reader cannot tell apart from an ordinary unpaginated row query.

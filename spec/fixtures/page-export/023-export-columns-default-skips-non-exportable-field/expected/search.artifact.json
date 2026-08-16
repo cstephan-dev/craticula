@@ -1,0 +1,17 @@
+{
+  "query": {
+    "term": {
+      "notes.keyword": {
+        "value": "priority"
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ]
+}

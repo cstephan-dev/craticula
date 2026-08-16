@@ -13,5 +13,6 @@
       "id": 1
     }
   },
-  { "$unset": ["__createdAtNullBucket", "__idNullBucket"] }
+  { "$unset": ["__createdAtNullBucket", "__idNullBucket"] },
+  { "$project": { "id": 1, "createdAt": 1, "_id": 0 } }
 ]

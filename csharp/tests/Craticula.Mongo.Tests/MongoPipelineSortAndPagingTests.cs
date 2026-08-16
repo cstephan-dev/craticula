@@ -256,42 +256,19 @@ public class MongoPipelineSortAndPagingTests
     }
 
     /// <summary>
-    /// The builder's half of <c>sort-paging/012</c>, which the conformance suite excludes by name:
-    /// the fixture resolves <c>page: none</c> from EXP-1's <c>exportScope: "all"</c>, and
-    /// <see cref="AgGridRequestParser"/> has no <c>exportScope</c> handling. Everything except that
-    /// one substitution runs end to end here, so the artifact is not left unexercised while the
-    /// upstream gap stands — the exact arrangement
-    /// <c>Craticula.Sql.Tests.SqlQueryBuilderPageAndSortTests</c> makes for the same fixture.
+    /// EXP-1(b): an EMPTY projection is refused rather than rendered. It cannot arrive from
+    /// <c>AgGridRequestParser</c>, which refuses an empty <c>exportColumns</c> at the wire — the
+    /// reachable population is a hand-built request or a future non-AG-Grid adapter, exactly the
+    /// population the <c>Projection</c>+<c>Group</c> guard beside it already exists for. Unguarded it
+    /// renders <c>{"$project": {"_id": 0}}</c>, which is not "project nothing" but a stage that
+    /// suppresses everything, and which older server versions reject outright.
     /// </summary>
     [Fact]
-    public void SortPaging012_Compiles_To_Its_Own_Artifact_Once_The_Page_Is_NonePage()
+    public void An_Empty_Export_Projection_Is_Refused_Rather_Than_Rendered_As_A_Bare_Id_Suppression()
     {
-        const string category = "sort-paging";
-        const string fixtureDir = "012-page-none-unpaginated-export";
+        var ex = Assert.Throws<MongoCompilationException>(() => MongoPipelineBuilder.Build(
+            new MongoQueryRequest { Schema = Schema, Page = new NonePage(), Projection = [] }));
 
-        var schema = GridSchema.Parse(File.ReadAllText(RepoPaths.Fixture(category, fixtureDir, "schema.json")));
-        var parsed = AgGridRequestParser.Parse(
-            File.ReadAllText(RepoPaths.Fixture(category, fixtureDir, "agGridRequest.json")),
-            new AgGridParseOptions { Schema = schema });
-
-        // The one substitution, and the whole content of the upstream gap: the parser reports the
-        // RangePage the literal startRow/endRow describe, because it does not read exportScope.
-        Assert.IsType<RangePage>(parsed.Page);
-
-        var filter = GridFilterPipeline.Process(
-            parsed.NativeFilter, parsed.CustomFilters, parsed.Page, schema, new ResourceLimits());
-
-        var query = MongoPipelineBuilder.Build(new MongoQueryRequest
-        {
-            Schema = schema,
-            Filter = filter,
-            Sort = parsed.Sort,
-            Page = new NonePage()
-        });
-
-        Assert.Equal(
-            MongoFixtureCompiler.CanonicalJson(
-                File.ReadAllText(RepoPaths.Fixture(category, fixtureDir, "expected", "mongo.artifact.json"))),
-            MongoFixtureCompiler.CanonicalJson(query.ToArtifact()));
+        Assert.Contains("empty EXP-1(b) export projection", ex.Message, StringComparison.Ordinal);
     }
 }

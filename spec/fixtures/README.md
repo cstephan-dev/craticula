@@ -62,7 +62,7 @@ outside T-1a:
 | Tier | Dialects | What that means |
 |---|---|---|
 | **v1 supported** (§5) | Postgres, SQL Server, MySQL/MariaDB, SQLite | Graded by T-1a; on the release path; execution-equality (T-1b, Feature #1624) will cover them. |
-| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 40 arms across `dialect-parity/006`-`023` and all of `group-aggregation/` — but **no CI job runs it against a real Oracle instance and no release is blocked on it**. OQ-6 stays open. Its host obligations (12.2+, `MAX_STRING_SIZE = EXTENDED`, quoted DDL) are recorded in `dialect-parity/README.md`. |
+| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 41 arms across `dialect-parity/006`-`023` (18) and all of `group-aggregation/` (23) — but **no CI job runs it against a real Oracle instance and no release is blocked on it**. OQ-6 stays open. Its host obligations (12.2+, `MAX_STRING_SIZE = EXTENDED`, quoted DDL) are recorded in `dialect-parity/README.md`. |
 
 An Oracle artifact disagreeing with a compiler is still a bug in one of the two, on the same terms as
 any other arm; the tier is about *coverage beyond the artifact*, not about how seriously the artifact
@@ -214,14 +214,15 @@ It is now MDB-1; re-settling it the other way means re-authoring those 21 artifa
 `MongoPipelineBuilder.ScalarOperator`, and `CrossCompilerGroupingTests`'s drill-down reader, which
 matches on the explicit form's `{`.
 
-**One coverage gap, recorded rather than closed: SC-4's Mongo path mapping.** Every in-scope
-fixture's `physical.mongo.path` is the identity mapping, so the code that turns `customerName` into
-`customer.name` in a `$match` key, a `$sort` key, `$group._id`, a `$cond` reference and a `$project`
-value is exercised by unit tests alone. The only schemas in the suite declaring a differing path
-belong to `page-export/`, whose whole category is excluded from the runner for an unrelated reason
-(EXP-1..EXP-8 owns the projection). `MongoConformanceFixtureTests` asserts the gap
-(`Records_That_No_In_Scope_Fixture_Maps_A_Mongo_Path_Away_From_Its_ColId`), so it fails — and this
-paragraph becomes deletable — the day a fixture closes it.
+**One coverage gap, recorded here in #1643 and CLOSED by #1650: SC-4's Mongo path mapping.** Every
+in-scope fixture's `physical.mongo.path` was the identity mapping, so the code that turns
+`customerName` into `customer.name` (and `id` into `_id`) in a `$match` key, a `$sort` key,
+`$group._id`, a `$cond` reference and a `$project` value was exercised by unit tests alone. The only
+schemas in the suite declaring a differing path belong to `page-export/`, whose whole category was
+excluded from the runner for an unrelated reason (`exportScope`) — bringing it in scope closed the
+gap. `MongoConformanceFixtureTests` now asserts the *inverse*
+(`Exercises_SC4_Path_Mapping_On_Fixtures_That_Really_Remap_A_Mongo_Path`), so it fails if the last
+remapping fixture ever leaves the suite and the gap silently reopens.
 
 ## Search artifact rendering — pinned by compiling it (#1644)
 
@@ -234,7 +235,7 @@ classes** — six clause-level corrections, since `dialect-parity/019` was wrong
 - a `term` on a `string` spelled with the bare shorthand instead of the long `{"value": …}` form —
   three artifacts (`operators/029`, `/030`, `dialect-parity/019`), against 64 that already spelled it
   long and GRP-2's own hand-written drill-down form. A **fourth** was found by the review pass in the
-  excluded `page-export/004` and corrected there too (see below);
+  then-excluded `page-export/004` and corrected there too (see below);
 - a `term` on a `boolean` spelled long instead of short — one artifact (`filter-tree/001`), for the
   identical construct `operators/044` spells short, against 13 non-string terms that already did;
 - a `notBlank` whose `must_not` took an array instead of a single clause object
@@ -274,10 +275,12 @@ Neither of the first two is a spelling:
   both a consumed `groupKeys` and a `filterModel`, so GRP-5's clause **order** was unpinned on **all
   three backends** — a reviewer's mutation reversing it passed every test. `023` pins it, plus each
   backend's composition of two conjunctions, on all seven arms.
-- **`page-export/004`-`007` were corrected** although the category is excluded from all three
-  runners: four wrapped an ordinary row query in OSE-3's grouping-only `{"bool": {"filter": […]}}`
-  container, and `004` also carried the suite's fourth short-form string `term`. The exclusion is
-  about `exportScope` (#1623), not about the rendering rules. See `page-export/README.md`.
+- **`page-export/004`-`007` were corrected** although the category was still excluded from all three
+  runners at the time: four wrapped an ordinary row query in OSE-3's grouping-only
+  `{"bool": {"filter": […]}}` container, and `004` also carried the suite's fourth short-form string
+  `term`. The exclusion was about `exportScope` (#1623), not about the rendering rules — and #1650
+  lifted it, along with four more drifted Mongo arms the same reasoning predicted. See
+  `page-export/README.md`.
 
 **One coverage gap, recorded rather than closed: SC-4's Search *base*-field mapping.** Every in-scope
 fixture's `physical.search.field` is the identity mapping, so the code that would turn `customerName`
@@ -287,6 +290,54 @@ aggregation metric is exercised by unit tests alone. The **sub-field** halves of
 the identity. `SearchConformanceFixtureTests` asserts the gap
 (`Records_That_No_In_Scope_Fixture_Maps_A_Search_Field_Away_From_Its_ColId`), so it fails — and this
 paragraph becomes deletable — the day a fixture closes it.
+
+## `page-export/` unblocked, and the last exclusion removed (#1650)
+
+Until #1650 the AG Grid adapter could not read EXP-1's `exportFormat`/`exportScope`/`exportColumns`,
+so no export request could be fed end to end. That single gap kept **the whole `page-export/`
+category** and **`sort-paging/012`** out of all three conformance runners. Both are gone: **every
+fixture in this suite is now executed by something**, and all three runners have an *empty*
+`ExcludedFixtures` and no excluded category that carries a compiled artifact. That property is
+asserted, not just stated — each runner's `The_End_To_End_Suite_…` test now also asserts
+`Assert.Empty(ExcludedFixtures)`.
+
+The compile-time export rules are pinned in `spec/semantics.md`'s **EXP-1/EXP-2** addendum, not
+here — the same discipline #1643 had to be corrected on. Executing 23 Postgres and 13 Mongo/Search
+arms nothing had ever run found **five disagreements**, every one of them the fixture's:
+
+- **`page-export/001`-`003`'s Postgres arms carried an explicit column list** although the three
+  requests carry no export member at all — and their **own Mongo arms had no `$project`**, which is
+  what settled it: a within-fixture disagreement means the SQL arm was the accident. GRP-3 says an
+  ordinary row query renders `SELECT *`; the three now do.
+- **`sort-paging/012` had the opposite defect**: an export (`exportFormat: "csv"`,
+  `exportScope: "all"`) rendering `SELECT *` and no `$project`. It gained both.
+- **Eight `page-export` Mongo arms wrote `_id: 0` FIRST** in their `$project`, against
+  `group-aggregation/005`/`006` and this category's own `008`, which write it last. MongoDB accepts
+  either, so the tie-break is that the output list's order is normative and byte-compared while the
+  suppression names no output column — and that the executed arms already spelled it last.
+- **`004`'s `$match` still spelled `eq` implicitly** (`{"status": "shipped"}`) — the residue of the
+  21 artifacts #1643 re-authored onto MDB-1's explicit `$eq`, missed only because this category was
+  excluded.
+- **`006`/`007` wrote a `decimal` bound as a plain JSON number** (`{"$gte": 100}`) where
+  `operators/046`/`047` pin `{"$numberDecimal": "…"}`.
+
+One fixture was **authored**, `023`, for the standing reason that a compiler path whose only oracle
+is a unit test by the implementation's own author is weak: `FieldConfig.Exportable` defaults to
+`true` and **no schema in the suite had ever declared `exportable: false`**, so every arm was
+exercising one branch of EXP-1(b)'s default projection. `023` declares it on `notes`, pins the
+six-column projection that follows on all three backends, and filters on that same non-exportable
+field to pin that `exportable` and SC-2's `filterable` are independent.
+
+**#1650's review pass authored a second one, `024`, and reversed a decision to do it.** The story had
+*refused* an export carrying a non-empty `groupKeys` (a drill-down key restricts the result, so
+discarding it widens the export) — but discarding `rowGroupCols` widens it just as much and is
+mandated, so the argument did not separate the three group members, and the refusal broke the obvious
+host integration: an export request built by copying the grid's last `getRows` payload hard-failed
+whenever a user had expanded a group node. EXP-1(a) now discards all three. That made `010`/`011` a
+weak oracle for the change — both send `groupKeys: []`, so the discard was pinned by nothing — and
+`024` sends a partially-consumed two-level path whose three arms are byte-identical to `010`'s. The
+category's contribution is therefore **24 Postgres and 14 Mongo/Search arms**, not the 23 and 13 the
+census above was taken over.
 
 ## Case-insensitivity mechanism policy (SEM-1)
 

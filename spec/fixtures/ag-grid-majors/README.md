@@ -161,9 +161,12 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   - `missing_bucket: true` on the Search composite source;
   - **the Search `bool.filter` composition** for its cross-condition `And`, where 001/003/005/006 in
     this category use `bool.must`. Both conventions exist suite-wide — `filter-tree/` and `operators/`
-    use `must` (13 artifacts), `group-aggregation/` and `page-export/` use `filter` (18) — and neither
+    use `must` (11 artifacts), `group-aggregation/` uses `filter` (16) — and neither
     is wrong; `filter` is the scoring-free form, which is the accurate one for a `size: 0` aggregation
-    query where no document score is ever read. Following `group-aggregation/` here is consistent with
+    query where no document score is ever read. *(This bullet counted `page-export/` among the
+    `filter` users until #1650's review pass: #1644 had corrected `page-export/004`-`007`, which were
+    wrapping an ordinary hit-returning query in `bool.filter` against OSE-3, so that category now
+    contributes none.)* Following `group-aggregation/` here is consistent with
     everything above it in this list, but it does mean this category is internally split, so it is
     written down rather than left for a reader to notice.
   - **and** `group-aggregation/`'s identifier quoting — see the next bullet; this used to be the one

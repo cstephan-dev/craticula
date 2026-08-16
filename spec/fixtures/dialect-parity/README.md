@@ -11,7 +11,9 @@ specific SEM rule/mechanism it pins):
 2. **Cross-backend parity showcases** (`006`-`023`): the same rule proved to reach an *identical
    logical outcome* on **every** backend — all five SQL dialects (Postgres/MSSQL/MySQL/SQLite, plus
    **Oracle** since #1642) + MongoDB + Search — through each backend's own native mechanism.
-   18 fixture directories × 7 backend artifacts = 126 artifact files, still only 18 fixture cases.
+   18 parity directories (`006`-`023`) × 7 backend artifacts = 126 artifact files, still only 18
+   fixture cases — the category holds 23 directories in all, the other five being the single-artifact
+   mechanics showcases above.
 
    *Identical logical outcome, not identical text — and `019` is where that distinction stops being
    pedantic.* Oracle's `''` is NULL, so `blank`'s text arm collapses there (**SQL-7**); its arm is the

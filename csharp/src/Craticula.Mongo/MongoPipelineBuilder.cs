@@ -31,7 +31,8 @@ namespace Craticula.Mongo;
 /// <c>$group</c> (a grouped level only) →
 /// <c>$addFields</c>/<c>$sort</c>/<c>$unset</c> (SEM-3's null-bucket emulation) →
 /// <c>$skip</c>/<c>$limit</c> (AG-3's row window; absent under EXP-2's <c>page: none</c>) →
-/// <c>$project</c> (GRP-3, a drill-down leaf only).</para>
+/// <c>$project</c> (a drill-down leaf, GRP-3, or an export, EXP-1(b) — never an ordinary row query,
+/// which returns whole documents exactly as its SQL counterpart renders <c>SELECT *</c>).</para>
 /// </summary>
 public static class MongoPipelineBuilder
 {
@@ -69,6 +70,29 @@ public static class MongoPipelineBuilder
         PageSpecValidator.Validate(request.Page);
         GroupSpecValidator.Validate(request.Group);
         AggregationValidator.Validate(request.Aggregations);
+
+        // EXP-1's group-export carve-out means the adapter has already nulled the group state on any
+        // export, so the two are mutually exclusive by construction. Checked rather than assumed, and
+        // for the same reason Craticula.Sql checks it: a hand-built request could set both, and there
+        // is no defined shape for an export projection over a $group's bucket-and-aggregate output.
+        if (request.Projection is not null && request.Group is not null)
+        {
+            throw new MongoCompilationException(
+                "A request carries both a GroupSpec and an EXP-1(b) export projection. An export emits leaf rows " +
+                "and discards group state (EXP-1's carve-out, applied by AgGridRequestParser), so the two never " +
+                "arrive together from the adapter.");
+        }
+
+        // Same population as the guard above — a hand-built request, since AgGridRequestParser refuses
+        // an empty 'exportColumns' at the wire. An empty list would render `{"$project": {"_id": 0}}`,
+        // which is not "project nothing" but a stage that suppresses everything, and which older server
+        // versions reject outright ("specification must have at least one field").
+        if (request.Projection is { Count: 0 })
+        {
+            throw new MongoCompilationException(
+                "A request carries an empty EXP-1(b) export projection. An export of no columns has no compiled " +
+                "form; leave Projection null for GRP-3's whole-document read / the schema-order default.");
+        }
 
         // GRP-2's divergence #3: a grouping request at any level computes bucket identity, so no
         // collation is emitted whatever the filter wants — which also means the escape below can
@@ -144,9 +168,17 @@ public static class MongoPipelineBuilder
         // GRP-3: a grouping request names its output at every level. A grouped level already does —
         // $group's own output keys are `_id` plus the aggregate names — so the explicit stage is the
         // LEAF's, which would otherwise return whole stored documents (Mongo's `SELECT *`).
+        // EXP-1(b) adds the second case that names its output: an export, whose column list the adapter
+        // has already resolved. Both land LAST, after any $skip/$limit — the paging window is over
+        // rows, not over fields, and the sort keys a $project may drop (page-export/008 orders on the
+        // stableKey it does not export) must still be readable when the $sort runs.
         if (grouping is { GroupColumn: null })
         {
-            stages.Add(Stage("$project", RenderLeafProjection(context)));
+            stages.Add(Stage("$project", RenderProjection(context.Schema.FieldOrder, context)));
+        }
+        else if (grouping is null && request.Projection is { } projection)
+        {
+            stages.Add(Stage("$project", RenderProjection(projection, context)));
         }
 
         return stages;
@@ -414,20 +446,28 @@ public static class MongoPipelineBuilder
         aggregation.Alias ?? $"{aggregation.Field}_{aggregation.Func.ToString().ToLowerInvariant()}";
 
     /// <summary>
-    /// GRP-3: the drill-down leaf's explicit projection — every field the schema declares, in
-    /// declaration order, then <c>_id: 0</c> to drop the stored document key the grid did not ask
-    /// for. A field whose physical path differs from its logical name is re-keyed
+    /// The <c>$project</c> body for an ordered list of logical field names — GRP-3's drill-down leaf
+    /// (every declared field, in <see cref="GridSchema.FieldOrder"/>) and EXP-1(b)'s export (the resolved
+    /// export columns, in request order) share it, because they answer the same question about the
+    /// same schema. A field whose physical path differs from its logical name is re-keyed
     /// (<c>"fiscalYear": "$fiscal_year"</c>); one whose path matches is a plain inclusion (<c>1</c>).
     ///
     /// <para>"Declaration order" is <see cref="GridSchema.FieldOrder"/>, read from the schema
     /// document, never <c>Fields.Keys</c> — that dictionary's enumeration order is unspecified by
     /// .NET, and <c>group-aggregation/005</c>/<c>006</c> compare this stage key for key.</para>
+    ///
+    /// <para><b><c>_id: 0</c> is written LAST, after the output fields.</b> MongoDB accepts the
+    /// suppression anywhere in the document, so this is a spelling choice — but the keys before it are
+    /// the OUTPUT list, whose order is normative (GRP-3/EXP-1(b)) and byte-compared, and interleaving a
+    /// key that names no output column into that list would make the artifact's own ordering claim
+    /// harder to read. Pinned by <c>group-aggregation/005</c>/<c>006</c> and, in this category,
+    /// <c>page-export/008</c>.</para>
     /// </summary>
-    private static JsonObject RenderLeafProjection(Context context)
+    private static JsonObject RenderProjection(IReadOnlyList<string> fields, Context context)
     {
         var projection = new JsonObject();
 
-        foreach (var field in context.Schema.FieldOrder)
+        foreach (var field in fields)
         {
             var path = ResolvePath(field, context);
             projection[field] = path == field ? 1 : FieldReference(path);

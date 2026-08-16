@@ -192,44 +192,19 @@ public class SqlQueryBuilderPageAndSortTests
     }
 
     /// <summary>
-    /// Closes the loop on <c>spec/fixtures/sort-paging/012</c>, the one in-scope fixture
-    /// <see cref="PostgresConformanceFixtureTests"/> cannot run end-to-end: it resolves
-    /// <c>page: none</c> from EXP-1's <c>exportScope: "all"</c>, and
-    /// <see cref="AgGridRequestParser"/> has no <c>exportScope</c> handling (a gap #1635 documented
-    /// deliberately; building export machinery is out of #1638's scope).
-    ///
-    /// <para>Everything except the <see cref="PageSpec"/> still comes from the fixture — its own
-    /// schema, its own request, its own artifact as the oracle — and the page is supplied as the
-    /// <c>NonePage</c> the fixture's <c>description.md</c> pins. So this asserts the builder's full
-    /// half of the fixture without weakening anything: when the adapter learns <c>exportScope</c>,
-    /// the case moves into the main theory with zero builder changes.</para>
+    /// EXP-1(b): an EMPTY projection is refused rather than rendered. It cannot arrive from
+    /// <c>AgGridRequestParser</c>, which refuses an empty <c>exportColumns</c> at the wire — the
+    /// reachable population is a hand-built request or a future non-AG-Grid adapter, exactly the
+    /// population the <c>Projection</c>+<c>Group</c> guard beside it already exists for. Unguarded it
+    /// renders <c>SELECT  FROM "employees"</c>, and the driver is the first thing that says so.
     /// </summary>
     [Fact]
-    public void SortPaging012_Compiles_To_Its_Own_Artifact_Once_The_Page_Is_NonePage()
+    public void An_Empty_Export_Projection_Is_Refused_Rather_Than_Rendered_As_An_Empty_Select_List()
     {
-        const string category = "sort-paging";
-        const string fixtureDir = "012-page-none-unpaginated-export";
+        var ex = Assert.Throws<SqlCompilationException>(() => SqlQueryBuilder.Build(
+            new SqlQueryRequest { Schema = Schema, Page = new NonePage(), Projection = [] },
+            PostgresDialect.Instance));
 
-        var schema = GridSchema.Parse(File.ReadAllText(RepoPaths.Fixture(category, fixtureDir, "schema.json")));
-        var parsed = AgGridRequestParser.Parse(
-            File.ReadAllText(RepoPaths.Fixture(category, fixtureDir, "agGridRequest.json")),
-            new AgGridParseOptions { Schema = schema });
-
-        // The one substitution, and the whole content of the upstream gap: the parser reports the
-        // RangePage the literal startRow/endRow describe, because it does not read exportScope.
-        Assert.IsType<RangePage>(parsed.Page);
-
-        var filter = GridFilterPipeline.Process(parsed.NativeFilter, parsed.CustomFilters, parsed.Page, schema, new ResourceLimits());
-
-        var query = SqlQueryBuilder.Build(
-            new SqlQueryRequest { Schema = schema, Filter = filter, Sort = parsed.Sort, Page = new NonePage() },
-            PostgresDialect.Instance);
-
-        using var artifact = JsonDocument.Parse(
-            File.ReadAllText(RepoPaths.Fixture(category, fixtureDir, "expected", "postgres.artifact.json")));
-
-        Assert.Equal(artifact.RootElement.GetProperty("sql").GetString(), query.Sql);
-        Assert.Empty(artifact.RootElement.GetProperty("params").EnumerateArray());
-        Assert.Empty(query.Parameters);
+        Assert.Contains("empty EXP-1(b) export projection", ex.Message, StringComparison.Ordinal);
     }
 }

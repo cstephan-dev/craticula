@@ -12,8 +12,18 @@ namespace Craticula.AgGrid.Tests;
 /// </summary>
 public class AgGridRequestParserSortPagingFixtureTests
 {
+    /// <summary>Parses a <c>sort-paging</c> fixture's request. The schema is supplied for every case
+    /// rather than only where it is load-bearing, because since #1650 an EXPORT request needs one to
+    /// resolve EXP-1(b)'s projection (<c>012</c>), and a harness that fed some cases a schema and others
+    /// none would make a failure ambiguous between the request and the setup.</summary>
     private static AgGridParsedRequest Parse(string fixtureDir) =>
-        AgGridRequestParser.Parse(File.ReadAllText(RepoPaths.Fixture("sort-paging", fixtureDir, "agGridRequest.json")));
+        AgGridRequestParser.Parse(
+            File.ReadAllText(RepoPaths.Fixture("sort-paging", fixtureDir, "agGridRequest.json")),
+            new AgGridParseOptions
+            {
+                Schema = Craticula.Core.Schema.GridSchema.Parse(
+                    File.ReadAllText(RepoPaths.Fixture("sort-paging", fixtureDir, "schema.json")))
+            });
 
     [Theory]
     [InlineData("001-single-key-string-asc-nulls-last-default", "lastName", SortDirection.Asc, NullsPosition.Last)]
@@ -79,19 +89,18 @@ public class AgGridRequestParserSortPagingFixtureTests
     }
 
     [Fact]
-    public void Fixture012_ExportScope_All_Is_Out_Of_Scope_Parser_Still_Resolves_RangePage_From_The_Literal_Numbers()
+    public void Fixture012_ExportScope_All_Resolves_NonePage_And_Discards_The_Literal_StartRow_EndRow()
     {
-        // This fixture's own point (per its description.md) is that EXP-1's exportScope:"all"
-        // extension makes a *compiler* resolve page to $defs/nonePage, ignoring startRow/endRow
-        // entirely. That resolution is out of this story's scope (the plan's page-parsing rule is
-        // startRow/endRow-only) -- this parser has no exportScope handling at all, so it reports the
-        // RangePage the literal startRow/endRow numbers describe. Documented gap, not a bug: a future
-        // EXP-1/EXP-2 story must apply the override on top of this parser's output.
+        // EXP-1/EXP-2 (#1650): this fixture sends startRow: 0, endRow: 100 BESIDE
+        // exportScope: "all", and its artifacts carry no row-range clause on any backend. Until the
+        // parser learned exportScope it reported the RangePage those two numbers describe, which is
+        // why all three conformance runners excluded the fixture by name; both the exclusions and
+        // this test's old assertion went away together.
         var parsed = Parse("012-page-none-unpaginated-export");
 
-        var page = Assert.IsType<RangePage>(parsed.Page);
-        Assert.Equal(0, page.StartRow);
-        Assert.Equal(100, page.EndRow);
+        Assert.IsType<NonePage>(parsed.Page);
+        Assert.Equal(ExportFormat.Csv, parsed.Export!.Format);
+        Assert.Equal(ExportScope.All, parsed.Export.Scope);
 
         Assert.Single(parsed.Sort!);
         Assert.Equal("createdAt", parsed.Sort![0].Field);

@@ -100,7 +100,8 @@ internal static class MongoFixtureCompiler
             Sort = row.Parsed.Sort,
             Page = row.Parsed.Page,
             Group = row.Parsed.Group,
-            Aggregations = row.Parsed.Aggregations
+            Aggregations = row.Parsed.Aggregations,
+            Projection = row.Parsed.Export?.ProjectionColumns
         });
     }
 

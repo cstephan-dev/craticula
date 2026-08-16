@@ -20,8 +20,9 @@ namespace Craticula.Sql.Tests;
 public class PostgresConformanceFixtureTests
 {
     /// <summary>
-    /// The seven categories this compiler compiles end to end. Each declares the number of Postgres
-    /// artifacts it is expected to contribute, so adding a fixture to one of them fails
+    /// The eight categories this compiler compiles end to end — every category on disk that carries a
+    /// compiled artifact at all. Each declares the number of Postgres artifacts it is expected to
+    /// contribute, so adding a fixture to one of them fails
     /// <see cref="Each_In_Scope_Category_Contributes_Exactly_The_Fixture_Count_It_Declares"/> rather
     /// than being silently unexercised.
     ///
@@ -34,6 +35,14 @@ public class PostgresConformanceFixtureTests
     /// <c>022</c> — the one case carrying a filter model AND a <c>searchPrefix</c>, which is what
     /// makes GRP-6(c)'s <c>WHERE</c> order artifact-pinned rather than unit-test-pinned — taking it
     /// to 22.</para>
+    ///
+    /// <para><c>page-export</c> joined in #1650 (EXP-1/EXP-2), and brought <c>sort-paging</c> from 11
+    /// to 12 with it: both blockages were the same one — <c>AgGridRequestParser</c> could not read
+    /// <c>exportScope</c>, so no export request could be fed end to end. All <b>24</b> of its cases are
+    /// in scope, not just the fourteen carrying a Mongo/Search arm: <c>012</c>-<c>020</c> and
+    /// <c>022</c> document CSV-<em>writer</em> behavior that has no compiler half yet, but their
+    /// <c>postgres.artifact.json</c> is an ordinary compiled query and is compared like any
+    /// other.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
@@ -42,44 +51,40 @@ public class PostgresConformanceFixtureTests
         ("dialect-parity", 19),
         ("group-aggregation", 23),
         ("filter-tree", 15),
-        ("sort-paging", 11),
-        ("ag-grid-majors", 6)
+        ("sort-paging", 12),
+        ("ag-grid-majors", 6),
+        ("page-export", 24)
     ];
 
     /// <summary>
     /// The categories deliberately NOT compiled, each with the reason — stated here rather than left
     /// as a silent absence, so a reader can tell "out of scope" from "forgotten".
     /// <see cref="Every_Fixture_Category_On_Disk_Is_Either_In_Scope_Or_Excluded_By_Name"/> fails if a
-    /// NEW category appears and is named in neither list.
+    /// NEW category appears and is named in neither list. Neither of the two remaining entries is a
+    /// compiler gap: one is not a fixture category and the other carries no artifact to compare.
     /// </summary>
     private static readonly Dictionary<string, string> ExcludedCategories = new(StringComparer.Ordinal)
     {
         ["schemas"] = "Not a fixture category at all — the suite's own meta-schemas " +
                       "(sql-artifact.schema.json and friends), validated by ajv-cli, not by this project.",
         ["adversarial"] = "Rejection-only fixtures: they carry expected/rejection.json, not a compiled artifact, " +
-                          "and are already exercised by Craticula.Core.Tests' allowlist/limits/coercion suites.",
-        ["page-export"] = "The export feature (EXP-1..EXP-8) owns the explicit projection and exportScope -> " +
-                          "page:none mapping these fixtures pin; a leaf builder emitting SELECT * cannot produce them."
+                          "and are already exercised by Craticula.Core.Tests' allowlist/limits/coercion suites."
     };
 
     /// <summary>
-    /// The one fixture inside an in-scope category that is nonetheless excluded — with its reason.
-    /// Everything else that carries no <c>expected/postgres.artifact.json</c> (the rejection-shaped
-    /// cases, and <c>dialect-parity/001</c>-<c>004</c>'s single-dialect MySQL/SQL Server/SQLite
-    /// artifacts, which are #1639's) is filtered out by the discovery below without needing to be
-    /// listed, since there is nothing to compare against.
+    /// EMPTY since #1650, and kept as a named, asserted-on collection rather than deleted: the point
+    /// of this suite is that a fixture is either exercised or excluded FOR A STATED REASON, and an
+    /// empty exclusion list is the strongest form of that claim. Everything that carries no
+    /// <c>expected/postgres.artifact.json</c> (the rejection-shaped cases, and
+    /// <c>dialect-parity/001</c>-<c>005</c>'s single-dialect MySQL/SQL Server/SQLite/Oracle artifacts)
+    /// is filtered out by the discovery below without needing to be listed, since there is nothing to
+    /// compare against.
+    ///
+    /// <para>Its last entry was <c>sort-paging/012</c>, blocked upstream on
+    /// <c>AgGridRequestParser</c>'s missing <c>exportScope</c> — the same blockage that kept the whole
+    /// <c>page-export</c> category out — and #1650 removed both.</para>
     /// </summary>
-    private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal)
-    {
-        ["sort-paging/012-page-none-unpaginated-export"] =
-            "BLOCKED UPSTREAM, not out of scope: the fixture resolves page:none from EXP-1's " +
-            "exportScope:\"all\", and AgGridRequestParser has no exportScope handling (a gap #1635 " +
-            "documented deliberately, and one #1638 was told not to build export machinery for). The " +
-            "SQL builder itself compiles this fixture exactly — see " +
-            "SqlQueryBuilderPageAndSortTests.SortPaging012_Compiles_To_Its_Own_Artifact_Once_The_Page_Is_NonePage, " +
-            "which asserts against the same artifact with only the PageSpec supplied. Delete this " +
-            "entry the moment the adapter learns exportScope."
-    };
+    private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal);
 
     public static TheoryData<string, string> InScopeFixtures
     {
@@ -167,18 +172,16 @@ public class PostgresConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_146_Of_The_147_Fixtures_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_All_172_Fixtures_In_The_Scoped_Categories()
     {
-        // 147 minus the ONE remaining entry in ExcludedFixtures: sort-paging/012, which the SQL
-        // builder compiles correctly but the AG Grid adapter cannot yet FEED correctly (see
-        // ExcludedFixtures for the full reason, and SqlQueryBuilderPageAndSortTests for the
-        // assertion that closes the loop on the builder's half). This number going up without
-        // ExcludedFixtures shrinking means a fixture was added. It last moved in #1644's review
-        // pass, which added group-aggregation/023 — the one case carrying both a consumed groupKeys
-        // and a filterModel, which is what pins GRP-5's drill-down-leads clause order in `params`;
-        // before that #1641's review pass added group-aggregation/022, and the pass before that
-        // built BM-3's compiler and released group-aggregation/016-019 from the exclusion list.
-        Assert.Equal(147, InScopeFixtures.Count);
+        // 172 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
+        // artifact in a scoped category is compiled and compared. The number last moved when #1650's
+        // review pass authored page-export/024; before that #1650 itself released page-export (23) and
+        // sort-paging/012 from exclusion and authored page-export/023, and #1644's review pass added
+        // group-aggregation/023 — the one case carrying both a consumed groupKeys and a filterModel,
+        // which pins GRP-5's drill-down-leads clause order in `params`.
+        Assert.Equal(172, InScopeFixtures.Count);
+        Assert.Empty(ExcludedFixtures);
     }
 
     [Fact]
@@ -197,6 +200,30 @@ public class PostgresConformanceFixtureTests
             .ToList();
 
         Assert.Equal(accounted, onDisk);
+    }
+
+    [Fact]
+    public void Every_Postgres_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
+    {
+        // The count that closes the loop on "172 in scope": every postgres.artifact.json in the repo
+        // is either exercised above, or inside a category/fixture this class excludes BY NAME. The
+        // category table plus Every_Fixture_Category_On_Disk_… does not close it — an artifact added
+        // under an EXCLUDED category (adversarial/) would leave every count untouched and go silently
+        // uncompiled. The Mongo and Search runners have asserted this since #1650; this one had not,
+        // in the story whose headline property is that every fixture is executed by something.
+        var onDisk = Directory
+            .EnumerateFiles(RepoPaths.Fixture(), "postgres.artifact.json", SearchOption.AllDirectories)
+            .Count();
+
+        var excludedCategoryArtifacts = ExcludedCategories.Keys
+            .Where(category => Directory.Exists(RepoPaths.Fixture(category)))
+            .Sum(category => Directory
+                .EnumerateFiles(RepoPaths.Fixture(category), "postgres.artifact.json", SearchOption.AllDirectories)
+                .Count());
+
+        Assert.Equal(172, onDisk);
+        Assert.Equal(0, excludedCategoryArtifacts);
+        Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }
 
     [Fact]
