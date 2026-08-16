@@ -10,9 +10,9 @@ filter applied before grouping (a `WHERE`, not a `HAVING` on the aggregate) -- A
 group keys" plus AR-5's ordinary filter-tree semantics composing on top of it.
 
 Sorting by the aggregated value needs different mechanics per backend: SQL `ORDER BY` the
-aggregate **expression**; Mongo `$sort` on the `$group` output key; the Search composite
-aggregation can only order by its *source* values natively, so ordering by a sub-aggregation metric
-requires an explicit `bucket_sort` pipeline aggregation.
+aggregate **expression**; Mongo `$sort` on the `$group` output key. **OpenSearch/Elasticsearch cannot
+express this request at all — see the Search note below — so this fixture deliberately has no
+`search` arm.**
 
 **Ordering-target note (GRP-4, corrected in #1640's review pass).** All four SQL arms that existed then originally
 ordered by the aggregate's select-list **alias** (`ORDER BY "amount_sum" DESC NULLS FIRST` on
@@ -28,10 +28,9 @@ which was already legal: "which of these two forms an engine accepts" is a seman
 a per-dialect spelling, so splitting it across dialects would put it in the wrong layer. The alias
 still names the aggregate in the projection, which is what the grid reads the response back by.
 
-The **mongo** and **search** arms are unaffected and still address the aggregate by name. Neither is
-an alias in a scope: after `$group` the aggregate is a real field of the document the later
-`$addFields`/`$sort` stages read, and ES's `bucket_sort` addresses a sub-aggregation by a
-`buckets_path`.
+The **mongo** arm is unaffected and still addresses the aggregate by name. It is not an alias in a
+scope: after `$group` the aggregate is a real field of the document the later `$addFields`/`$sort`
+stages read.
 
 **Modeling note (deviation from raw AG Grid wire fidelity, deliberate):** real AG Grid SSRM sends `groupKeys` as `string[]` on the wire; the frontend adapter resolves each raw string into a typed value using the group column's declared schema type before building the IR (`AR-7`), exactly like it does for filter values. `spec/ir.schema.json`'s `$defs/groupSpec.groupKeys` requires that resolved `typedValue` form -- a prior review caught and fixed a regression where `groupKeys` had been left as raw scalars there. This fixture suite pins that fix at the request boundary too: `agGridRequest.json` here already carries the adapter-resolved typed form (e.g. `{"type":"string","value":"EMEA"}`), not the raw wire string, so a fixture consumer builds/checks the IR directly against the typed contract without re-deriving the (out-of-scope-for-this-suite) string-to-typedValue resolution step. See `group-aggregation/README.md` for the category-wide note.
 
@@ -50,11 +49,38 @@ adapter's default) as the tiebreaker, exactly the same pattern SEM-6 uses for `s
 ordinary leaf queries. `region` (not `id`/`stableKey`) is correct here because this is a *grouped*
 (non-leaf) row: the group column is already the row's own unique key post-`GROUP BY`/`$group`
 (see `fixtures-suite` agent-memory's BM-2 note), so it is the group's own natural tiebreaker, not
-the leaf-row `stableKey`. On Search, the composite aggregation's `bucket_sort` pipeline aggregation
-has no `missing` parameter in the pinned 7.10-era subset, so `amount_sum`'s own null-ordering marker
-has no native equivalent to compile to there — only the `region`-tiebreaker half of this fix is
-expressible as a second `bucket_sort` sort criterion (`_key asc`); this is the same class of
-documented, accepted ES-specific gap as AGG-5's own composite null-bucket note, not a three-way
-parity break this fixture can otherwise resolve. Independent of sort order, the composite
-aggregation's `missing_bucket: true` on the `region` terms source still applies (a group-completeness
-concern, not a sort-order one).
+the leaf-row `stableKey`.
+
+## No `search` arm: OpenSearch/Elasticsearch cannot answer this request (#1644 review pass)
+
+A prior revision of this fixture carried a `search.artifact.json` that rendered the aggregate sort as
+a `bucket_sort` pipeline aggregation beside the `composite`, and this note described the missing
+`missing` parameter as "the same class of documented, accepted ES-specific gap as AGG-5's". **That was
+the wrong question.** The problem is not that a null marker is inexpressible; it is that the whole
+answer is different.
+
+A `composite` aggregation **always** enumerates buckets in composite-key order and returns `size` of
+them. A `bucket_sort` is post-processing: it reorders only the buckets that page already contains. So
+this request — "the top 100 regions by `SUM(amount)`" — compiled on Postgres to the globally largest
+100 regions, and compiled on Search to *the first 100 regions in `region` key order, rearranged by
+revenue*. With more than 100 distinct regions those are **different groups**, not a different
+ordering, and nothing in the artifact tier could see it. Elasticsearch's own composite documentation
+states the general rule rather than a "limit": a composite aggregation is **not compatible with
+pipeline aggregations**, and gives this precise reason (a pipeline aggregation can only see one page).
+
+So the Search arm is **deleted** and `SearchQueryBuilder` **refuses** a grouped level ordered by
+anything other than its own group column (`spec/semantics.md` OSE-11(c)) — the same treatment
+OSE-11(d) already gives a non-zero `startRow` on a grouped level, and the register SQL-7(b) and MDB-9
+established: a plausible request that silently answers a different question is worse than an error
+naming the reason. **This is a real, user-visible capability gap on this backend**, not a spelling
+difference: ordering a grouped level by an aggregate does not work on OpenSearch/Elasticsearch.
+Closing it needs a different grouped-ordering strategy (a two-pass `terms`-then-`composite` plan, or a
+full bucket enumeration reordered client-side), which is the execution adapter's business (#1622) and
+gradeable only against a live cluster (#1624).
+
+The absence is asserted rather than left silent: `SearchQueryGroupingTests` names this fixture and
+pins both that it carries no Search arm and that compiling it throws.
+
+Independent of sort order, the composite aggregation's `missing_bucket: true` on a `region` terms
+source still applies wherever a grouped level *is* expressible (a group-completeness concern, not a
+sort-order one) — see `003`, `021` and `023`.

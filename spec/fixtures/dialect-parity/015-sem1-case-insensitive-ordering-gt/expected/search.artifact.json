@@ -1,6 +1,6 @@
 {
   "query": {
-    "range": { "lastName.normalized": { "gt": "smith" } }
+    "range": { "lastName.normalized": { "gt": "Smith" } }
   },
   "sort": [ { "id": { "order": "asc", "missing": "_last" } } ],
   "from": 0,

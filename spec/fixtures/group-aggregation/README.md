@@ -11,10 +11,10 @@ here is a **general/structural** fixture, so each carries `expected/postgres.art
 to verify against. #1642 then added an `oracle` arm to every one of them, so **every case here is
 seven-backend**.
 
-All 22 cases share one `schema.json` ("sales" grid: `id` stableKey; `region`/`segment`/`product`
+All 23 cases share one `schema.json` ("sales" grid: `id` stableKey; `region`/`segment`/`product`
 groupable strings; `fiscalYear` groupable int64; `amount` a decimal aggregatable over
 `sum`/`min`/`max`/`avg`; `quantity` an int64 aggregatable over all five funcs including `count`).
-All 22 read one base SQL table / Mongo collection / Search index, `sales_fact`. That name used to
+All 23 read one base SQL table / Mongo collection / Search index, `sales_fact`. That name used to
 appear only in the expected artifacts — `spec/grid-schema.schema.json` did not model the FROM
 target at all, so it was recoverable from nothing but the artifacts themselves. #1638 added a
 required `source` to the schema (SQL-0 in `spec/semantics.md`'s canonical-rendering addendum); each
@@ -201,7 +201,8 @@ re-derivation evidence rather than bookkeeping.
 
 `016`-`019` gained theirs in **#1641**, once BM-3's compiler existed — 12 more artifacts, derived the
 same way from each case's own Postgres arm. **#1642** then added the 22 `oracle` arms in one pass,
-by the identical transformation, so every case in this category is now seven-backend. `022`
+by the identical transformation, so every case in this category is now seven-backend — including
+`023`, authored later with all seven from the start. `022`
 was added in #1641's review pass, derived the same way but
 from **two** sibling arms rather than one: `017`'s for the surviving `segment` predicate and `018`'s
 for the prefix, conjoined under SQL-2's composite rule. It exists because GRP-6(c)'s `WHERE` order is
@@ -227,9 +228,25 @@ against the `FROM` scope and raising Msg 207, *Invalid column name*. GRP-4 now r
 already-legal Postgres one, and `020`'s four SQL arms then existing were re-authored to `SUM("amount")` /
 `SUM([amount])` / `` SUM(`amount`) ``. Uniform rather than fixed on the two broken arms, because
 "which of these two forms is legal here" is a semantic difference, not the per-dialect spelling the
-`ISqlDialect` seam exists for. `020`'s **mongo** and **search** arms are unaffected and keep the
-name: after `$group` the aggregate is a real field of the document a later `$sort` reads, and ES's
-`bucket_sort` addresses a sub-aggregation by `buckets_path`, neither of which is an alias in a scope.
+`ISqlDialect` seam exists for. `020`'s **mongo** arm is unaffected and keeps the name: after `$group`
+the aggregate is a real field of the document a later `$sort` reads, which is not an alias in a scope.
+(Its **search** arm was deleted in #1644's review pass — see below.)
+
+### `020` has no `search` arm, and the absence is the finding (#1644 review)
+
+`020` orders a **grouped** level by an aggregate, and **this backend cannot express that request at
+all**. A `composite` aggregation enumerates buckets in composite-key order and returns `size` of them;
+a `bucket_sort` is post-processing that reorders only the buckets already returned. So `020` on
+Postgres means "the 100 largest regions by revenue" and the arm that used to sit here meant "the first
+100 regions alphabetically, rearranged by revenue" — different groups as soon as the level has more
+than 100 of them. Elasticsearch's own composite documentation states the general rule: a composite
+aggregation is **not compatible with pipeline aggregations**, for exactly this reason. The arm was
+therefore deleted rather than re-spelled, `SearchQueryBuilder` **refuses** the request
+(`spec/semantics.md` OSE-11(c)), and the missing arm is asserted by name in
+`SearchQueryGroupingTests` so it reads as a recorded capability gap rather than an oversight.
+Ordering a grouped level by an aggregate is a real, user-visible gap on OpenSearch/Elasticsearch; it
+needs a different grouped-ordering strategy, owned by #1622 and gradeable only against a live cluster
+(#1624).
 
 ## Aggregation semantics addendum (AGG-1..AGG-5) — applied category-wide
 
@@ -351,3 +368,4 @@ object, not an `IServerSideGetRowsRequest` — called out again in each case's `
 | 020 | `grouped-query-with-filter-and-sort` | BM-2, AR-5, AR-9, AR-8 | grouped query + row-level filter (pre-aggregation) + sort on the aggregate |
 | 021 | `group-column-sort-via-auto-column-colid` | BM-2, AR-9, GRP-4, AG-6 | `sortModel` addresses the group column through `ag-Grid-AutoColumn`, plus the whole coupled row-group set (1 + N entries) |
 | 022 | `set-filter-values-prefix-with-active-filter` | BM-3, GRP-6(b), GRP-6(c) | the **only** case carrying the own-field exclusion and a `searchPrefix` on that same column in one statement — pins GRP-6(c)'s `WHERE` order (user's filter leads, prefix trails), which `params` compares exactly |
+| 023 | `grouped-drill-down-with-active-row-filter` | GRP-5, BM-2, AR-5, AR-8 | the **only** case carrying a consumed `groupKeys` **and** a `filterModel` — pins GRP-5's clause order (drill-down leads, user filter trails) on all seven arms, and each backend's composition of two conjunctions (SQL/Mongo nest, Search flattens into one `bool.filter`). Authored in #1644's review pass; a mutation reversing the order had passed every test in every suite |

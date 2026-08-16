@@ -1,13 +1,9 @@
 {
   "query": {
-    "bool": {
-      "filter": [
-        {
-          "term": {
-            "status.keyword": "shipped"
-          }
-        }
-      ]
+    "term": {
+      "status.keyword": {
+        "value": "shipped"
+      }
     }
   },
   "sort": [

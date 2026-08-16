@@ -1,0 +1,61 @@
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "term": {
+            "region.keyword": {
+              "value": "EMEA"
+            }
+          }
+        },
+        {
+          "term": {
+            "segment.keyword": {
+              "value": "Enterprise"
+            }
+          }
+        },
+        {
+          "range": {
+            "fiscalYear": {
+              "gte": 2023
+            }
+          }
+        },
+        {
+          "range": {
+            "quantity": {
+              "lt": 500
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "product": {
+      "composite": {
+        "size": 100,
+        "sources": [
+          {
+            "product": {
+              "terms": {
+                "field": "product.keyword",
+                "missing_bucket": true
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "amount_sum": {
+          "sum": {
+            "field": "amount"
+          }
+        }
+      }
+    }
+  }
+}

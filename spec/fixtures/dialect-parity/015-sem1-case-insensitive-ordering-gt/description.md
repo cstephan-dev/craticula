@@ -18,11 +18,25 @@ query-time equivalent." Filter: `lastName > "Smith"`, case-insensitive (the fiel
 - **Search**: no `case_insensitive` parameter exists for `range` — the compiler instead targets a
   dedicated sub-field declared via `GridSchema`'s `physical.search.normalizedSubField` (distinct
   from `keywordSubField`, the `.keyword` exact-match sub-field used for `term`/`wildcard` CI ops
-  elsewhere in this suite — see `spec/grid-schema.schema.json`), maintained via a lowercasing
-  normalizer at index time, **and** lowercases the comparison value itself before querying
-  (`"Smith"` → `"smith"`) to match that normalizer's index-time transformation — the one mechanism
-  in this whole suite where the compiler transforms a value rather than relying purely on a
-  query-time flag.
+  elsewhere in this suite — see `spec/grid-schema.schema.json`), maintained via a folding normalizer
+  at index time. **No value transformation here either**: `"Smith"` is bound as typed, exactly as on
+  the other six arms, and the sub-field does the folding.
+
+  > *Corrected in #1644, which compiled this arm for the first time.* It previously bound `"smith"`,
+  > and this description previously called that "the one mechanism in this whole suite where the
+  > compiler transforms a value rather than relying purely on a query-time flag". It is wrong three
+  > times over. **(1) Redundant**: a normalizer is applied at search time as well as at index time for
+  > a term-level query, and `range` is one, so the engine folds the bound value itself. **(2)
+  > Unknowable**: `GridSchema` declares the sub-field's *name* and nothing about what its normalizer
+  > does — SEM-1 describes an **ICU-folding** one, which folds diacritics and width as well as case,
+  > so a compiler lowering `"ÉCOLE"` to `"école"` would miss every document the normalizer had reduced
+  > to `"ecole"`. A compiler cannot reproduce a transformation it cannot see. **(3) Unportable**:
+  > "lowercase" is not one operation across the four language ports G3/G4 require to agree — .NET's
+  > invariant lowering, Java's locale-sensitive default (the Turkish dotless I), Python's full case
+  > folding and JavaScript's all disagree on some input — so pinning it would make the same IR compile
+  > to different artifacts per port, for a transformation the engine performs correctly anyway. The
+  > rule is now **OSE-6** in `spec/semantics.md`, and SEM-1's own snippet was corrected to show an
+  > untransformed value.
 
 AG Grid's own text filter UI has no ordering-operator vocabulary at all (`iTextFilter.ts`'s closed
 `type` enum — `equals`/`notEqual`/`contains`/`notContains`/`startsWith`/`endsWith`/`blank`/

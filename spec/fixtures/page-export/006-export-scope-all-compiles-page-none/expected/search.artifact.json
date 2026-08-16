@@ -1,15 +1,9 @@
 {
   "query": {
-    "bool": {
-      "filter": [
-        {
-          "range": {
-            "totalAmount": {
-              "gte": 100
-            }
-          }
-        }
-      ]
+    "range": {
+      "totalAmount": {
+        "gte": 100
+      }
     }
   },
   "sort": [

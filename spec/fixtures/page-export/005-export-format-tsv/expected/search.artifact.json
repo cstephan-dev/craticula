@@ -1,15 +1,9 @@
 {
   "query": {
-    "bool": {
-      "filter": [
-        {
-          "terms": {
-            "region.keyword": [
-              "EMEA",
-              "APAC"
-            ]
-          }
-        }
+    "terms": {
+      "region.keyword": [
+        "EMEA",
+        "APAC"
       ]
     }
   },

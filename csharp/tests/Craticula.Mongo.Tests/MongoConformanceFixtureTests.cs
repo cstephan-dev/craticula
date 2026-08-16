@@ -37,7 +37,7 @@ public class MongoConformanceFixtureTests
         ("operators", 47),
         ("date-presets", 26),
         ("dialect-parity", 18),
-        ("group-aggregation", 22),
+        ("group-aggregation", 23),
         ("filter-tree", 15),
         ("sort-paging", 11),
         ("ag-grid-majors", 6)
@@ -197,13 +197,14 @@ public class MongoConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_144_Of_The_145_Mongo_Artifacts_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_145_Of_The_146_Mongo_Artifacts_In_The_Scoped_Categories()
     {
-        // 145 minus the ONE entry in ExcludedFixtures: sort-paging/012, which the Mongo builder
-        // compiles correctly but the AG Grid adapter cannot yet FEED correctly. The suite holds 157
+        // 146 minus the ONE entry in ExcludedFixtures: sort-paging/012, which the Mongo builder
+        // compiles correctly but the AG Grid adapter cannot yet FEED correctly. The suite holds 159
         // mongo.artifact.json files in total; the 12 outside this number are page-export's, whose
-        // whole category is excluded.
-        Assert.Equal(145, InScopeFixtures.Count);
+        // whole category is excluded. It last moved in #1644's review pass, which added
+        // group-aggregation/023 to pin GRP-5's drill-down-leads clause order.
+        Assert.Equal(146, InScopeFixtures.Count);
     }
 
     [Fact]
@@ -227,7 +228,7 @@ public class MongoConformanceFixtureTests
     [Fact]
     public void Every_Mongo_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "144 in scope": every mongo.artifact.json in the repo is
+        // The count that closes the loop on "145 in scope": every mongo.artifact.json in the repo is
         // either exercised above, or inside a category/fixture this class excludes BY NAME. A new
         // artifact in an excluded category still moves this number, which is what makes the exclusion
         // reasons re-read rather than inherited.
@@ -241,7 +242,7 @@ public class MongoConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "mongo.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(158, onDisk);
+        Assert.Equal(159, onDisk);
         Assert.Equal(12, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }
