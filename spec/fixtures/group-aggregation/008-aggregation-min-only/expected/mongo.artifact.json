@@ -1,7 +1,9 @@
 [
   {
     "$match": {
-      "region": "EMEA"
+      "region": {
+        "$eq": "EMEA"
+      }
     }
   },
   {

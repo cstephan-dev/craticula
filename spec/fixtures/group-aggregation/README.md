@@ -66,9 +66,15 @@ corrected it there and in that category's README.
 > arms move to a `search.normalizedSubField` (`product.normalized` — `005`'s user key; the
 > tiebreaker's own `id` is settled separately just below), which SEM-1 requires for case-insensitive
 > ordering on ES/OpenSearch and which that schema now declares.
-> Their **mongo** arms are also unchanged, and that is the accepted divergence GRP-2 now records:
-> Mongo's `collation` is query-level, so a leaf cannot collate its `$sort` without also folding the
-> drill-down `$match` that reproduces the bucket — and bucket identity wins.
+> Their **mongo** arms carry no `collation`, and on `005` that is the accepted divergence GRP-2 now
+> records: Mongo's `collation` is query-level, so a leaf cannot collate its `$sort` without also
+> folding the drill-down `$match` that reproduces the bucket — and bucket identity wins. **On `006`
+> it is not the divergence at all**, and `spec/semantics.md` listed it as one until #1643's review:
+> `006` carries no `sortModel`, so its only key is the appended tiebreaker, which the paragraph below
+> settles as exact on *every* backend. "Suppressed a collation it wanted" and "never wanted one" are
+> different compiler states; only `005` is in the first. *(This sentence read "their mongo arms are
+> also unchanged" until the same pass. Both arms did change in #1643 — GRP-5's `$and` wrap and
+> MDB-1's explicit `$eq` — but never in the collation, which is the only thing it was claiming.)*
 >
 > *Consequence, and the second-round correction it needed.* These schemas declare `stableKey: "id"`
 > as a `string` with no `text` block, so SEM-1 makes it case-**insensitive**, and the first pass let
@@ -148,6 +154,25 @@ form in an earlier review pass; `013` was missed. Fixed on all six arms then exi
 `oracle` arm was authored later, in #1642, already carrying the AGG-2 names). The compiler was right and
 the fixture was wrong, which is the direction T-1 assumes only when the fixtures agree with each
 other — here they did not, and `012` was the tiebreak.
+
+## The Mongo arms, compiled for the first time in #1643
+
+Until #1643 nothing had ever executed this category's `mongo.artifact.json` files. Compiling them
+found two defects, both adjudicated from `spec/semantics.md` rather than from the compiler:
+
+- **The drill-down rendered flat where GRP-5 requires a composite.** `003`, `004` and `005` spelled
+  two or three consumed `groupKeys` as sibling keys of one `$match` document
+  (`{"region": "EMEA", "segment": "Enterprise"}`). That is #1630's original reading — "a synthesised
+  conjunction is not an IR construct" — which **GRP-5 rejects by name**, and which #1640 had already
+  removed from the SQL arms (their `WHERE` is `("region" = $1 AND "segment" = $2)`, wrapped). The
+  drill-down is ordinary IR merged through the same primitive as `customFilters`, so any compiler
+  reusing its filter renderer emits `{"$and": [...]}` for free. Re-authored on all three; a single
+  consumed key is not a composite and still renders bare.
+- **`020` bound a `decimal` as a JSON number.** Its filter is `amount > 1000` and `amount` is declared
+  `decimal`, so the value is AR-7's numeric string and must be a Decimal128 literal —
+  `{"$numberDecimal": "1000"}`, as `operators/046`/`047` and `ag-grid-majors/002` already spell it,
+  and as its own Postgres arm already binds (`params: ["1000", ...]`, a string). A JSON number in
+  Extended JSON is an IEEE double, which is precisely the round-trip AR-7 exists to prevent.
 
 ## Per-dialect arms (#1640, extended to Oracle by #1642)
 

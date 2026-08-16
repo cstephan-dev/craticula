@@ -1,8 +1,18 @@
 [
   {
     "$match": {
-      "region": "EMEA",
-      "segment": "Enterprise"
+      "$and": [
+        {
+          "region": {
+            "$eq": "EMEA"
+          }
+        },
+        {
+          "segment": {
+            "$eq": "Enterprise"
+          }
+        }
+      ]
     }
   },
   {

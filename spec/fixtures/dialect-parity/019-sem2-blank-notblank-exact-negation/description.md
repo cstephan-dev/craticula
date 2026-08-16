@@ -15,8 +15,17 @@ mechanism visible rather than its algebraically-equivalent expansion:
   negated form is what this rule requires the compiler to actually *construct*; the AND-form, if a
   dialect renderer chooses to simplify to it, must be *derived from* this negation, never written
   independently).
-- **MongoDB**: `$nor` — Mongo's native "not any of these" operator, the direct negation of
-  `blank`'s own `$or` form (`{ $or: [{ lastName: null }, { lastName: "" }] }`).
+- **MongoDB**: `{"lastName": {"$nin": [null, ""]}}` — the **operator-level** negation of the very
+  operator `blank` chose, which on this backend is `{"lastName": {"$in": [null, ""]}}` (MDB-5,
+  pinned by `operators/029` and `/030`). `$nin` *is* `$in`'s negation, so "negate the compiled
+  `blank`" is satisfied by construction here rather than by an outer wrapper. *This bullet described
+  a `$nor` over a two-clause `$or` until #1643's review, and both halves were wrong: `blank` compiles
+  to a single `$in` on every artifact in the suite, so the `$or` it was said to negate exists
+  nowhere, and `$nor` is this suite's rendering of a tree-level `notNode` (MDB-2), which would make
+  one leaf's negation indistinguishable from a one-child `NOT`. The artifact itself was corrected in
+  #1643; a port implementing from this description rather than from the artifact would still have
+  emitted the wrong shape, which is why the prose is corrected too — a case description is the
+  normative unit a port reads.*
 - **Search**: a `bool.must_not` wrapping `blank`'s own compiled `bool.should` query verbatim (field
   missing, via negated `exists`, OR an empty-string `term`).
 

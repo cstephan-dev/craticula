@@ -104,7 +104,8 @@ and leaves it verbatim, unchanged from before).
   it, and even then only in a request that is not grouped — because Mongo's `collation` is
   query-level, a grouped request cannot carry it without folding `$group`'s buckets too. GRP-2
   records that as an accepted divergence. Under either the old reason or the new one this case's
-  artifact is the bare array, which is why nothing caught the drift: Mongo has no conformance runner.
+  artifact is the bare array, which is why nothing caught the drift: Mongo had no conformance runner
+  until #1643, whose compiler now reproduces this artifact unchanged.
 - **The Search artifact composes its cross-condition `And` as `bool.filter`**, where 001/003/005/006
   in this category use `bool.must`. Both conventions exist suite-wide (`filter-tree/` and `operators/`
   use `must`; `group-aggregation/` and `page-export/` use `filter`) and neither is wrong — `filter`

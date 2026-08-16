@@ -1,0 +1,13 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        { "term": { "lastName.keyword": { "value": "smith", "case_insensitive": true } } },
+        { "term": { "employeeCode.keyword": { "value": "AB-100" } } }
+      ]
+    }
+  },
+  "sort": [ { "id": { "order": "asc", "missing": "_last" } } ],
+  "from": 0,
+  "size": 100
+}

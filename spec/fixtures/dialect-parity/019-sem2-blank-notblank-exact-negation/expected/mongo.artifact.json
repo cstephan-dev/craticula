@@ -1,5 +1,5 @@
 [
-  { "$match": { "$nor": [ { "lastName": null }, { "lastName": "" } ] } },
+  { "$match": { "lastName": { "$nin": [null, ""] } } },
   {
     "$addFields": {
       "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }

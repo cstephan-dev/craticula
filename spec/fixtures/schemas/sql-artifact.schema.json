@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/sql-artifact.schema.json",
   "title": "SQL compilation artifact (fixture expected/ shape)",
-  "description": "Deliberately lightweight: this catches gross authoring mistakes in a hand-written expected artifact (no SQL compiler exists yet to check these semantically, per #1630's context.md). It does not validate the SQL text itself, only the artifact's outer shape (AR-4: parameterized SQL text + ordered/named parameter list).",
+  "description": "Deliberately lightweight: this catches gross authoring mistakes in a hand-written expected artifact. It does not validate the SQL text itself, only the artifact's outer shape (AR-4: parameterized SQL text + ordered/named parameter list); since #1638 a SQL compiler (Craticula.Sql) checks the rest semantically, by compiling every in-scope artifact and comparing it byte for byte -- across all five dialects since #1642. The wording here said 'no SQL compiler exists yet to check these semantically, per #1630's context.md' until #1643's review pass, which found it still standing beside its already-repaired Mongo counterpart.",
   "type": "object",
   "additionalProperties": false,
   "required": ["dialect", "sql", "params"],

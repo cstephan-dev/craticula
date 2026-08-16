@@ -208,8 +208,10 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   *Corrected in #1640's review.* This bullet used to say the wrapper "goes only where a `$match`
   needs it", and read "matching" as the deciding test — which made a consumed `groupKeys` match a
   place the wrapper was required. GRP-2 makes exactly that match exact, so `group-aggregation/002`
-  onwards do not carry it either. The claim survived because Mongo has no conformance runner: nothing
-  in the suite could contradict it.
+  onwards do not carry it either. The claim survived because Mongo had no conformance runner: nothing
+  in the suite could contradict it. **#1643 built one** (`Craticula.Mongo`, exercising 144 of the 157
+  Mongo artifacts), and this category's six arms compiled unchanged — the only category besides
+  `date-presets/` and `sort-paging/` for which that was true.
 - No `customFilters` anywhere in this category. Every case is a payload a real grid of that major can
   emit on its own; reaching for the extension would defeat the point. That is also why 008 exists:
   `operators/` reaches `inRange` *through* `customFilters`, so nothing was pinning what the native

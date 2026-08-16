@@ -3,10 +3,14 @@
     "$match": {
       "$or": [
         {
-          "birthDate": "1990-05-12"
+          "birthDate": {
+            "$eq": "1990-05-12"
+          }
         },
         {
-          "birthDate": "1991-07-04"
+          "birthDate": {
+            "$eq": "1991-07-04"
+          }
         }
       ]
     }
@@ -32,6 +36,9 @@
       "__idNullBucket": 1,
       "id": 1
     }
+  },
+  {
+    "$unset": "__idNullBucket"
   },
   {
     "$skip": 0

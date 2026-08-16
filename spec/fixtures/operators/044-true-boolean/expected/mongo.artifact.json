@@ -1,7 +1,9 @@
 [
   {
     "$match": {
-      "isActive": true
+      "isActive": {
+        "$eq": true
+      }
     }
   },
   {
@@ -25,6 +27,9 @@
       "__idNullBucket": 1,
       "id": 1
     }
+  },
+  {
+    "$unset": "__idNullBucket"
   },
   {
     "$skip": 0

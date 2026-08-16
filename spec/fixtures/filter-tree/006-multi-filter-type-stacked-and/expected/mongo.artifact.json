@@ -1,66 +1,60 @@
-{
-  "pipeline": [
-    {
-      "$match": {
-        "$and": [
-          {
-            "customerName": {
-              "$regex": "acme",
-              "$options": "i"
-            }
-          },
-          {
-            "$or": [
-              {
-                "customerName": {
-                  "$not": {
-                    "$regex": "test",
-                    "$options": "i"
-                  }
-                }
-              },
-              {
-                "customerName": null
-              }
-            ]
+[
+  {
+    "$match": {
+      "$and": [
+        {
+          "customerName": {
+            "$regex": "acme",
+            "$options": "i"
           }
-        ]
-      }
-    },
-    {
-      "$addFields": {
-        "__idNullBucket": {
-          "$cond": [
+        },
+        {
+          "$or": [
             {
-              "$eq": [
-                "$id",
-                null
-              ]
+              "customerName": {
+                "$not": {
+                  "$regex": "test",
+                  "$options": "i"
+                }
+              }
             },
-            1,
-            0
+            {
+              "customerName": null
+            }
           ]
         }
-      }
-    },
-    {
-      "$sort": {
-        "__idNullBucket": 1,
-        "id": 1
-      }
-    },
-    {
-      "$unset": "__idNullBucket"
-    },
-    {
-      "$skip": 0
-    },
-    {
-      "$limit": 100
+      ]
     }
-  ],
-  "collation": {
-    "locale": "en",
-    "strength": 2
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
   }
-}
+]

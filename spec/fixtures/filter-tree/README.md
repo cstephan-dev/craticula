@@ -10,7 +10,7 @@ So `customFilters` is load-bearing here for **negation and depth**, which the wi
 
 ## Merge convention assumed by these fixtures
 
-No compiler exists yet to check this semantically, so every merged fixture below hand-applies the same rule, consistent with `docs/architecture/c4-components-core-ir.md`'s Custom Filter Merge component ("merges the host's customFilters IR fragment into the filter tree", run *before* allowlist/limit validation so the combined tree is checked as one unit):
+This convention was hand-applied by every merged fixture below, and is now checked semantically rather than asserted: since #1638 (Postgres) and #1643 (Mongo) both conformance runners drive all 15 of these fixtures through `GridFilterPipeline`, whose `FilterTreeMerge` is the one implementation of it. It remains stated here because a *port* has no such runner until it writes one, and it is consistent with `docs/architecture/c4-components-core-ir.md`'s Custom Filter Merge component ("merges the host's customFilters IR fragment into the filter tree", run *before* allowlist/limit validation so the combined tree is checked as one unit):
 
 - Native filter present + `customFilters` present -> merged root is `And([nativeTree, customFragment])`, the native tree nested as one opaque child (never flattened into the merge's own `And`, regardless of the native tree's own shape).
 - `customFilters` present, no native filter (`filterModel: null`) -> merged root is the `customFilters` fragment itself, unwrapped (no spurious single-child `And`).
@@ -48,6 +48,14 @@ Depth is counted from the root node inward, root = depth 1; each `And`/`Or`/`Not
 - Every Mongo pipeline's `$sort` stage (the SEM-6 `id` tiebreaker's null-bucket emulation, present
   in all 15 fixtures regardless of what each one's own point is) is immediately followed by a
   `$unset` stage dropping `__idNullBucket`, per SEM-3's mandatory bucket-cleanup rule.
+- **The Mongo query-level `collation` wrapper is on 13 of the 15, not all 15 — corrected in #1643.**
+  It belongs where SEM-1's *collation* mechanism is actually used, i.e. a user's own
+  `eq`/`neq`/`in`/`notIn`/ordering comparison on a case-insensitive `string`. `004` compares only
+  `amount` (a `double`) and `id` (an `int64`), so SEM-1 never applies to it at all; `006` uses only
+  `contains`/`notContains`, which is the *pattern-match* mechanism and carries its own
+  `$options: "i"` — a query-level collation does not reach a `$regex`. Both now use the bare-array
+  form, like `operators/025`-`028` and `dialect-parity/007`/`011`-`013` already did. The `id`
+  tiebreaker never contributes either, whatever its type: SEM-6's appended key resolves exact.
 
 ## Cases
 

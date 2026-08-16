@@ -1,9 +1,23 @@
 [
   {
     "$match": {
-      "region": "EMEA",
-      "segment": "Enterprise",
-      "fiscalYear": 2024
+      "$and": [
+        {
+          "region": {
+            "$eq": "EMEA"
+          }
+        },
+        {
+          "segment": {
+            "$eq": "Enterprise"
+          }
+        },
+        {
+          "fiscalYear": {
+            "$eq": 2024
+          }
+        }
+      ]
     }
   },
   {
