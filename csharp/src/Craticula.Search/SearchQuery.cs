@@ -21,7 +21,7 @@ namespace Craticula.Search;
 /// counterpart — <c>spec/fixtures/schemas/search-artifact.schema.json</c> forbids the member
 /// outright), no <c>track_total_hits</c>, and no <c>search_after</c>: PERF-2 scopes that to deep
 /// paging beyond <c>max_result_window</c> with a cursor cache the <b>execution adapter</b> owns
-/// (Feature #1622), and neither the window nor the cursor exists in this compiler's inputs. All 145
+/// (Feature #1622), and neither the window nor the cursor exists in this compiler's inputs. All 160
 /// in-scope artifacts pin the <c>from</c>/<c>size</c> offset form this class emits.</para>
 /// </summary>
 public sealed record SearchQuery

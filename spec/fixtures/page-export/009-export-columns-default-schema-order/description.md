@@ -9,15 +9,20 @@ fields flagged exportable are emitted in schema order, headers from schema label
 array — `ir.schema.json`-adjacent conventions elsewhere in this suite always give "absent" and
 "empty" distinct meaning, and EXP-1's wording is specifically about absence).
 
-## Note — a gap in `grid-schema.schema.json` this fixture works around
+## Note — this fixture's schema declares no `label`, by choice
 
-`spec/grid-schema.schema.json` (SC-1..SC-5), as authored ahead of the real `GridSchema` model
-(#1631), has **no per-field `exportable` flag** and **no per-field `label`** yet — both of
-which EXP-1's default wording assumes exist ("fields flagged exportable", "headers from schema
-labels"). Until #1631 adds them, this fixture treats every field present in `schema.fields` as
-exportable by default, in the object's own key order (`id, orderDate, customerName, totalAmount,
-status, region, notes`), and uses the bare `colId` as the header (no schema label to draw from).
-This is a documented assumption, not a claim that the schema already carries these flags.
+The normative rule is **EXP-1(b)** in `spec/semantics.md`: absent `exportColumns`, the projection is
+every field the schema declares **that is `exportable`**, in declaration order, with headers from
+each field's `label` falling back to its colId. Both properties exist —
+`spec/grid-schema.schema.json` declares `exportable` and `label` per field, and `FieldConfig`
+carries them.
+
+This fixture's own `schema.json` declares neither on any field, which is a *choice*, not a gap: with
+`exportable` defaulting to `true` it pins the all-exportable seven-column case (`id, orderDate,
+customerName, totalAmount, status, region, notes`), and with no `label` anywhere the headers are the
+bare colIds. Fixture **023** is the counterpart that declares `"exportable": false` on one field and
+carries the suite's only `label` — a header appears in no compiled artifact either way, since it is
+the CSV writer's (EXP-4, #1651/#1652).
 
 ## Key expectation
 

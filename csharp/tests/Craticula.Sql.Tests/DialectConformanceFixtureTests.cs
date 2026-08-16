@@ -51,13 +51,16 @@ public class DialectConformanceFixtureTests
     /// deliberately scans <em>every</em> category: an arm added elsewhere must show up as a count
     /// mismatch here, not disappear because this suite only looked in one directory.</para>
     ///
-    /// <para><b>Oracle's 39 is the full-parity count and is deliberately two short of MySQL's 41.</b>
+    /// <para><b>Oracle's 41 is the full-parity count and is deliberately two short of MySQL's 43.</b>
     /// #1642 authored an arm everywhere a case carries all six backends — <c>dialect-parity/006</c>-
-    /// <c>022</c> (17) and all of <c>group-aggregation/</c> (22) — and none in
+    /// <c>023</c> (18) and all of <c>group-aggregation/</c> (23) — and none in
     /// <c>dialect-parity/001</c>-<c>005</c>, which are single-engine mechanics showcases (MySQL's
     /// <c>ISNULL</c>, T-SQL's <c>OFFSET/FETCH</c>, SQLite's ASCII-CI <c>LIKE</c>, Postgres's
     /// <c>ILIKE</c>) that exist to document one named engine and have no Postgres arm to transform.
-    /// The asymmetry in this table is therefore the coverage policy, not a gap.</para>
+    /// The asymmetry in this table is therefore the coverage policy, not a gap. <em>(This paragraph
+    /// said 39 and 41 while the table beside it said 41 and 43: #1644's review pass added
+    /// <c>dialect-parity/023</c> and <c>group-aggregation/023</c>, each carrying every dialect arm,
+    /// and updated the table only. Corrected in #1650's review pass.)</em></para>
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [
@@ -69,10 +72,10 @@ public class DialectConformanceFixtureTests
 
     /// <summary>
     /// Deliberately empty, and kept rather than deleted so the shape of the guard matches the
-    /// Postgres suite's: every non-Postgres arm on disk is currently compiled end to end. The one
-    /// fixture the Postgres suite must exclude (<c>sort-paging/012</c>, blocked on the adapter's
-    /// missing <c>exportScope</c>) carries no non-Postgres arm, so it never reaches here. An entry
-    /// added later must state its reason, exactly as that one does.
+    /// Postgres suite's: every non-Postgres arm on disk is currently compiled end to end. The
+    /// Postgres suite's own exclusion list is empty too as of #1650 — until then it held
+    /// <c>sort-paging/012</c>, blocked on the adapter's missing <c>exportScope</c>, which carried no
+    /// non-Postgres arm and so never reached here. An entry added later must state its reason.
     /// </summary>
     private static readonly Dictionary<string, string> ExcludedArms = new(StringComparer.Ordinal);
 

@@ -8,9 +8,10 @@ namespace Craticula.AgGrid.Tests;
 /// </summary>
 public class AgGridRequestParserRejectionTests
 {
-    // No real fixture anywhere sets pivotMode:true (all 158 fixtures use pivotMode:false/pivotCols:[]
-    // — see docs/feat/1635/context.md's research notes) — this synthetic request is the only way to
-    // exercise the rejection at all.
+    // No real fixture anywhere sets pivotMode:true (every one that carries the property at all uses
+    // pivotMode:false/pivotCols:[] — see docs/feat/1635/context.md's research notes) — this synthetic
+    // request is the only way to exercise the rejection at all. Stated without a count on purpose: the
+    // one it used to carry (158) was already stale by #1650, when the suite held 202 fixtures.
     [Fact]
     public void PivotMode_True_Throws_MalformedRequest()
     {

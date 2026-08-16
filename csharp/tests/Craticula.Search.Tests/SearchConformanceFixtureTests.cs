@@ -12,8 +12,8 @@ namespace Craticula.Search.Tests;
 ///
 /// <para><b>This suite is the third and last of the inverted ones.</b> Every
 /// <c>postgres.artifact.json</c> had been compiled and re-compiled since #1638 and the
-/// <c>mongo.artifact.json</c> arm since #1643; the 158 <c>search.artifact.json</c> files were
-/// hand-authored across #1630-#1643 as a TERTIARY arm that <em>nothing had ever executed</em>. So a
+/// <c>mongo.artifact.json</c> arm since #1643; the 158 <c>search.artifact.json</c> files then on disk
+/// were hand-authored across #1630-#1643 as a TERTIARY arm that <em>nothing had ever executed</em>. So a
 /// disagreement here was never presumptively the compiler's fault, and it was never presumptively the
 /// fixture's either: each was adjudicated against <c>spec/semantics.md</c> and the sibling artifacts,
 /// and the losing side corrected. See <c>docs/feat/1644/context.md</c> for the census.</para>
@@ -21,8 +21,9 @@ namespace Craticula.Search.Tests;
 public class SearchConformanceFixtureTests
 {
     /// <summary>
-    /// The seven categories this compiler compiles end to end. Each declares the number of Search
-    /// artifacts it is expected to contribute, so adding a fixture to one of them fails
+    /// The eight categories this compiler compiles end to end — every category on disk that carries a
+    /// compiled artifact at all. Each declares the number of Search artifacts it is expected to
+    /// contribute, so adding a fixture to one of them fails
     /// <see cref="Each_In_Scope_Category_Contributes_Exactly_The_Fixture_Count_It_Declares"/> rather
     /// than being silently unexercised.
     ///
@@ -31,7 +32,15 @@ public class SearchConformanceFixtureTests
     /// <c>005</c> is #1642's Oracle one, none of which carries a Search arm at all. Discovery filters
     /// on the artifact's presence, so they need no exclusion entry — there is nothing to compare
     /// against. <c>ag-grid-majors</c> contributes 6 of its 8 for the same reason (<c>007</c> and
-    /// <c>008</c> are rejection fixtures).</para>
+    /// <c>008</c> are rejection fixtures), and <c>page-export</c> 14 of its 24 (<c>012</c>-<c>020</c>
+    /// and <c>022</c> document CSV-writer behavior on a single representative backend).
+    /// <c>group-aggregation</c> contributes 22 of its 23 because <c>020</c> has no Search arm at all:
+    /// ordering a grouped level by an aggregate is refused on this backend (OSE-11(c)).</para>
+    ///
+    /// <para><c>page-export</c> joined in #1650 (EXP-1/EXP-2), and brought <c>sort-paging</c> from 11
+    /// to 12 with it: both blockages were the same one — <c>AgGridRequestParser</c> could not read
+    /// <c>exportScope</c>. This backend renders no projection either way (OSE-13), so nothing about
+    /// EXP-1(b) changed here; only the requests could finally be fed.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
@@ -40,15 +49,16 @@ public class SearchConformanceFixtureTests
         ("dialect-parity", 18),
         ("group-aggregation", 22),
         ("filter-tree", 15),
-        ("sort-paging", 11),
-        ("ag-grid-majors", 6)
+        ("sort-paging", 12),
+        ("ag-grid-majors", 6),
+        ("page-export", 14)
     ];
 
     /// <summary>
     /// The categories deliberately NOT compiled, each with the reason — stated here rather than left
     /// as a silent absence, so a reader can tell "out of scope" from "forgotten".
     /// <see cref="Every_Fixture_Category_On_Disk_Is_Either_In_Scope_Or_Excluded_By_Name"/> fails if a
-    /// NEW category appears and is named in neither list. The three reasons are the same three
+    /// NEW category appears and is named in neither list. The two reasons are the same two
     /// <c>PostgresConformanceFixtureTests</c> and <c>MongoConformanceFixtureTests</c> give, and
     /// deliberately so: nothing about them is backend-specific, so a divergence between the three
     /// lists would mean one of the suites had silently changed scope.
@@ -60,41 +70,16 @@ public class SearchConformanceFixtureTests
         ["adversarial"] = "Rejection-only fixtures: they carry expected/rejection.json, not a compiled artifact, " +
                           "and are already exercised by Craticula.Core.Tests' allowlist/limits/coercion suites. " +
                           "(They also carry no search.artifact.json, so discovery would skip them anyway — named " +
-                          "here so the category list stays exhaustive.)",
-        // THIS SUITE'S OWN GROUND, not the SQL/Mongo suites'. Those two exclude page-export partly
-        // because EXP-1 owns the request-supplied COLUMN LIST, and that half provably does not apply
-        // here: OSE-13 says this backend names no output columns at all, so there is nothing for a
-        // projection rule to own. What DOES apply is the other half — exportScope, which
-        // AgGridRequestParser cannot yet read (#1635's documented gap) and which maps to EXP-2's
-        // page:none. Every one of the twelve carries an exportScope, so none of them can be FED
-        // end to end, which is the same blockage sort-paging/012 is excluded for and nothing to do
-        // with rendering. #1644's review pass proved the distinction matters: four of the twelve had
-        // drifted from OSE-1/OSE-3 while nothing could compile them, and were corrected there rather
-        // than left for #1623. Their builder half is asserted by
-        // SearchQuerySortAndPagingTests.PageExport004To007_..., the same treatment sort-paging/012 gets.
-        ["page-export"] = "BLOCKED UPSTREAM, like sort-paging/012 and for the identical reason: all 12 carry " +
-                          "EXP-1's exportScope, which AgGridRequestParser does not read, so the request cannot " +
-                          "be fed end to end. NOT excluded on the projection ground the SQL and Mongo suites " +
-                          "also cite — OSE-13 says this backend has no projection member at all. Their " +
-                          "rendering is still governed by the OSE-* addendum and is checked: see " +
-                          "SearchQuerySortAndPagingTests.PageExport004To007_Compile_To_Their_Own_Artifacts_Once_The_Page_Is_Supplied."
+                          "here so the category list stays exhaustive.)"
     };
 
     /// <summary>
-    /// The one fixture inside an in-scope category that is nonetheless excluded, with its reason —
-    /// again identical to the SQL and Mongo suites', because the blockage is upstream of all three
-    /// compilers.
+    /// EMPTY since #1650, exactly as in the SQL and Mongo suites: its last entry was
+    /// <c>sort-paging/012</c>, blocked upstream on <c>AgGridRequestParser</c>'s missing
+    /// <c>exportScope</c> — the same blockage that kept the whole <c>page-export</c> category out.
+    /// Kept as a named, asserted-on collection rather than deleted.
     /// </summary>
-    private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal)
-    {
-        ["sort-paging/012-page-none-unpaginated-export"] =
-            "BLOCKED UPSTREAM, not out of scope: the fixture resolves page:none from EXP-1's " +
-            "exportScope:\"all\", and AgGridRequestParser has no exportScope handling (a gap #1635 " +
-            "documented deliberately). The Search builder itself compiles this fixture exactly — see " +
-            "SearchQuerySortAndPagingTests.SortPaging012_Compiles_To_Its_Own_Artifact_Once_The_Page_Is_NonePage, " +
-            "which asserts against the same artifact with only the PageSpec supplied. Delete this " +
-            "entry the moment the adapter learns exportScope."
-    };
+    private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal);
 
     public static TheoryData<string, string> InScopeFixtures
     {
@@ -141,7 +126,7 @@ public class SearchConformanceFixtureTests
 
     /// <summary>
     /// SEM-3, asserted independently of the artifact text: <b>every</b> sort key carries an explicit
-    /// <c>missing</c>, on all 145 fixtures.
+    /// <c>missing</c>, on all 160 fixtures.
     ///
     /// <para>SEM-3's first Must-NOT forbids relying on the engine's own default even when it happens
     /// to match, and SEM-6's fourth forbids "the stable key is probably never null" as a licence to
@@ -216,7 +201,7 @@ public class SearchConformanceFixtureTests
     /// until #1644's review pass observed that
     /// <see cref="SearchQuery.CaseInsensitivitySuppressedByBucketIdentity"/> is a <em>constant of the
     /// type</em> — unlike <c>MongoQuery.CollationSuppressedByBucketIdentity</c>, which is computed
-    /// from what its pipeline actually did — so 145 cases were asserting
+    /// from what its pipeline actually did — so all 145 cases then in scope were asserting
     /// <c>Assert.False(false)</c> and inflating the suite's count with no information. What is worth
     /// asserting is the structural claim the constant STANDS FOR, which needs exactly one request:
     /// <c>group-aggregation/005</c>, the drill-down leaf that is MongoDB's own second divergence
@@ -262,13 +247,15 @@ public class SearchConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_145_Of_The_146_Search_Artifacts_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_All_160_Search_Artifacts_In_The_Suite()
     {
-        // 146 minus the ONE entry in ExcludedFixtures: sort-paging/012, which the Search builder
-        // compiles correctly but the AG Grid adapter cannot yet FEED correctly. The suite holds 158
-        // search.artifact.json files in total; the 12 outside this number are page-export's, whose
-        // whole category is excluded.
-        Assert.Equal(145, InScopeFixtures.Count);
+        // 160 with NOTHING subtracted, and it is the same number as the count of search.artifact.json
+        // files on disk (asserted below): as of #1650 there is no excluded category carrying a Search
+        // arm and no excluded fixture at all. It last moved when #1650's review pass authored
+        // page-export/024; before that #1650 itself released page-export (13, now 14) and
+        // sort-paging/012 from exclusion and authored page-export/023.
+        Assert.Equal(160, InScopeFixtures.Count);
+        Assert.Empty(ExcludedFixtures);
     }
 
     [Fact]
@@ -292,10 +279,11 @@ public class SearchConformanceFixtureTests
     [Fact]
     public void Every_Search_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "145 in scope": every search.artifact.json in the repo is
-        // either exercised above, or inside a category/fixture this class excludes BY NAME. A new
-        // artifact in an excluded category still moves this number, which is what makes the exclusion
-        // reasons re-read rather than inherited.
+        // The count that closes the loop on "160 in scope": every search.artifact.json in the repo is
+        // either exercised above, or inside a category/fixture this class excludes BY NAME. Since
+        // #1650 nothing is excluded, so the two numbers are equal — the arithmetic is kept rather
+        // than simplified away, because it is what would catch a future exclusion being added
+        // without its artifacts being subtracted.
         var onDisk = Directory
             .EnumerateFiles(RepoPaths.Fixture(), "search.artifact.json", SearchOption.AllDirectories)
             .Count();
@@ -306,8 +294,8 @@ public class SearchConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "search.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(158, onDisk);
-        Assert.Equal(12, excludedCategoryArtifacts);
+        Assert.Equal(160, onDisk);
+        Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }
 

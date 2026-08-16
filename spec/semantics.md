@@ -1065,9 +1065,14 @@ in .NET, `dict` in Python and `Map` in JS happen to preserve insertion order; Go
 `HashMap` emphatically do not), and `group-aggregation/005`/`006` compare this column list byte for
 byte. `SELECT *` is not available to the protocol at either level: it returns *physical*
 column names, and a grid that asked for `fiscalYear` cannot read a `fiscal_year` key. An **ordinary
-row query** is out of GRP-3's scope and still renders `SELECT *`; widening that belongs to the export
-feature, which owns the request-supplied column list (EXP-3) any general projection rule has to
-compose with. *"Ordinary row query" and not "ungrouped"*: BM-3's distinct-values query also carries no
+row query** is out of GRP-3's scope and still renders `SELECT *`. Widening it belonged to the export
+feature, which owns the request-supplied column list any general projection rule has to compose with
+— and **EXP-1(b) has now settled it, narrowly**: an *export* names its columns, an ordinary row
+query still does not. So this sentence is no longer a deferral; the only projection a request can add
+is an export's. (Until #1650 this sentence cited that column list as *EXP-3*, and so did its
+restatement in `SqlQueryBuilder`. The TRD's EXP-3 is **streaming**; the column list is a clause of
+**EXP-1**, which is why the addendum numbers it EXP-1(b).) *"Ordinary row query" and not
+"ungrouped"*: BM-3's distinct-values query also carries no
 `groupSpec` and is emphatically not `SELECT *` — it projects the one target column, unaliased
 (GRP-6(e)). The same distinction as in SEM-6's first blockquote, for the same reason.
 
@@ -1331,6 +1336,124 @@ omission.
 `$defs/sortItem`, `$defs/setValuesSpec`, AGG-1..AGG-4 (AGG-4 pins the `terms` ordering GRP-6(a)'s
 ES/OpenSearch arm depends on), SEM-1, SEM-5, SEM-6, SEM-7, SQL-2, SQL-6, and BM-2/BM-3/AR-8/AR-9 in
 the TRD. `spec/fixtures/group-aggregation/` is the artifact oracle for all six.
+
+---
+
+## Addendum — export semantics (EXP-1(a), EXP-1(b), EXP-2; not numbered SEM-*, for the same reason as
+the grouping addendum above, of which this is the sibling: the TRD's §6.1 states the export
+requirements and this is where the compile-time half of them is decided)
+
+The TRD's EXP-1..EXP-8 span a wire contract, a compilation rule, a streaming obligation and a CSV
+writer. **Only EXP-1 and EXP-2 have a compiled form at all** — EXP-3 is *streaming*, and
+EXP-4..EXP-8 are the CSV writer's; none of them is restated here. So this addendum owns no new
+number: it refines the two that exist, splitting EXP-1's single paragraph into the two independent
+rules it actually contains — the request extension with its group carve-out, EXP-1(a), and the column
+list, EXP-1(b). Numbering the column list "EXP-3" is a mistake this repo has already made twice, in
+GRP-3 and in its restatement in `SqlQueryBuilder`; both are corrected.
+
+What follows is what a *compiler* and its request adapter must do, pinned because #1650 found the two
+questions below answered inconsistently in the suite that was meant to pin them: whether an ordinary
+row query projects, and whether an export does.
+
+**EXP-1(a). The export is a request-shaped extension, and its group state is discarded.** The wire
+request carries `exportFormat: "csv" | "tsv"`, `exportScope: "all" | "page"` (default `"all"`) and an
+optional ordered `exportColumns: [{ colId, header? }]` **beside** the ordinary AG Grid SSRM members —
+`filterModel` and `sortModel` are always honoured, unchanged, which is why nothing else about the
+compiled query differs. Three consequences, all of them the *adapter's* to apply before a compiler
+sees the IR:
+
+- **`exportFormat` is what marks a request as an export**, and it is not optional. An `exportScope` or
+  `exportColumns` arriving without one is a malformed request, not a row fetch with two ignorable
+  properties: ignoring a scope returns one page where the client asked for the whole result set.
+  `exportFormat` itself is otherwise **compilation-inert** — `page-export/004` and `/005` differ only
+  in it and pin byte-identical artifacts on all three backends. It exists in the IR-facing contract so
+  the writer can read it, and for no other reason.
+- **A grouped view exports leaf rows.** `rowGroupCols`, `valueCols` **and `groupKeys`** are discarded
+  outright, so the compiled IR carries no `groupSpec` and no aggregations and the GRP-1 dispatch is
+  never entered. `page-export/010` and `/011` send a fully populated single- and two-level group state
+  with aggregations, and `/024` adds a **non-empty `groupKeys`** — a partially consumed path, the
+  shape GRP-1 would otherwise dispatch to a grouped level — and all three pin flat, ungrouped
+  artifacts with no drill-down predicate. Group-structured and pivot exports are out of scope for v1.
+  The discard applies to **either** scope: the output is a flat delimited row stream either way, and
+  the scope decides only how many rows go into it.
+- **`groupKeys` is discarded with the other two rather than refused, and the widening is accepted
+  knowingly.** A drill-down key *restricts* the result to one bucket, so dropping it exports strictly
+  more rows than the grid is showing. That is true — and it is equally true of dropping
+  `rowGroupCols`, which this same rule mandates, so it does not distinguish the three members. The
+  case that decides it is the obvious host integration: an export request built by copying the grid's
+  last `getRows` payload and adding `exportFormat` carries whatever drill-down path the user had
+  expanded, and refusing it would hard-fail every export taken from an expanded grid. All three
+  members describe one thing — the group state of the view — and EXP-1(a) discards that state.
+- **The one genuinely incoherent combination is permitted, not refused: `exportScope: "page"` over a
+  grouped view.** The `startRow`/`endRow` range the grid sent was computed against *grouped* rows,
+  and the export emits *leaf* rows, so the window is of questionable meaning — it is a count of one
+  kind of row applied to another. It is nevertheless honoured rather than rejected, for the same
+  reason the `groupKeys` discard is: refusing it would break the copy-the-last-payload integration for
+  a request the client can reasonably send. **Nothing pins it**, and no fixture does, deliberately —
+  the shape has no answer worth freezing until a host asks for one.
+
+**EXP-1(b). An export names its output columns; an ordinary row query still does not.** This is the
+widening GRP-3 deferred to "the export feature", and it is deliberately narrow — it did not become a
+general projection rule:
+
+- **Absent `exportColumns`**, the projection is every field the schema declares **that is
+  `exportable`**, in declaration order (the `fields` object's member order in the schema *document*,
+  GRP-3's rule and for GRP-3's reason). Headers come from each field's `label`, falling back to its
+  colId. `page-export/009` pins the all-exportable case and `/023` the case where one field is
+  declared `"exportable": false` and is absent from the projection while still being filtered on —
+  `exportable` and SC-2's `filterable` are independent flags.
+- **Present `exportColumns`**, the projection is exactly those columns, in **request** order, and the
+  `header` strings are the writer's alone. `page-export/008` names three of seven with custom headers;
+  none of the three headers appears in any of its arms. A `header` is arbitrary client text carried
+  verbatim, so **EXP-6's formula-injection hardening applies to the header row exactly as it applies
+  to values**: a header beginning `=`, `+`, `-`, `@`, tab or CR is prefixed with `'` like any cell.
+  EXP-6's wording is about values because no header existed when it was written; the row a header
+  lands in is a spreadsheet row like any other.
+- **The resolution happens once, in the request adapter**, not per compiler: an unknown colId, a
+  colId the schema declares non-exportable, a repeated colId, and an explicitly empty list are all
+  refused there. All four are hard failures in **every** `GridSchema` mode — Lenient's contract is
+  that an unknown filter *condition* vanishes and the result merely widens, whereas a dropped export
+  column hands back a file missing something the client asked for by name, which is the same
+  reasoning that keeps a `groupCol` and an aggregation field hard failures under GRP-1.
+- **An ordinary row query is unchanged and still renders `SELECT *`** (and no `$project`, and no
+  `_source` filter). `page-export/001`-`003` are the category's plain-paging baseline, carry no export
+  member at all, and are spelled exactly like every other row query in the suite. #1630 had authored
+  their Postgres arms with an explicit column list their own Mongo arms did not have; #1650 corrected
+  them rather than generalising the rule, because widening every row query is a decision about the
+  *grid's* response shape, which no fixture in the suite pins and this feature does not own.
+
+*Per backend.* On **SQL** the projection is the `SELECT` list, each column aliased back to its logical
+name only where the physical column differs (`"order_date" AS "orderDate"`, but plain `"status"`) —
+GRP-3's drill-down-leaf rule, reused unchanged. On **MongoDB** it is a trailing `$project`, after any
+`$skip`/`$limit`, re-keying a differing physical path with the expression form (`"id": "$_id"`) and a
+matching one with a plain `1`, then `_id: 0` **last** (MDB-10's shape rules apply to it like any other
+stage document; the suppression is written after the output list because that list's *order* is what
+is normative and byte-compared). On **OpenSearch/Elasticsearch** there is **no projection at all** —
+see OSE-13, which is a statement about the artifact's admitted member set, and the note there on
+`_source` filtering. Column selection and ordering for that backend fall to the writer, reading
+`exportColumns` from the request it already holds. That is not EXP-1(b) contradicting OSE-13; it is one
+rule with a per-backend split, and the fourteen Search arms in `page-export/` pin it.
+
+**EXP-2. `exportScope` resolves to a page mode, and nothing else in the compiler changes.**
+`"all"` is `$defs/nonePage` — the whole filtered and sorted result, with the request's own
+`startRow`/`endRow` **discarded**, not merely absent. `"page"` honours that range exactly as an
+ordinary row fetch does. `page-export/006` and `/007` are the pair that pins this: identical requests
+down to `startRow: 200, endRow: 250`, differing only in the scope, and `006` compiles with no
+`LIMIT`/`OFFSET`, no `$skip`/`$limit` and no `from`/`size` on any backend. The `startRow`/`endRow`
+pair is still shape-checked before the scope overrides it — a half-supplied range is malformed
+whether or not this scope would have used it.
+
+SEM-6's tiebreaker is **unaffected**: `page: none` is still a paged read as far as determinism is
+concerned (a stream can be resumed, and an unordered one cannot be), so the stable key is appended
+exactly as it always is. `sort-paging/012` and every `exportScope: "all"` fixture in
+`page-export/` carry it.
+
+**Cross-links.** `$defs/nonePage`, `$defs/rangePage`, `$defs/groupSpec`, GRP-1 (the dispatch the
+carve-out bypasses), GRP-3 (the projection rule this one composes with), SEM-6 (the tiebreaker
+`page: none` keeps), OSE-13 and MDB-10. `spec/fixtures/page-export/` is the artifact oracle, plus
+`sort-paging/012` for the `page: none` shape on all three backends. EXP-3..EXP-8 — streaming and
+chunking, the CSV writer, its formatting and injection hardening, and the row-count limit — have no
+compiled form and are owned by #1651/#1652 and the execution adapters.
 
 ---
 
@@ -1929,9 +2052,10 @@ as illustrative. A normative sentence there would contradict the framing, and th
 precisely what let those pairs disagree in the first place.
 
 Each rule below is the form the `spec/fixtures/*/expected/search.artifact.json` files now contain —
-**all 158 of them, including `page-export/`'s twelve**, whose exclusion from the conformance runners is
-about `exportScope` (#1623) and never about these rules. (Four of those twelve had drifted precisely
-because nothing could compile them; #1644's review pass corrected them under OSE-1 and OSE-3.) Where a
+**all 160 of them, `page-export/`'s fourteen included**. That category was excluded from the
+conformance runner until #1650, on `exportScope` (#1623) and never on these rules — and four of its
+arms had drifted precisely because nothing could compile them, which #1644's review pass corrected
+under OSE-1 and OSE-3 before the exclusion was lifted. Where a
 rule is a **refusal**, there is no artifact by construction, and the fixture that used to carry one
 says so in its own `description.md` — `group-aggregation/020` is the only such case.
 **There is ONE compiler and ONE artifact for both engines** (OQ-7), so unlike the SQL addendum
@@ -1970,10 +2094,14 @@ declared `caseSensitivity`, which is the property the alternative loses: GRP-2 p
 string form by hand ("ES/OpenSearch drops the `case_insensitive: true` parameter from a drill-down
 `term`, leaving `{"term": {"<field>.keyword": {"value": "EMEA"}}}`") and `dialect-parity/014` uses the
 identical shape for the case-sensitive opt-in, so a rule of "long only when the parameter is there"
-is already contradicted twice over. 64 string terms in the suite are long and **4** were short; 13
-non-string terms are short and 1 was long (`filter-tree/001`'s boolean, whose own construct
-`operators/044` spells short). **Five** artifacts were re-authored onto this rule in #1644 and its
-review pass.
+is already contradicted twice over. **71** string `term`s in the suite now take the long form, **4**
+of which had been authored short; **14** non-string `term`s take the short form, **1** of which had
+been authored long (`filter-tree/001`'s boolean, whose own construct `operators/044` spells short).
+**Five** artifacts were re-authored onto this rule in #1644 and its review pass — the 4 plus the 1.
+*(This census read "64 long / 4 short" until #1650's review pass recounted it: the long figure was
+two short of the artifacts on disk even when it was written, and `page-export/023`'s new arm has
+since added a seventy-first. The counts are the argument here, so they are stated as occurrences of
+`term` across every `expected/search.artifact.json`, which is what a recount reproduces.)*
 
 *The fourth short one is worth naming, because it weakens the argument this rule would otherwise lean
 on.* Three of the four were `blank`'s empty-string sentinel (`operators/029`, `/030`,
@@ -1981,7 +2109,7 @@ on.* Three of the four were `blank`'s empty-string sentinel (`operators/029`, `/
 found by the review pass in `page-export/004`, is an ordinary **client** value on a `sensitive`
 `string` (`{"term": {"status.keyword": "shipped"}}`), and it survived only because `page-export` is
 excluded from all three conformance runners. So the artifact evidence for "the type, not the
-parameter" is 64-to-4 rather than 64-to-3-plus-a-sentinel, and the rule rests where it always really
+parameter" is 71-to-4 rather than 71-to-3-plus-a-sentinel, and the rule rests where it always really
 did: on GRP-2's normative sentence and `dialect-parity/014`, not on the counts. It was corrected
 rather than left for #1623 to re-adjudicate.
 
@@ -2202,7 +2330,7 @@ rather than one body with optional members, and `size: 0` beside a `sort` orders
 `max_result_window`, with a cursor cache it assigns by name to the **execution adapter** (#1622).
 `max_result_window` is index configuration absent from `GridSchema` and from the IR; the cursor is
 the previous page's last sort values, which an offset-based AG Grid SSRM request never sends and
-`$defs/pageSpec` has nowhere to carry. All 158 `search.artifact.json` files pin the offset form.
+`$defs/pageSpec` has nowhere to carry. All 159 `search.artifact.json` files pin the offset form.
 `spec/fixtures/schemas/search-artifact.schema.json` admits the member so that #1622 can use it
 without a schema change; nothing does today.
 
@@ -2337,7 +2465,7 @@ container is a JSON object and the second would silently replace the first.
   `group-aggregation/018`'s description states it and `CrossCompilerGroupingTests` asserts it as an
   expected difference.
 
-**OSE-13. There is no projection member: GRP-3 has no counterpart on this backend.**
+**OSE-13. There is no projection member: neither GRP-3 nor EXP-1(b) has a counterpart on this backend.**
 `spec/fixtures/schemas/search-artifact.schema.json` declares `additionalProperties: false` over a
 member set with no `_source` in it, so this is a contract rather than an omission. GRP-3's concern is
 a *physical* column name reaching a grid that asked for a logical one; a hit's `_source` carries the
@@ -2345,6 +2473,22 @@ document's own field names, which the index mapping decides once rather than per
 question is answered at index time. A drill-down leaf therefore emits no column list where SQL emits
 an aliased one and MongoDB emits a `$project` — asserted as an expected difference rather than left
 as an absence.
+
+*EXP-1(b)'s export column list reaches the same answer, and `_source` filtering is **declined**, not
+overlooked.* Elasticsearch and OpenSearch both support `_source: [...]` (and `_source: {includes,
+excludes}`) on a search body, so narrowing is available here in a way it is not for GRP-3's aliasing
+problem — the omission is therefore a decision and is recorded as one. Three grounds: it would be a
+*narrowing* only, never a **renaming** or a **reordering**, so it could not deliver EXP-1(b)'s ordered,
+logically-named column list and the writer would still have to do the whole job from `exportColumns`;
+adding a member to the artifact's closed set would make it the one place where this backend's
+compiled body varies with a property that changes nothing else about which documents match; and the
+saving is bandwidth between the engine and the host process, which is an *execution*-adapter
+trade-off (the same register as EXP-3's streaming and chunking, which is what that id really names)
+rather than a compiled-query
+semantic. The thirteen `page-export/` Search arms pin the absence: `008` narrows to three of seven
+columns on SQL and MongoDB and its Search arm carries only a `query` and a `sort`. If a host wants the
+bandwidth, `_source` is an adapter-level addition to the request it sends, not a change to this
+contract.
 
 **OSE-14. One compiler, both engines, and no target flag — a fact about the pinned subset, not an
 aspiration.** #1621's DoD asks for OpenSearch-versus-Elasticsearch divergences to sit "behind a target

@@ -49,4 +49,19 @@ public sealed record MongoQueryRequest
     /// which return documents rather than aggregates. Subject to the same allowlist precondition as
     /// <see cref="Group"/>.</summary>
     public IReadOnlyList<Aggregation>? Aggregations { get; init; }
+
+    /// <summary>
+    /// EXP-1(b): the export's output fields, in the order they must appear —
+    /// <c>Craticula.AgGrid.ExportSpec.ProjectionColumns</c>, already resolved. <see langword="null"/>
+    /// (the default) is an ordinary row query, which emits no <c>$project</c> stage at all, exactly
+    /// as its SQL counterpart renders <c>SELECT *</c> (GRP-3).
+    ///
+    /// <para>Property-for-property the same member <c>Craticula.Sql.SqlQueryRequest</c> carries, and
+    /// deliberately so — the two compilers consume the identical resolved list, so neither can
+    /// disagree with the other about which columns an export contains or what order they are in.
+    /// Both compilers refuse the same two shapes: a projection beside a <see cref="Group"/>, and an
+    /// EMPTY projection — here it would emit <c>{"$project": {"_id": 0}}</c>, a stage that suppresses
+    /// every field rather than projecting none.</para>
+    /// </summary>
+    public IReadOnlyList<string>? Projection { get; init; }
 }

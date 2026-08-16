@@ -36,11 +36,13 @@ public sealed record SqlQueryRequest
     /// projects named columns at every level (GRP-3) and folds no case on its own keys (GRP-2), so
     /// it is not a decoration on the ungrouped query.
     ///
-    /// <para>A caller that holds group state but wants the plain rows anyway must pass
+    /// <para>A caller that holds group state but wants the plain rows anyway passes
     /// <see langword="null"/> here. That is a real case — <c>spec/fixtures/page-export/010</c> and
-    /// <c>/011</c> carry <c>rowGroupCols</c> and still compile to a flat export, because EXP-1's
-    /// <c>exportScope: "all"</c> discards the grouping — and it belongs to the export feature, which
-    /// owns that decision, not to this builder.</para>
+    /// <c>/011</c> carry <c>rowGroupCols</c> and still compile to a flat export — and the decision
+    /// belongs to the export feature, not to this builder: since #1650
+    /// <c>Craticula.AgGrid.AgGridRequestParser</c> applies EXP-1's carve-out itself, so an export
+    /// never reaches here carrying a <see cref="GroupSpec"/> at all. See <see cref="Projection"/>,
+    /// which the same carve-out makes mutually exclusive with this property.</para>
     ///
     /// <para><b>This is client-controlled input and must reach here already allowlisted</b>, exactly
     /// like <see cref="Filter"/>: pass it (and <see cref="Aggregations"/>) to
@@ -61,4 +63,24 @@ public sealed record SqlQueryRequest
     /// <see cref="Group"/> — see its remarks.
     /// </summary>
     public IReadOnlyList<Aggregation>? Aggregations { get; init; }
+
+    /// <summary>
+    /// EXP-1(b): the export's output columns, in the order they must appear —
+    /// <c>Craticula.AgGrid.ExportSpec.ProjectionColumns</c>, already resolved (an explicit
+    /// <c>exportColumns</c>, or every <see cref="FieldConfig.Exportable"/> field in declaration
+    /// order). <see langword="null"/> — the default — is an ordinary row query, which still renders
+    /// <c>SELECT *</c> per GRP-3.
+    ///
+    /// <para>A plain list of logical field names rather than the adapter's own export type, so this
+    /// compiler needs no reference to <c>Craticula.AgGrid</c>: the format, the scope and the header
+    /// strings are all invisible here (a header never reaches a compiled artifact — see
+    /// <c>page-export/008</c>), and the only thing the compiler is owed is which columns, in what
+    /// order.</para>
+    ///
+    /// <para>Mutually exclusive with <see cref="Group"/>, and checked: EXP-1's carve-out discards
+    /// group state on an export, so a request carrying both has already gone wrong upstream. An
+    /// EMPTY list is checked too, and refused: <c>AgGridRequestParser</c> rejects an empty
+    /// <c>exportColumns</c> at the wire, and rendering one here would emit <c>SELECT  FROM …</c>.</para>
+    /// </summary>
+    public IReadOnlyList<string>? Projection { get; init; }
 }

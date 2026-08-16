@@ -1058,8 +1058,9 @@ public static class SearchQueryBuilder
             "Carrying the after key is the execution adapter's (#1622)."),
         NonePage => throw new SearchCompilationException(
             "A grouped level was asked for an unpaginated page (EXP-2's page: none), but a composite aggregation " +
-            "always returns at most `size` buckets and has no unbounded form. An export that ignores group state " +
-            "(EXP-1) is the shape that reaches this combination, and resolving it belongs to the export feature."),
+            "always returns at most `size` buckets and has no unbounded form. Only a request built outside " +
+            "AgGridRequestParser reaches this combination: since #1650 the export path discards group state before " +
+            "compiling (EXP-1(a)), so an export never arrives carrying a GroupSpec."),
         _ => throw new SearchCompilationException($"Unknown PageSpec type '{page.GetType().Name}'.")
     };
 

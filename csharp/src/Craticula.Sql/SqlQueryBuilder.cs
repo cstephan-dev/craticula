@@ -38,9 +38,12 @@ namespace Craticula.Sql;
 /// <see cref="Build"/> because it shares every clause renderer but none of the request shape (no
 /// page, no sort model, no aggregation); see <see cref="SqlSetValuesRequest"/>.</para>
 ///
-/// <para><b>Still out of scope.</b> <c>exportScope</c> and the export column list belong to the
-/// export feature — which is also why an <em>ungrouped</em> query still projects <c>SELECT *</c>
-/// (GRP-3).</para>
+/// <para><b>Export (#1650, EXP-1/EXP-2).</b> <c>exportScope</c> reaches this builder only as the
+/// <see cref="PageSpec"/> the adapter already resolved it to (<c>all</c> is EXP-2's
+/// <see cref="NonePage"/>), and the export's column list as <see cref="SqlQueryRequest.Projection"/>
+/// — the one thing that widens the <c>SELECT</c> list. An <em>ordinary</em> row query still projects
+/// <c>SELECT *</c> (GRP-3): only an export names its output columns, which is what EXP-1(b) in
+/// <c>spec/semantics.md</c> pins.</para>
 /// </summary>
 public static class SqlQueryBuilder
 {
@@ -65,12 +68,35 @@ public static class SqlQueryBuilder
         GroupSpecValidator.Validate(request.Group);
         AggregationValidator.Validate(request.Aggregations);
 
+        // EXP-1's group-export carve-out means the adapter has already nulled the group state on any
+        // export, so the two are mutually exclusive by construction. Checked rather than assumed:
+        // a caller building the request by hand could set both, and there is no defined shape for
+        // "project these columns" over a GROUP BY that projects a bucket key and its aggregates.
+        if (request.Projection is not null && request.Group is not null)
+        {
+            throw new SqlCompilationException(
+                "A request carries both a GroupSpec and an EXP-1(b) export projection. An export emits leaf rows " +
+                "and discards group state (EXP-1's carve-out, applied by AgGridRequestParser), so the two never " +
+                "arrive together from the adapter.");
+        }
+
+        // Same population as the guard above — a hand-built request, since AgGridRequestParser refuses
+        // an empty 'exportColumns' at the wire. An empty list is not "project nothing": it renders
+        // `SELECT  FROM ...`, which is not SQL at all, and the driver would be the first thing to say
+        // so. EXP-1(b)'s "omit the property to get the default projection" is the shape that means it.
+        if (request.Projection is { Count: 0 })
+        {
+            throw new SqlCompilationException(
+                "A request carries an empty EXP-1(b) export projection. An export of no columns has no compiled " +
+                "form; leave Projection null for GRP-3's SELECT * / the schema-order default.");
+        }
+
         var parameters = new SqlParameterBag(dialect);
         var grouping = GroupingPlan.Resolve(request);
         var context = new Context(request.Schema, dialect, parameters);
 
         var sql = new StringBuilder("SELECT ")
-            .Append(RenderProjection(grouping, context))
+            .Append(RenderProjection(grouping, request.Projection, context))
             .Append(" FROM ")
             .Append(dialect.QuoteIdentifier(request.Schema.Source));
 
@@ -256,23 +282,27 @@ public static class SqlQueryBuilder
     /// A grouping request's rows are named at every level, which <c>SELECT *</c> cannot do: it
     /// returns the physical column names, so a schema whose <c>fiscalYear</c> lives in
     /// <c>fiscal_year</c> would hand the grid a key it does not know.</description></item>
-    /// <item><description><b>Ungrouped</b> — <c>SELECT *</c>, #1638's inherited form. Widening it to
-    /// the explicit list belongs to the export feature, which owns the request-supplied column list
-    /// (EXP-3) that would have to compose with it.</description></item>
+    /// <item><description><b>Export</b> (EXP-1(b), <see cref="SqlQueryRequest.Projection"/>) — the
+    /// resolved export columns, in the order the request asked for them, under the same
+    /// alias-only-where-it-differs rule as the leaf. The list arrives already resolved from the
+    /// adapter, so this branch decides nothing about WHICH columns; it renders the ones it is
+    /// given.</description></item>
+    /// <item><description><b>Ordinary row query</b> — <c>SELECT *</c>, #1638's inherited form and
+    /// GRP-3's explicit carve-out. Only an export widens it: <c>page-export/001</c>-<c>003</c> are
+    /// the category's plain-paging baseline, carry no export field, and render <c>*</c> like every
+    /// other row query in the suite.</description></item>
     /// </list>
     /// </summary>
-    private static string RenderProjection(GroupingPlan? grouping, Context context)
+    private static string RenderProjection(GroupingPlan? grouping, IReadOnlyList<string>? projection, Context context)
     {
         if (grouping is null)
         {
-            return "*";
+            return projection is null ? "*" : RenderColumnList(projection, context);
         }
-
-        var items = new List<string>();
 
         if (grouping.GroupColumn is { } groupColumn)
         {
-            items.Add(Alias(ResolveColumn(groupColumn, context), groupColumn, context));
+            var items = new List<string> { Alias(ResolveColumn(groupColumn, context), groupColumn, context) };
 
             foreach (var aggregation in grouping.Aggregations)
             {
@@ -285,7 +315,18 @@ public static class SqlQueryBuilder
         // GRP-3's "in declaration order" comes from GridSchema.FieldOrder, never from Fields.Keys:
         // that dictionary's enumeration order is unspecified by .NET, and 005/006 compare this column
         // list byte-for-byte.
-        foreach (var field in context.Schema.FieldOrder)
+        return RenderColumnList(context.Schema.FieldOrder, context);
+    }
+
+    /// <summary>An ordered list of logical field names as a <c>SELECT</c> list, each aliased back to
+    /// its logical name only where the physical column differs (<c>"fiscal_year" AS "fiscalYear"</c>,
+    /// but plain <c>"region"</c>) — GRP-3's rule, shared by the drill-down leaf and EXP-1(b)'s export
+    /// because they answer the same question about the same schema.</summary>
+    private static string RenderColumnList(IReadOnlyList<string> fields, Context context)
+    {
+        var items = new List<string>(fields.Count);
+
+        foreach (var field in fields)
         {
             var column = ResolveColumn(field, context);
             var alias = context.Dialect.QuoteIdentifier(field);

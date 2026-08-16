@@ -36,13 +36,35 @@ public sealed record AgGridParsedRequest
     public IReadOnlyList<SortItem>? Sort { get; init; }
 
     /// <summary>The request's <c>rowGroupCols</c>/<c>groupKeys</c>, or <see langword="null"/> when
-    /// <c>rowGroupCols</c> is empty (the request is not grouped at all).</summary>
+    /// <c>rowGroupCols</c> is empty (the request is not grouped at all). Also <see langword="null"/>
+    /// on every export request, whatever the wire sent — see <see cref="Export"/>.</summary>
     public GroupSpec? Group { get; init; }
 
     /// <summary>The request's <c>valueCols</c>, or <see langword="null"/> when <c>valueCols</c> is
-    /// empty — never an empty list.</summary>
+    /// empty — never an empty list. Also <see langword="null"/> on every export request, for the same
+    /// reason <see cref="Group"/> is.</summary>
     public IReadOnlyList<Aggregation>? Aggregations { get; init; }
 
-    /// <summary>The request's <c>startRow</c>/<c>endRow</c> resolved to AG-3/EXP-2's page spec.</summary>
+    /// <summary>The request's <c>startRow</c>/<c>endRow</c> resolved to AG-3/EXP-2's page spec — or,
+    /// on an <see cref="ExportScope.All"/> export, <see cref="NonePage"/> regardless of what those two
+    /// numbers said.</summary>
     public required PageSpec Page { get; init; }
+
+    /// <summary>
+    /// EXP-1's export extension (<c>exportFormat</c>/<c>exportScope</c>/<c>exportColumns</c>), or
+    /// <see langword="null"/> when the request is an ordinary row fetch. Two things follow from it
+    /// being non-null, and both are already applied to the properties above:
+    /// <list type="bullet">
+    /// <item><description><see cref="Page"/> is <see cref="NonePage"/> under
+    /// <see cref="ExportScope.All"/> (EXP-2), the request's own <c>startRow</c>/<c>endRow</c> under
+    /// <see cref="ExportScope.Page"/>.</description></item>
+    /// <item><description><see cref="Group"/> and <see cref="Aggregations"/> are
+    /// <see langword="null"/>: EXP-1's group-export carve-out emits leaf rows under the current
+    /// filter and sort, and group-structured exports are out of scope for v1
+    /// (<c>page-export/010</c>, <c>/011</c>).</description></item>
+    /// </list>
+    /// <see cref="ExportSpec.ProjectionColumns"/> is the third consequence, and the only one a caller
+    /// still has to carry: hand it to the compiler as its <c>Projection</c>.
+    /// </summary>
+    public ExportSpec? Export { get; init; }
 }

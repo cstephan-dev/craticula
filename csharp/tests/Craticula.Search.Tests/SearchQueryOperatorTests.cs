@@ -8,7 +8,7 @@ namespace Craticula.Search.Tests;
 /// reaches</b> — a case-sensitive string ordering comparison, a case-insensitive one on a field that
 /// declares no normalizer sub-field, the substring family on a <c>searchMode: analyzed</c> field
 /// beyond <c>contains</c>, SC-4's base-field remapping, and the escape sets on values that actually
-/// contain metacharacters. The 145-fixture conformance suite covers the rest far better than a
+/// contain metacharacters. The 160-fixture conformance suite covers the rest far better than a
 /// hand-written test could.
 /// </summary>
 public class SearchQueryOperatorTests

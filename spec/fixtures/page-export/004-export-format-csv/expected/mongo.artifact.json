@@ -1,7 +1,9 @@
 [
   {
     "$match": {
-      "status": "shipped"
+      "status": {
+        "$eq": "shipped"
+      }
     }
   },
   {
@@ -48,14 +50,14 @@
   },
   {
     "$project": {
-      "_id": 0,
       "id": "$_id",
       "orderDate": 1,
       "customerName": "$customer.name",
       "totalAmount": 1,
       "status": 1,
       "region": 1,
-      "notes": 1
+      "notes": 1,
+      "_id": 0
     }
   }
 ]

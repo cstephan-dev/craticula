@@ -12,7 +12,7 @@ namespace Craticula.Mongo.Tests;
 ///
 /// <para><b>This suite is the inverse of the SQL ones, and the difference matters.</b> Every
 /// <c>postgres.artifact.json</c> had been compiled and re-compiled since #1638; the 157
-/// <c>mongo.artifact.json</c> files were hand-authored across #1630-#1642 as a secondary arm that
+/// <c>mongo.artifact.json</c> files then on disk were hand-authored across #1630-#1642 as a secondary arm that
 /// <em>nothing had ever executed</em>. So a disagreement here was never presumptively the compiler's
 /// fault, and it was never presumptively the fixture's either: each was adjudicated against
 /// <c>spec/semantics.md</c> and the sibling artifacts, and the losing side corrected. See
@@ -21,16 +21,23 @@ namespace Craticula.Mongo.Tests;
 public class MongoConformanceFixtureTests
 {
     /// <summary>
-    /// The seven categories this compiler compiles end to end. Each declares the number of Mongo
-    /// artifacts it is expected to contribute, so adding a fixture to one of them fails
+    /// The eight categories this compiler compiles end to end — every category on disk that carries a
+    /// compiled artifact at all. Each declares the number of Mongo artifacts it is expected to
+    /// contribute, so adding a fixture to one of them fails
     /// <see cref="Each_In_Scope_Category_Contributes_Exactly_The_Fixture_Count_It_Declares"/> rather
     /// than being silently unexercised.
     ///
-    /// <para><c>dialect-parity</c> contributes 17 rather than its 22 directories:
+    /// <para><c>dialect-parity</c> contributes 18 rather than its 23 directories:
     /// <c>001</c>-<c>004</c> are #1639's single-dialect MySQL/SQL Server/SQLite showcases and
     /// <c>005</c> is Oracle's, none of which carries a Mongo arm at all. Discovery filters on the
     /// artifact's presence, so they need no exclusion entry — there is nothing to compare
-    /// against.</para>
+    /// against. <c>page-export</c> contributes 14 of its 24 for the same reason: <c>012</c>-<c>020</c>
+    /// and <c>022</c> document CSV-writer behavior on a single representative backend and carry a
+    /// Postgres arm only.</para>
+    ///
+    /// <para><c>page-export</c> joined in #1650 (EXP-1/EXP-2), and brought <c>sort-paging</c> from 11
+    /// to 12 with it: both blockages were the same one — <c>AgGridRequestParser</c> could not read
+    /// <c>exportScope</c>, so no export request could be fed end to end.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
@@ -39,15 +46,16 @@ public class MongoConformanceFixtureTests
         ("dialect-parity", 18),
         ("group-aggregation", 23),
         ("filter-tree", 15),
-        ("sort-paging", 11),
-        ("ag-grid-majors", 6)
+        ("sort-paging", 12),
+        ("ag-grid-majors", 6),
+        ("page-export", 14)
     ];
 
     /// <summary>
     /// The categories deliberately NOT compiled, each with the reason — stated here rather than left
     /// as a silent absence, so a reader can tell "out of scope" from "forgotten".
     /// <see cref="Every_Fixture_Category_On_Disk_Is_Either_In_Scope_Or_Excluded_By_Name"/> fails if a
-    /// NEW category appears and is named in neither list. The three reasons are the same three
+    /// NEW category appears and is named in neither list. The two reasons are the same two
     /// <c>PostgresConformanceFixtureTests</c> gives, and deliberately so: nothing about them is
     /// backend-specific, so a divergence between the two lists would mean one of the suites had
     /// silently changed scope.
@@ -59,27 +67,17 @@ public class MongoConformanceFixtureTests
         ["adversarial"] = "Rejection-only fixtures: they carry expected/rejection.json, not a compiled artifact, " +
                           "and are already exercised by Craticula.Core.Tests' allowlist/limits/coercion suites. " +
                           "(They also carry no mongo.artifact.json, so discovery would skip them anyway — named " +
-                          "here so the category list stays exhaustive.)",
-        ["page-export"] = "The export feature (EXP-1..EXP-8) owns the explicit $project column list and the " +
-                          "exportScope -> page:none mapping these 12 fixtures pin; a leaf builder that projects " +
-                          "nothing on an ordinary row query cannot produce them. Excluded on exactly the same " +
-                          "ground as in PostgresConformanceFixtureTests."
+                          "here so the category list stays exhaustive.)"
     };
 
     /// <summary>
-    /// The one fixture inside an in-scope category that is nonetheless excluded, with its reason —
-    /// again identical to the SQL suite's, because the blockage is upstream of both compilers.
+    /// EMPTY since #1650, exactly as in <c>PostgresConformanceFixtureTests</c>: its last entry was
+    /// <c>sort-paging/012</c>, blocked upstream on <c>AgGridRequestParser</c>'s missing
+    /// <c>exportScope</c>. Kept as a named, asserted-on collection rather than deleted — an empty
+    /// exclusion list is the strongest form of "every fixture is either exercised or excluded for a
+    /// stated reason".
     /// </summary>
-    private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal)
-    {
-        ["sort-paging/012-page-none-unpaginated-export"] =
-            "BLOCKED UPSTREAM, not out of scope: the fixture resolves page:none from EXP-1's " +
-            "exportScope:\"all\", and AgGridRequestParser has no exportScope handling (a gap #1635 " +
-            "documented deliberately). The Mongo builder itself compiles this fixture exactly — see " +
-            "MongoPipelineSortAndPagingTests.SortPaging012_Compiles_To_Its_Own_Artifact_Once_The_Page_Is_NonePage, " +
-            "which asserts against the same artifact with only the PageSpec supplied. Delete this " +
-            "entry the moment the adapter learns exportScope."
-    };
+    private static readonly Dictionary<string, string> ExcludedFixtures = new(StringComparer.Ordinal);
 
     public static TheoryData<string, string> InScopeFixtures
     {
@@ -139,7 +137,7 @@ public class MongoConformanceFixtureTests
     /// <para>Worth its own test because it is the rule the hand-authored suite got wrong most often:
     /// a leaked bucket is a shape divergence from the Postgres/Search results for the identical IR,
     /// and the artifact comparison above would only catch it in the fixtures that happen to pin the
-    /// stage. Here it is checked on all 144.</para>
+    /// stage. Here it is checked on all 161.</para>
     /// </summary>
     [Theory]
     [MemberData(nameof(InScopeFixtures))]
@@ -197,14 +195,15 @@ public class MongoConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_145_Of_The_146_Mongo_Artifacts_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_All_161_Mongo_Artifacts_In_The_Suite()
     {
-        // 146 minus the ONE entry in ExcludedFixtures: sort-paging/012, which the Mongo builder
-        // compiles correctly but the AG Grid adapter cannot yet FEED correctly. The suite holds 159
-        // mongo.artifact.json files in total; the 12 outside this number are page-export's, whose
-        // whole category is excluded. It last moved in #1644's review pass, which added
-        // group-aggregation/023 to pin GRP-5's drill-down-leads clause order.
-        Assert.Equal(146, InScopeFixtures.Count);
+        // 161 with NOTHING subtracted, and it is the same number as the count of mongo.artifact.json
+        // files on disk (asserted below): as of #1650 there is no excluded category carrying a Mongo
+        // arm and no excluded fixture at all. It last moved when #1650's review pass authored
+        // page-export/024; before that #1650 itself released page-export (13, now 14) and
+        // sort-paging/012 from exclusion and authored page-export/023.
+        Assert.Equal(161, InScopeFixtures.Count);
+        Assert.Empty(ExcludedFixtures);
     }
 
     [Fact]
@@ -228,10 +227,11 @@ public class MongoConformanceFixtureTests
     [Fact]
     public void Every_Mongo_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "145 in scope": every mongo.artifact.json in the repo is
-        // either exercised above, or inside a category/fixture this class excludes BY NAME. A new
-        // artifact in an excluded category still moves this number, which is what makes the exclusion
-        // reasons re-read rather than inherited.
+        // The count that closes the loop on "161 in scope": every mongo.artifact.json in the repo is
+        // either exercised above, or inside a category/fixture this class excludes BY NAME. Since
+        // #1650 nothing is excluded, so the two numbers are equal — the arithmetic is kept rather
+        // than simplified away, because it is what would catch a future exclusion being added
+        // without its artifacts being subtracted.
         var onDisk = Directory
             .EnumerateFiles(RepoPaths.Fixture(), "mongo.artifact.json", SearchOption.AllDirectories)
             .Count();
@@ -242,27 +242,23 @@ public class MongoConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "mongo.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(159, onDisk);
-        Assert.Equal(12, excludedCategoryArtifacts);
+        Assert.Equal(161, onDisk);
+        Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }
 
     /// <summary>
-    /// A recorded COVERAGE GAP, asserted so it self-heals rather than being a comment nobody
-    /// re-reads: <b>no in-scope fixture declares a <c>physical.mongo.path</c> that differs from its
-    /// colId</b>, so SC-4's path mapping — the thing that turns <c>customerName</c> into
-    /// <c>customer.name</c> in every <c>$match</c> key, <c>$sort</c> key, <c>$group._id</c>,
-    /// <c>$cond</c> reference and <c>$project</c> value — is exercised by unit tests alone
-    /// (<c>MongoPipelineOperatorTests</c>, <c>MongoPipelineSortAndPagingTests</c>). The only schemas
-    /// in the suite that declare one belong to <c>page-export/</c>, whose whole category is excluded
-    /// above for a reason that has nothing to do with paths.
-    ///
-    /// <para>This test FAILS the day a fixture closes the gap, which is the point: at that moment
-    /// this note is obsolete and should be deleted along with it, rather than left claiming a
-    /// weakness that no longer exists.</para>
+    /// The inverse of the COVERAGE GAP this class recorded until #1650: SC-4's path mapping — the
+    /// thing that turns <c>customerName</c> into <c>customer.name</c> and <c>id</c> into <c>_id</c> in
+    /// every <c>$match</c> key, <c>$sort</c> key, <c>$group._id</c>, <c>$cond</c> reference and
+    /// <c>$project</c> value — used to be exercised by unit tests alone, because the only schemas in
+    /// the suite declaring a non-identity path belonged to <c>page-export/</c>, whose whole category
+    /// was excluded for an unrelated reason (<c>exportScope</c>). Bringing that category in scope
+    /// closed the gap, so the assertion is inverted rather than deleted: it now fails if the last
+    /// remapping-fixture ever leaves the suite and the gap silently reopens.
     /// </summary>
     [Fact]
-    public void Records_That_No_In_Scope_Fixture_Maps_A_Mongo_Path_Away_From_Its_ColId()
+    public void Exercises_SC4_Path_Mapping_On_Fixtures_That_Really_Remap_A_Mongo_Path()
     {
         var remapped = new List<string>();
 
@@ -278,7 +274,7 @@ public class MongoConformanceFixtureTests
             }
         }
 
-        Assert.Empty(remapped);
+        Assert.NotEmpty(remapped);
     }
 
     [Fact]

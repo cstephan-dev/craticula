@@ -44,6 +44,15 @@ namespace Craticula.AgGrid;
 /// is not a row-fetch request. See <see cref="AgGridRequestParseException"/> for the two reason codes
 /// these rejections carry.</para>
 ///
+/// <para><b>EXP-1's export extension IS read here (#1650).</b> <c>exportFormat</c>,
+/// <c>exportScope</c> and <c>exportColumns</c> sit beside the ordinary SSRM fields and resolve to
+/// <see cref="AgGridParsedRequest.Export"/> — plus three effects on the rest of the parsed request:
+/// <c>exportScope: "all"</c> becomes EXP-2's <see cref="NonePage"/> (discarding <c>startRow</c>/
+/// <c>endRow</c>), the group/aggregation state is discarded outright (EXP-1's leaf-row carve-out),
+/// and the projection is resolved against the schema's <c>exportable</c> flags. See
+/// <see cref="ParseExport"/> and <see cref="ApplyExportCarveOut"/>; the compiled shape those
+/// decisions render into is <c>spec/semantics.md</c>'s EXP-* addendum.</para>
+///
 /// <para><b>Two entry points, one per request kind (#1641).</b> <see cref="Parse"/> reads AG Grid's
 /// own <c>IServerSideGetRowsRequest</c>; <see cref="ParseSetValues"/> reads BM-3's
 /// <c>setValuesRequest</c> envelope, which is Craticula's own shape and shares only the
@@ -101,12 +110,21 @@ public static class AgGridRequestParser
         var nativeFilter = ParseFilterModel(root, DateResolutionContext.From(root, options));
         var customFilters = ParseCustomFilters(root);
 
+        var export = ParseExport(root, options);
+
         // Group state is parsed BEFORE the sort model, not merely beside it: AG Grid addresses a
         // grouped sort through the row-group DISPLAY column's colId, which only the group state can
         // resolve to a real field (see ResolveAutoGroupColumn).
         var (group, aggregations, rowGroupCols) = ParseGroupAndAggregations(root);
+
+        // ...and the sort model is resolved against the group state the WIRE sent, even on an export
+        // that is about to discard it (below): AG-6's `ag-Grid-AutoColumn` is a colId in AG Grid's
+        // column space, so a grouped grid whose user hits "export" still sends it, and discarding the
+        // group state first would leave a sort key naming no schema field at all.
         var sort = ParseSortModel(root, group, rowGroupCols);
-        var page = ParsePage(root);
+        var page = ParsePage(root, export);
+
+        (group, aggregations) = ApplyExportCarveOut(export, group, aggregations);
 
         FilterNodeValidator.Validate(nativeFilter);
         FilterNodeValidator.Validate(customFilters);
@@ -122,7 +140,8 @@ public static class AgGridRequestParser
             Sort = sort,
             Group = group,
             Aggregations = aggregations,
-            Page = page
+            Page = page,
+            Export = export
         };
     }
 
@@ -1273,21 +1292,240 @@ public static class AgGridRequestParser
             $"valueCols entry for field '{field}' has an unrecognized aggFunc '{raw}' (AR-8's closed v1 function set is sum/min/max/avg/count).")
     };
 
+    // ---- exportFormat / exportScope / exportColumns (EXP-1) --------------------------------------
+
+    /// <summary>
+    /// EXP-1's wire-contract extension: <c>exportFormat: "csv" | "tsv"</c>,
+    /// <c>exportScope: "all" | "page"</c> (default <c>"all"</c>) and an optional ordered
+    /// <c>exportColumns: [{ colId, header? }]</c>, sitting BESIDE the ordinary SSRM fields rather
+    /// than replacing them — <c>filterModel</c> and <c>sortModel</c> are always honored, which is why
+    /// nothing else in this parser changes shape for an export.
+    ///
+    /// <para><b><c>exportFormat</c> is what marks a request as an export</b>, so <c>exportScope</c>
+    /// or <c>exportColumns</c> arriving without it is rejected rather than read as an ordinary row
+    /// fetch with two stray properties: EXP-1 declares the format non-optional, and silently ignoring
+    /// a scope would return one page where the client asked for the whole result set — the widening/
+    /// narrowing class of silent mis-parse AG-1/AG-5 exist to rule out.</para>
+    ///
+    /// <para><b>The projection is RESOLVED here, not echoed</b> (EXP-1(b)). An explicit
+    /// <c>exportColumns</c> is taken in request order; an absent one expands to every field the schema
+    /// declares <see cref="FieldConfig.Exportable"/>, in GRP-3's declaration order
+    /// (<see cref="GridSchema.FieldOrder"/>, read from the schema document — never a
+    /// <see cref="Dictionary{TKey,TValue}"/>'s unspecified enumeration order). Doing it once, here,
+    /// is what stops the SQL and Mongo compilers from being able to disagree about the default.</para>
+    ///
+    /// <para><b>Why this reads the schema although "the adapter is not an allowlist gate" (#1635).</b>
+    /// Exactly <see cref="ResolveDatePreset"/>'s distinction: SC-1 allowlisting stays
+    /// <see cref="FieldAllowlistValidator"/>'s job, and this is the narrower statement that a column
+    /// the adapter must PROJECT cannot be resolved when the schema does not declare it — and that
+    /// <see cref="FieldConfig.Exportable"/>, a flag whose only consumer is this contract, has to be
+    /// honored by whoever reads that contract. Both refusals are hard in EVERY
+    /// <see cref="GridSchemaMode"/>: Lenient's contract is that an unknown filter CONDITION vanishes
+    /// and the result merely widens, while a dropped export column hands the user a file missing a
+    /// column they explicitly asked for — the same reasoning that keeps #1640's group columns and
+    /// aggregations hard failures in Lenient mode.</para>
+    /// </summary>
+    private static ExportSpec? ParseExport(JsonElement root, AgGridParseOptions options)
+    {
+        var format = ReadOptionalString(root, "exportFormat");
+        var scope = ReadOptionalString(root, "exportScope");
+        var hasColumns = root.TryGetProperty("exportColumns", out var columnsEl)
+            && columnsEl.ValueKind != JsonValueKind.Null;
+
+        if (format is null)
+        {
+            if (scope is null && !hasColumns)
+            {
+                return null;
+            }
+
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                "'exportScope'/'exportColumns' are part of EXP-1's export extension and require an " +
+                "'exportFormat' (\"csv\" or \"tsv\") on the same request — a row fetch carries none of the three.");
+        }
+
+        if (options.Schema is not { } schema)
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                "An export request cannot be resolved because no GridSchema was supplied — pass " +
+                "AgGridParseOptions.Schema so EXP-1(b)'s projection (the declared 'exportable' fields, or the " +
+                "'exportColumns' the request names) can be resolved.");
+        }
+
+        return new ExportSpec
+        {
+            Format = format switch
+            {
+                "csv" => ExportFormat.Csv,
+                "tsv" => ExportFormat.Tsv,
+                _ => throw new AgGridRequestParseException(
+                    "malformed-request", $"'exportFormat' must be \"csv\" or \"tsv\", got '{format}'.")
+            },
+
+            // EXP-1 pins the default explicitly: an export with no stated scope streams the whole
+            // filtered+sorted result, it does not fall back to whatever page the grid last fetched.
+            Scope = (scope ?? "all") switch
+            {
+                "all" => ExportScope.All,
+                "page" => ExportScope.Page,
+                _ => throw new AgGridRequestParseException(
+                    "malformed-request", $"'exportScope' must be \"all\" or \"page\", got '{scope}'.")
+            },
+
+            Columns = hasColumns
+                ? ParseExportColumns(columnsEl, schema)
+                : DefaultExportColumns(schema)
+        };
+    }
+
+    /// <summary>The wire's own ordered <c>exportColumns</c>, each resolved against the schema.</summary>
+    private static IReadOnlyList<ExportColumn> ParseExportColumns(JsonElement columnsEl, GridSchema schema)
+    {
+        if (columnsEl.ValueKind != JsonValueKind.Array)
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request", $"'exportColumns' must be an array or null, got {columnsEl.ValueKind}.");
+        }
+
+        var columns = new List<ExportColumn>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var element in columnsEl.EnumerateArray())
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                throw new AgGridRequestParseException(
+                    "malformed-request", $"An 'exportColumns' entry must be an object, got {element.ValueKind}.");
+            }
+
+            var colId = ReadRequiredString(element, "colId", "<exportColumns>");
+
+            if (!schema.Fields.TryGetValue(colId, out var config))
+            {
+                throw new AgGridRequestParseException(
+                    "malformed-request",
+                    $"'exportColumns' names '{colId}', which the GridSchema does not declare — there is no " +
+                    "physical column to project it from.");
+            }
+
+            if (!config.Exportable)
+            {
+                throw new AgGridRequestParseException(
+                    "malformed-request",
+                    $"'exportColumns' names '{colId}', which the GridSchema declares 'exportable: false'.");
+            }
+
+            // A repeated colId is refused rather than deduplicated: on SQL it would emit the same
+            // output name twice, and on MongoDB a $project is a JSON object, so the second entry
+            // simply overwrites the first (MDB-10's last-wins collision) and the client would get
+            // one column back where it asked for two, with nothing saying so.
+            if (!seen.Add(colId))
+            {
+                throw new AgGridRequestParseException(
+                    "malformed-request", $"'exportColumns' names '{colId}' more than once.");
+            }
+
+            var header = element.TryGetProperty("header", out var headerEl) && headerEl.ValueKind == JsonValueKind.String
+                ? headerEl.GetString()!
+                : config.Label ?? colId;
+
+            columns.Add(new ExportColumn(colId, header));
+        }
+
+        if (columns.Count == 0)
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                "'exportColumns' is present but empty — an export of no columns has no compiled form. Omit the " +
+                "property entirely to get EXP-1(b)'s default projection.");
+        }
+
+        return columns;
+    }
+
+    /// <summary>EXP-1's default projection: "all schema fields flagged exportable are emitted in
+    /// schema order, headers from schema labels".</summary>
+    private static IReadOnlyList<ExportColumn> DefaultExportColumns(GridSchema schema)
+    {
+        var columns = schema.FieldOrder
+            .Where(field => schema.Fields[field].Exportable)
+            .Select(field => new ExportColumn(field, schema.Fields[field].Label ?? field))
+            .ToList();
+
+        if (columns.Count == 0)
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request",
+                "The GridSchema declares no exportable field, so an export with no 'exportColumns' has nothing " +
+                "to project.");
+        }
+
+        return columns;
+    }
+
+    /// <summary>
+    /// EXP-1's group-export carve-out: an export emits <b>leaf rows</b> under the current filter and
+    /// sort, so <c>rowGroupCols</c>, <c>valueCols</c> and <c>groupKeys</c> are all discarded outright —
+    /// the compiled IR carries no <c>group</c> and no <c>aggregations</c>, and the grouping dispatch
+    /// every compiler runs (GRP-1) is therefore never entered. <c>page-export/010</c>, <c>/011</c> and
+    /// <c>/024</c> send a fully populated single-level, two-level and drilled-into group state and pin
+    /// flat, ungrouped artifacts on all three backends. Group-structured and pivot exports are
+    /// explicitly out of scope for v1.
+    ///
+    /// <para>Applied to <b>any</b> export, not only an <see cref="ExportScope.All"/> one: the output
+    /// is a flat delimited row stream either way, and the scope decides only how many rows go into
+    /// it.</para>
+    ///
+    /// <para><b><c>groupKeys</c> is discarded with the other two, not refused.</b> All three members
+    /// describe the same thing — the group state of the view being exported — and EXP-1(a) discards
+    /// that state entirely. Dropping a drill-down key does export more rows than the grid is
+    /// showing, but so does dropping <c>rowGroupCols</c>, which is mandated; the distinction does not
+    /// survive that. The deciding case is the obvious host integration: an export request built by
+    /// copying the grid's last <c>getRows</c> payload and adding <c>exportFormat</c> would otherwise
+    /// hard-fail whenever a user had expanded a group node. <c>page-export/024</c> pins the discard
+    /// end to end.
+    ///
+    /// <para>A <c>groupKeys</c> with an EMPTY <c>rowGroupCols</c> is still rejected on an export, in
+    /// <see cref="ParseGroupAndAggregations"/> and before this method runs. That is not the same rule
+    /// wearing a different answer: there the request is structurally malformed — AG Grid cannot
+    /// produce it, since a drill-down path is a prefix of the group columns — whereas here the
+    /// request is well formed and its group state is deliberately dropped.</para>
+    /// </summary>
+    private static (GroupSpec? Group, IReadOnlyList<Aggregation>? Aggregations) ApplyExportCarveOut(
+        ExportSpec? export, GroupSpec? group, IReadOnlyList<Aggregation>? aggregations)
+        => export is null ? (group, aggregations) : (null, null);
+
     // ---- startRow / endRow ---------------------------------------------------------------------
 
-    private static PageSpec ParsePage(JsonElement root)
+    /// <summary>
+    /// AG-3/EXP-2. <c>startRow</c>/<c>endRow</c> resolve to a <see cref="RangePage"/> exactly as
+    /// before — <b>except</b> under EXP-1's <c>exportScope: "all"</c>, which is EXP-2's
+    /// <c>page: { mode: "none" }</c> and discards whatever those two numbers said. That discard is
+    /// pinned, not inferred: <c>page-export/006</c> sends <c>startRow: 200, endRow: 250</c> beside
+    /// <c>exportScope: "all"</c> and its artifacts carry no row-range clause on any backend, while
+    /// <c>/007</c> sends the identical pair under <c>exportScope: "page"</c> and keeps it.
+    ///
+    /// <para>The pair is still shape-checked before being overridden, so a half-supplied
+    /// <c>startRow</c> is a malformed request whether or not this particular scope would have used
+    /// it — the same reason <see cref="DateResolutionContext.From"/> resolves the zone eagerly.</para>
+    /// </summary>
+    private static PageSpec ParsePage(JsonElement root, ExportSpec? export)
     {
         var startRow = ReadOptionalInt(root, "startRow");
         var endRow = ReadOptionalInt(root, "endRow");
 
-        return (startRow, endRow) switch
+        var page = (startRow, endRow) switch
         {
-            ({ } s, { } e) => new RangePage { StartRow = s, EndRow = e },
+            ({ } s, { } e) => (PageSpec)new RangePage { StartRow = s, EndRow = e },
             (null, null) => new NonePage(),
             _ => throw new AgGridRequestParseException(
                 "malformed-request",
                 $"'startRow'/'endRow' must both be present or both be null (got startRow={Render(startRow)}, endRow={Render(endRow)}).")
         };
+
+        return export is { Scope: ExportScope.All } ? new NonePage() : page;
     }
 
     private static string Render(int? value) => value?.ToString() ?? "null";
@@ -1309,6 +1547,25 @@ public static class AgGridRequestParser
     }
 
     // ---- shared JsonElement helpers -------------------------------------------------------------
+
+    /// <summary>Reads an optional top-level string property. Absent and explicit JSON <c>null</c> are
+    /// the same thing (AG Grid nulls out rather than omits — <c>startRow: null</c> is the same wire
+    /// habit); any other value kind is a malformed request rather than a silently ignored one.</summary>
+    private static string? ReadOptionalString(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var el) || el.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (el.ValueKind != JsonValueKind.String)
+        {
+            throw new AgGridRequestParseException(
+                "malformed-request", $"'{propertyName}' must be a string or null, got {el.ValueKind}.");
+        }
+
+        return el.GetString()!;
+    }
 
     private static string ReadRequiredString(JsonElement obj, string propertyName, string field)
     {

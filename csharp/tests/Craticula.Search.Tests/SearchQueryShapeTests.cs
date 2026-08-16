@@ -69,7 +69,7 @@ public class SearchQueryShapeTests
 
     /// <summary>
     /// OSE-3: an ordinary row query with no predicate carries an explicit <c>match_all</c> rather
-    /// than omitting the member — the form 13 in-scope artifacts pin — while a bucket request with no
+    /// than omitting the member — the form 23 in-scope artifacts pin — while a bucket request with no
     /// predicate omits <c>query</c> entirely, which 6 others pin. Both spellings mean the same thing
     /// to the engine; the point is that only one of them is emitted for each request shape.
     /// </summary>

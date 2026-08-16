@@ -318,7 +318,8 @@ public class DialectIndependenceTests
     /// had from the start.</b> Every other token here is a SQL spelling, so the list could only ever
     /// catch a builder that emitted engine-specific text. It was blind to the other shape of the same
     /// violation — branching on <em>which</em> engine — because
-    /// <c>if (context.Dialect.Name == "oracle")</c> introduces none of them, passes all 160 artifacts,
+    /// <c>if (context.Dialect.Name == "oracle")</c> introduces none of them, passes all 168 non-Postgres
+    /// dialect arms,
     /// and is exactly the BM-1 smell. That branch was unreachable in practice until this story: SQL-7
     /// is the first genuinely per-engine <em>behaviour</em> within the builder's reach, and
     /// <see cref="ISqlDialect.EmptyStringIsNull"/> is the shape that keeps it out. Note the ban is on

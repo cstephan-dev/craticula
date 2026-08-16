@@ -1,13 +1,20 @@
 # `page-export/` — page spec + export fixtures
 
-Backs `spec/fixtures/README.md`'s category index row: "AG-3/EXP-2 page spec, EXP-1/EXP-6/EXP-8
-export + hostile CSV values" (~20 target, 22 authored — see 022 below, added to round out EXP-6's
-trigger-character coverage). Requirement ids referenced below are
-[TRD](../../../docs/TRD-grid-query-compiler.md) §6 (`AG-3`) and §6.1 (`EXP-1`..`EXP-8`).
+Backs `spec/fixtures/README.md`'s category index row: "AG-3/EXP-2 page spec,
+EXP-1/EXP-6/EXP-8 export + hostile CSV values" (~20 target, 24 authored — see 022, 023 and 024
+below). Requirement ids referenced below are
+[TRD](../../../docs/TRD-grid-query-compiler.md) §6 (`AG-3`) and §6.1 (`EXP-1`..`EXP-8`); the
+compile-time half of them is pinned normatively in `spec/semantics.md`'s **EXP-1/EXP-2** addendum,
+which this category is the artifact oracle for.
+
+**In scope in all three conformance runners since #1650.** Every arm here — 24 Postgres, 14 Mongo and
+14 Search — is compiled end to end from the fixture's own request and compared byte for byte. It was
+excluded from all three until the AG Grid adapter learned `exportScope`; see the "#1650" section of
+`spec/fixtures/README.md` for the five disagreements that surfaced when the arms were first executed.
 
 ## Shape notes specific to this category
 
-- **Export wire-contract extension.** Fixtures 004-022 carry `exportFormat`/`exportScope`/
+- **Export wire-contract extension.** Fixtures 004-024 carry `exportFormat`/`exportScope`/
   `exportColumns` directly on `agGridRequest.json`, **alongside** the normal
   `filterModel`/`sortModel`/`startRow`/`endRow` fields — EXP-1 is an *extension* of the AG Grid
   SSRM wire request, not a separate request shape. Fixtures 001-003 (plain AG-3 paging) omit the
@@ -26,24 +33,36 @@ trigger-character coverage). Requirement ids referenced below are
   that compiles normally. The compiled artifact shows the raw, unmodified value; hardening
   (leading-apostrophe prefixing) is documented as a future CSV-writer obligation, not enforced
   here.
-- **`grid-schema.schema.json` gap.** The shared meta-schema (SC-1..SC-5), authored ahead of the
-  real `GridSchema` model (#1631), has no per-field `exportable` flag and no per-field `label` yet
-  — both assumed by EXP-1's default-projection wording. Fixtures 009 and 021 (and, by extension,
-  every other export-scope-"all" fixture) document the assumption used to bridge that gap: every
-  field in `schema.fields` is treated as exportable, in the object's own key order, with the bare
-  `colId` standing in for a schema label. See fixture 009's `description.md` for the full note.
-- **Postgres physical-to-logical column aliasing applies category-wide, not just to the
-  `exportColumns` fixtures.** `schema.json`'s `physical.sql.column` differs from the logical field
-  name for `orderDate` (`order_date`), `customerName` (`customer_name`), and `totalAmount`
-  (`total_amount`). Every `postgres.artifact.json` `SELECT` list in this category aliases those
-  three back to their logical camelCase names (`"order_date" AS "orderDate"`, etc.) — the same "alias
-  only when the physical name differs from the logical field name" convention `group-aggregation/`'s
-  005-006 fixtures use (see 008's `description.md` for the full rationale). `ORDER BY`/`WHERE`
-  clauses reference the physical column name directly, never the alias, matching every other
-  category's convention. This applies uniformly, including to fixtures whose own point is
-  unrelated to column projection (001-007, 010-022) — a fixture's artifact must be correct in
-  every detail, not just the one property it's authored to exercise.
-- **Canonical SQL rendering (#1638).** All 22 Postgres artifacts gained identifier quoting — every
+- **`exportable` and `label` exist now — the "`grid-schema.schema.json` gap" this README used to
+  record is CLOSED.** `spec/grid-schema.schema.json` carries both per-field properties and
+  `FieldConfig.Exportable` defaults to `true`, so 009/021's "treat every field as exportable" is no
+  longer an assumption bridging a gap; it is simply what that schema declares. Fixture **023** is the
+  one that exercises the other branch (`"exportable": false`), and is also the only schema in the
+  suite carrying a `label` — which appears in **no** artifact, since a header is the CSV writer's
+  (EXP-4), exactly as 008's three `header` overrides appear in none of its three arms.
+- **A projection appears if and only if the request is an EXPORT (EXP-1(b)), and 001-003 are the
+  baseline that proves it.** Fixtures 004-024 carry export members and therefore name their output
+  columns: Postgres a `SELECT` list, MongoDB a trailing `$project`, and Search nothing at all
+  (OSE-13). Fixtures **001-003 carry no export member** and render `SELECT *` with no `$project`,
+  exactly like every other ordinary row query in the suite — GRP-3's carve-out, which EXP-1(b)
+  deliberately did not generalise. *(A previous revision of this README claimed the projection applied
+  "category-wide, including 001-007 and 010-022". It did not: those three fixtures' own Mongo arms
+  never had a `$project`, and #1650 corrected their Postgres arms rather than the rule.)*
+- **Postgres physical-to-logical column aliasing, inside a projection.** `schema.json`'s
+  `physical.sql.column` differs from the logical field name for `orderDate` (`order_date`),
+  `customerName` (`customer_name`), and `totalAmount` (`total_amount`). Every `SELECT` list that
+  exists in this category aliases those three back to their logical camelCase names
+  (`"order_date" AS "orderDate"`, etc.) and leaves the other four bare — the same "alias only when the
+  physical name differs from the logical field name" convention `group-aggregation/`'s 005-006
+  fixtures use (see 008's `description.md` for the full rationale). `ORDER BY`/`WHERE` clauses
+  reference the physical column name directly, never the alias, matching every other category's
+  convention.
+- **MongoDB's `$project` writes `_id: 0` LAST**, after the output fields, matching
+  `group-aggregation/005`/`006`. MongoDB accepts the suppression anywhere; the output list's order is
+  what is normative and byte-compared, so the key that names no output column goes after it. Eight
+  arms here wrote it first until #1650 executed them.
+- **Canonical SQL rendering (#1638).** Every Postgres artifact in the category (22 of them at the
+  time) gained identifier quoting — every
   column, every alias, and the table — per `spec/semantics.md`'s "Addendum — canonical SQL
   rendering" (SQL-1). One artifact also had a rendering rewritten: `005`'s `region IN ($1, $2)` with
   two scalar parameters became `"region" = ANY($1)` with a **single array parameter**
@@ -79,6 +98,8 @@ trigger-character coverage). Requirement ids referenced below are
 | 020 | `020-hostile-value-cr-quote-newline-delimiter` | Leading CR + embedded quote/newline/delimiter (documented writer prefix + RFC 4180 quoting) | EXP-6, EXP-8, EXP-4 |
 | 021 | `021-export-max-rows-limit-default` | Default max export rows (1,000,000) is an execution-adapter concern, not a compiled-artifact field (documented) | EXP-7 |
 | 022 | `022-hostile-value-formula-tab` | Leading tab passes through compiler unchanged (documented writer prefix) — rounds out EXP-6's trigger-character coverage alongside 016-020 | EXP-6, EXP-8 |
+| 023 | `023-export-columns-default-skips-non-exportable-field` | Default projection omits a field declared `exportable: false`, which is still filterable | EXP-1, EXP-1(b) |
+| 024 | `024-export-all-ignores-drill-down-group-keys` | Export discards a **non-empty `groupKeys`** too — no drill-down predicate, no grouped level | EXP-1 (group-export carve-out), EXP-1(a) |
 
 ## Backend coverage
 
@@ -87,7 +108,9 @@ shared Search, except:
 
 - Fixtures 012-020 and 022 (CSV writer behavior + hostile values): Postgres only. The behavior
   under test lives entirely at the writer layer; a single representative backend is sufficient
-  (see the shape note above).
+  (see the shape note above). Their Postgres arm is nonetheless an ordinary compiled query and is
+  compared like any other — which is why this category contributes 24 arms to the Postgres runner and
+  14 to each of the other two.
 - Fixture 008's Mongo artifact demonstrates column narrowing via a `$project` stage; the shared
   Search artifact schema (`search-artifact.schema.json`) has no source-filtering property, so
   Search's own column narrowing cannot be shown structurally there (documented in that fixture's
@@ -95,9 +118,9 @@ shared Search, except:
 
 ### Search arms of 004-007 corrected (#1644 review pass)
 
-This category is excluded from `SearchConformanceFixtureTests` because #1623 owns `exportScope`, not
-because its Search artifacts are exempt from `spec/semantics.md`'s OSE-* addendum — and four of them
-had drifted while nothing could compile them:
+At the time, this category was excluded from `SearchConformanceFixtureTests` because #1623 owned
+`exportScope` — not because its Search artifacts were exempt from `spec/semantics.md`'s OSE-*
+addendum — and four of them had drifted while nothing could compile them:
 
 - **004-007 wrapped an ordinary hit-returning query in `{"bool": {"filter": [...]}}`.** OSE-3 reserves
   that container for a **grouping or distinct-values** request; a row query renders its filter tree
@@ -110,7 +133,7 @@ had drifted while nothing could compile them:
   rather than `blank`'s empty-string sentinel; the other three (`operators/029`, `/030`,
   `dialect-parity/019`) were corrected in #1644 itself.
 
-The four are compiled and compared by
-`SearchQuerySortAndPagingTests.PageExport004To007_Compile_To_Their_Own_Artifacts_Once_The_Page_Is_Supplied`,
-with only the `PageSpec` supplied directly — the same treatment `sort-paging/012` already gets, and
-the reason the exclusion does not have to mean "unchecked".
+#1650 lifted the exclusion, and the same reasoning predicted more: executing the arms for the first
+time found four *Mongo* drifts of exactly the kind the Search pass had found (an implicit `eq`, a
+bare-number `decimal` bound twice, and eight `_id: 0` placements). The stand-in test that compiled
+004-007 with only the `PageSpec` supplied is gone, superseded by the real end-to-end runner.

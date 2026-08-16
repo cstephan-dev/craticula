@@ -82,7 +82,7 @@ public class CrossCompilerGroupingTests
     /// keeps the stable key. BM-3 appends nothing at all (GRP-6(e)), which is
     /// <see langword="null"/>.</param>
     /// <param name="ProjectionIsNamed">GRP-3: a grouping request names its output columns at every
-    /// level; an ordinary row query does not. <b>Inside this category it is <c>true</c> on all 22
+    /// level; an ordinary row query does not. <b>Inside this category it is <c>true</c> on all 23
     /// fixtures and on both backends</b>, so the equality above cannot discriminate on it — every
     /// case here is a grouped level, a drill-down leaf or a BM-3 query, and GRP-3 names the output of
     /// all three. Its other half is pinned by
@@ -175,7 +175,7 @@ public class CrossCompilerGroupingTests
     /// <summary>
     /// GRP-3's other half, which <c>group-aggregation/</c> cannot supply: an <b>ordinary row query</b>
     /// names no columns, on either backend. Without it <see cref="GroupingDecisions.ProjectionIsNamed"/>
-    /// is <see langword="true"/> for all 22 fixtures on both sides, so the equality assertion above
+    /// is <see langword="true"/> for all 23 fixtures on both sides, so the equality assertion above
     /// would still hold if both compilers had lost the distinction entirely.
     ///
     /// <para>The fixture is borrowed from another category deliberately: reading it through the same
