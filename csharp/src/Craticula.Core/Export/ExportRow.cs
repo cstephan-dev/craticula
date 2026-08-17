@@ -1,6 +1,4 @@
-using Craticula.Core.Export;
-
-namespace Craticula.Export.Csv;
+namespace Craticula.Core.Export;
 
 /// <summary>
 /// One row of an export, as an execution adapter yields it: the cell values <b>positionally aligned
@@ -14,15 +12,38 @@ namespace Craticula.Export.Csv;
 /// <c>DbDataReader</c> therefore already has the values in this order, and a dictionary would make
 /// it build one lookup per row for a mapping that cannot differ. It also removes a whole failure
 /// mode: a name-keyed row can silently disagree with the projection (a missing key becomes an empty
-/// cell), whereas a length mismatch is caught by <see cref="CsvWriter"/> on the first row.
-/// <see cref="FromCells"/> exists for the adapters whose driver hands back a name-keyed document
+/// cell), whereas a length mismatch is caught by <c>Craticula.Export.Csv.CsvWriter</c> on the first
+/// row. <see cref="FromCells"/> exists for the adapters whose driver hands back a name-keyed document
 /// (MongoDB, OpenSearch) and makes that mapping the ONE place the two representations meet.</para>
 ///
 /// <para>A <see langword="struct"/> wrapping the caller's own list: constructing one allocates
 /// nothing beyond what the adapter already had, which is what lets a million-row export (EXP-7)
-/// stream through <see cref="CsvWriter"/> without the writer being the thing that materializes
-/// it.</para>
+/// stream through the writer without the writer being the thing that materializes it. An adapter
+/// chunking a keyset walk (EXP-3) can therefore hand out an <see cref="ArraySegment{T}"/> over one
+/// wider buffer it filled — <see cref="ArraySegment{T}"/> is an <see cref="IReadOnlyList{T}"/> —
+/// without copying a cell, which is what <c>Craticula.EntityFrameworkCore</c> does.</para>
 /// </summary>
+/// <remarks>
+/// <b>Why this lives in <c>Craticula.Core</c> rather than beside the CSV writer that consumes it —
+/// moved here by #1645.</b> It is the hand-off type between an <em>execution adapter</em> (EXP-3's
+/// row stream) and a <em>writer</em> (EXP-4's bytes), which is verbatim the argument
+/// <see cref="ExportColumn"/>'s own remarks make for its own move in #1651: AR-3's boundary rule is
+/// that dependencies point <em>into</em> the core and never sideways between adapters, so the type
+/// both sides share belongs here. What kept that argument abstract until now is that only one side of
+/// the seam existed — no execution adapter did. #1645 built the first one
+/// (<c>Craticula.EntityFrameworkCore</c>), and an adapter that referenced <c>Craticula.Export.Csv</c>
+/// merely to name its own return type would be welded to <em>one file format</em>: the same adapter
+/// must be able to feed <c>Export.Xlsx</c> (roadmap §14) without either writer knowing the other
+/// exists, and an execution adapter carrying a driver dependency (AR-3's exception) must not drag
+/// that driver into a writer's dependency graph either.
+///
+/// <para>The alternative — an adapter yielding a bare
+/// <c>IAsyncEnumerable&lt;IReadOnlyList&lt;object?&gt;&gt;</c> that each host re-wraps — was rejected
+/// because the BCL has no <c>Select</c> over <see cref="IAsyncEnumerable{T}"/>: every host of every
+/// adapter would hand-write the same <c>await foreach … yield return new ExportRow(cells)</c> pump,
+/// once per adapter, to bridge two types that differ by nothing. The move costs no call site: every
+/// file that names this type already imported this namespace for <see cref="ExportColumn"/>.</para>
+/// </remarks>
 public readonly struct ExportRow
 {
     private readonly IReadOnlyList<object?>? values;

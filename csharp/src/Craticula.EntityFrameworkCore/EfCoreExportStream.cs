@@ -1,0 +1,197 @@
+using System.Runtime.CompilerServices;
+using Craticula.Core.Export;
+using Craticula.Core.Ir;
+using Microsoft.EntityFrameworkCore;
+
+namespace Craticula.EntityFrameworkCore;
+
+/// <summary>
+/// The <b>export</b> entry point: EXP-1(b)'s columns for every matching row, streamed as
+/// <see cref="ExportRow"/>s a writer consumes directly —
+/// <c>CsvWriter.WriteAsync(stream, columns, options, destination, ct)</c>.
+///
+/// <para><b>This type exists so that "an export never OFFSET-walks" is a property of the code rather
+/// than a note in a comment.</b> EXP-3 forbids offset paging for an export, and EF compiles
+/// <see cref="Queryable.Skip{TSource}"/> to <c>OFFSET</c> — measured, not assumed. The token
+/// <c>Skip</c> does not appear in this file, there is no offset in scope for it to pass, and
+/// <see cref="EfCoreQueryBuilder.ApplyRowWindow"/> (the one method that would emit one) is never called
+/// from here. Two tests hold that: one reads this file's own source for the forbidden token, the other
+/// asserts that a chunk's generated SQL contains no <c>OFFSET</c>. A boolean "isExport" flag on a
+/// single entry point would have put the same rule somewhere a caller can get wrong, and the symptom is
+/// not an error — it is a download that returns exactly the right bytes, quadratically slower, on a
+/// dataset large enough that nobody is watching.</para>
+///
+/// <para><b>What replaces the offset: a keyset walk on the query's own sort tuple</b>
+/// (<see cref="EfCoreKeysetPredicate"/>), <see cref="EfCoreExportOptions.ChunkSize"/> rows at a time,
+/// each chunk a <c>Take</c> with no <c>Skip</c>. Every chunk after the first adds one predicate — "sorts
+/// strictly after the last row I emitted" — which an index on the sort keys can seek to directly instead
+/// of counting past. EXP-3 names server-side cursors first and keyset chunking as the fallback for
+/// drivers without them; chunking is what this adapter implements, because it is the one that holds for
+/// every EF provider and does not depend on a connection staying open across a million-row read.</para>
+///
+/// <para><b>Streaming is a contract here, matching the writer's own.</b> Rows are yielded as they are
+/// read: the memory held at any moment is one chunk's worth of provider buffer plus one row, so a
+/// million-row export costs what a ten-row one costs. Because the consumer's <c>await</c> suspends this
+/// iterator, a slow destination stops the reader rather than filling memory ahead of it — the same
+/// backpressure <c>CsvWriter</c> documents from the other side.</para>
+///
+/// <para><b>What this deliberately does NOT do: enforce EXP-7's row cap.</b> The TRD sets a default
+/// maximum of 1,000,000 exported rows, and <c>CsvWriter</c> correctly declines to enforce it ("it would
+/// have to guess whether a truncated file or an error is what the host wants") and points at the
+/// adapter. #1645 declines too, and for a reason rather than by omission: nothing in the spec or the
+/// fixture suite pins <em>which</em> of those two behaviours the cap has —
+/// <c>spec/fixtures/page-export/021</c> documents the number and explicitly enforces nothing — and the
+/// two are not interchangeable to a user (a silently truncated CSV is a wrong answer that looks
+/// complete). Picking one here would put an unpinned policy in the layer everything else depends on. A
+/// host caps it today by counting the rows it forwards, which it is already doing to write them;
+/// <see cref="CancellationToken"/> is EXP-7's other half and is implemented.</para>
+/// </summary>
+public static class EfCoreExportStream
+{
+    /// <summary>
+    /// Streams every row matching <paramref name="request"/>, in the export's own column order.
+    ///
+    /// <para>The row's cells are an <see cref="ArraySegment{T}"/> over a wider array the projection
+    /// filled: the sort keys the keyset walk needs are appended after the export's own columns, so ONE
+    /// projection serves both and no row is read twice. The segment costs no copy —
+    /// <see cref="ArraySegment{T}"/> is an <see cref="IReadOnlyList{T}"/>, which is what
+    /// <see cref="ExportRow"/> wraps — and the consumer sees exactly
+    /// <c>EfCoreQueryBuilder.ResolveProjection</c>'s columns, never the bookkeeping ones.</para>
+    /// </summary>
+    /// <param name="source">The <c>FROM</c> target — a <c>DbSet</c> with its global query filters, or
+    /// <see cref="GridSchemaPropertyBag.Query"/>.</param>
+    /// <param name="request">The validated IR. Its <see cref="EfCoreQueryRequest.Page"/> must be
+    /// EXP-2's <see cref="NonePage"/>; see the exception below.</param>
+    /// <param name="semantics">The five engine facts SEM-1/SEM-7/SEC-4/SQL-7 need.</param>
+    /// <param name="options">Chunking configuration; <see langword="null"/> takes EXP-3's 5,000-row
+    /// default.</param>
+    /// <param name="cancellationToken">EXP-7's cancellation hook. Observed between chunks and between
+    /// rows, so cancelling stops PULLING rather than only stopping whoever was writing.</param>
+    /// <exception cref="EfCoreCompilationException">The request carries a
+    /// <see cref="RangePage"/> (use <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/>), row-group state
+    /// (#1622), or any of the shapes <see cref="EfCoreQueryBuilder"/> refuses.</exception>
+    public static async IAsyncEnumerable<ExportRow> StreamAsync<TRow>(
+        IQueryable<TRow> source,
+        EfCoreQueryRequest request,
+        EfCoreProviderSemantics semantics,
+        EfCoreExportOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(semantics);
+
+        var chunking = options ?? EfCoreExportOptions.Default;
+        chunking.Validate();
+
+        // EXP-1/EXP-2: `exportScope: "all"` is the scope this method serves, and the adapter that parsed
+        // the request has already resolved it to NonePage. A RangePage means `exportScope: "page"`
+        // (spec/fixtures/page-export/007), which is ONE bounded window — the identical query a grid
+        // block runs, down to the projection — so it is served by the grid entry point rather than given
+        // a Skip here. Refusing keeps this file's no-OFFSET guarantee total instead of true-except-once,
+        // which is the only form of it a test can hold.
+        if (request.Page is not NonePage)
+        {
+            throw new EfCoreCompilationException(
+                $"An export stream requires EXP-2's NonePage, but this request carries " +
+                $"'{request.Page.GetType().Name}'. A page-scoped export (exportScope: 'page') is one bounded window " +
+                "and is the same query as a grid block: call EfCoreGridQuery.FetchPageAsync and wrap its rows. This " +
+                "method may never apply a row offset (EXP-3), so it has no arm for a row range.");
+        }
+
+        var context = EfCoreQueryBuilder.CreateValidatedContext(request, semantics, typeof(TRow));
+        var keys = EfCoreQueryBuilder.ResolveSortKeys(request);
+        var columns = EfCoreQueryBuilder.ResolveProjection(request);
+
+        // The projection: the export's columns, then the sort keys, in one list. A key that is also an
+        // export column is simply read twice — cheaper than a second query, and the alternative (looking
+        // up which projected index holds each key) would make the row layout depend on a coincidence
+        // between two independent lists.
+        var projected = new List<string>(columns.Count + keys.Count);
+        projected.AddRange(columns);
+        foreach (var key in keys)
+        {
+            projected.Add(key.Field);
+        }
+
+        var boundary = new object?[keys.Count];
+        var walked = false;
+
+        // SEM-6 guarantees the LAST key is the stable key — AppendStableKeyTiebreaker either appended it
+        // or found the request's own sort already ending in it — which is the fact the whole walk rests
+        // on. Named here because the uniqueness check below reads it.
+        var stableKeyIndex = keys.Count - 1;
+
+        while (true)
+        {
+            var filtered = EfCoreQueryBuilder.ApplyFilter(source, request, semantics);
+
+            if (walked)
+            {
+                if (EfCoreKeysetPredicate.Build<TRow>(keys, boundary, context) is not { } after)
+                {
+                    // No row can sort after the last one emitted (every key null, every key's nulls
+                    // last). The export is complete; issuing a constant-false query to learn that would
+                    // be a round trip for nothing.
+                    yield break;
+                }
+
+                filtered = filtered.Where(after);
+            }
+
+            var chunk = EfCoreQueryBuilder.ApplyProjection(
+                EfCoreQueryBuilder.ApplyOrdering(filtered, keys, context).Take(chunking.ChunkSize),
+                request.Schema,
+                projected);
+
+            var rowsInChunk = 0;
+
+            await foreach (var cells in chunk.AsAsyncEnumerable()
+                .WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // SEM-6's uniqueness, checked on the data rather than trusted from the declaration —
+                // because the consequence of it being false is a silent one. The boundary predicate is
+                // "strictly after the last row emitted", so the walk can never repeat a row or fail to
+                // terminate; what it does instead, when two rows share a stable key, is SKIP the second
+                // one at whichever chunk edge it lands on. A short export that is otherwise perfectly
+                // well formed is exactly the kind of wrong answer this project prefers to fail on.
+                //
+                // Adjacent rows are the right place to look: the result is sorted, so duplicates of the
+                // trailing key are neighbours. It costs one comparison per row, and it cannot produce a
+                // false positive — SC-5 declares the key unique, so two equal values are a schema defect
+                // whether or not this particular export would have dropped anything.
+                var stableKey = cells[columns.Count + stableKeyIndex];
+                if (rowsInChunk > 0 && Equals(stableKey, boundary[stableKeyIndex]))
+                {
+                    throw new EfCoreCompilationException(
+                        $"Two rows share the stable key '{request.Schema.StableKey}' (value '{stableKey}'). SC-5 " +
+                        "declares that key unique and EXP-3's keyset chunking relies on it: it is the last key of " +
+                        "every ordering this adapter emits (SEM-6), and it is what makes the sort a TOTAL order " +
+                        "that a boundary predicate can split. Without uniqueness the walk does not loop or " +
+                        "repeat — it silently omits the duplicate at a chunk edge, producing a short export that " +
+                        "looks complete. Fix the schema's stableKey; a larger chunk size only moves which row is " +
+                        "lost.");
+                }
+
+                for (var index = 0; index < keys.Count; index++)
+                {
+                    boundary[index] = cells[columns.Count + index];
+                }
+
+                rowsInChunk++;
+                yield return new ExportRow(new ArraySegment<object?>(cells, 0, columns.Count));
+            }
+
+            // A short chunk is the end of the data: the ordering is total, so there is no arrangement in
+            // which the engine returns fewer rows than asked for and more remain.
+            if (rowsInChunk < chunking.ChunkSize)
+            {
+                yield break;
+            }
+
+            walked = true;
+        }
+    }
+}

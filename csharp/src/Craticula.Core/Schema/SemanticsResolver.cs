@@ -7,8 +7,16 @@ namespace Craticula.Core.Schema;
 /// <c>spec/semantics.md</c>'s rules — one implementation the SQL/Mongo/Search compilers all call,
 /// so a semantics rule never drifts between backends (G3/G4). Every method here is a pure function
 /// from IR/schema shapes to a decision; how a decision is actually rendered (collation clause,
-/// <c>ILIKE</c>, <c>$regex</c>, <c>missing</c> parameter, ...) is exclusively a future compiler's
-/// job, never this class's.
+/// <c>ILIKE</c>, <c>$regex</c>, <c>missing</c> parameter, ...) is exclusively the consumer's job,
+/// never this class's.
+///
+/// <para><b>"Consumer" is deliberately wider than "compiler" since #1645.</b> The three compilers
+/// render these decisions into TEXT (SQL, extended JSON, Query DSL);
+/// <c>Craticula.EntityFrameworkCore</c> renders them into a LINQ expression tree instead — AR-4's
+/// exception — so it calls the same methods and emits no artifact at all. That is the strongest
+/// argument available for why the decisions live here rather than in each backend: two of the four
+/// consumers now target the same database through completely different machinery, and AR-4 requires
+/// them to return the same rows.</para>
 ///
 /// SEM-4 (dates &amp; zones) has no corresponding method here: it is almost entirely "must NOT"
 /// constraints on compiler <em>rendering</em> (never emit a zone clause for a <c>datetimeValue</c>,

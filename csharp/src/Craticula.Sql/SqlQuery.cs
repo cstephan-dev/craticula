@@ -3,8 +3,14 @@ namespace Craticula.Sql;
 /// <summary>
 /// A compiled SQL artifact: the statement text plus its ordered parameter values — exactly the
 /// <c>{ dialect, sql, params }</c> shape every <c>spec/fixtures/*/expected/postgres.artifact.json</c>
-/// pins, and the shape the Dapper/EF Core adapters consume (see
+/// pins, and the shape a Dapper-style execution adapter consumes (see
 /// <c>docs/architecture/c4-components-sql-compiler.md</c>).
+///
+/// <para><b>Not</b> the shape the EF Core adapter consumes, though earlier prose here and in that
+/// diagram said so. AR-4 exempts it from SQL text altogether: <c>Craticula.EntityFrameworkCore</c>
+/// (#1645) compiles the same IR to <c>IQueryable&lt;T&gt;</c> expression trees and does not reference
+/// this assembly at all. What the two paths share is the rules, in <c>Craticula.Core</c>, not this
+/// type.</para>
 ///
 /// <para><see cref="Parameters"/> carries the CLR values that serialize to the artifact's own
 /// <c>params</c> array element-for-element: <see cref="string"/>, <see cref="long"/>,
