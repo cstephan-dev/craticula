@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Craticula.EntityFrameworkCore</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The FIRST NuGet dependency of any project under csharp/src/, and AR-3 is what permits it:
+         "compile-only core packages have zero database driver dependencies. Execution adapters are
+         separate packages that depend on the ecosystem's drivers." This project is one of those
+         adapters (AR-4), so the dependency is the point rather than a compromise.
+
+         Exactly ONE package, and Relational rather than the base one: two of the APIs this adapter
+         needs live there and have no non-relational equivalent — EF.Functions.Collate, which is how
+         SEM-1's case mechanism is realized, and ToTable for the property-bag model. It therefore
+         declares what this adapter is: an adapter for relational providers, which is also all AR-4
+         claims. It pulls Microsoft.EntityFrameworkCore in transitively; naming both would pin two
+         versions that must move together anyway.
+
+         NO provider package (Npgsql.EntityFrameworkCore.PostgreSQL, .SqlServer, .Sqlite), which is
+         load-bearing rather than tidy: a provider reference would make this package usable with one
+         database, and its provider-specific extensions (EF.Functions.ILike, EF.Functions.Glob) would
+         be in scope and would get used. The engine differences reach this adapter as DATA instead —
+         see EfCoreProviderSemantics' five facts. A provider is the host's choice, declared next to
+         its DbContext, and the test project references Sqlite for exactly that reason.
+
+         Version pinned inline, the convention every test project in this solution already follows
+         (there is no Directory.Packages.props / Directory.Build.props to central-manage it). 10.0.11
+         is the release that targets net10.0, which every project here does. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Craticula.Core ONLY. Not Craticula.Sql: an execution adapter may not depend on a compiler
+         (AR-3 — dependencies point into the core, never sideways), which is why the four rules this
+         adapter shares with the SQL compiler live in Craticula.Core rather than being reachable from
+         here (SqlPatternEscaping, FilterNodeFields, IsoInstant, SemanticsResolver). Not
+         Craticula.AgGrid either: the IR is the contract, and a second grid vendor must be able to
+         drive this adapter. Not Craticula.Export.Csv, though this adapter yields ExportRow — that
+         type moved into Craticula.Core.Export precisely so an adapter is not welded to one file
+         format. -->
+    <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
+  </ItemGroup>
+
+</Project>

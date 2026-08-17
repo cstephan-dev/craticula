@@ -93,20 +93,19 @@ internal static class SearchJson
     /// datetime pattern mandates a trailing <c>Z</c> or an explicit offset. Without that guarantee
     /// <see cref="DateTimeOffset.TryParse(string, IFormatProvider, DateTimeStyles, out DateTimeOffset)"/>
     /// would assume the HOST's local zone for a zone-less string, and the same fixture would compile
-    /// to a different instant on a different machine. (Deliberately duplicated from
-    /// <c>Craticula.Mongo.MongoExtendedJson.NormalizeInstant</c>, which is <see langword="internal"/>
-    /// to that assembly: a backend compiler depending on another backend compiler would be a worse
-    /// coupling than eleven duplicated lines, and neither may reach into the other.)</para>
+    /// to a different instant on a different machine. (No longer duplicated: since #1645 the parse itself is
+    /// <see cref="Craticula.Core.Ir.IsoInstant.TryParseUtc"/> in <c>Craticula.Core</c>, which both this
+    /// backend and Mongo's reach without either depending on the other — the coupling that made a copy
+    /// the lesser evil is gone. Only the rendering below is this backend's.)</para>
     /// </summary>
     public static string NormalizeInstant(string value)
     {
-        if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var instant))
+        if (!IsoInstant.TryParseUtc(value, out var utc))
         {
             throw new SearchCompilationException(
                 $"datetimeValue '{value}' is not an ISO-8601 instant (FilterNodeValidator should have rejected it upstream).");
         }
 
-        var utc = instant.UtcDateTime;
         var format = utc.Ticks % TimeSpan.TicksPerSecond == 0
             ? "yyyy-MM-dd'T'HH:mm:ss'Z'"
             : "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'";

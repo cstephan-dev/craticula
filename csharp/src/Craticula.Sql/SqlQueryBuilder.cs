@@ -468,51 +468,18 @@ public static class SqlQueryBuilder
         var child = RenderNode(not.Node, context);
 
         var negation = new StringBuilder("(NOT (").Append(child).Append(')');
-        foreach (var field in DistinctFieldsInOrder(not.Node))
+
+        // WHICH fields get a disjunct, and in which order, is SEM-2's rule rather than this
+        // compiler's: since #1645 the EF Core execution adapter emits the same fan-out over the same
+        // tree (AR-4), and a second copy of the walk would diverge in the one direction nothing
+        // catches — a missed field yields a valid query returning fewer rows. See
+        // FilterNodeFields.DistinctInOrder.
+        foreach (var field in FilterNodeFields.DistinctInOrder(not.Node))
         {
             negation.Append(" OR ").Append(ResolveColumn(field, context)).Append(" IS NULL");
         }
 
         return negation.Append(')').ToString();
-    }
-
-    /// <summary>Every field a subtree references, deduplicated, in first-appearance (left-to-right,
-    /// depth-first) order — the order the <c>NOT</c> fan-out's <c>IS NULL</c> disjuncts follow.</summary>
-    private static IReadOnlyList<string> DistinctFieldsInOrder(FilterNode node)
-    {
-        var ordered = new List<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        Collect(node, ordered, seen);
-        return ordered;
-
-        static void Collect(FilterNode node, List<string> ordered, HashSet<string> seen)
-        {
-            switch (node)
-            {
-                case CompositeFilterNode composite:
-                    foreach (var child in composite.Nodes)
-                    {
-                        Collect(child, ordered, seen);
-                    }
-
-                    return;
-
-                case NotNode not:
-                    Collect(not.Node, ordered, seen);
-                    return;
-
-                case ComparisonNode comparison:
-                    if (seen.Add(comparison.Field))
-                    {
-                        ordered.Add(comparison.Field);
-                    }
-
-                    return;
-
-                default:
-                    throw new SqlCompilationException($"Unknown FilterNode type '{node.GetType().Name}'.");
-            }
-        }
     }
 
     private static string RenderComparison(ComparisonNode node, Context context)
@@ -954,21 +921,25 @@ public static class SqlQueryBuilder
     /// <para><b>Load-bearing dependency:</b> this is safe from local-time drift only because
     /// <see cref="Build"/> runs <see cref="FilterNodeValidator"/> first, and its
     /// <c>DatetimePattern</c> mandates a trailing <c>Z</c> or an explicit offset. Without that
-    /// guarantee <see cref="DateTimeOffset.TryParse(string, IFormatProvider, DateTimeStyles, out DateTimeOffset)"/>
-    /// would assume the MACHINE's local zone for a zone-less string, and the same fixture would
-    /// compile to a different instant on a different host.</para>
+    /// guarantee the parse would assume the MACHINE's local zone for a zone-less string, and the same
+    /// fixture would compile to a different instant on a different host. That parse is
+    /// <see cref="IsoInstant.TryParseUtc"/> since #1645 — the EF Core execution adapter reads the
+    /// same value as a <see cref="DateTime"/> it hands a provider, and AR-4 makes "which instant is
+    /// this?" a question the two paths may not answer separately. Only the TEXT below is this
+    /// compiler's, because only its artifacts pin one.</para>
     /// </summary>
     private static string NormalizeInstant(string value)
     {
         // Zone-less input cannot reach here — FilterNodeValidator (run by Build) rejects it — which
-        // is what makes the local-time assumption below unreachable rather than merely unlikely.
-        if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var instant))
+        // is what makes the local-time assumption inside TryParseUtc unreachable rather than merely
+        // unlikely. The failure is reported in THIS compiler's vocabulary, which is why the shared
+        // helper is a Try- method rather than a throwing one.
+        if (!IsoInstant.TryParseUtc(value, out var utc))
         {
             throw new SqlCompilationException(
                 $"datetimeValue '{value}' is not an ISO-8601 instant (FilterNodeValidator should have rejected it upstream).");
         }
 
-        var utc = instant.UtcDateTime;
         var format = utc.Ticks % TimeSpan.TicksPerSecond == 0 ? "yyyy-MM-dd'T'HH:mm:ss'Z'" : "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'";
         return utc.ToString(format, CultureInfo.InvariantCulture);
     }

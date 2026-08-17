@@ -7,14 +7,25 @@ namespace Craticula.Core.Schema;
 /// <c>spec/semantics.md</c>'s rules — one implementation the SQL/Mongo/Search compilers all call,
 /// so a semantics rule never drifts between backends (G3/G4). Every method here is a pure function
 /// from IR/schema shapes to a decision; how a decision is actually rendered (collation clause,
-/// <c>ILIKE</c>, <c>$regex</c>, <c>missing</c> parameter, ...) is exclusively a future compiler's
-/// job, never this class's.
+/// <c>ILIKE</c>, <c>$regex</c>, <c>missing</c> parameter, ...) is exclusively the consumer's job,
+/// never this class's.
 ///
-/// SEM-4 (dates &amp; zones) has no corresponding method here: it is almost entirely "must NOT"
-/// constraints on compiler <em>rendering</em> (never emit a zone clause for a <c>datetimeValue</c>,
-/// never promote a <c>dateValue</c> to a Mongo <c>Date</c>) rather than a callable decision — a
-/// future compiler author should read SEM-4 in <c>spec/semantics.md</c> directly rather than expect
-/// a resolver method for it.
+/// <para><b>"Consumer" is deliberately wider than "compiler" since #1645.</b> The three compilers
+/// render these decisions into TEXT (SQL, extended JSON, Query DSL);
+/// <c>Craticula.EntityFrameworkCore</c> renders them into a LINQ expression tree instead — AR-4's
+/// exception — so it calls the same methods and emits no artifact at all. That is the strongest
+/// argument available for why the decisions live here rather than in each backend: two of the four
+/// consumers now target the same database through completely different machinery, and AR-4 requires
+/// them to return the same rows.</para>
+///
+/// SEM-4 (dates &amp; zones) has no method <em>here</em>, but since #1645 it is no longer purely a rule
+/// to read. Its <b>reading</b> half — which absolute instant a <c>datetimeValue</c> denotes — is now a
+/// callable decision, <see cref="Craticula.Core.Ir.IsoInstant.TryParseUtc"/>, and all four consumers go
+/// through it. <b>Call that rather than parsing the text again:</b> a second parse is how two backends
+/// come to disagree about which moment a wire string names, which is the divergence AR-4 forbids.
+/// What remains uncallable is SEM-4's <em>rendering</em> half — "must NOT" constraints on output (never
+/// emit a zone clause for a <c>datetimeValue</c>, never promote a <c>dateValue</c> to a Mongo
+/// <c>Date</c>) — and for those, read SEM-4 in <c>spec/semantics.md</c> directly.
 /// </summary>
 public static class SemanticsResolver
 {

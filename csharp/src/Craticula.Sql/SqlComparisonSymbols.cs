@@ -1,3 +1,5 @@
+using Craticula.Core.Schema;
+
 namespace Craticula.Sql;
 
 /// <summary>

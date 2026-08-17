@@ -5,7 +5,14 @@ namespace Craticula.Mongo;
 /// <summary>
 /// SEM-7's MongoDB escape set — a <b>strictly wider character class than SEC-4's</b>, and the
 /// distinction is the whole reason this exists instead of reusing
-/// <c>Craticula.Sql.SqlPatternEscaping</c>.
+/// <see cref="Craticula.Core.Schema.SqlPatternEscaping"/>.
+///
+/// <para><b>That reason got sharper in #1645, not weaker.</b> The SQL escaper moved into
+/// <c>Craticula.Core</c> so the SQL compiler and the EF Core adapter could stop owning two copies of
+/// SEC-4 — which means it is now <em>in scope</em> for this assembly, where before it was unreachable.
+/// Reaching for it here would be a SEM-7 violation ("must NOT conflate the two"), and the compiler
+/// will no longer stop you. The set below is the answer for a <c>$regex</c>; that one is the answer for
+/// a <c>LIKE</c>.</para>
 ///
 /// <para>SEC-4 covers SQL <c>LIKE</c> wildcards (<c>%</c>, <c>_</c>, <c>\</c>) and ES wildcard syntax
 /// (<c>*</c>, <c>?</c>). It says nothing about <em>regex</em> metacharacters, and MongoDB has no
