@@ -1,0 +1,24 @@
+{
+  "startRow": null,
+  "endRow": null,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "status": {
+      "filterType": "text",
+      "type": "equals",
+      "filter": "shipped"
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "orderDate",
+      "sort": "asc"
+    }
+  ],
+  "exportFormat": "tsv",
+  "exportScope": "all"
+}

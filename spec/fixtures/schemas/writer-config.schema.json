@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/writer-config.schema.json",
+  "title": "CSV/TSV writer configuration (fixture writerConfig.json shape)",
+  "description": "EXP-4/EXP-5's host-side writer configuration — everything about the emitted file that the AG Grid wire request does NOT carry (EXP-1 exposes no delimiter, BOM or header-row field, which is why this is a separate file and not a member of agGridRequest.json). PRESENT ONLY WHEN A FIXTURE OVERRIDES A DEFAULT: a case proving a default (012's comma, 014's BOM-on, 025's tab-from-exportFormat) carries no writerConfig.json at all, so its expected bytes are produced by the writer's own defaults and would fail the moment one of them changed. Every property below is optional; an absent property means the writer's default.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "delimiter": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1,
+      "description": "The field separator. Default ',' (EXP-4); ';' is EXP-4's first-class French/European preset; a tab comes from exportFormat: \"tsv\" rather than from here. Quoting follows THIS character, not a fixed one."
+    },
+    "bom": {
+      "type": "boolean",
+      "description": "EXP-4's optional UTF-8 BOM (EF BB BF), default true. False emits no mark."
+    },
+    "headerRow": {
+      "type": "boolean",
+      "description": "EXP-4's header row, default true. False emits data rows only."
+    },
+    "decimalSeparator": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1,
+      "description": "EXP-5's decimal separator, default '.' (invariant culture). Equal to the delimiter, it is the collision EXP-5 requires the writer to reject — which no fixture can carry, since a rejected configuration produces no output file to compare against."
+    }
+  }
+}

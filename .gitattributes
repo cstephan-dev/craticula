@@ -1,0 +1,9 @@
+# Byte-exact CSV/TSV writer fixtures (EXP-4/EXP-8, added #1651).
+#
+# These files pin CRLF record separators and a UTF-8 BOM as CONTENT: they are the oracle a writer is
+# graded against byte for byte, not source files. Git's end-of-line normalization (core.autocrlf on
+# Windows, or a future `* text=auto` here) would rewrite the very bytes under test, and the resulting
+# failure would look like a writer bug on one contributor's machine only. `-text` disables all
+# normalization for them.
+spec/fixtures/**/expected/export.csv -text
+spec/fixtures/**/expected/export.tsv -text

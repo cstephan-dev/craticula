@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/row-stream.schema.json",
+  "title": "CSV/TSV writer input row stream (fixture rowStream.json shape)",
+  "description": "EXP-4's third input, beside the request and the writer config: the rows an execution adapter yields for this fixture's compiled query, which the writer turns into bytes. Deliberately NOT named dataset.json — that name (with expectedRows.json) is reserved for the execution-equality tier T-1b, where it means a SEEDED DATABASE. A row stream is not a seed: it is what an adapter hands back AFTER filtering, sorting, projection and physical-to-logical aliasing, so it is keyed by logical colId, ordered by the compiled ORDER BY, and contains exactly the projected columns. Values are encoded by the field's declared GridSchema type: int64/int32 as a JSON number, decimal as a JSON STRING carrying its exact digits and scale (the same reason mongo artifacts spell a decimal as {\"$numberDecimal\": \"...\"}), date/datetime as an ISO 8601 string, string as a string, and a missing/NULL cell as JSON null. A conformance runner decodes each value against the fixture's own schema.json before handing it to the writer, so the writer's formatting layer (EXP-5, invariant culture) is exercised rather than bypassed by pre-stringified cells.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["columns", "rows"],
+  "properties": {
+    "columns": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The logical colIds this stream carries, in the order the adapter yields them. MUST equal EXP-1(b)'s resolved projection for this request (the wire's exportColumns, else every exportable field in schema order) — a runner asserts the two agree, which is what keeps the row stream honest about being an adapter's output rather than hand-picked data."
+    },
+    "rows": {
+      "type": "array",
+      "description": "The rows, in result order: the compiled query's ORDER BY including SEM-6's stableKey tiebreaker. May be empty (a header-row-only export is a legitimate case).",
+      "items": {
+        "type": "object",
+        "description": "One row, keyed by logical colId. Every key MUST appear in 'columns'.",
+        "additionalProperties": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "null" }
+          ],
+          "description": "One cell. Never an object or an array: a CSV cell is a scalar, and a nested document would have to be flattened by the adapter before the writer sees it."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 3001,
+      "orderDate": "2026-04-01",
+      "customerName": "Northwind, Ltd.",
+      "totalAmount": "10.00",
+      "status": "shipped",
+      "region": "APAC",
+      "notes": "Pallet A\tPallet B"
+    },
+    {
+      "id": 3002,
+      "orderDate": "2026-04-03",
+      "customerName": "Piedmont Supply",
+      "totalAmount": "42.75",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "Backorder; ETA 2026-04-10"
+    }
+  ]
+}

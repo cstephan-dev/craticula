@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Craticula.Export.Csv</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- AR-3: no package reference at all, exactly like the four compiler projects. The whole module
+         is System.Text + System.IO over the BCL.
+
+         One ProjectReference, and it points at Craticula.Core - the same shape every other project
+         in this repo has. Dependencies point INTO the core and never sideways between adapters, so a
+         writer may not reference a grid adapter: a TanStack or Handsontable adapter has to be able to
+         produce this module's input without going through AG Grid, and Craticula.Export.Xlsx (roadmap
+         section 14) plugs into the same EXP-4 boundary as an independently published package.
+         Craticula.Core.Export.ExportColumn is therefore where EXP-1(b)'s resolved column list and its
+         header text live - resolved exactly once by whichever wire adapter parsed the request, and
+         read here without either side knowing about the other.
+
+         "Backend-agnostic" (EXP-4) means agnostic of the DATA backend: nothing here knows about SQL,
+         MongoDB or OpenSearch, and the row stream it consumes can come from any of them. -->
+    <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
+  </ItemGroup>
+
+</Project>

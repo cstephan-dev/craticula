@@ -1,14 +1,6 @@
-namespace Craticula.AgGrid;
+using Craticula.Core.Export;
 
-/// <summary>EXP-1: the two delimiter-separated formats the wire contract admits. The choice never
-/// reaches a compiler — <c>page-export/004</c> and <c>/005</c> exist precisely to pin that the same
-/// request compiles identically under either — it is carried through for the CSV writer
-/// (EXP-4, #1651/#1652), which is what turns it into a delimiter.</summary>
-public enum ExportFormat
-{
-    Csv,
-    Tsv
-}
+namespace Craticula.AgGrid;
 
 /// <summary>
 /// EXP-1: whether the export streams the whole filtered+sorted result or exactly the rows the grid
@@ -28,25 +20,6 @@ public enum ExportScope
 }
 
 /// <summary>
-/// EXP-1: one column of an export, in the order it must be emitted.
-/// </summary>
-/// <param name="ColId">The logical field name, resolved against the <see cref="Craticula.Core.Schema.GridSchema"/>
-/// exactly like any other colId — this is what the compilers project.</param>
-/// <param name="Header">The header text the CSV writer must put in the header row: the wire's own
-/// <c>header</c> override when it supplied one, else the schema's
-/// <see cref="Craticula.Core.Schema.FieldConfig.Label"/>, else the <paramref name="ColId"/> itself
-/// (EXP-1's "headers from schema labels"). <b>Never reaches a compiler</b> — no compiled artifact in
-/// the suite contains a header string, which is exactly why <c>page-export/008</c>'s three custom
-/// headers are invisible in all three of its arms.
-///
-/// <para><b>EXP-6's formula-injection hardening covers the header row too, not only the values.</b>
-/// A wire-supplied <c>header</c> is arbitrary client text carried verbatim to the writer, so a header
-/// beginning <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab or CR must be prefixed with <c>'</c> exactly
-/// as a cell value is — the row it lands in is a spreadsheet row like any other. Stated here because
-/// #1650 is where the header became a first-class resolved value and #1651/#1652 will read it.</para></param>
-public sealed record ExportColumn(string ColId, string Header);
-
-/// <summary>
 /// EXP-1's wire-contract extension, already resolved: what a request means when it carries
 /// <c>exportFormat</c>/<c>exportScope</c>/<c>exportColumns</c> beside the ordinary AG Grid SSRM
 /// fields. Built by <see cref="AgGridRequestParser.Parse"/>; <see langword="null"/> on
@@ -58,6 +31,14 @@ public sealed record ExportColumn(string ColId, string Header);
 /// (EXP-1(b)). Resolving it here rather than in each compiler is what keeps the SQL and Mongo
 /// projections from being able to disagree about the default, and is why
 /// <see cref="AgGridParseOptions.Schema"/> is required for an export request.</para>
+///
+/// <para><b>This type is the wire half only.</b> What it resolves <em>to</em> —
+/// <see cref="Craticula.Core.Export.ExportColumn"/> and
+/// <see cref="Craticula.Core.Export.ExportFormat"/> — lives in <c>Craticula.Core</c>, because those
+/// two are the hand-off to the writer (EXP-4) and a writer must not have to reference a grid adapter
+/// to read them (AR-3: never sideways between adapters). What stays here is what only a wire request
+/// can mean: <see cref="Scope"/>, and the fact that these three members were spelled on an AG Grid
+/// SSRM request at all.</para>
 /// </summary>
 public sealed record ExportSpec
 {

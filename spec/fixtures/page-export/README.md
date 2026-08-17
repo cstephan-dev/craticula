@@ -1,16 +1,21 @@
 # `page-export/` — page spec + export fixtures
 
 Backs `spec/fixtures/README.md`'s category index row: "AG-3/EXP-2 page spec,
-EXP-1/EXP-6/EXP-8 export + hostile CSV values" (~20 target, 24 authored — see 022, 023 and 024
+EXP-1/EXP-4..EXP-8 export + hostile CSV values" (~20 target, 25 authored — see 022, 023, 024 and 025
 below). Requirement ids referenced below are
 [TRD](../../../docs/TRD-grid-query-compiler.md) §6 (`AG-3`) and §6.1 (`EXP-1`..`EXP-8`); the
 compile-time half of them is pinned normatively in `spec/semantics.md`'s **EXP-1/EXP-2** addendum,
-which this category is the artifact oracle for.
+which this category is the artifact oracle for. The *writer* half (EXP-4..EXP-8) is deliberately not
+in `semantics.md` — it has no compiled form — so the TRD §6.1 prose is its normative home and the
+expected-output files below are its oracle.
 
-**In scope in all three conformance runners since #1650.** Every arm here — 24 Postgres, 14 Mongo and
+**In scope in all three conformance runners since #1650.** Every arm here — 25 Postgres, 14 Mongo and
 14 Search — is compiled end to end from the fixture's own request and compared byte for byte. It was
 excluded from all three until the AG Grid adapter learned `exportScope`; see the "#1650" section of
 `spec/fixtures/README.md` for the five disagreements that surfaced when the arms were first executed.
+
+**Five cases also carry a CSV/TSV writer oracle since #1651** — see the shape note below for which,
+and for which are still prose.
 
 ## Shape notes specific to this category
 
@@ -19,15 +24,57 @@ excluded from all three until the AG Grid adapter learned `exportScope`; see the
   `filterModel`/`sortModel`/`startRow`/`endRow` fields — EXP-1 is an *extension* of the AG Grid
   SSRM wire request, not a separate request shape. Fixtures 001-003 (plain AG-3 paging) omit the
   export fields entirely, as a baseline.
-- **CSV writer + hostile-value fixtures (012-020, 022) document, rather than assert, writer
-  behavior.**
-  No CSV writer exists yet in this codebase (only the artifact-equality tier, T-1a, is delivered
-  by this story — see `docs/feat/1630/context.md` decision #3). These fixtures carry a real
-  compiled artifact (the row-stream source a future writer would consume) plus a documented
-  expectation in `description.md` for what the writer must do with that stream. They are **not**
-  byte-exact CSV file fixtures, and intentionally use a single representative backend
-  (`postgres.artifact.json`) since the behavior under test is at the writer layer, not the
-  compiler layer.
+- **CSV/TSV writer fixtures: five assert, six still document (#1651).** Until #1651 no CSV writer
+  existed and all ten writer-facing cases that existed then (012-020, 022 — 025 is #1651's own)
+  carried a compiled artifact plus a documented expectation in prose. `Craticula.Export.Csv` now
+  exists, and the five cases whose
+  subject it implements — **012, 013, 014, 015** (EXP-4's delimiter presets and BOM on/off) and
+  **025** (EXP-4's tab delimiter, authored by #1651) — carry a real oracle and are compared **byte
+  for byte**, BOM included. The other six — **016-020 and 022** — are EXP-6's formula-injection
+  hostile values and stay prose until **#1652** implements the `'`-prefixing they document; **021**
+  is EXP-7's row limit, an execution-adapter concern with no writer output at all. `#1652` inherits
+  exactly that boundary: six cases to convert, using the file shapes below.
+
+  A case with an oracle carries two extra inputs beside its request and schema, and one extra
+  expected file:
+
+  | File | What it is |
+  |---|---|
+  | `rowStream.json` | The rows an execution adapter yields for this fixture's compiled query, keyed by logical colId, in the compiled `ORDER BY`'s order. Validates against `../schemas/row-stream.schema.json`. |
+  | `writerConfig.json` | EXP-4/EXP-5's host configuration (`delimiter`, `bom`, `headerRow`, `decimalSeparator`). **Present only when the case overrides a default** — 012, 014 and 025 carry none, which is what makes them oracles for the defaults. Validates against `../schemas/writer-config.schema.json`. |
+  | `expected/export.csv` / `expected/export.tsv` | The bytes. The extension is the request's own `exportFormat`, which is the only place in the fixture tree that field is visible at all (004/005 prove it reaches no compiled artifact). |
+
+  **Not `dataset.json`/`expectedRows.json`.** Those two names are reserved for the execution-equality
+  tier (T-1b, #1655), where they mean a *seeded database* and the row ids a query returns from it. A
+  writer input is not a seed: it is what an adapter hands back **after** filtering, sorting,
+  projection and physical-to-logical aliasing (`order_date` → `orderDate`), which is why it is keyed
+  by logical colId and carries exactly the projected columns. Both can coexist in one directory later
+  without either meaning the other.
+
+  **How the rows were derived.** Each case's `status` cell is `"shipped"` in every row because the
+  request's `equals` filter says so — an `equals` filter's value is exactly what any matching row's
+  cell contains, which is the argument these fixtures' `description.md`s already made in prose. The
+  row *order* is the compiled query's `ORDER BY` (`order_date ASC`, then SEM-6's `id` tiebreaker).
+  Everything else is **chosen, not derived**, and each `description.md` says so and says what it was
+  chosen to exercise (a delimiter inside a value, an inner quote, an embedded LF, a null, non-ASCII
+  text, a tab). No cell begins with `=`, `+`, `-`, `@`, tab or CR: those are EXP-6's triggers, and a
+  trigger character here would make these expected bytes change when #1652 lands, for a reason that
+  has nothing to do with EXP-4.
+
+  All eleven still use a single representative backend (`postgres.artifact.json`) for their compiled
+  arm, since the behavior under test is at the writer layer, not the compiler layer.
+- **Two EXP-5 branches have no fixture oracle, deliberately, and are unit-tested instead.** The
+  **collision guard** (`decimalSeparator == delimiter`) cannot be a fixture: the writer refuses before
+  producing any bytes, so there is no expected file to compare — a rejection-shaped writer fixture
+  would need the `adversarial/` category's `expected/rejection.json` treatment, which is a bigger
+  change than the one branch justifies. The **legal** `;` + `,` pairing (the French/European locale
+  the preset is named for) *could* be a fixture and is not one: 013 overrides the delimiter alone,
+  because EXP-4 makes `;` a delimiter preset while EXP-5 keeps formatting on the invariant culture
+  until a per-field override exists (#1631 owns that schema field), and coupling the two in 013 would
+  make its bytes depend on something the TRD does not state. Both branches are pinned in
+  `Craticula.Export.Csv.Tests`; a future story that adds per-field format overrides should give the
+  second one a fixture.
+
 - **Hostile values are safe-handling, not rejection.** Distinct from the `adversarial/` category's
   `expected/rejection.json` shape: an EXP-6 hostile export value is a perfectly legal filter value
   that compiles normally. The compiled artifact shows the raw, unmodified value; hardening
@@ -87,10 +134,10 @@ excluded from all three until the AG Grid adapter learned `exportScope`; see the
 | 009 | `009-export-columns-default-schema-order` | `exportColumns` absent -> default schema-order projection | EXP-1 |
 | 010 | `010-export-all-ignores-single-level-group-state` | Export flattens an active single-level group+agg to leaf rows | EXP-1 (group-export carve-out) |
 | 011 | `011-export-all-ignores-multi-level-group-and-multiple-aggs` | Same carve-out under a two-level group + two aggregations | EXP-1 (group-export carve-out) |
-| 012 | `012-csv-writer-delimiter-comma-default` | Default `,` delimiter, header row on, CRLF, RFC 4180 quoting (documented) | EXP-4 |
-| 013 | `013-csv-writer-delimiter-semicolon-preset` | First-class `;` delimiter preset (documented) | EXP-4, EXP-5 |
-| 014 | `014-csv-writer-bom-on-default` | UTF-8 BOM on by default (documented) | EXP-4 |
-| 015 | `015-csv-writer-bom-off-configured` | UTF-8 BOM explicitly disabled (documented) | EXP-4 |
+| 012 | `012-csv-writer-delimiter-comma-default` | Default `,` delimiter, header row on, CRLF, RFC 4180 quoting — **byte-exact** | EXP-4, EXP-8 |
+| 013 | `013-csv-writer-delimiter-semicolon-preset` | First-class `;` delimiter preset; quoting follows the active delimiter — **byte-exact** | EXP-4, EXP-8 |
+| 014 | `014-csv-writer-bom-on-default` | UTF-8 BOM on by default, over non-ASCII cells — **byte-exact** | EXP-4, EXP-8 |
+| 015 | `015-csv-writer-bom-off-configured` | UTF-8 BOM explicitly disabled; 014's file minus three bytes — **byte-exact** | EXP-4, EXP-8 |
 | 016 | `016-hostile-value-formula-equals` | Leading `=` passes through compiler unchanged (documented writer prefix) | EXP-6, EXP-8 |
 | 017 | `017-hostile-value-formula-plus` | Leading `+` passes through compiler unchanged (documented writer prefix) | EXP-6, EXP-8 |
 | 018 | `018-hostile-value-formula-minus` | Leading `-` passes through compiler unchanged (documented writer prefix) | EXP-6, EXP-8 |
@@ -100,17 +147,21 @@ excluded from all three until the AG Grid adapter learned `exportScope`; see the
 | 022 | `022-hostile-value-formula-tab` | Leading tab passes through compiler unchanged (documented writer prefix) — rounds out EXP-6's trigger-character coverage alongside 016-020 | EXP-6, EXP-8 |
 | 023 | `023-export-columns-default-skips-non-exportable-field` | Default projection omits a field declared `exportable: false`, which is still filterable | EXP-1, EXP-1(b) |
 | 024 | `024-export-all-ignores-drill-down-group-keys` | Export discards a **non-empty `groupKeys`** too — no drill-down predicate, no grouped level | EXP-1 (group-export carve-out), EXP-1(a) |
+| 025 | `025-tsv-writer-tab-delimited` | `exportFormat: "tsv"` makes the writer emit tabs, and a tab inside a value is quoted while a `,`/`;` is not — **byte-exact**, with a compiled arm byte-identical to 012's | EXP-4, EXP-8 |
 
 ## Backend coverage
 
 Per `spec/fixtures/README.md`'s policy, these are general/structural fixtures: Postgres + Mongo +
 shared Search, except:
 
-- Fixtures 012-020 and 022 (CSV writer behavior + hostile values): Postgres only. The behavior
-  under test lives entirely at the writer layer; a single representative backend is sufficient
-  (see the shape note above). Their Postgres arm is nonetheless an ordinary compiled query and is
-  compared like any other — which is why this category contributes 24 arms to the Postgres runner and
-  14 to each of the other two.
+- Fixtures 012-020, 022 and 025 (CSV/TSV writer behavior + hostile values): Postgres only. The
+  behavior under test lives entirely at the writer layer; a single representative backend is
+  sufficient (see the shape note above). Their Postgres arm is nonetheless an ordinary compiled query
+  and is compared like any other — which is why this category contributes 25 arms to the Postgres
+  runner and 14 to each of the other two.
+- The five writer oracles are backend-agnostic by construction: a row stream is what *any* adapter
+  yields, so there is no per-backend expected output and never will be. That is EXP-4's "backend-
+  agnostic module" restated as a fixture shape.
 - Fixture 008's Mongo artifact demonstrates column narrowing via a `$project` stage; the shared
   Search artifact schema (`search-artifact.schema.json`) has no source-filtering property, so
   Search's own column narrowing cannot be shown structurally there (documented in that fixture's

@@ -1,0 +1,3 @@
+﻿id	orderDate	customerName	totalAmount	status	region	notes
+3001	2026-04-01	Northwind, Ltd.	10.00	shipped	APAC	"Pallet A	Pallet B"
+3002	2026-04-03	Piedmont Supply	42.75	shipped	EMEA	Backorder; ETA 2026-04-10

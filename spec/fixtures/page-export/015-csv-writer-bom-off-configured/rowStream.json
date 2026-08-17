@@ -1,0 +1,31 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 2001,
+      "orderDate": "2026-03-02",
+      "customerName": "Éditions Chêne",
+      "totalAmount": "250.00",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "Livré à Paris — 3e étage"
+    },
+    {
+      "id": 2002,
+      "orderDate": "2026-03-09",
+      "customerName": "Кофе и Ко",
+      "totalAmount": "75.25",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "お届け済み"
+    }
+  ]
+}

@@ -23,9 +23,26 @@ own framing of the same principle for the rules these fixtures enforce.
     sqlite.artifact.json
     mongo.artifact.json
     search.artifact.json     — shared OpenSearch/Elasticsearch artifact (OQ-7: one compiler, one DSL subset)
+    export.csv? / export.tsv? — optional, CSV/TSV writer tier (EXP-4/EXP-8) — see below
+  rowStream.json?           — optional, CSV/TSV writer tier: the rows an adapter yields (added #1651)
+  writerConfig.json?        — optional, CSV/TSV writer tier: delimiter/BOM/header/decimal separator
   dataset.json?             — optional, execution-equality tier (T-1b) — see "Deferred" below
   expectedRows.json?        — optional, execution-equality tier (T-1b) — see "Deferred" below
 ```
+
+**The writer tier (EXP-4/EXP-8), added by #1651.** A CSV/TSV export has three inputs, only one of
+which is a request: the resolved column list (EXP-1(b), from the request + schema), the row stream an
+execution adapter yields, and the host's writer configuration. A case carrying `rowStream.json` is
+compared **byte for byte** — BOM, CRLF and UTF-8 encoding are the substance of EXP-4, and all three
+survive a string comparison — against `expected/export.csv`/`.tsv`, whose extension is the request's
+own `exportFormat`. `writerConfig.json` is present **only** when the case overrides a writer default,
+so a case proving a default is graded against bytes the defaults produced. `rowStream.json` and
+`writerConfig.json` validate against `schemas/row-stream.schema.json` and
+`schemas/writer-config.schema.json`. Five cases carry the tier today, all in `page-export/`
+(`012`-`015` and `025`); that category's own README says which of its writer-facing cases are still
+prose and why. **These files are deliberately not `dataset.json`/`expectedRows.json`** — see the
+"Deferred" section below for what those two names are reserved for, and the category README for why a
+row stream is not a database seed.
 
 Every `expected/<backend>.artifact.json` validates against its shape schema in `schemas/`
 (`sql-artifact.schema.json` for every SQL dialect, `mongo-artifact.schema.json`,
@@ -74,6 +91,12 @@ Not populated in this pass. They require a real seeded database to derive expect
 fabricating them without one would be inventing data, not capturing ground truth, which is worse
 than leaving the field absent. They get added to these same fixture directories once integration
 containers exist (a later Feature #1624 story) — this is additive, not a schema change.
+
+**Still reserved after #1651 added the writer tier.** A `rowStream.json` is *not* a small
+`dataset.json`: a seed is what a database holds before the query runs, while a row stream is what an
+adapter yields **after** filtering, sorting, projection and physical-to-logical aliasing. The two can
+sit in the same directory later without either meaning the other — a writer fixture takes no
+position on what was stored, and an execution fixture takes none on how the bytes are formatted.
 
 ## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
 
@@ -339,6 +362,24 @@ weak oracle for the change — both send `groupKeys: []`, so the discard was pin
 category's contribution is therefore **24 Postgres and 14 Mongo/Search arms**, not the 23 and 13 the
 census above was taken over.
 
+## The writer tier arrives, and one fixture was authored for it (#1651)
+
+`Craticula.Export.Csv` is the first module in this repo that is not a compiler: it consumes a row
+stream and emits bytes, so nothing it does can be graded by an artifact. #1651 gave EXP-4's four
+delimiter/BOM cases (`page-export/012`-`015`) a real oracle — an input row stream and a byte-exact
+expected file each — rather than leaving them, as they had been, prose plus a unit test written by
+the writer's own author.
+
+**`page-export/025` was authored** for the gap that exercise exposed: `004` and `005` prove
+`exportFormat` never affects **compilation** and rightly stay compilation-only, but that left the
+format field's *actual* effect — which delimiter the writer uses — pinned by nothing, while `012` and
+`013` covered only `,` and `;`. `025` is `012`'s request with `exportFormat: "tsv"`; its compiled arm
+is byte-identical to `012`'s and its expected bytes are not. That takes the category to **25 Postgres
+arms** (Mongo and Search stay at 14 — a writer case carries a single representative backend).
+
+Six writer-facing cases remain prose on purpose: `016`-`020` and `022` are EXP-6's formula-injection
+values, which #1652 implements. `021` is EXP-7's row limit and has no writer output at all.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,
@@ -493,7 +534,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
-| `page-export/` | AG-3/EXP-2 page spec, EXP-1/EXP-6/EXP-8 export + hostile CSV values | ~20 |
+| `page-export/` | AG-3/EXP-2 page spec, EXP-1 export + EXP-4/EXP-8 byte-exact writer output + hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits | ~20 |
 | `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7, MDB-9) | ~23 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Craticula.Export.Csv/Craticula.Export.Csv.csproj" />
+    <!-- The conformance tests drive the REAL end-to-end path a host uses: the fixture's own
+         agGridRequest.json + schema.json go through AgGridRequestParser, and the ExportSpec that
+         comes out is what the writer is handed. Nothing about the column list or the header text is
+         hand-fed here, which is the only way the fixtures can grade EXP-1(b) and EXP-4 together. -->
+    <ProjectReference Include="../../src/Craticula.AgGrid/Craticula.AgGrid.csproj" />
+  </ItemGroup>
+
+</Project>

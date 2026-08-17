@@ -46,8 +46,11 @@ namespace Craticula.Core.Schema;
 ///     the already-built object graph. The two numbers are not the same budget — this one exists so
 ///     a pathological JSON document can't exhaust the deserializer before any application-level
 ///     validator gets a chance to run; SEC-3's tree-depth limit is the actual per-request policy.
-/// Verified against all 158 spec/fixtures/**/schema.json — every one still deserializes cleanly
-/// with these options; the strictness only rejects documents the meta-schema already forbids.
+/// Verified against every spec/fixtures/**/schema.json in the suite — all of them still deserialize
+/// cleanly with these options; the strictness only rejects documents the meta-schema already
+/// forbids. Stated without a count deliberately: the suite grows every story, and a number here
+/// would be stale on the next one while the claim it makes stays true. The claim is executable —
+/// GridSchemaFixtureSuiteTests parses each file on disk, whatever their number.
 /// </summary>
 public static class GridSchemaJson
 {

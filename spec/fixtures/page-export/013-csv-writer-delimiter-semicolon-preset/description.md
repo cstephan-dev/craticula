@@ -1,25 +1,42 @@
 # CSV writer — first-class semicolon delimiter preset
 
-**Proves:** EXP-4's `;` delimiter preset ("Excel in French and most European locales expects
-`;` and misparses `,`"), as a documented expectation.
+**Proves:** EXP-4's `;` delimiter preset ("Excel in French and most European locales expects `;` and
+misparses `,`") — **byte for byte**, against `expected/export.csv`.
 
 ## Scenario
 
-Same request/artifact shape as fixture 012 (a single representative backend, Postgres — this is a
-writer-layer concern, not a compiler-layer one); the difference under test is entirely in the
-writer's delimiter configuration, which is not part of the AG Grid wire contract (EXP-1 does not
-expose a delimiter field on the request) and is therefore not represented in `agGridRequest.json`
-— it is host/writer configuration, documented here in prose.
+The same request and the same `rowStream.json` as fixture 012, and a `writerConfig.json` carrying
+`{"delimiter": ";"}`. The delimiter is **not** part of the AG Grid wire contract (EXP-1 exposes no
+such field on the request), which is why it lives in a separate writer-configuration file rather than
+in `agGridRequest.json`.
 
-## Documented writer expectation (EXP-4)
+Sharing 012's row stream is what makes this fixture load-bearing: the two expected files are the same
+three rows under two delimiters, so the diff between them is exactly EXP-4's rule that **quoting
+follows the active delimiter**.
 
-- **Delimiter:** `;` (semicolon), via the writer's first-class French/European-locale preset —
-  an explicit configuration choice, not something inferred from the request or schema.
-- Everything else (header row on, CRLF line endings, RFC 4180 quoting) is unchanged from fixture
-  012 — only the delimiter character changes, including which characters trigger quoting (a
-  value containing `;` must now be quoted; a value containing a plain `,` no longer needs to be,
-  since `,` is no longer the delimiter). See EXP-5 for the related decimal-separator collision
-  the writer must guard against when `;` is active (a `,`-decimal-separator locale colliding
-  with a `;`-delimiter locale is fine; a `,`-decimal-separator field value combined with a
-  `,`-delimiter would not be, which is exactly the collision EXP-5 requires the writer to
-  detect and warn/fail on).
+- `customerName` = `Acme, Inc.` — quoted in 012, **bare** here. `,` is no longer a delimiter.
+- `notes` = `Ship to dock 3; ask for Ana` — bare in 012, **quoted** here.
+- `customerName` = `Bill "Big" Ross Ltd` and the LF-carrying `notes` are quoted in both: the quote
+  character and the line endings are quoting triggers under every delimiter.
+
+## What is deliberately NOT configured here: the decimal separator
+
+`totalAmount` still renders `1234.50` with a `.`, because this file overrides the delimiter and
+nothing else. EXP-4 makes `;` a **delimiter** preset; EXP-5 keeps number and date formatting on the
+invariant culture until a per-field override says otherwise (#1631 owns that schema field), and
+pairing the two would make these bytes depend on a coupling the TRD does not state.
+
+The pairing is nonetheless the reason the preset exists, and it is legal: `;` delimiter + `,` decimal
+separator is the classic French/European locale, and it is exactly what EXP-5's collision guard
+permits *because* the delimiter is no longer `,`. The collision it forbids is `,` delimiter + `,`
+decimal separator, which no fixture can pin — the writer refuses before producing any bytes, so
+there is no output file to compare. That refusal is unit-tested in `Craticula.Export.Csv.Tests`;
+the *legal* `;` + `,` pairing has no fixture-level oracle either, and the category README records
+both gaps.
+
+## Documented writer expectation (EXP-4) — asserted
+
+- **Delimiter:** `;`, via the writer's first-class French/European-locale preset — an explicit
+  configuration choice, not something inferred from the request or the schema.
+- Everything else is unchanged from fixture 012: header row on, CRLF records, BOM on, RFC 4180
+  quoting — with the trigger set following the delimiter, as above.
