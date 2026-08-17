@@ -1413,6 +1413,15 @@ general projection rule:
   side, because a header is always text. What the narrowing is, is the TRD's EXP-6 to state and not
   this addendum's: the claim above is EXP-1(b)'s own (a `header` is client text), and restating the
   cell rule here is what would make the two drift.
+- **A column also carries what EXP-5 declares for it, and a compiler reads none of it.** A field's
+  `format` (its date pattern and decimal separator, in `GridSchema` config since #1653) is resolved onto
+  the column beside its header, because the writer is handed nothing else per field. It is stated here
+  for one reason, and it is a *compilation* one: like a `label`, a `format` must leave every compiled
+  artifact untouched. `page-export/026` is `/013`'s request, row stream and writer config byte for byte
+  with two `format` members added to its schema, and pins a byte-identical `postgres.artifact.json` —
+  the same statement `/004`-`/005` and `/025` make about `exportFormat`, made for the first time about a
+  *schema* member. What those overrides mean and how a value renders under them is EXP-5's, in the TRD,
+  and is deliberately not restated here.
 - **The resolution happens once, in the request adapter**, not per compiler: an unknown colId, a
   colId the schema declares non-exportable, a repeated colId, and an explicitly empty list are all
   refused there. All four are hard failures in **every** `GridSchema` mode — Lenient's contract is
@@ -1458,14 +1467,15 @@ carve-out bypasses), GRP-3 (the projection rule this one composes with), SEM-6 (
 `sort-paging/012` for the `page: none` shape on all three backends. EXP-3..EXP-8 — streaming and
 chunking, the CSV writer, its formatting and injection hardening, and the row-count limit — have no
 compiled form and are **not restated here**; the TRD §6.1 prose is their normative home. #1651 built
-the writer half of EXP-4/EXP-5 and #1652 EXP-6's injection hardening, and their oracle is the
-byte-exact `expected/export.csv`/`.tsv` files in `page-export/012`-`020`, `/022` and `/025` — eleven of
-that category's twenty-five cases, which is every writer-facing one except `021` (EXP-7's row limit
-produces no output to compare). See the category README for the file shapes. #1652 also **narrowed
-EXP-6's scope**, and that narrowing is stated at EXP-6 itself in the TRD — deliberately not here, and
-not in summary either: it turns on a distinction fine enough (which spelling of the type test, not
-just which types) that a second copy would be wrong within a story or two. `page-export/018` is its
-oracle. EXP-3 and EXP-7 are the execution adapters'.
+the writer half of EXP-4/EXP-5, #1652 EXP-6's injection hardening and #1653 EXP-5's per-field format
+overrides, and their oracle is the
+byte-exact `expected/export.csv`/`.tsv` files in `page-export/012`-`020`, `/022`, `/025` and `/026` —
+twelve of that category's twenty-six cases, which is every writer-facing one except `021` (EXP-7's row
+limit produces no output to compare). See the category README for the file shapes. #1652 also
+**narrowed EXP-6's scope**, and that narrowing is stated at EXP-6 itself in the TRD — deliberately not
+here, and not in summary either: it turns on a distinction fine enough (which spelling of the type
+test, not just which types) that a second copy would be wrong within a story or two.
+`page-export/018` is its oracle. EXP-3 and EXP-7 are the execution adapters'.
 
 ---
 

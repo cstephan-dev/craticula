@@ -35,4 +35,9 @@ public sealed record FieldConfig
 
     /// <summary>EXP-1: the export header text for this field, falling back to the colId when absent.</summary>
     public string? Label { get; init; }
+
+    /// <summary>EXP-5: per-field format overrides for the CSV/TSV writer (date pattern, decimal
+    /// separator). Absent means the invariant-culture default. Like <see cref="Label"/>, it reaches no
+    /// compiler.</summary>
+    public FormatOptions? Format { get; init; }
 }

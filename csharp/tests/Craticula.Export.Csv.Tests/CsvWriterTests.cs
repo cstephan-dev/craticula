@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text;
 using Craticula.Core.Export;
+using Craticula.Core.Schema;
 
 namespace Craticula.Export.Csv.Tests;
 
@@ -145,8 +146,8 @@ public class CsvWriterTests
     /// formula-injection hardening applies to the header row exactly as it applies to values".
     ///
     /// <para><b>No fixture covers a hostile header, deliberately, and this is the only guard.</b> Adding
-    /// a twenty-sixth <c>page-export</c> case would move the 662-artifact census and the three compiler
-    /// runners' exact counts for a property that has nothing to do with compilation, and overriding a
+    /// a case for it would move the artifact census and the compiler runners' exact counts for a property
+    /// that has nothing to do with compilation, and overriding a
     /// header on one of the six hostile-value cases would make its bytes test two things at once. The
     /// header path is structural — one call site, <c>harden: true</c> unconditionally — and this states
     /// it. Note the second column: a header is hardened whatever its text, but the type test that
@@ -337,8 +338,11 @@ public class CsvWriterTests
     /// <summary>
     /// The pairing the collision guard exists to ALLOW: <c>;</c> delimiter with a <c>,</c> decimal
     /// separator is the French/European locale EXP-4's preset is named for, and the number is written
-    /// bare because <c>,</c> is no longer a delimiter. No fixture pins this (013 overrides the
-    /// delimiter only — see its description), which is why it is stated here.
+    /// bare because <c>,</c> is no longer a delimiter. This is the <b>writer-wide</b> form of that
+    /// pairing and it has no fixture — 013 overrides the delimiter only, and
+    /// <c>page-export/026</c> pins the <em>per-field</em> form, where the separator comes from schema
+    /// config as EXP-5 specifies. A writer-wide separator is a host configuration no schema declares,
+    /// so it stays here.
     /// </summary>
     [Fact]
     public void Accepts_A_Comma_Decimal_Separator_When_The_Delimiter_Is_A_Semicolon()
@@ -353,6 +357,124 @@ public class CsvWriterTests
         var output = Write(options, Columns(2), [new ExportRow([1234.50m, "x"])]);
 
         Assert.Equal("1234,50;x\r\n", output);
+    }
+
+    // ---- EXP-5's per-field overrides (#1653) ---------------------------------------------------------
+
+    /// <summary>
+    /// EXP-5's two overrides, on two different fields of the same row, with five columns beside them
+    /// declaring nothing. Both halves matter: the two overridden columns change, and — the property one
+    /// override alone cannot show — the untouched ones do not, so a rendering resolved once and applied
+    /// to everything that matched would fail here. <c>page-export/026</c> is the byte oracle for the
+    /// same statement; this is the readable form, and the only one that also covers a
+    /// <see cref="DateTime"/> and a <see cref="double"/> (that fixture's schema declares neither).
+    /// </summary>
+    [Fact]
+    public void Applies_Each_Columns_Own_Format_And_Leaves_The_Others_Alone()
+    {
+        IReadOnlyList<ExportColumn> columns =
+        [
+            new ExportColumn("id", "id"),
+            new ExportColumn("orderDate", "orderDate", new FormatOptions { DatePattern = "dd/MM/yyyy" }),
+            new ExportColumn("shippedAt", "shippedAt"),
+            new ExportColumn("totalAmount", "totalAmount", new FormatOptions { DecimalSeparator = ',' }),
+            new ExportColumn("taxRate", "taxRate"),
+            new ExportColumn("status", "status")
+        ];
+        var options = CsvWriterOptions.SemicolonPreset with
+        {
+            IncludeHeaderRow = false,
+            WriteByteOrderMark = false
+        };
+
+        var output = Write(options, columns, [new ExportRow([
+            1001L,
+            new DateOnly(2026, 1, 5),
+            new DateTime(2026, 1, 5, 14, 30, 0),
+            1234.50m,
+            0.25d,
+            "shipped"])]);
+
+        Assert.Equal("1001;05/01/2026;2026-01-05T14:30:00;1234,50;0.25;shipped\r\n", output);
+    }
+
+    /// <summary>
+    /// The widened collision guard. A field-declared separator equal to the delimiter is the identical
+    /// defect to the writer-wide one this suite already pins — a well-formed WRONG file — and before
+    /// #1653 it would have been written out without a word. It fails before the first byte, like its
+    /// sibling, and <b>names the field</b>: a schema with twenty columns gives a host no other way to
+    /// find the declaration to fix, and the message is all the host gets.
+    /// </summary>
+    [Fact]
+    public void Refuses_A_Per_Field_Decimal_Separator_Equal_To_The_Delimiter_Before_Writing_Any_Byte()
+    {
+        IReadOnlyList<ExportColumn> columns =
+        [
+            new ExportColumn("status", "status"),
+            new ExportColumn("totalAmount", "totalAmount", new FormatOptions { DecimalSeparator = ',' })
+        ];
+        using var destination = new MemoryStream();
+
+        var exception = Assert.Throws<CsvWriterException>(() => CsvWriter.Write(
+            [new ExportRow(["shipped", 1234.50m])], columns, CsvWriterOptions.Default, destination));
+
+        Assert.Contains("EXP-5", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("totalAmount", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, destination.Length);
+    }
+
+    /// <summary>The same refusal on the async path and on <see cref="CsvWriterOptions.Validate"/>'s
+    /// column-aware overload — which is where the check lives, so that a host holding its schema and
+    /// its options can reject the pair at startup rather than on the first user's download, exactly as
+    /// it can for the writer-wide half.</summary>
+    [Fact]
+    public async Task Refuses_The_Per_Field_Collision_On_The_Async_Path_And_On_Validate()
+    {
+        IReadOnlyList<ExportColumn> columns =
+            [new ExportColumn("totalAmount", "totalAmount", new FormatOptions { DecimalSeparator = '\t' })];
+        var options = CsvWriterOptions.ForFormat(ExportFormat.Tsv);
+        using var destination = new MemoryStream();
+
+        await Assert.ThrowsAsync<CsvWriterException>(
+            () => CsvWriter.WriteAsync(Empty(), columns, options, destination));
+        Assert.Throws<CsvWriterException>(() => options.Validate(columns));
+
+        // ...and the options alone are fine: the collision is a property of the PAIR, which is why the
+        // parameterless overload cannot see it and why a GridSchema cannot either (the same schema is
+        // legal under ';' and illegal under a tab).
+        options.Validate();
+        Assert.Equal(0, destination.Length);
+    }
+
+    /// <summary>A per-field separator that is one of RFC 4180's own characters is refused for the same
+    /// reason the writer-wide one is: no reader could tell it from an escape. Same rule, same place,
+    /// because a field is not a lesser source of a separator.</summary>
+    [Theory]
+    [InlineData('"')]
+    [InlineData('\r')]
+    [InlineData('\n')]
+    public void Refuses_A_Per_Field_Decimal_Separator_That_Is_A_Quoting_Character(char separator)
+    {
+        IReadOnlyList<ExportColumn> columns =
+            [new ExportColumn("totalAmount", "totalAmount", new FormatOptions { DecimalSeparator = separator })];
+
+        var exception = Assert.Throws<CsvWriterException>(
+            () => CsvWriterOptions.Default.Validate(columns));
+
+        Assert.Contains("totalAmount", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A column that declares no override at all goes through the per-field path untouched —
+    /// the guard has nothing to check and the rendering is the writer-wide default. Stated because
+    /// every fixture but 026 depends on it, and they would fail as byte diffs.</summary>
+    [Fact]
+    public void A_Projection_Declaring_No_Format_Is_Neither_Refused_Nor_Re_Rendered()
+    {
+        var options = CsvWriterOptions.Default with { IncludeHeaderRow = false, WriteByteOrderMark = false };
+
+        Assert.Equal(
+            "1234.50,2026-01-05\r\n",
+            Write(options, Columns(2), [new ExportRow([1234.50m, new DateOnly(2026, 1, 5)])]));
     }
 
     [Theory]

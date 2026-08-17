@@ -76,7 +76,10 @@ public sealed record GridSchema
     /// <c>fields</c> non-empty (minProperties:1), no null <see cref="FieldConfig"/> entries,
     /// <see cref="Source"/> non-blank (minLength:1),
     /// <see cref="StableKey"/> non-blank (minLength:1) and present in <see cref="Fields"/>,
-    /// every <see cref="SqlMapping"/>'s "exactly one of column/qualifiedColumn/expression", and
+    /// every <see cref="SqlMapping"/>'s "exactly one of column/qualifiedColumn/expression",
+    /// every <see cref="FormatOptions.DatePattern"/> being a pattern a formatter can actually apply
+    /// (EXP-5 — see <see cref="FormatOptions.IsValid"/> for why that is checked here rather than when
+    /// the first date cell is written), and
     /// (via <see cref="FilterNodeValidator"/>) every structural invariant of a present
     /// <see cref="StaticFilter"/> tree.
     /// </summary>
@@ -105,6 +108,15 @@ public sealed record GridSchema
             {
                 throw new GridSchemaValidationException(
                     $"GridSchema.fields['{colId}'].physical.sql must set exactly one of column, qualifiedColumn, or expression.");
+            }
+
+            if (config.Format is { IsValid: false } format)
+            {
+                throw new GridSchemaValidationException(
+                    $"GridSchema.fields['{colId}'].format.datePattern '{format.DatePattern}' cannot format a " +
+                    "date value (EXP-5). It must be a non-blank pattern in the LDML field letters every port " +
+                    "shares (yyyy, MM, dd, HH, mm, ss and literal separators), e.g. 'dd/MM/yyyy'. Rejected here " +
+                    "rather than at the first date cell, which a streaming export cannot recover from.");
             }
         }
 

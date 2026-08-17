@@ -17,10 +17,16 @@ namespace Craticula.Export.Csv.Tests;
 /// difference between what was decoded and what was on disk. A test comparing strings would pass on
 /// a missing BOM, which is the single most likely regression in this module.</para>
 ///
-/// <para><b>The expected files are hand-authored (#1651, and #1652's six the same way), like every
-/// artifact in this suite.</b> They were written record by record from EXP-4's and EXP-6's rules, not
-/// captured from this writer's output, so a disagreement is informative in both directions and must be
-/// investigated rather than resolved by regenerating the file.</para>
+/// <para><b>The expected files are hand-authored (#1651, then #1652's six and #1653's one the same
+/// way), like every artifact in this suite.</b> They were written record by record from EXP-4's, EXP-5's
+/// and EXP-6's rules, not captured from this writer's output, so a disagreement is informative in both
+/// directions and must be investigated rather than resolved by regenerating the file.</para>
+///
+/// <para>Note that a fixture's per-field formats reach the writer the same way its headers do — through
+/// the real <see cref="AgGridRequestParser.Parse"/>, off the fixture's own <c>schema.json</c> — and not
+/// through <c>writerConfig.json</c>, which carries only what EXP-4 puts in host configuration. That is
+/// what makes <c>026</c> grade the schema member, the adapter's resolution and the writer's rendering
+/// together rather than the last of the three alone.</para>
 /// </summary>
 public class CsvWriterConformanceFixtureTests
 {
@@ -30,16 +36,18 @@ public class CsvWriterConformanceFixtureTests
     /// Only <c>page-export</c> has any: the writer's input is an export, and an export request is
     /// what that category is for.
     ///
-    /// <para>Eleven of that category's 25 cases carry a row stream: <c>012</c>-<c>015</c> (EXP-4's
+    /// <para>Twelve of that category's 26 cases carry a row stream: <c>012</c>-<c>015</c> (EXP-4's
     /// delimiter presets and BOM on/off, #1651's DoD), <c>025</c> (tab, authored by #1651 because
-    /// nothing pinned TSV output bytes), and <c>016</c>-<c>020</c> plus <c>022</c> (EXP-6's six trigger
-    /// characters, converted from prose by #1652 together with the prefixing they document). That is
-    /// every writer-documenting case in the category but one: <c>021</c> is EXP-7's row limit, which is
-    /// an execution-adapter concern with no writer output at all.</para>
+    /// nothing pinned TSV output bytes), <c>016</c>-<c>020</c> plus <c>022</c> (EXP-6's six trigger
+    /// characters, converted from prose by #1652 together with the prefixing they document), and
+    /// <c>026</c> (EXP-5's per-field date pattern and decimal separator, authored by #1653 — the
+    /// fixture the category README had reserved for the legal <c>;</c>+<c>,</c> pairing since #1651).
+    /// That is every writer-documenting case in the category but one: <c>021</c> is EXP-7's row limit,
+    /// which is an execution-adapter concern with no writer output at all.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
-        ("page-export", 11)
+        ("page-export", 12)
     ];
 
     /// <summary>
@@ -206,6 +214,70 @@ public class CsvWriterConformanceFixtureTests
             File.ReadAllBytes(Path.Combine(tsv, "expected", "export.tsv")));
     }
 
+    /// <summary>
+    /// EXP-5's per-field pair, and the story's cheapest proof that <b>formatting never reaches a
+    /// compiler</b>: <c>026</c> is <c>013</c>'s request, row stream and writer config byte for byte, its
+    /// schema differs by exactly two added <c>format</c> members, its compiled arm is
+    /// <b>byte-identical</b> to <c>013</c>'s, and its bytes are not.
+    ///
+    /// <para>Asserted as a relation for the reason the three sibling relations above are: comparing each
+    /// file against its own expected bytes cannot catch an override that was silently applied file-wide,
+    /// nor one that leaked into the artifact. The schema diff is checked down to the member rather than
+    /// stated as "the schemas differ" — "differ somewhere" would also hold if the two schemas had drifted
+    /// in a physical mapping, and then the byte diff below would no longer be EXP-5's doing.</para>
+    ///
+    /// <para>Note which direction carries the weight. The <em>inputs</em> being identical is what makes
+    /// the output diff attributable, and the <em>artifact</em> being identical over a real schema
+    /// difference is what makes "a format is invisible to compilation" executable rather than a sentence
+    /// in <c>ExportColumn</c>'s doc comment.</para>
+    /// </summary>
+    [Fact]
+    public void The_Per_Field_Format_Fixture_Is_The_Semicolon_Fixtures_Inputs_With_Only_Its_Schema_Changed()
+    {
+        var semicolon = RepoPaths.Fixture("page-export", "013-csv-writer-delimiter-semicolon-preset");
+        var perField = RepoPaths.Fixture("page-export", "026-csv-writer-per-field-format-overrides");
+
+        foreach (var input in new[] { "agGridRequest.json", "rowStream.json", "writerConfig.json" })
+        {
+            Assert.Equal(
+                File.ReadAllBytes(Path.Combine(semicolon, input)),
+                File.ReadAllBytes(Path.Combine(perField, input)));
+        }
+
+        using var left = JsonDocument.Parse(File.ReadAllText(Path.Combine(semicolon, "schema.json")));
+        using var right = JsonDocument.Parse(File.ReadAllText(Path.Combine(perField, "schema.json")));
+
+        Assert.Equal(
+            ["fields"],
+            DifferingMembers(left.RootElement, right.RootElement).Keys.Order(StringComparer.Ordinal));
+
+        var leftFields = left.RootElement.GetProperty("fields");
+        var rightFields = right.RootElement.GetProperty("fields");
+        Assert.Equal(
+            ["orderDate", "totalAmount"],
+            DifferingMembers(leftFields, rightFields).Keys.Order(StringComparer.Ordinal));
+
+        // ...and each of those two differs by exactly one ADDED member, `format`. Anything else in the
+        // field config — a type, a physical mapping — moving would make the output diff mean something
+        // else.
+        foreach (var colId in new[] { "orderDate", "totalAmount" })
+        {
+            var difference = DifferingMembers(
+                leftFields.GetProperty(colId), rightFields.GetProperty(colId));
+
+            Assert.Equal(["format"], difference.Keys.Order(StringComparer.Ordinal));
+            Assert.Equal("<absent>", difference["format"].Left);
+        }
+
+        Assert.Equal(
+            File.ReadAllBytes(Path.Combine(semicolon, "expected", "postgres.artifact.json")),
+            File.ReadAllBytes(Path.Combine(perField, "expected", "postgres.artifact.json")));
+
+        Assert.NotEqual(
+            File.ReadAllBytes(Path.Combine(semicolon, "expected", "export.csv")),
+            File.ReadAllBytes(Path.Combine(perField, "expected", "export.csv")));
+    }
+
     // ---- anti-rot guards -------------------------------------------------------------------------
 
     [Fact]
@@ -218,14 +290,14 @@ public class CsvWriterConformanceFixtureTests
     }
 
     [Fact]
-    public void The_Writer_Suite_Is_All_11_Fixtures_That_Carry_A_Row_Stream()
+    public void The_Writer_Suite_Is_All_12_Fixtures_That_Carry_A_Row_Stream()
     {
-        // 11 with NOTHING subtracted: #1651's five (012-015, 025) plus the six EXP-6 hostile-value
-        // cases #1652 converted from prose (016-020, 022). Those six were the whole of the gap this
-        // runner recorded when it was written, so the number now covers every page-export case whose
-        // subject the writer implements — 021 (EXP-7's row limit) has no writer output at all, and a
-        // twelfth would mean a new fixture, not a converted one.
-        Assert.Equal(11, InScopeFixtures.Count);
+        // 12 with NOTHING subtracted: #1651's five (012-015, 025), the six EXP-6 hostile-value cases
+        // #1652 converted from prose (016-020, 022) — which exhausted the converted-from-prose supply,
+        // as this comment said at 11 — and #1653's 026, which is therefore a NEW fixture, authored for
+        // EXP-5's per-field overrides. 021 (EXP-7's row limit) still has no writer output at all, so a
+        // thirteenth again means a new case rather than a conversion.
+        Assert.Equal(12, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -341,15 +413,23 @@ public class CsvWriterConformanceFixtureTests
         using var left = JsonDocument.Parse(File.ReadAllText(leftPath));
         using var right = JsonDocument.Parse(File.ReadAllText(rightPath));
 
-        var names = left.RootElement.EnumerateObject().Select(member => member.Name)
-            .Concat(right.RootElement.EnumerateObject().Select(member => member.Name))
+        return DifferingMembers(left.RootElement, right.RootElement);
+    }
+
+    /// <summary>The same comparison one level down, for a nested object (a <c>fields</c> map, one field's
+    /// config). The caller owns the documents these elements came from.</summary>
+    private static Dictionary<string, (string Left, string Right)> DifferingMembers(
+        JsonElement left, JsonElement right)
+    {
+        var names = left.EnumerateObject().Select(member => member.Name)
+            .Concat(right.EnumerateObject().Select(member => member.Name))
             .Distinct(StringComparer.Ordinal);
 
         var differing = new Dictionary<string, (string Left, string Right)>(StringComparer.Ordinal);
         foreach (var name in names)
         {
-            var leftText = RawMember(left.RootElement, name);
-            var rightText = RawMember(right.RootElement, name);
+            var leftText = RawMember(left, name);
+            var rightText = RawMember(right, name);
             if (!string.Equals(leftText, rightText, StringComparison.Ordinal))
             {
                 differing[name] = (leftText, rightText);

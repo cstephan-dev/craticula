@@ -1,0 +1,5 @@
+﻿id;orderDate;customerName;totalAmount;status;region;notes
+1001;05/01/2026;Acme, Inc.;1234,50;shipped;EMEA;"Ship to dock 3; ask for Ana"
+1002;05/01/2026;"Bill ""Big"" Ross Ltd";99,00;shipped;EMEA;"Delivered
+signed by J. Ross"
+1003;14/02/2026;Zenith Retail;0,00;shipped;APAC;

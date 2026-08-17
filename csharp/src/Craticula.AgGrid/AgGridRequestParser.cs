@@ -1313,7 +1313,10 @@ public static class AgGridRequestParser
     /// declares <see cref="FieldConfig.Exportable"/>, in GRP-3's declaration order
     /// (<see cref="GridSchema.FieldOrder"/>, read from the schema document — never a
     /// <see cref="Dictionary{TKey,TValue}"/>'s unspecified enumeration order). Doing it once, here,
-    /// is what stops the SQL and Mongo compilers from being able to disagree about the default.</para>
+    /// is what stops the SQL and Mongo compilers from being able to disagree about the default. Each
+    /// resolved column carries the two things a compiler never sees and a writer cannot re-derive: its
+    /// header (EXP-1(b)) and, since #1653, its <see cref="FieldConfig.Format"/> (EXP-5's per-field date
+    /// pattern and decimal separator).</para>
     ///
     /// <para><b>Why this reads the schema although "the adapter is not an allowlist gate" (#1635).</b>
     /// Exactly <see cref="ResolveDatePreset"/>'s distinction: SC-1 allowlisting stays
@@ -1432,7 +1435,10 @@ public static class AgGridRequestParser
                 ? headerEl.GetString()!
                 : config.Label ?? colId;
 
-            columns.Add(new ExportColumn(colId, header));
+            // The format is the field's own (EXP-5 puts the override in schema config, so unlike the
+            // header there is nothing on the wire to merge with it) and travels on the column because
+            // the writer is handed nothing else per field.
+            columns.Add(new ExportColumn(colId, header, config.Format));
         }
 
         if (columns.Count == 0)
@@ -1447,12 +1453,14 @@ public static class AgGridRequestParser
     }
 
     /// <summary>EXP-1's default projection: "all schema fields flagged exportable are emitted in
-    /// schema order, headers from schema labels".</summary>
+    /// schema order, headers from schema labels" — plus EXP-5's per-field format, resolved on the same
+    /// pass and from the same <see cref="FieldConfig"/>, so the two projections cannot disagree about
+    /// which columns carry an override.</summary>
     private static IReadOnlyList<ExportColumn> DefaultExportColumns(GridSchema schema)
     {
         var columns = schema.FieldOrder
             .Where(field => schema.Fields[field].Exportable)
-            .Select(field => new ExportColumn(field, schema.Fields[field].Label ?? field))
+            .Select(field => new ExportColumn(field, schema.Fields[field].Label ?? field, schema.Fields[field].Format))
             .ToList();
 
         if (columns.Count == 0)

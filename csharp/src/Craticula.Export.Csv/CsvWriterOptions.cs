@@ -33,7 +33,10 @@ public sealed record CsvWriterOptions
     /// <para>It changes the delimiter and <b>nothing else</b>: no decimal separator, no date pattern.
     /// EXP-4 makes the preset a delimiter preset, and EXP-5 keeps number/date formatting on the
     /// invariant culture until a per-field override says otherwise. Pairing the two here would make
-    /// <c>page-export/013</c>'s expected bytes depend on a coupling the TRD does not state.</para>
+    /// <c>page-export/013</c>'s expected bytes depend on a coupling the TRD does not state.
+    /// <c>page-export/026</c> is where an override does say otherwise: this same preset, over a schema
+    /// declaring <c>,</c> on the one decimal column and <c>dd/MM/yyyy</c> on the date one — the whole
+    /// European locale, assembled from the two places EXP-4 and EXP-5 each put their half.</para>
     /// </summary>
     public static CsvWriterOptions SemicolonPreset { get; } = new() { Delimiter = ';' };
 
@@ -59,10 +62,13 @@ public sealed record CsvWriterOptions
     /// <see cref="CsvValueFormatter"/>), never to an integral one — swapping a separator that is not
     /// there is what would make a thousands separator appear, and this writer emits none.
     ///
-    /// <para>EXP-5 also allows a <em>per-field</em> override in schema config. The schema does not
-    /// carry one yet (#1631 owns that field), so this is writer-wide; the formatter takes it as a
-    /// parameter rather than reading a static so that per-field resolution can be added without
-    /// restructuring anything.</para>
+    /// <para>EXP-5 also allows a <em>per-field</em> override in schema config, and since #1653 the
+    /// schema carries one (<see cref="Craticula.Core.Schema.FormatOptions.DecimalSeparator"/>, reaching
+    /// the writer on <see cref="ExportColumn.Format"/>). This member is therefore the <b>file-wide
+    /// default a field overrides</b>, not the only separator there is — which is why
+    /// <see cref="Validate(IReadOnlyList{ExportColumn})"/> exists beside <see cref="Validate()"/>: the
+    /// collision this requirement names is a property of a delimiter and <em>whichever</em> separator
+    /// applies to a cell.</para>
     /// </summary>
     public char DecimalSeparator { get; init; } = '.';
 
@@ -96,7 +102,7 @@ public sealed record CsvWriterOptions
     /// <see cref="Default"/>).
     ///
     /// <para><b>This method is the ONLY place <c>exportFormat</c> becomes a delimiter, and an adapter
-    /// wiring an export endpoint (#1653) must go through it.</b> The writer takes a resolved
+    /// wiring an export endpoint (#1622) must go through it.</b> The writer takes a resolved
     /// <see cref="ExportColumn"/> list and these options — it is never handed the parsed request, so
     /// it cannot apply the format on the caller's behalf and will not notice that the caller forgot.
     /// A host that passes <see cref="Default"/> for a <c>"tsv"</c> request gets a comma-delimited file
@@ -121,24 +127,34 @@ public sealed record CsvWriterOptions
     };
 
     /// <summary>
-    /// EXP-5's collision guard, plus the two structural impossibilities that would make the output
-    /// unparseable by anything. Called by <see cref="CsvWriter"/> before the first byte is written
-    /// (and before the row stream is enumerated), so a rejected configuration costs nothing and
-    /// leaves nothing behind. Public because a host wiring an export endpoint should be able to
-    /// reject a bad configuration at startup rather than on the first user's download.
+    /// EXP-5's collision guard for the <b>file-wide</b> separator, plus the two structural
+    /// impossibilities that would make the output unparseable by anything. Public because a host wiring
+    /// an export endpoint should be able to reject a bad configuration at startup rather than on the
+    /// first user's download.
+    ///
+    /// <para><b><see cref="Validate(IReadOnlyList{ExportColumn})"/> is the overload
+    /// <see cref="CsvWriter"/> calls</b>, because since #1653 a field can override the separator and
+    /// that override collides in exactly the same way. This one remains for a host validating its
+    /// options alone; it is a strict subset of the other.</para>
     /// </summary>
     /// <exception cref="CsvWriterException">The configuration cannot produce an unambiguous file.</exception>
     public void Validate()
     {
         // EXP-5, verbatim: "The writer MUST warn/fail if the decimal separator equals the delimiter
         // (the classic `;`-locale collision)." The failure it prevents is not a malformed file but a
-        // well-formed WRONG one: 1234,56 in a ,-delimited file parses as two columns, and every
-        // subsequent column of that row shifts by one. See CsvWriterException for warn-vs-fail.
+        // well-formed WRONG one, and precisely: this writer's own RFC 4180 quoting sees the separator
+        // inside the number and emits "1234,56" as a QUOTED field, so the row does not shift for a
+        // reader that honours quotes — the number simply arrives as quoted text a spreadsheet will not
+        // sum, in the one column an export exists to carry a quantity in. A reader that splits on the
+        // delimiter without honouring quotes does shift, from that cell to the end of the row. Neither
+        // consumer sees a malformed file; both get a wrong one, which is why this fails rather than
+        // warning. See CsvWriterException for warn-vs-fail.
         if (DecimalSeparator == Delimiter)
         {
             throw new CsvWriterException(
                 $"EXP-5: the decimal separator and the delimiter are both '{Describe(Delimiter)}'. " +
-                "Every fractional number would split into two fields and shift the rest of its row. " +
+                "Every fractional number would be emitted as a quoted string where a number belongs, " +
+                "and would split its row in any reader that ignores the quotes. " +
                 "Use CsvWriterOptions.SemicolonPreset (or any other delimiter) with a ',' decimal " +
                 "separator, or keep the invariant '.' separator with a ',' delimiter.");
         }
@@ -159,6 +175,65 @@ public sealed record CsvWriterOptions
             throw new CsvWriterException(
                 $"Decimal separator '{Describe(DecimalSeparator)}' is one of the characters RFC 4180 " +
                 "quoting is built on ('\"', CR, LF).");
+        }
+    }
+
+    /// <summary>
+    /// EXP-5's collision guard over <b>every separator that can apply to a cell</b>: this
+    /// configuration's own, and each column's <see cref="Craticula.Core.Schema.FormatOptions.DecimalSeparator"/>
+    /// override. Called by <see cref="CsvWriter"/> before the first byte is written and before the row
+    /// stream is enumerated, so a rejected export costs nothing and leaves nothing behind.
+    ///
+    /// <para><b>Why the per-field half lives here and not in the schema or in the writer's body.</b>
+    /// EXP-5 says the writer MUST warn/fail on the collision; it does not say "only for the default",
+    /// and a field-declared <c>,</c> under a <c>,</c> delimiter is the identical defect — a well-formed
+    /// WRONG file, which is the whole reason that guard exists. It cannot be checked where the override
+    /// is declared: a <c>GridSchema</c> does not know which delimiter (or which
+    /// <see cref="ExportFormat"/>) a host will export with, and the same schema is legal under <c>;</c>
+    /// and illegal under <c>,</c>. It belongs on this type rather than inside
+    /// <see cref="CsvWriter.Write"/> because the two halves are one rule and a reader should meet them
+    /// together — and because a per-field format comes from host-declared schema config, so a host
+    /// holding a schema can run this at startup exactly as it can run <see cref="Validate()"/>, which
+    /// is what that method's existence is an argument for.</para>
+    /// </summary>
+    /// <param name="columns">EXP-1(b)'s resolved projection. An empty list is not this method's
+    /// business — <see cref="CsvWriter"/> refuses it for EXP-1(b)'s reason, not EXP-5's.</param>
+    /// <exception cref="CsvWriterException">The configuration, or one column's override, cannot produce
+    /// an unambiguous file.</exception>
+    public void Validate(IReadOnlyList<ExportColumn> columns)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+
+        Validate();
+
+        foreach (var column in columns)
+        {
+            if (column.Format?.DecimalSeparator is not { } separator)
+            {
+                continue;
+            }
+
+            // The field is named, not just the character: a host reading "the decimal separator and
+            // the delimiter are both ','" over a schema with twenty fields has no way to know which
+            // declaration to fix, and the whole point of failing before the first byte is that the
+            // message is the only thing the host gets.
+            if (separator == Delimiter)
+            {
+                throw new CsvWriterException(
+                    $"EXP-5: field '{column.ColId}' declares a decimal separator " +
+                    $"'{Describe(separator)}', which is also the delimiter. Every fractional number in " +
+                    "that column would be emitted as a quoted string where a number belongs, and would " +
+                    "split its row in any reader that ignores the quotes. Change the field's " +
+                    "format.decimalSeparator in the GridSchema, or export with another delimiter.");
+            }
+
+            if (separator is '"' or '\r' or '\n')
+            {
+                throw new CsvWriterException(
+                    $"EXP-5: field '{column.ColId}' declares a decimal separator " +
+                    $"'{Describe(separator)}', one of the characters RFC 4180 quoting is built on " +
+                    "('\"', CR, LF).");
+            }
         }
     }
 

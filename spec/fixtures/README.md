@@ -25,7 +25,8 @@ own framing of the same principle for the rules these fixtures enforce.
     search.artifact.json     — shared OpenSearch/Elasticsearch artifact (OQ-7: one compiler, one DSL subset)
     export.csv? / export.tsv? — optional, CSV/TSV writer tier (EXP-4/EXP-8) — see below
   rowStream.json?           — optional, CSV/TSV writer tier: the rows an adapter yields (added #1651)
-  writerConfig.json?        — optional, CSV/TSV writer tier: delimiter/BOM/header/decimal separator
+  writerConfig.json?        — optional, CSV/TSV writer tier: the HOST's delimiter/BOM/header/decimal
+                              separator (EXP-5's PER-FIELD overrides live in schema.json instead)
   dataset.json?             — optional, execution-equality tier (T-1b) — see "Deferred" below
   expectedRows.json?        — optional, execution-equality tier (T-1b) — see "Deferred" below
 ```
@@ -38,10 +39,15 @@ survive a string comparison — against `expected/export.csv`/`.tsv`, whose exte
 own `exportFormat`. `writerConfig.json` is present **only** when the case overrides a writer default,
 so a case proving a default is graded against bytes the defaults produced. `rowStream.json` and
 `writerConfig.json` validate against `schemas/row-stream.schema.json` and
-`schemas/writer-config.schema.json`. Eleven cases carry the tier, all in `page-export/`: `012`-`015`
-and `025` (#1651, EXP-4/EXP-5) plus `016`-`020` and `022` (#1652, EXP-6's formula-injection prefixing).
+`schemas/writer-config.schema.json`. Twelve cases carry the tier, all in `page-export/`: `012`-`015`
+and `025` (#1651, EXP-4/EXP-5), `016`-`020` and `022` (#1652, EXP-6's formula-injection prefixing), and
+`026` (#1653, EXP-5's per-field date pattern and decimal separator).
 That is every writer-facing case in that category except `021`, whose subject — EXP-7's row limit —
-produces no output to compare; the category README says so and says why. **These files are deliberately
+produces no output to compare; the category README says so and says why.
+Note that a **fourth** input reaches the writer and is not a file of its own: EXP-5 puts per-field
+format overrides in *schema config*, so `026`'s two overrides live in its `schema.json` and reach the
+writer through the request adapter, exactly as a `label` does. `writerConfig.json` carries only what
+EXP-4 makes host configuration. **These files are deliberately
 not `dataset.json`/`expectedRows.json`** — see the "Deferred" section below for what those two names are
 reserved for, and the category README for why a row stream is not a database seed.
 
@@ -390,6 +396,39 @@ move: a converted case compiles exactly as it did.
 `021` is the one writer-facing case still prose, and permanently: EXP-7's row limit is an
 execution-adapter concern with no writer output at all to compare.
 
+## The reserved fixture is authored, and formatting is proved invisible to compilation (#1653)
+
+EXP-5 has two halves. #1651 shipped the collision guard and left the other — *"per-field overrides in
+schema config (date pattern, decimal separator)"* — with **no schema member to carry it**, recording in
+the category README that a future story should give the legal `;`+`,` pairing a fixture. #1653 added
+the member (`fields.<colId>.format` in `../grid-schema.schema.json`, `FieldConfig.Format` in
+`Craticula.Core`) and authored **`page-export/026`**, which is the reserved case: `013`'s request, row
+stream and `writerConfig.json` **byte for byte**, over a schema declaring `decimalSeparator: ","` on
+`totalAmount` and `datePattern: "dd/MM/yyyy"` on `orderDate`.
+
+Two properties make it worth a whole fixture rather than a unit test:
+
+- **A format reaches no compiler.** `026`'s `postgres.artifact.json` is **byte-identical to `013`'s**
+  over a real `schema.json` difference — the same claim `025` makes for `exportFormat`, now made for a
+  *schema* member rather than a request one, which is the half nothing covered.
+  `CsvWriterConformanceFixtureTests.The_Per_Field_Format_Fixture_Is_The_Semicolon_Fixtures_Inputs_With_Only_Its_Schema_Changed`
+  asserts the whole relation, down to *which* schema members differ.
+- **Per-field means per field.** The two overrides land on two different columns of every record while
+  five columns beside them are untouched. One override alone cannot tell "resolved per column" from
+  "resolved once and applied to whatever matched"; an implementation with that bug would still emit a
+  well-formed file and would fail here.
+
+The counts moved: `page-export` **25 → 26**, the Postgres runner **173 → 174**, artifacts on disk
+**662 → 663** (Mongo 161, Search 160 and the 168 non-Postgres SQL arms unmoved — a writer case carries
+one representative backend), the writer tier **11 → 12**. All four runners' `ExcludedFixtures` are
+still empty.
+
+The story also widened EXP-5's collision guard, which is the part with no fixture: a **per-field**
+decimal separator equal to the delimiter is the identical defect to the writer-wide one — a well-formed
+WRONG file — and would have been written out silently. It is refused before the first byte, naming the
+offending field, and unit-tested; a refused export produces no bytes to compare, which is why neither
+form of the collision can be a fixture.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,
@@ -544,7 +583,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
-| `page-export/` | AG-3/EXP-2 page spec, EXP-1 export + EXP-4/EXP-8 byte-exact writer output + hostile CSV values | ~20 |
+| `page-export/` | AG-3/EXP-2 page spec, EXP-1 export + EXP-4/EXP-5/EXP-8 byte-exact writer output (delimiters, BOM, per-field formats) + EXP-6 hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits | ~20 |
 | `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7, MDB-9) | ~23 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |

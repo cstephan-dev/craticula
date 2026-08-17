@@ -30,6 +30,15 @@ namespace Craticula.Export.Csv;
 /// disagree with the delimiter the caller configured. The format reaches the file through exactly one
 /// door, <see cref="CsvWriterOptions.ForFormat"/>, on the caller's side.</para>
 ///
+/// <para><b>That column list is also EXP-5's per-field channel.</b> Each
+/// <see cref="ExportColumn.Format"/> carries the host's declared date pattern and decimal separator for
+/// that column, and <see cref="CsvWriterOptions.DecimalSeparator"/> is the file-wide default a column
+/// overrides. Because a field can now name the separator, EXP-5's collision guard is widened to match:
+/// <see cref="CsvWriterOptions.Validate(IReadOnlyList{ExportColumn})"/> refuses a per-field separator
+/// equal to the delimiter exactly as it refuses the file-wide one, before the first byte, naming the
+/// offending field — a field-declared collision is the same well-formed WRONG file, and nothing else
+/// would have noticed it.</para>
+///
 /// <para><b>It also hardens against EXP-6's formula injection, and the rule is narrower than EXP-6's
 /// wording.</b> A field whose first character is <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab or CR is
 /// prefixed with <c>'</c> (see <see cref="FormulaInjectionHardening"/> for what that protects against),
@@ -54,7 +63,7 @@ namespace Craticula.Export.Csv;
 /// adapter already decided how to materialise the column, and letting the schema win over the actual
 /// value is how the two disagree silently.</para>
 ///
-/// <para><b>What that still puts on an execution adapter (#1653).</b> Because EXP-5's formatting reads
+/// <para><b>What that still puts on an execution adapter (#1622).</b> Because EXP-5's formatting reads
 /// the CLR type, an adapter must yield <em>native</em> CLR values and never its driver's wrapper types:
 /// a <see cref="decimal"/> handed over as a <c>BsonDecimal128</c> loses
 /// <see cref="CsvValueFormatter"/>'s scale-preserving arm and is rendered by whatever that wrapper's
@@ -146,7 +155,7 @@ public static class CsvWriter
             // the adapter's cursor is what a cancelled export needs to release.
             cancellationToken.ThrowIfCancellationRequested();
 
-            BuildDataRecord(record, row, columns.Count, rowCount, options);
+            BuildDataRecord(record, row, columns, rowCount, options);
             await writer.WriteAsync(record, cancellationToken).ConfigureAwait(false);
             rowCount++;
         }
@@ -187,7 +196,7 @@ public static class CsvWriter
 
         foreach (var row in rows)
         {
-            BuildDataRecord(record, row, columns.Count, rowCount, options);
+            BuildDataRecord(record, row, columns, rowCount, options);
             writer.Write(record);
             rowCount++;
         }
@@ -197,7 +206,10 @@ public static class CsvWriter
     }
 
     /// <summary>Everything both overloads must do before touching the destination: reject a
-    /// colliding configuration (EXP-5) while nothing has been written yet.</summary>
+    /// colliding configuration (EXP-5) while nothing has been written yet. The column-aware overload of
+    /// <see cref="CsvWriterOptions.Validate(IReadOnlyList{ExportColumn})"/> is the one called, so a
+    /// per-field decimal separator that collides with the delimiter is refused here too — the same
+    /// defect as the file-wide one, and the reason that overload exists.</summary>
     private static void Prepare(
         IReadOnlyList<ExportColumn> columns, CsvWriterOptions options, Stream destination)
     {
@@ -205,7 +217,7 @@ public static class CsvWriter
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(destination);
 
-        options.Validate();
+        options.Validate(columns);
 
         // EXP-1(b) guarantees a non-empty resolved list, and AgGridRequestParser rejects an empty
         // exportColumns outright — but this list can also be hand-built by a host, and a zero-column
@@ -248,23 +260,30 @@ public static class CsvWriter
         record.Append(RecordSeparator);
     }
 
+    /// <summary>One data record. Takes the column list rather than just its length because EXP-5's
+    /// per-field overrides live on it: which pattern or separator a cell is rendered with is a property
+    /// of its column, and this loop is the only place the two meet.</summary>
     private static void BuildDataRecord(
-        StringBuilder record, ExportRow row, int columnCount, long rowOrdinal, CsvWriterOptions options)
+        StringBuilder record,
+        ExportRow row,
+        IReadOnlyList<ExportColumn> columns,
+        long rowOrdinal,
+        CsvWriterOptions options)
     {
         // A row that does not match the projection is a bug in the adapter that produced it, and the
         // symptom without this check is a file whose columns silently shift from that row on — the
         // same class of damage EXP-5's collision guard exists to prevent, so it gets the same
         // treatment. The ordinal is included because "row 400123 of your export" is the only way to
         // find it again in a stream nobody kept.
-        if (row.Count != columnCount)
+        if (row.Count != columns.Count)
         {
             throw new CsvWriterException(
-                $"Row {rowOrdinal} carries {row.Count} cells but the export projects {columnCount} " +
+                $"Row {rowOrdinal} carries {row.Count} cells but the export projects {columns.Count} " +
                 "columns. The row stream must be positionally aligned with the resolved column list.");
         }
 
         record.Clear();
-        for (var index = 0; index < columnCount; index++)
+        for (var index = 0; index < columns.Count; index++)
         {
             if (index > 0)
             {
@@ -278,9 +297,14 @@ public static class CsvWriter
             // formatted number would corrupt it (class remarks).
             var value = row[index];
 
+            // EXP-6's scope is decided by the value's CLR type and EXP-5's rendering by the column's
+            // declared format: two independent inputs to one cell, and neither substitutes for the
+            // other. A per-field date pattern or decimal separator cannot move a cell into or out of
+            // hardening — the type is what does that — which is why nothing about IsInHardeningScope
+            // changes here.
             AppendField(
                 record,
-                CsvValueFormatter.Format(value, options.DecimalSeparator),
+                CsvValueFormatter.Format(value, options.DecimalSeparator, columns[index].Format),
                 options,
                 harden: IsInHardeningScope(value));
         }

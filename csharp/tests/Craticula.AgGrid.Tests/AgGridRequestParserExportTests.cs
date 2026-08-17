@@ -10,12 +10,13 @@ namespace Craticula.AgGrid.Tests;
 /// group-export carve-out, and EXP-1(b)'s resolved projection.
 ///
 /// <para><b>What is here and what is a fixture.</b> The compiled SHAPES this contract produces are
-/// pinned by <c>spec/fixtures/page-export/</c> — 25 Postgres arms and 14 Mongo/Search ones, all
+/// pinned by <c>spec/fixtures/page-export/</c> — 26 Postgres arms and 14 Mongo/Search ones, all
 /// running end to end through the three conformance runners, including <c>023</c> which was authored
 /// by this story specifically so <c>exportable: false</c> is not a compiler path whose only oracle is
-/// a unit test. What is here is what a compiled artifact CANNOT show: the rejections, and the
-/// <see cref="ExportColumn.Header"/> resolution, which no artifact in the suite contains by
-/// construction (a header is the CSV writer's, EXP-4/#1651).</para>
+/// a unit test. What is here is what a compiled artifact CANNOT show: the rejections, the
+/// <see cref="ExportColumn.Header"/> resolution and (since #1653) the
+/// <see cref="ExportColumn.Format"/> one, neither of which any artifact in the suite contains by
+/// construction — a header and a format are both the CSV writer's (EXP-4/EXP-5, #1651/#1653).</para>
 /// </summary>
 public class AgGridRequestParserExportTests
 {
@@ -24,6 +25,15 @@ public class AgGridRequestParserExportTests
     private static GridSchema Schema() => GridSchema.Parse(
         File.ReadAllText(RepoPaths.Fixture(
             "page-export", "023-export-columns-default-skips-non-exportable-field", "schema.json")));
+
+    /// <summary>The category's per-field-format schema (<c>page-export/026</c>): 013's seven fields with
+    /// EXP-5's two overrides declared on the two whose type makes them meaningful — a date pattern on
+    /// <c>orderDate</c>, a decimal separator on <c>totalAmount</c>. Read off the fixture rather than
+    /// built here so that the fixture's bytes and this resolution are graded against the same
+    /// declaration.</summary>
+    private static GridSchema FormatSchema() => GridSchema.Parse(
+        File.ReadAllText(RepoPaths.Fixture(
+            "page-export", "026-csv-writer-per-field-format-overrides", "schema.json")));
 
     private static AgGridParsedRequest Parse(string request) =>
         AgGridRequestParser.Parse(request, new AgGridParseOptions { Schema = Schema() });
@@ -205,6 +215,49 @@ public class AgGridRequestParserExportTests
 
         Assert.Equal("Customer name", customerName.Header);
         Assert.Equal("status", parsed.Export.Columns.Single(column => column.ColId == "status").Header);
+    }
+
+    /// <summary>
+    /// EXP-5's per-field overrides ride on the resolved column, because the writer is handed nothing
+    /// else per field. Asserted on <b>both</b> resolution paths — the default expansion and an explicit
+    /// <c>exportColumns</c> — since they are two separate constructions of the same type and only one of
+    /// them is exercised by <c>page-export/026</c> (whose request carries no <c>exportColumns</c>).
+    ///
+    /// <para>The columns declaring nothing are asserted too: a format resolved from the wrong
+    /// <see cref="FieldConfig"/>, or applied to every column, would produce a perfectly ordinary export
+    /// with the wrong separator in it.</para>
+    /// </summary>
+    [Fact]
+    public void Each_Resolved_Column_Carries_Its_Own_Fields_Format_And_The_Others_Carry_None()
+    {
+        var schema = FormatSchema();
+
+        var byDefault = AgGridRequestParser.Parse(
+            Request(""", "exportFormat": "csv" """), new AgGridParseOptions { Schema = schema });
+        var explicitly = AgGridRequestParser.Parse(
+            Request("""
+                , "exportFormat": "csv", "exportColumns": [
+                    { "colId": "totalAmount" }, { "colId": "status" }, { "colId": "orderDate" }
+                  ]
+                """),
+            new AgGridParseOptions { Schema = schema });
+
+        foreach (var columns in new[] { byDefault.Export!.Columns, explicitly.Export!.Columns })
+        {
+            Assert.Equal(
+                "dd/MM/yyyy",
+                columns.Single(column => column.ColId == "orderDate").Format!.DatePattern);
+            Assert.Equal(
+                ',',
+                columns.Single(column => column.ColId == "totalAmount").Format!.DecimalSeparator);
+            Assert.Null(columns.Single(column => column.ColId == "status").Format);
+        }
+
+        // 023's schema declares no format at all, so every column resolved from it carries none — which
+        // is what keeps the other eleven writer fixtures on the invariant defaults.
+        Assert.All(
+            Parse(Request(""", "exportFormat": "csv" """)).Export!.Columns,
+            column => Assert.Null(column.Format));
     }
 
     [Theory]
