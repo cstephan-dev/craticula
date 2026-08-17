@@ -16,10 +16,10 @@ namespace Craticula.Export.Csv;
 /// </summary>
 public sealed record CsvWriterOptions
 {
-    /// <summary>EXP-4's default: comma, header row on, BOM on. The three fixtures that configure
-    /// nothing (<c>page-export/012</c>, <c>/014</c> and <c>/025</c>) are byte-compared against
-    /// exactly this instance, which is what makes "the default" an asserted fact rather than a
-    /// sentence in a doc comment.</summary>
+    /// <summary>EXP-4's default: comma, header row on, BOM on, plus EXP-6's hardening on. The nine
+    /// fixtures that configure nothing (<c>page-export/012</c>, <c>/014</c>, <c>/016</c>-<c>/020</c>,
+    /// <c>/022</c> and <c>/025</c>) are byte-compared against exactly this instance, which is what makes
+    /// "the default" an asserted fact rather than a sentence in a doc comment.</summary>
     public static CsvWriterOptions Default { get; } = new();
 
     /// <summary>
@@ -65,6 +65,30 @@ public sealed record CsvWriterOptions
     /// restructuring anything.</para>
     /// </summary>
     public char DecimalSeparator { get; init; } = '.';
+
+    /// <summary>
+    /// EXP-6's "default on, configurable off". When on, a field whose first character is <c>=</c>,
+    /// <c>+</c>, <c>-</c>, <c>@</c>, tab or CR is prefixed with <c>'</c> before RFC 4180 quoting — see
+    /// <see cref="FormulaInjectionHardening"/> for what the rule protects against, and
+    /// <see cref="CsvWriter"/> for the fields it applies to (client-supplied text and headers, never a
+    /// compiler-formatted number or date).
+    ///
+    /// <para><b>#1651 shipped the writer without this member on purpose, and the reason is worth
+    /// keeping:</b> the hardening did not exist yet, so an option defaulting to <see langword="true"/>
+    /// would have promised a protection nothing performed. An option that lies is worse than an absent
+    /// one — a host reading the surface would have concluded the export was hardened and stopped
+    /// looking. #1652 adds the behaviour and the toggle in the same change, which is the only ordering
+    /// in which the default is honest.</para>
+    ///
+    /// <para>Off is a legitimate configuration, not a foot-gun: an export consumed by a parser rather
+    /// than by a spreadsheet wants the raw value, and the prefix is not reversible (see
+    /// <see cref="FormulaInjectionHardening"/>). It is off by <em>choice</em> and on by default, which
+    /// is the direction EXP-6 specifies. No conformance fixture turns it off — the six hostile-value
+    /// cases (<c>page-export/016</c>-<c>020</c>, <c>/022</c>) carry no <c>writerConfig.json</c> at all,
+    /// so they grade the default; the disabled path is unit-tested, exactly like the legal <c>;</c>+
+    /// <c>,</c> pairing EXP-5 allows.</para>
+    /// </summary>
+    public bool HardenFormulaInjection { get; init; } = true;
 
     /// <summary>
     /// The delimiter <see cref="ExportFormat"/> asks for, as a starting point a host may still refine

@@ -1,0 +1,31 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 2001,
+      "orderDate": "2026-03-30",
+      "customerName": "Ironvale Metals",
+      "totalAmount": "349.99",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "\rHe said \"hello\", then\nleft"
+    },
+    {
+      "id": 2002,
+      "orderDate": "2026-04-01",
+      "customerName": "Juniper Labs",
+      "totalAmount": "12.05",
+      "status": "shipped",
+      "region": "AMER",
+      "notes": "\rHe said \"hello\", then\nleft"
+    }
+  ]
+}

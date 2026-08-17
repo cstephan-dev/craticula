@@ -29,11 +29,43 @@ namespace Craticula.Export.Csv;
 /// disagree with the delimiter the caller configured. The format reaches the file through exactly one
 /// door, <see cref="CsvWriterOptions.ForFormat"/>, on the caller's side.</para>
 ///
-/// <para><b>What is deliberately NOT here: EXP-6's formula-injection hardening.</b> Prefixing a value
-/// that starts with <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab or CR with <c>'</c> is #1652's, along
-/// with the six <c>page-export/016</c>-<c>020</c>, <c>022</c> fixtures that pin it. The seam it needs
-/// is <see cref="AppendField"/> — the single choke point every header cell and every data cell
-/// passes through, before the quoting decision. See its own remarks.</para>
+/// <para><b>It also hardens against EXP-6's formula injection, and the rule is narrower than EXP-6's
+/// wording.</b> A field whose first character is <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab or CR is
+/// prefixed with <c>'</c> (see <see cref="FormulaInjectionHardening"/> for what that protects against),
+/// but only where the text could be client-supplied: <b>every header</b>, which is arbitrary wire text
+/// by EXP-1(b), and <b>every data cell except those the writer formatted from a number, a date/time or
+/// a <see cref="bool"/></b> — see <see cref="IsInHardeningScope"/>, which states the rule as an
+/// exclusion rather than as "is it a <see cref="string"/>" on purpose, so that a value type this writer
+/// does not recognise is hardened instead of being waved through.</para>
+///
+/// <para><b>Why, in one sentence: <c>-</c> is also the leading character of every negative number.</b>
+/// EXP-6 reads "values starting with ... <c>-</c>", unqualified, and applied literally it turns
+/// <c>-500.25</c> into <c>'-500.25</c> — which a spreadsheet displays as text, will not sum, and cannot
+/// be coerced back without the reader knowing this writer's convention. That corrupts the data the
+/// export exists to deliver, in the ordinary case, to protect against an attack that cannot reach a
+/// numeric column: OWASP's formula injection is about content a user authored, and a value the writer
+/// received as a <see cref="decimal"/> was produced by the database and re-rendered here (EXP-5), so
+/// there is no user text in it to neutralise. <c>page-export/018</c> is the oracle for both halves —
+/// one record where the string <c>-2+3</c> is prefixed and the decimal <c>-500.25</c> beside it is not.
+/// The narrowing is recorded at EXP-6 itself, in <c>docs/TRD-grid-query-compiler.md</c> §6.1, because
+/// that prose is its normative home. The discriminator is the CLR type of the value and NOT the
+/// schema's declared <c>FieldType</c>, for the reason <see cref="CsvValueFormatter"/> gives: the
+/// adapter already decided how to materialise the column, and letting the schema win over the actual
+/// value is how the two disagree silently.</para>
+///
+/// <para><b>What that still puts on an execution adapter (#1653).</b> Because EXP-5's formatting reads
+/// the CLR type, an adapter must yield <em>native</em> CLR values and never its driver's wrapper types:
+/// a <see cref="decimal"/> handed over as a <c>BsonDecimal128</c> loses
+/// <see cref="CsvValueFormatter"/>'s scale-preserving arm and is rendered by whatever that wrapper's
+/// <c>ToString()</c> does. What it no longer costs is a <em>security</em> failure —
+/// <see cref="IsInHardeningScope"/> denies by default, so an unrecognised wrapper around text is
+/// hardened rather than skipped. The residual risk is a formatting divergence, which is visible in the
+/// bytes and gradeable by a fixture; that is the right shape for an obligation on another story to
+/// carry. The opposite case, a numeric column boxed as a <see cref="string"/>, is the only one that
+/// would still justify carrying a <c>FieldType</c> on <see cref="ExportColumn"/>; it costs a spurious
+/// <c>'</c> rather than a hole, no adapter is known to do it, and adding a <c>Craticula.Core</c>
+/// contract member for a hypothetical one buys nothing while the value is in scope one frame above the
+/// seam.</para>
 /// </summary>
 public static class CsvWriter
 {
@@ -189,8 +221,14 @@ public static class CsvWriter
     /// <summary>
     /// EXP-4's header row: the resolved <see cref="ExportColumn.Header"/> of each column, in
     /// projection order. It goes through <see cref="AppendField"/> like any data cell, which is both
-    /// why a header containing the delimiter is quoted and where EXP-6's prefixing will reach it
-    /// (#1650 recorded that obligation on <see cref="ExportColumn"/> itself).
+    /// why a header containing the delimiter is quoted and how EXP-6's prefixing reaches it (#1650
+    /// recorded that obligation on <see cref="ExportColumn"/> itself).
+    ///
+    /// <para>It passes <c>harden: true</c> <b>unconditionally</b>, with none of the type test a data
+    /// cell gets: a header is arbitrary client text by EXP-1(b) — a wire-supplied <c>header</c> override,
+    /// else the schema's <c>label</c>, else the colId — and it is always a <see cref="string"/>, so the
+    /// narrowing the data path applies has nothing to exclude here. A grid whose column captions are
+    /// user-editable is exactly how <c>=cmd|…</c> reaches a header row.</para>
     /// </summary>
     private static void BuildHeaderRecord(
         StringBuilder record, IReadOnlyList<ExportColumn> columns, CsvWriterOptions options)
@@ -203,7 +241,7 @@ public static class CsvWriter
                 record.Append(options.Delimiter);
             }
 
-            AppendField(record, columns[index].Header, options);
+            AppendField(record, columns[index].Header, options, harden: true);
         }
 
         record.Append(RecordSeparator);
@@ -232,11 +270,60 @@ public static class CsvWriter
                 record.Append(options.Delimiter);
             }
 
-            AppendField(record, CsvValueFormatter.Format(row[index], options.DecimalSeparator), options);
+            // The value is read into a local because EXP-6's scope is decided by its CLR TYPE, and the
+            // type is gone one line later: CsvValueFormatter returns a string for every input, so a
+            // decimal that formatted to "-500.25" and a client-supplied "-2+3" are indistinguishable
+            // at the seam. `-` is the leading character of every negative number, so hardening a
+            // formatted number would corrupt it (class remarks).
+            var value = row[index];
+
+            AppendField(
+                record,
+                CsvValueFormatter.Format(value, options.DecimalSeparator),
+                options,
+                harden: IsInHardeningScope(value));
         }
 
         record.Append(RecordSeparator);
     }
+
+    /// <summary>
+    /// Whether a data cell's value is in EXP-6's scope, decided as a <b>default-deny</b> test: every
+    /// type <see cref="CsvValueFormatter"/> renders from a number, a date/time or a boolean is out of
+    /// scope, and <b>anything else is in it</b> — a <see cref="string"/>, but equally an enum, a
+    /// <see cref="char"/>, or a type this writer has never heard of.
+    ///
+    /// <para><b>The polarity is the whole point, and the obvious spelling (<c>value is string</c>) has
+    /// it backwards.</b> Both tests agree on every type listed below and on <see cref="string"/>; they
+    /// differ only on the unknown one, and that is precisely where an adapter bug lands. A text column
+    /// handed over as a driver's own wrapper — a <c>BsonString</c>, a <c>JsonElement</c>, a
+    /// <c>DbDataRecord</c> field object — is not a <see cref="string"/>, yet
+    /// <see cref="CsvValueFormatter"/> falls through to its <see cref="IFormattable"/>/<c>ToString()</c>
+    /// tail and produces exactly the right text. Under <c>value is string</c> that cell would be
+    /// written unhardened, and <b>the failure is invisible in the only direction that matters</b>: the
+    /// file is well formed, every character is where it should be, and the security control is simply
+    /// absent. No test in this module could see it, because a test would have to guess which wrapper
+    /// type a future adapter picks. Denying by default means an unrecognised type is hardened, so the
+    /// worst an adapter bug can now cost is a spurious <c>'</c> on a cell — visible, reportable, and
+    /// not a vulnerability.
+    ///
+    /// <para>The excluded set is closed and mirrors <see cref="CsvValueFormatter.Format"/>'s own
+    /// numeric, temporal and boolean arms, which is what keeps the two from drifting: a type added
+    /// there without being added here becomes hardened rather than becoming a hole.
+    /// <see cref="TimeSpan"/> is excluded although the formatter has no arm for it — a negative
+    /// duration renders <c>-01:30:00</c>, and it is a machine-rendered quantity like any other.</para>
+    ///
+    /// <para><see langword="null"/> is in scope and costs nothing:
+    /// <see cref="CsvValueFormatter.Format"/> maps it to the empty string, which
+    /// <see cref="FormulaInjectionHardening"/> never prefixes.</para>
+    /// </summary>
+    private static bool IsInHardeningScope(object? value) => value switch
+    {
+        bool or byte or sbyte or short or ushort or int or uint or long or ulong => false,
+        decimal or double or float => false,
+        DateOnly or DateTime or DateTimeOffset or TimeOnly or TimeSpan => false,
+        _ => true
+    };
 
     /// <summary>
     /// RFC 4180 §2 rules 5-7, applied to one already-formatted field: a field containing the active
@@ -246,18 +333,31 @@ public static class CsvWriter
     /// <para><b>This is the single choke point for every character that reaches the file</b> — the
     /// header row and every data cell both come through here, which is what makes "EXP-6 covers the
     /// header row too" (EXP-1(b), <see cref="ExportColumn.Header"/>) a structural property rather
-    /// than something a second call site could forget. <b>#1652 adds EXP-6's <c>'</c> prefixing at
-    /// the marked line below</b>, i.e. BEFORE the quoting decision: the two rules are independent and
-    /// compose (<c>page-export/020</c> is prefixed AND quoted), and a prefix applied after the
-    /// decision would be able to change whether quoting was needed.</para>
+    /// than something a second call site could forget.</para>
+    ///
+    /// <para><b>EXP-6's <c>'</c> prefixing therefore happens here as well, BEFORE the quoting
+    /// decision.</b> The two rules are independent and compose: the prefix becomes the field's first
+    /// character, then RFC 4180 wraps whatever the field now is. <c>page-export/020</c> is the oracle
+    /// for the composition — a value beginning with CR and embedding a quote, a comma and an LF comes
+    /// out as <c>"'\rHe said ""hello"", then\nleft"</c>, with the apostrophe <b>inside</b> the opening
+    /// quote. Prefixing after the decision would emit <c>'"…"</c>, which is not a CSV field at all (a
+    /// bare character in an unquoted field followed by a stray quote), and would also let the prefix
+    /// change whether quoting was needed — a value of exactly <c>"\r"</c> needs quotes either way, but
+    /// the order must not be what decides it.</para>
     ///
     /// <para>Note that a line ending INSIDE a field is preserved exactly as the value carried it (a
     /// bare LF stays a bare LF); only the record separator is normalized to CRLF. Rewriting a value's
     /// own newlines would be the writer editing data it was asked to transport.</para>
     /// </summary>
-    private static void AppendField(StringBuilder record, string text, CsvWriterOptions options)
+    /// <param name="harden">Whether this field is in EXP-6's scope — <see langword="true"/> for every
+    /// header, and for a data cell only when the adapter's value was a <see cref="string"/>. Combined
+    /// here with <see cref="CsvWriterOptions.HardenFormulaInjection"/>, which is the host's "configurable
+    /// off": the scope answers <em>which</em> fields the rule covers, the option whether it runs at all,
+    /// and both must hold. See the class remarks for why the scope is narrower than EXP-6's wording.</param>
+    private static void AppendField(
+        StringBuilder record, string text, CsvWriterOptions options, bool harden)
     {
-        // #1652 (EXP-6): text = FormulaInjectionHardening.Harden(text, options) goes here.
+        text = FormulaInjectionHardening.Harden(text, enabled: harden && options.HardenFormulaInjection);
 
         var needsQuoting = false;
         foreach (var character in text)

@@ -14,8 +14,9 @@ expected-output files below are its oracle.
 excluded from all three until the AG Grid adapter learned `exportScope`; see the "#1650" section of
 `spec/fixtures/README.md` for the five disagreements that surfaced when the arms were first executed.
 
-**Five cases also carry a CSV/TSV writer oracle since #1651** — see the shape note below for which,
-and for which are still prose.
+**Eleven cases also carry a CSV/TSV writer oracle** — five since #1651 (EXP-4/EXP-5) and six more
+since #1652 (EXP-6). That is every writer-facing case in the category except `021`; see the shape note
+below.
 
 ## Shape notes specific to this category
 
@@ -24,16 +25,16 @@ and for which are still prose.
   `filterModel`/`sortModel`/`startRow`/`endRow` fields — EXP-1 is an *extension* of the AG Grid
   SSRM wire request, not a separate request shape. Fixtures 001-003 (plain AG-3 paging) omit the
   export fields entirely, as a baseline.
-- **CSV/TSV writer fixtures: five assert, six still document (#1651).** Until #1651 no CSV writer
-  existed and all ten writer-facing cases that existed then (012-020, 022 — 025 is #1651's own)
-  carried a compiled artifact plus a documented expectation in prose. `Craticula.Export.Csv` now
-  exists, and the five cases whose
-  subject it implements — **012, 013, 014, 015** (EXP-4's delimiter presets and BOM on/off) and
-  **025** (EXP-4's tab delimiter, authored by #1651) — carry a real oracle and are compared **byte
-  for byte**, BOM included. The other six — **016-020 and 022** — are EXP-6's formula-injection
-  hostile values and stay prose until **#1652** implements the `'`-prefixing they document; **021**
-  is EXP-7's row limit, an execution-adapter concern with no writer output at all. `#1652` inherits
-  exactly that boundary: six cases to convert, using the file shapes below.
+- **CSV/TSV writer fixtures: eleven assert, one is prose because it has no output (#1651, #1652).**
+  Until #1651 no CSV writer existed and all ten writer-facing cases that existed then (012-020, 022 —
+  025 is #1651's own) carried a compiled artifact plus a documented expectation in prose.
+  `Craticula.Export.Csv` now exists and so does its EXP-6 hardening, so all eleven of the cases whose
+  subject it implements carry a real oracle and are compared **byte for byte**, BOM included:
+  **012, 013, 014, 015** (EXP-4's delimiter presets and BOM on/off) and **025** (EXP-4's tab delimiter,
+  authored by #1651), then **016-020 and 022** (EXP-6's six trigger characters, converted by #1652
+  alongside the `'`-prefixing they document — `018` also carries the suite's only negative number, which
+  is what pins EXP-6's *scope*). **021** is the one left in prose: it is EXP-7's row limit, an
+  execution-adapter concern with no writer output at all to compare.
 
   A case with an oracle carries two extra inputs beside its request and schema, and one extra
   expected file:
@@ -41,7 +42,7 @@ and for which are still prose.
   | File | What it is |
   |---|---|
   | `rowStream.json` | The rows an execution adapter yields for this fixture's compiled query, keyed by logical colId, in the compiled `ORDER BY`'s order. Validates against `../schemas/row-stream.schema.json`. |
-  | `writerConfig.json` | EXP-4/EXP-5's host configuration (`delimiter`, `bom`, `headerRow`, `decimalSeparator`). **Present only when the case overrides a default** — 012, 014 and 025 carry none, which is what makes them oracles for the defaults. Validates against `../schemas/writer-config.schema.json`. |
+  | `writerConfig.json` | EXP-4/EXP-5's host configuration (`delimiter`, `bom`, `headerRow`, `decimalSeparator`). **Present only when the case overrides a default** — nine of the eleven carry none (only 013 and 015 do), which is what makes them oracles for the defaults, EXP-6's "default on" included. Validates against `../schemas/writer-config.schema.json`. |
   | `expected/export.csv` / `expected/export.tsv` | The bytes. The extension is the request's own `exportFormat`, which is the only place in the fixture tree that field is visible at all (004/005 prove it reaches no compiled artifact). |
 
   **Not `dataset.json`/`expectedRows.json`.** Those two names are reserved for the execution-equality
@@ -51,15 +52,24 @@ and for which are still prose.
   by logical colId and carries exactly the projected columns. Both can coexist in one directory later
   without either meaning the other.
 
-  **How the rows were derived.** Each case's `status` cell is `"shipped"` in every row because the
-  request's `equals` filter says so — an `equals` filter's value is exactly what any matching row's
-  cell contains, which is the argument these fixtures' `description.md`s already made in prose. The
-  row *order* is the compiled query's `ORDER BY` (`order_date ASC`, then SEM-6's `id` tiebreaker).
-  Everything else is **chosen, not derived**, and each `description.md` says so and says what it was
-  chosen to exercise (a delimiter inside a value, an inner quote, an embedded LF, a null, non-ASCII
-  text, a tab). No cell begins with `=`, `+`, `-`, `@`, tab or CR: those are EXP-6's triggers, and a
-  trigger character here would make these expected bytes change when #1652 lands, for a reason that
-  has nothing to do with EXP-4.
+  **How the rows were derived.** One cell of every row is *derived*: the one the request's `equals`
+  filter names, because an `equals` filter's value is exactly what any matching row's cell contains —
+  `status` is `"shipped"` in every row of 012-015 and 025, and `notes` is the hostile value in every row
+  of 016-020 and 022, which is the argument those fixtures' `description.md`s already made in prose. The
+  row *order* is the compiled query's `ORDER BY`: `order_date ASC` then SEM-6's `id` tiebreaker for
+  012-015/025, whose requests carry a `sortModel`, and the bare `id` tiebreaker for 016-020/022, whose
+  `sortModel` is empty. Everything else is **chosen, not derived**, and each `description.md` says so
+  and says what it was chosen to exercise (a delimiter inside a value, an inner quote, an embedded LF, a
+  null, non-ASCII text, a tab).
+
+  **Which cases may carry an EXP-6 trigger character, and which may not.** In 012-015 and 025 no cell
+  begins with `=`, `+`, `-`, `@`, tab or CR and no number is negative: those are EXP-6's triggers, and
+  one here would make an EXP-4 case's bytes say something about EXP-6 too. In 016-020 and 022 exactly
+  one cell does — `notes`, which is the whole point — and `018` additionally carries a **negative
+  `totalAmount`**, the only one in the suite, because EXP-6's scope (every cell and header except the
+  ones the writer formatted from a number, a date/time or a boolean) is pinned by nothing else. No header in the category begins with a trigger
+  either; that branch is unit-tested instead, since a twenty-sixth case would move the compiler runners'
+  artifact counts for a property that has nothing to do with compilation.
 
   All eleven still use a single representative backend (`postgres.artifact.json`) for their compiled
   arm, since the behavior under test is at the writer layer, not the compiler layer.
@@ -77,9 +87,11 @@ and for which are still prose.
 
 - **Hostile values are safe-handling, not rejection.** Distinct from the `adversarial/` category's
   `expected/rejection.json` shape: an EXP-6 hostile export value is a perfectly legal filter value
-  that compiles normally. The compiled artifact shows the raw, unmodified value; hardening
-  (leading-apostrophe prefixing) is documented as a future CSV-writer obligation, not enforced
-  here.
+  that compiles normally. The compiled artifact shows the raw, unmodified value; the hardening
+  (leading-apostrophe prefixing) belongs to the CSV writer and is asserted in `expected/export.csv`,
+  never in the artifact. Each of the six therefore has **two** expected files that must disagree — the
+  raw value in the artifact's `params`, the prefixed one in the bytes — which is the cheapest statement
+  of "the compiler has no opinion on this value" the suite can make.
 - **`exportable` and `label` exist now — the "`grid-schema.schema.json` gap" this README used to
   record is CLOSED.** `spec/grid-schema.schema.json` carries both per-field properties and
   `FieldConfig.Exportable` defaults to `true`, so 009/021's "treat every field as exportable" is no
@@ -138,13 +150,13 @@ and for which are still prose.
 | 013 | `013-csv-writer-delimiter-semicolon-preset` | First-class `;` delimiter preset; quoting follows the active delimiter — **byte-exact** | EXP-4, EXP-8 |
 | 014 | `014-csv-writer-bom-on-default` | UTF-8 BOM on by default, over non-ASCII cells — **byte-exact** | EXP-4, EXP-8 |
 | 015 | `015-csv-writer-bom-off-configured` | UTF-8 BOM explicitly disabled; 014's file minus three bytes — **byte-exact** | EXP-4, EXP-8 |
-| 016 | `016-hostile-value-formula-equals` | Leading `=` passes through compiler unchanged (documented writer prefix) | EXP-6, EXP-8 |
-| 017 | `017-hostile-value-formula-plus` | Leading `+` passes through compiler unchanged (documented writer prefix) | EXP-6, EXP-8 |
-| 018 | `018-hostile-value-formula-minus` | Leading `-` passes through compiler unchanged (documented writer prefix) | EXP-6, EXP-8 |
-| 019 | `019-hostile-value-formula-at` | Leading `@` passes through compiler unchanged (documented writer prefix) | EXP-6, EXP-8 |
-| 020 | `020-hostile-value-cr-quote-newline-delimiter` | Leading CR + embedded quote/newline/delimiter (documented writer prefix + RFC 4180 quoting) | EXP-6, EXP-8, EXP-4 |
+| 016 | `016-hostile-value-formula-equals` | Leading `=` passes through the compiler unchanged; the writer prefixes it with `'` — **byte-exact** | EXP-6, EXP-8 |
+| 017 | `017-hostile-value-formula-plus` | Leading `+` on a phone number, prefixed by the writer — **byte-exact** | EXP-6, EXP-8 |
+| 018 | `018-hostile-value-formula-minus` | Leading `-` prefixed on the **string** cell while the **negative `decimal`** beside it is not — EXP-6's scope, pinned nowhere else — **byte-exact** | EXP-6, EXP-8 |
+| 019 | `019-hostile-value-formula-at` | Leading `@` passes through the compiler unchanged; the writer prefixes it with `'` — **byte-exact** | EXP-6, EXP-8 |
+| 020 | `020-hostile-value-cr-quote-newline-delimiter` | Leading CR + embedded quote/newline/delimiter: prefix **and** RFC 4180 quoting on one cell, apostrophe inside the quotes — **byte-exact** | EXP-6, EXP-8, EXP-4 |
 | 021 | `021-export-max-rows-limit-default` | Default max export rows (1,000,000) is an execution-adapter concern, not a compiled-artifact field (documented) | EXP-7 |
-| 022 | `022-hostile-value-formula-tab` | Leading tab passes through compiler unchanged (documented writer prefix) — rounds out EXP-6's trigger-character coverage alongside 016-020 | EXP-6, EXP-8 |
+| 022 | `022-hostile-value-formula-tab` | Leading tab prefixed but **not** quoted, the delimiter being `,` — rounds out EXP-6's trigger-character coverage alongside 016-020 — **byte-exact** | EXP-6, EXP-8 |
 | 023 | `023-export-columns-default-skips-non-exportable-field` | Default projection omits a field declared `exportable: false`, which is still filterable | EXP-1, EXP-1(b) |
 | 024 | `024-export-all-ignores-drill-down-group-keys` | Export discards a **non-empty `groupKeys`** too — no drill-down predicate, no grouped level | EXP-1 (group-export carve-out), EXP-1(a) |
 | 025 | `025-tsv-writer-tab-delimited` | `exportFormat: "tsv"` makes the writer emit tabs, and a tab inside a value is quoted while a `,`/`;` is not — **byte-exact**, with a compiled arm byte-identical to 012's | EXP-4, EXP-8 |
@@ -159,7 +171,7 @@ shared Search, except:
   sufficient (see the shape note above). Their Postgres arm is nonetheless an ordinary compiled query
   and is compared like any other — which is why this category contributes 25 arms to the Postgres
   runner and 14 to each of the other two.
-- The five writer oracles are backend-agnostic by construction: a row stream is what *any* adapter
+- The eleven writer oracles are backend-agnostic by construction: a row stream is what *any* adapter
   yields, so there is no per-backend expected output and never will be. That is EXP-4's "backend-
   agnostic module" restated as a fixture shape.
 - Fixture 008's Mongo artifact demonstrates column narrowing via a `$project` stage; the shared

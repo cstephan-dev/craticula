@@ -1,0 +1,3 @@
+﻿id,orderDate,customerName,totalAmount,status,region,notes
+1801,2026-03-16,Estuary Marine,-500.25,credited,EMEA,'-2+3
+1802,2026-03-18,Farrow Textiles,640.00,shipped,AMER,'-2+3

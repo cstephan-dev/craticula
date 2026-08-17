@@ -1,0 +1,31 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 1901,
+      "orderDate": "2026-03-23",
+      "customerName": "Glenmark Foods",
+      "totalAmount": "88.10",
+      "status": "shipped",
+      "region": "APAC",
+      "notes": "@SUM(A1:A10)"
+    },
+    {
+      "id": 1902,
+      "orderDate": "2026-03-25",
+      "customerName": "Halvern Group",
+      "totalAmount": "1200.00",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "@SUM(A1:A10)"
+    }
+  ]
+}

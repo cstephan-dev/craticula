@@ -1,0 +1,5 @@
+﻿id,orderDate,customerName,totalAmount,status,region,notes
+2001,2026-03-30,Ironvale Metals,349.99,shipped,EMEA,"'He said ""hello"", then
+left"
+2002,2026-04-01,Juniper Labs,12.05,shipped,AMER,"'He said ""hello"", then
+left"

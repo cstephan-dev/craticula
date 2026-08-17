@@ -4,10 +4,11 @@ using Craticula.Core.Export;
 namespace Craticula.Export.Csv.Tests;
 
 /// <summary>
-/// The rules of EXP-4/EXP-5 that no fixture can carry, exercised directly: every RFC 4180 quoting
-/// trigger in isolation (the fixtures show them composed), the configurations the writer REFUSES —
-/// which produce no output file and therefore cannot be a byte fixture — and the streaming contract,
-/// which is a property of how the writer consumes its input rather than of what it emits.
+/// The rules of EXP-4/EXP-5/EXP-6 that no fixture can carry, exercised directly: every RFC 4180
+/// quoting trigger in isolation (the fixtures show them composed), the configurations the writer
+/// REFUSES — which produce no output file and therefore cannot be a byte fixture — the two halves of
+/// EXP-6's scope that the fixture tree has no room for, and the streaming contract, which is a
+/// property of how the writer consumes its input rather than of what it emits.
 ///
 /// <para>What is deliberately NOT here: a second oracle for the delimiter presets and the BOM. Those
 /// are graded by <see cref="CsvWriterConformanceFixtureTests"/> against hand-authored files, and
@@ -96,11 +97,12 @@ public class CsvWriterTests
 
     /// <summary>
     /// The header row goes through the same field path as a data cell, which is what makes EXP-6's
-    /// prefixing reach it in #1652 without a second call site (see EXP-1(b)'s note on
-    /// <see cref="ExportColumn.Header"/>). Pinned here on the rule that already exists: a header
-    /// containing the delimiter is quoted exactly as a value is. <c>page-export/008</c> is the
-    /// fixture that supplies wire headers; it carries no row stream yet, so this is the only place
-    /// header text is exercised at all.
+    /// prefixing reach it without a second call site (see EXP-1(b)'s note on
+    /// <see cref="ExportColumn.Header"/>, and
+    /// <see cref="Prefixes_A_Header_That_Begins_With_A_Trigger_Character"/> for that half). Pinned here
+    /// on the quoting rule: a header containing the delimiter is quoted exactly as a value is.
+    /// <c>page-export/008</c> is the fixture that supplies wire headers; it carries no row stream, so
+    /// this is the only place header text is exercised at all.
     /// </summary>
     [Fact]
     public void Quotes_A_Header_The_Same_Way_It_Quotes_A_Cell()
@@ -112,6 +114,136 @@ public class CsvWriterTests
         var output = Write(options, columns, [new ExportRow(["1", "2"])]);
 
         Assert.Equal("\"Total, net\",\"He said \"\"go\"\"\"\r\n1,2\r\n", output);
+    }
+
+    // ---- formula-injection hardening (EXP-6) --------------------------------------------------------
+
+    /// <summary>
+    /// EXP-6's "configurable off", through the writer rather than through
+    /// <see cref="FormulaInjectionHardening"/>: with the option off, a hostile value reaches the file
+    /// exactly as the adapter yielded it, and so does a hostile header. No conformance fixture turns the
+    /// option off — the six hostile-value cases carry no <c>writerConfig.json</c> at all, which is what
+    /// makes them oracles for the default — so this is the only place the disabled path is graded, like
+    /// the legal <c>;</c>+<c>,</c> pairing above.
+    /// </summary>
+    [Fact]
+    public void Emits_The_Raw_Value_When_Hardening_Is_Configured_Off()
+    {
+        IReadOnlyList<ExportColumn> columns = [new ExportColumn("notes", "=Notes")];
+        var options = CsvWriterOptions.Default with
+        {
+            HardenFormulaInjection = false,
+            WriteByteOrderMark = false
+        };
+
+        Assert.Equal("=Notes\r\n=1+2\r\n", Write(options, columns, [new ExportRow(["=1+2"])]));
+    }
+
+    /// <summary>
+    /// EXP-1(b), verbatim: a <c>header</c> is arbitrary client text carried to the writer, so "EXP-6's
+    /// formula-injection hardening applies to the header row exactly as it applies to values".
+    ///
+    /// <para><b>No fixture covers a hostile header, deliberately, and this is the only guard.</b> Adding
+    /// a twenty-sixth <c>page-export</c> case would move the 662-artifact census and the three compiler
+    /// runners' exact counts for a property that has nothing to do with compilation, and overriding a
+    /// header on one of the six hostile-value cases would make its bytes test two things at once. The
+    /// header path is structural — one call site, <c>harden: true</c> unconditionally — and this states
+    /// it. Note the second column: a header is hardened whatever its text, but the type test that
+    /// spares a numeric CELL does not exist for a header, because a header is always a string.</para>
+    /// </summary>
+    [Fact]
+    public void Prefixes_A_Header_That_Begins_With_A_Trigger_Character()
+    {
+        IReadOnlyList<ExportColumn> columns =
+            [new ExportColumn("link", "=Import this"), new ExportColumn("total", "-Net total")];
+        var options = CsvWriterOptions.Default with { WriteByteOrderMark = false };
+
+        var output = Write(options, columns, [new ExportRow([1L, 2L])]);
+
+        Assert.Equal("'=Import this,'-Net total\r\n1,2\r\n", output);
+    }
+
+    /// <summary>
+    /// The narrowing #1652 applied to EXP-6's unqualified wording, stated as the rule
+    /// <c>page-export/018</c> pins in bytes: a negative number formats to text beginning with <c>-</c>,
+    /// EXP-6's third trigger, and is NOT prefixed, while a client-supplied <see cref="string"/> in the
+    /// next column is. Prefixing the number would produce <c>'-500.25</c>, which a spreadsheet renders
+    /// as text and will not sum — corrupting the data the export exists to deliver, to defend a column
+    /// no user authored.
+    ///
+    /// <para>Every numeric width is listed rather than just the <see cref="decimal"/> the fixture
+    /// carries: <c>-</c> is the leading character of every negative number of every width, and a date
+    /// renders with two of them. Note what this test does NOT claim — "not a <see cref="string"/>"
+    /// is not the rule; the rule is "a number, a date/time or a <see cref="bool"/>", and
+    /// <see cref="Prefixes_A_Cell_Whose_Value_Is_An_Unrecognised_Wrapper_Around_Text"/> is the case
+    /// that separates the two.</para>
+    /// </summary>
+    [Fact]
+    public void Does_Not_Prefix_A_Cell_The_Writer_Formatted_From_A_Number_Or_A_Date()
+    {
+        var options = CsvWriterOptions.Default with { IncludeHeaderRow = false, WriteByteOrderMark = false };
+
+        var output = Write(
+            options,
+            Columns(6),
+            [new ExportRow([-500.25m, -42L, -1.5d, -7.25f, new DateOnly(2026, 3, 16), "-2+3"])]);
+
+        Assert.Equal("-500.25,-42,-1.5,-7.25,2026-03-16,'-2+3\r\n", output);
+    }
+
+    /// <summary>A driver's own wrapper around a text column, as MongoDB's <c>BsonString</c> and
+    /// <c>JsonElement</c> both are: not a <see cref="string"/>, but it renders its text through
+    /// <see cref="CsvValueFormatter"/>'s <c>ToString()</c> tail and carries whatever the client
+    /// wrote.</summary>
+    private sealed class TextWrapper(string text)
+    {
+        public override string ToString() => text;
+    }
+
+    /// <summary>
+    /// <b>The polarity of EXP-6's type test, and the one case where the two plausible spellings
+    /// disagree.</b> <see cref="CsvWriter"/> asks "is this a number, a date or a bool?" and hardens
+    /// everything else; the obvious alternative asks "is this a <see cref="string"/>?" and hardens
+    /// nothing else. They agree on every type either test enumerates — and differ here, on the type
+    /// neither anticipated, which is exactly where an adapter bug lands.
+    ///
+    /// <para>Without this test the suite cannot tell the two apart, and the failure it guards is the
+    /// worst shape a security bug takes: <see cref="CsvValueFormatter"/> renders the wrapper's text
+    /// correctly, so the file is well formed, every character is where it belongs, the row count is
+    /// right — and the hardening is simply not there. Nothing about the output looks wrong. A
+    /// default-deny test cannot fail that way; the worst it can do is put a spurious <c>'</c> on a cell,
+    /// which someone reads and reports.</para>
+    /// </summary>
+    [Fact]
+    public void Prefixes_A_Cell_Whose_Value_Is_An_Unrecognised_Wrapper_Around_Text()
+    {
+        var options = CsvWriterOptions.Default with { IncludeHeaderRow = false, WriteByteOrderMark = false };
+
+        var output = Write(options, Columns(2), [new ExportRow([new TextWrapper("=1+2"), new TextWrapper("safe")])]);
+
+        Assert.Equal("'=1+2,safe\r\n", output);
+    }
+
+    /// <summary>
+    /// The composition of EXP-6 and EXP-4 on one cell, as a string rather than as a byte diff:
+    /// <b>the apostrophe lands INSIDE the opening quote.</b> <c>page-export/020</c> is the byte oracle;
+    /// this is the readable statement of it, because a byte-array mismatch is exactly where an operator
+    /// precedence like this one is hardest to see.
+    ///
+    /// <para>The wrong form, <c>'"…"</c> (prefix applied after quoting), is not a badly formatted field
+    /// but an unparseable one — a bare character in an unquoted field followed by a stray quote — and
+    /// applying the prefix first is also what stops it from being able to change whether quoting was
+    /// needed.</para>
+    /// </summary>
+    [Fact]
+    public void Puts_The_Apostrophe_Inside_The_Quotes_When_Both_Rules_Apply()
+    {
+        var options = CsvWriterOptions.Default with { IncludeHeaderRow = false, WriteByteOrderMark = false };
+
+        var output = WriteOneRow(options, "\rHe said \"hello\", then\nleft");
+
+        Assert.Equal("\"'\rHe said \"\"hello\"\", then\nleft\"\r\n", output);
+        Assert.StartsWith("\"'", output, StringComparison.Ordinal);
     }
 
     // ---- refusals (EXP-5 and the structural impossibilities) ----------------------------------------
@@ -317,6 +449,12 @@ public class CsvWriterTests
         Assert.Equal('.', CsvWriterOptions.Default.DecimalSeparator);
         Assert.Equal(';', CsvWriterOptions.SemicolonPreset.Delimiter);
         Assert.Equal('.', CsvWriterOptions.SemicolonPreset.DecimalSeparator);
+
+        // EXP-6's "default ON", which is the direction that matters: a hardening that had to be opted
+        // into would leave every host that never read this file exporting unprotected files.
+        Assert.True(CsvWriterOptions.Default.HardenFormulaInjection);
+        Assert.True(CsvWriterOptions.SemicolonPreset.HardenFormulaInjection);
+        Assert.True(CsvWriterOptions.ForFormat(ExportFormat.Tsv).HardenFormulaInjection);
     }
 
     // ---- ExportRow ----------------------------------------------------------------------------------

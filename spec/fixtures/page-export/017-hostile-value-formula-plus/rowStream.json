@@ -1,0 +1,31 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 1701,
+      "orderDate": "2026-03-09",
+      "customerName": "Caldera Systems",
+      "totalAmount": "75.25",
+      "status": "shipped",
+      "region": "AMER",
+      "notes": "+1234567890"
+    },
+    {
+      "id": 1702,
+      "orderDate": "2026-03-11",
+      "customerName": "Dunmore Supply",
+      "totalAmount": "512.00",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "+1234567890"
+    }
+  ]
+}

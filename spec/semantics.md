@@ -1408,7 +1408,11 @@ general projection rule:
   verbatim, so **EXP-6's formula-injection hardening applies to the header row exactly as it applies
   to values**: a header beginning `=`, `+`, `-`, `@`, tab or CR is prefixed with `'` like any cell.
   EXP-6's wording is about values because no header existed when it was written; the row a header
-  lands in is a spreadsheet row like any other.
+  lands in is a spreadsheet row like any other. It applies **unconditionally** here, and #1652's
+  narrowing of EXP-6 — which spares only cells the writer formatted from a numeric, date/time or
+  boolean value — does not weaken that: a header is always text, so the narrowing has nothing to
+  exclude on this side. See the TRD's EXP-6 for the narrowing itself — this addendum still restates
+  none of EXP-4..EXP-8.
 - **The resolution happens once, in the request adapter**, not per compiler: an unknown colId, a
   colId the schema declares non-exportable, a repeated colId, and an explicitly empty list are all
   refused there. All four are hard failures in **every** `GridSchema` mode — Lenient's contract is
@@ -1454,10 +1458,15 @@ carve-out bypasses), GRP-3 (the projection rule this one composes with), SEM-6 (
 `sort-paging/012` for the `page: none` shape on all three backends. EXP-3..EXP-8 — streaming and
 chunking, the CSV writer, its formatting and injection hardening, and the row-count limit — have no
 compiled form and are **not restated here**; the TRD §6.1 prose is their normative home. #1651 built
-the writer half of EXP-4/EXP-5, and its oracle is the byte-exact `expected/export.csv`/`.tsv` files
-in `page-export/012`-`015` and `/025` (see that category's README for the file shapes and for which
-cases are still prose). EXP-6's injection hardening is #1652's; EXP-3 and EXP-7 are the execution
-adapters'.
+the writer half of EXP-4/EXP-5 and #1652 EXP-6's injection hardening, and their oracle is the
+byte-exact `expected/export.csv`/`.tsv` files in `page-export/012`-`020`, `/022` and `/025` — eleven of
+that category's twenty-five cases, which is every writer-facing one except `021` (EXP-7's row limit
+produces no output to compare). See the category README for the file shapes. #1652 also **narrowed**
+EXP-6, sparing the cells it formatted from a numeric, date/time or boolean value and hardening every
+other cell (the rule is normative as that exclusion, not as "string-valued cells" — see the TRD for
+why the polarity matters); that narrowing is recorded at EXP-6 itself in the TRD, and the only trace
+of it here is the unconditional-for-headers note under EXP-1(b) above. EXP-3 and EXP-7 are the
+execution adapters'.
 
 ---
 

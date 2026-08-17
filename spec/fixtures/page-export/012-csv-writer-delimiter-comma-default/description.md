@@ -35,9 +35,11 @@ are picked so that every RFC 4180 quoting trigger appears at least once.
 - `notes` on row 1001 contains a `;`, which is **not** quoted here and is quoted in fixture 013 —
   the two files share a row stream, so the difference between them is the delimiter and nothing else.
 
-No cell begins with `=`, `+`, `-`, `@`, tab or CR. That is deliberate: EXP-6's hardening (#1652,
-fixtures 016-020 and 022) prefixes such a value with `'`, and a trigger character here would make
-these expected bytes change when that story lands, for a reason that has nothing to do with EXP-4.
+No cell begins with `=`, `+`, `-`, `@`, tab or CR, and no `totalAmount` is negative. That is
+deliberate: EXP-6's hardening (fixtures 016-020 and 022) prefixes such a value with `'`, and a trigger
+character here would make these expected bytes say something about EXP-6 as well, which is not what
+this case is for. It is also what kept these bytes unchanged when #1652 landed the prefixing — the
+guarantee held.
 
 ## Documented writer expectation (EXP-4) — asserted
 

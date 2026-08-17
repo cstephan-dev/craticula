@@ -1,0 +1,31 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 1601,
+      "orderDate": "2026-03-02",
+      "customerName": "Acme Industrial",
+      "totalAmount": "250.00",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "=1+2"
+    },
+    {
+      "id": 1602,
+      "orderDate": "2026-03-04",
+      "customerName": "Bering Foods",
+      "totalAmount": "18.40",
+      "status": "pending",
+      "region": "APAC",
+      "notes": "=1+2"
+    }
+  ]
+}
