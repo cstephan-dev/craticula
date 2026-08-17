@@ -208,7 +208,29 @@ public sealed record CsvWriterOptions
 
         foreach (var column in columns)
         {
-            if (column.Format?.DecimalSeparator is not { } separator)
+            if (column.Format is not { } format)
+            {
+                continue;
+            }
+
+            // An unusable pattern throws FormatException on the first date cell — mid-stream, after the
+            // BOM and the header row have already reached the client, which is the one failure a
+            // streaming writer cannot take back. GridSchema.Parse refuses it, but a column list can be
+            // hand-built without a schema (an execution adapter is expected to), so the writer asks
+            // again here rather than trusting a provenance it cannot see. This is why
+            // FormatOptions.IsValid is public where its SqlMapping counterpart is internal.
+            if (!format.IsValid)
+            {
+                throw new CsvWriterException(
+                    $"EXP-5: field '{column.ColId}' declares a date pattern " +
+                    $"'{format.DatePattern}' that no formatter can apply. Left to the first date cell it " +
+                    "would throw mid-export, after the header row and an arbitrary number of records had " +
+                    "already reached the client. Note that an empty pattern is refused too: it is .NET's " +
+                    "alias for the general format, which would silently substitute a shape nobody asked " +
+                    "for. Fix the field's format.datePattern in the GridSchema.");
+            }
+
+            if (format.DecimalSeparator is not { } separator)
             {
                 continue;
             }

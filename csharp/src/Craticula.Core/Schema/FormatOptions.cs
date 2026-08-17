@@ -36,15 +36,29 @@ public sealed record FormatOptions
     /// platform understands it and is <b>not</b> portable; a conformance fixture must therefore stay
     /// inside it, which <c>page-export/026</c>'s <c>dd/MM/yyyy</c> does.</para>
     ///
-    /// <para><b>Known limit: an offset specifier reads state the writer otherwise never consults.</b>
-    /// A pattern carrying <c>z</c>/<c>K</c> renders the machine's local offset when it is applied to a
-    /// value that carries none (a <see cref="DateOnly"/>, or a <see cref="DateTime"/> whose
-    /// <see cref="DateTimeKind"/> is <see cref="DateTimeKind.Unspecified"/> — the ordinary shape of a
-    /// SQL <c>timestamp</c>), which makes those bytes depend on the host. It is not rejected, because
-    /// whether a value carries an offset is known only from its runtime type and a schema cannot see
-    /// that; and it cannot be detected by probing, because the probe's own answer would depend on the
-    /// validating machine's zone. Stated rather than silently permitted: an offset is meaningful in a
-    /// pattern only for a column an adapter yields as a <see cref="DateTimeOffset"/>.</para>
+    /// <para><b>Known limit: <c>z</c> reads state the writer otherwise never consults.</b> Applied to a
+    /// value carrying no offset — a <see cref="DateOnly"/>, or a <see cref="DateTime"/> whose
+    /// <see cref="DateTimeKind"/> is <see cref="DateTimeKind.Unspecified"/>, the ordinary shape of a SQL
+    /// <c>timestamp</c> — <c>z</c>/<c>zz</c>/<c>zzz</c> substitutes <b>the formatting machine's own
+    /// offset</b>, so the same rows exported from a developer's laptop and from a UTC CI box differ in
+    /// bytes.
+    ///
+    /// <para><b><c>K</c> is not the same hazard, and an earlier draft of this clause said it was.</b>
+    /// Measured, invariant culture: on an <see cref="DateTimeKind.Unspecified"/> value <c>K</c> renders
+    /// the <b>empty string</b> — machine-independently — and it yields an offset only for a
+    /// <see cref="DateTimeKind.Local"/> value (<see cref="DateTimeKind.Utc"/> gives <c>Z</c>). Naming
+    /// both together misdirects a language port in both directions at once: it would guard the
+    /// specifier that is safe on the case named, and leave open the one that is not.</para>
+    ///
+    /// <para>Neither is rejected. Whether a value carries an offset is known only from its runtime type,
+    /// which a schema cannot see, and no probe can settle it — the probe's own answer depends on the
+    /// validating machine's zone, so a guard built that way passes locally and fails on CI. A purely
+    /// <em>syntactic</em> refusal of an unescaped <c>z</c> would be machine-independent and is a
+    /// defensible narrowing, given the portable-subset rule above already excludes it; it is not applied
+    /// because a column an adapter yields as a <see cref="DateTimeOffset"/> renders an offset
+    /// deterministically, and that is a legitimate use this record cannot distinguish from the hazardous
+    /// one. A conformance fixture must stay inside the portable subset regardless, which is the rule that
+    /// actually protects the suite.</para>
     /// </summary>
     public string? DatePattern { get; init; }
 
@@ -81,8 +95,20 @@ public sealed record FormatOptions
     /// accepted here cannot throw later. An empty or whitespace-only pattern is rejected although it
     /// formats cleanly: <c>""</c> is .NET's alias for the general format (<c>01/05/2026 14:30:45</c>),
     /// so accepting it would silently substitute a shape nobody asked for.</para>
+    ///
+    /// <para><b>Why this is <see langword="public"/> where <see cref="SqlMapping.IsValid"/> is
+    /// internal, which is a deliberate divergence.</b> That one has exactly one caller,
+    /// <see cref="GridSchema.Parse"/>, because a physical mapping reaches a compiler only through a
+    /// parsed schema. A <see cref="FormatOptions"/> does not: it travels on an
+    /// <see cref="Craticula.Core.Export.ExportColumn"/>, which is a public record an execution adapter
+    /// or a host may <b>hand-build</b> without any schema having been parsed — and #1622's adapters are
+    /// expected to. Left internal, the CSV writer (a different assembly) could not ask this question,
+    /// and the mid-stream <see cref="FormatException"/> described above was reachable in exactly that
+    /// case: measured, the writer emitted the BOM and the whole header row before throwing. So the
+    /// second caller is real, and the pre-flight guard that needs it is
+    /// <c>CsvWriterOptions.Validate(IReadOnlyList&lt;ExportColumn&gt;)</c>.</para>
     /// </summary>
-    internal bool IsValid => DatePattern is null || IsUsableDatePattern(DatePattern);
+    public bool IsValid => DatePattern is null || IsUsableDatePattern(DatePattern);
 
     /// <summary>An arbitrary, fixed probe instant — the value is irrelevant, only whether the pattern
     /// survives being applied to it.</summary>

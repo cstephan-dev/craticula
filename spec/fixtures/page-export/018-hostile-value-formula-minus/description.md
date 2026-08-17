@@ -8,7 +8,7 @@ perfectly legal `typedValue` (a `string`, per `ir.schema.json`'s `stringValue`) 
 
 **It also proves the one thing no other fixture in the suite does: which cells EXP-6 applies to.** See
 "The scope of the rule" below — that section is this case's real subject, and it is the reason this
-fixture carries a **negative** `totalAmount` while none of the other twenty-four does.
+fixture carries a **negative** `totalAmount` while no other case in the category does.
 
 This case was prose until #1652. It carried a compiled artifact and a written-down expectation
 because the writer had no hardening to grade; `Craticula.Export.Csv.FormulaInjectionHardening` now

@@ -423,6 +423,53 @@ public class CsvWriterTests
         Assert.Equal(0, destination.Length);
     }
 
+    /// <summary>
+    /// The other half of EXP-5(c): an unusable <see cref="FormatOptions.DatePattern"/> is refused
+    /// <b>before any byte is written</b>, on a column list nobody parsed a schema for.
+    ///
+    /// <para><b>This is the case the guard was missing, and the failure it replaces was the worst shape
+    /// available to a streaming writer.</b> <see cref="Craticula.Core.Schema.GridSchema"/> refuses such a
+    /// pattern at parse time, but an <see cref="ExportColumn"/> is a public record an execution adapter
+    /// can hand-build with no schema in sight (#1622 will), and <see cref="FormatOptions.IsValid"/> was
+    /// <see langword="internal"/>, so this assembly could not ask. Measured before the fix: the writer
+    /// emitted the BOM and the entire header row — twelve bytes on the wire — and then threw a raw
+    /// <see cref="FormatException"/> on the first date cell, which is neither recoverable nor a
+    /// <see cref="CsvWriterException"/>. The two assertions that matter are therefore the exception
+    /// <em>type</em> and <c>Length == 0</c>; a test asserting only that "it throws" would still pass
+    /// against the bug.</para>
+    /// </summary>
+    [Fact]
+    public void Refuses_An_Unusable_Per_Field_Date_Pattern_Before_Writing_Any_Byte()
+    {
+        IReadOnlyList<ExportColumn> columns =
+        [
+            new ExportColumn("id", "id"),
+            new ExportColumn("orderDate", "orderDate", new FormatOptions { DatePattern = "q" })
+        ];
+        using var destination = new MemoryStream();
+
+        var exception = Assert.Throws<CsvWriterException>(() => CsvWriter.Write(
+            [new ExportRow([1L, new DateOnly(2026, 1, 5)])], columns, CsvWriterOptions.Default, destination));
+
+        Assert.Contains("EXP-5", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("orderDate", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, destination.Length);
+    }
+
+    /// <summary>An empty pattern is refused by the same pre-flight, not merely by
+    /// <c>GridSchema.Parse</c>: <c>""</c> is .NET's alias for the general format, so letting it through
+    /// would substitute <c>01/05/2026 14:30:45</c> for the ISO default nobody asked to change.</summary>
+    [Fact]
+    public void Refuses_An_Empty_Per_Field_Date_Pattern_Before_Writing_Any_Byte()
+    {
+        IReadOnlyList<ExportColumn> columns = [new ExportColumn("orderDate", "orderDate", new FormatOptions { DatePattern = "" })];
+        using var destination = new MemoryStream();
+
+        Assert.Throws<CsvWriterException>(() => CsvWriter.Write(
+            [new ExportRow([new DateOnly(2026, 1, 5)])], columns, CsvWriterOptions.Default, destination));
+        Assert.Equal(0, destination.Length);
+    }
+
     /// <summary>The same refusal on the async path and on <see cref="CsvWriterOptions.Validate"/>'s
     /// column-aware overload — which is where the check lives, so that a host holding its schema and
     /// its options can reject the pair at startup rather than on the first user's download, exactly as
