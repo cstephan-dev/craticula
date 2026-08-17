@@ -65,4 +65,26 @@ public static class SqlPatternEscaping
 
         return escaped.ToString();
     }
+
+    /// <summary>
+    /// <see cref="Escape"/> plus T-SQL's extra metacharacter: <c>[</c>, which opens a character class
+    /// in SQL Server's <c>LIKE</c> and in no other dialect this project targets. Use this wherever the
+    /// engine treats <c>[</c> as a metacharacter, and <see cref="Escape"/> everywhere else.
+    ///
+    /// <para><b>Why the two passes compose rather than being one loop</b> — the part that is easy to
+    /// get wrong, and the reason this lives here instead of at each call site. The <c>[</c> pass must
+    /// run <em>second</em>: the escape character that <see cref="Escape"/> introduces is an escape, not
+    /// a literal, and must not be doubled again; and a literal escape character in the value was
+    /// already doubled by that first pass and carries no <c>[</c> for this one to see. Running them the
+    /// other way round, or fusing them, silently changes what the user searched for.</para>
+    ///
+    /// <para><b>Why it is shared.</b> SQL-5 is normative (see <c>dialect-parity</c>'s D5, pinned by
+    /// fixture <c>022</c>): an unescaped <c>[</c> silently <em>widens</em> a match set, so the failure
+    /// is wrong rows rather than an exception, and nothing downstream would notice. Two owners of that
+    /// decision is exactly what #1645 moved this class into <c>Craticula.Core</c> to prevent, and the
+    /// second owner appeared in the same commit — the SQL dialect and the EF Core adapter each held a
+    /// copy. If SQL-5 ever widens to <c>]</c>, <c>^</c> or <c>-</c>, it widens here once.</para>
+    /// </summary>
+    public static string EscapeIncludingLeftBracket(string value, char escapeCharacter) =>
+        Escape(value, escapeCharacter).Replace("[", $"{escapeCharacter}[", StringComparison.Ordinal);
 }

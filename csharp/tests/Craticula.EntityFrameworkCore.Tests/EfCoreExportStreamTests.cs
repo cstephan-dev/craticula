@@ -65,8 +65,9 @@ public class EfCoreExportStreamTests
             Assert.DoesNotContain("OFFSET", command, StringComparison.OrdinalIgnoreCase);
         }
 
-        // ...and the walk really did chunk: a size of 1 over 8 rows cannot be one statement. (The final
-        // statement is the short chunk that ends the walk, hence rows + 1 at size 1.)
+        // ...and the walk really did chunk: a size of 1 over 8 rows cannot be one statement. (The walk
+        // stops as soon as a chunk comes back without its probe row, so an exactly-full last chunk
+        // costs no extra empty round trip.)
         Assert.True(
             database.ExecutedCommands.Count > 1 || chunkSize >= rows.Count,
             $"Chunk size {chunkSize} over {rows.Count} rows executed only one statement, so the keyset " +
@@ -129,17 +130,29 @@ public class EfCoreExportStreamTests
     /// SEM-6's tiebreaker is what makes the walk sound, so a schema whose stable key is NOT unique must
     /// fail loudly.
     ///
-    /// <para><b>The failure mode is not the obvious one, and this test is here because the first
-    /// implementation guarded against the wrong thing.</b> A boundary predicate says "strictly after the
-    /// last row emitted", so the walk is monotone — it cannot repeat a row and cannot fail to terminate,
-    /// which makes a "did the boundary advance?" guard unreachable code. What a duplicate stable key
-    /// actually causes is a row <em>silently skipped</em> at a chunk edge: a short export that is
-    /// perfectly well formed. So the check is on the data — two adjacent rows sharing the trailing key —
-    /// which is precise (the result is sorted, so duplicates are neighbours) and cannot false-positive,
-    /// since SC-5 declares that key unique.</para>
+    /// <para><b>The failure mode is not the obvious one, and this test has now guarded against the wrong
+    /// thing twice.</b> A boundary predicate says "strictly after the last row emitted", so the walk is
+    /// monotone — it cannot repeat a row and cannot fail to terminate, which makes a "did the boundary
+    /// advance?" guard unreachable code. What a duplicate stable key actually causes is a row
+    /// <em>silently skipped</em>: a short export that is perfectly well formed.
+    ///
+    /// <para><b>Then the fix for that was itself half-blind, and this test hid it by choosing one chunk
+    /// size.</b> An adjacent-row check only sees duplicates that land inside the SAME chunk. When the pair
+    /// straddles a chunk edge the next chunk's predicate excludes the second row, so it is never fetched
+    /// and there is nothing to compare — the review reproduced exactly that at <c>ChunkSize = 1</c>: two
+    /// seeded rows, one emitted, no exception. The original test asserted at <c>chunkSize: 2</c> against a
+    /// two-row dataset, the one size at which both rows are guaranteed to share a chunk, so it passed
+    /// while the behaviour it names was wrong. Hence the theory below: <b>1 is the case that matters</b>,
+    /// because with two rows it forces the pair apart.</para>
+    ///
+    /// <para>The check cannot false-positive, since SC-5 declares that key unique.</para>
     /// </summary>
-    [Fact]
-    public async Task A_Non_Unique_Stable_Key_Is_Reported_Rather_Than_Silently_Dropping_A_Row()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5000)]
+    public async Task A_Non_Unique_Stable_Key_Is_Reported_At_Every_Chunk_Size(int chunkSize)
     {
         var fixture = HardestOrdering();
 
@@ -154,11 +167,12 @@ public class EfCoreExportStreamTests
         using var database = SqliteFixtureDatabase.Create(fixture.Schema, duplicated);
 
         var exception = await Assert.ThrowsAsync<EfCoreCompilationException>(
-            async () => await Drain(database, fixture, chunkSize: 2));
+            async () => await Drain(database, fixture, chunkSize));
 
         Assert.Contains("share the stable key", exception.Message, StringComparison.Ordinal);
         Assert.Contains("silently omits", exception.Message, StringComparison.Ordinal);
     }
+
 
     /// <summary>EXP-1/EXP-2: a page-scoped export is refused rather than given a <c>Skip</c>, which is
     /// what keeps the no-OFFSET guarantee total instead of true-except-once. The message names the entry

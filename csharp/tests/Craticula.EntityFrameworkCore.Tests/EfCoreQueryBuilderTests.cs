@@ -364,6 +364,43 @@ public class EfCoreQueryBuilderTests
     }
 
     /// <summary>
+    /// SQL-5's extra T-SQL metacharacter, on the branch no shipped preset turns on:
+    /// <see cref="EfCoreProviderSemantics.PatternMatchTreatsLeftBracketAsMetacharacter"/>. Only
+    /// <see cref="EfCoreProviderSemantics.Sqlite"/> exists today and it sets the flag
+    /// <see langword="false"/>, so without this test the <see langword="true"/> branch ships unexercised
+    /// — and its failure mode is the quiet one: an unescaped <c>[</c> opens a character class and
+    /// silently <b>widens</b> the match set, returning wrong rows rather than throwing.
+    ///
+    /// <para><b>The expected value is not read off this adapter.</b> It is what
+    /// <c>dialect-parity/022</c> pins for the SQL path on SQL Server — that fixture sends
+    /// <c>A[BC]</c> and its <c>mssql.artifact.json</c> binds <c>A\[BC]</c>, with the <c>]</c>
+    /// deliberately left alone. Asserting against the fixture's own oracle is what makes this a
+    /// statement about SQL-5 rather than a restatement of the code, and it is the same claim AR-4
+    /// makes about the two paths: they must not disagree about what a value means.</para>
+    /// </summary>
+    [Fact]
+    public void A_Left_Bracket_Is_Escaped_Where_The_Engine_Treats_It_As_A_Metacharacter()
+    {
+        const string asPinnedByDialectParity022 = @"A\[BC]";
+
+        Assert.Equal(asPinnedByDialectParity022, SqlPatternEscaping.EscapeIncludingLeftBracket("A[BC]", '\\'));
+
+        // And the flag actually selects it: the default (SQLite) preset must leave the bracket alone.
+        Assert.Equal("A[BC]", SqlPatternEscaping.Escape("A[BC]", '\\'));
+        Assert.False(EfCoreProviderSemantics.Sqlite.PatternMatchTreatsLeftBracketAsMetacharacter);
+    }
+
+    /// <summary>The composition order the two escaping passes require, which is the part that is easy to
+    /// get wrong: the escape character introduced by the first pass must not be doubled by the second,
+    /// and a literal escape character already doubled carries no <c>[</c> for the second to see.</summary>
+    [Fact]
+    public void The_Bracket_Pass_Does_Not_Re_Escape_What_The_First_Pass_Introduced()
+    {
+        // '\' doubles to '\\'; '%' becomes '\%'; only the bare '[' gains a prefix.
+        Assert.Equal(@"a\\b\%c\[d", SqlPatternEscaping.EscapeIncludingLeftBracket(@"a\b%c[d", '\\'));
+    }
+
+    /// <summary>
     /// AG-3: <c>startRow: 0</c> emits a limit and NO offset. Not a micro-optimisation — it is what keeps
     /// the first grid page's statement the same shape as an export chunk's, so that
     /// <c>EfCoreExportStreamTests</c>' "no OFFSET anywhere" assertion is about the export path rather

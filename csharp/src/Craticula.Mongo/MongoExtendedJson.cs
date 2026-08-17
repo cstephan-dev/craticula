@@ -72,13 +72,15 @@ internal static class MongoExtendedJson
     /// </summary>
     public static string NormalizeInstant(string value)
     {
-        if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var instant))
+        // SEM-4's READING is Craticula.Core.Ir.IsoInstant's, shared with the SQL compiler and the EF
+        // Core adapter (#1645). Only the RENDERING below is this backend's. A local copy of the parse
+        // is how two backends come to disagree about which moment a wire string denotes.
+        if (!IsoInstant.TryParseUtc(value, out var utc))
         {
             throw new MongoCompilationException(
                 $"datetimeValue '{value}' is not an ISO-8601 instant (FilterNodeValidator should have rejected it upstream).");
         }
 
-        var utc = instant.UtcDateTime;
         var format = utc.Ticks % TimeSpan.TicksPerSecond == 0
             ? "yyyy-MM-dd'T'HH:mm:ss'Z'"
             : "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'";

@@ -595,20 +595,25 @@ public static class EfCoreQueryBuilder
                 "substring match, but this provider's LIKE folds case unconditionally " +
                 "(EfCoreProviderSemantics.PatternMatchFoldsCase), so no provider-independent EF translation can " +
                 "honour the declaration. Translating it anyway would silently return rows the schema excludes " +
-                "(SEM-1). Declare the column's collation case-sensitive in DDL, or compile this request with " +
-                "Craticula.Sql, whose SqliteDialect reaches for GLOB.");
+                "(SEM-1). Compile this request with Craticula.Sql instead: its dialects reach for the " +
+                "engine-specific operator EF has no provider-independent equivalent of (GLOB on SQLite, a " +
+                "case-sensitive collation elsewhere), and spec/fixtures/dialect-parity/021 is that path's " +
+                "oracle. Note that a column collation is NOT a fix on every engine — SQLite's LIKE ignores " +
+                "collating sequences entirely, so only the connection-wide PRAGMA case_sensitive_like would " +
+                "move it, and that would break the insensitive direction for every other field. Where a " +
+                "collation IS the lever (MySQL), the provider fact " +
+                "EfCoreProviderSemantics.PatternMatchFoldsCase must be set false to match, since it describes " +
+                "the provider rather than the column.");
         }
 
-        var escaped = SqlPatternEscaping.Escape(value.Value, PatternEscapeCharacter);
-
-        if (context.Semantics.PatternMatchTreatsLeftBracketAsMetacharacter)
-        {
-            // Composed in this order, never as one pass, for MssqlDialect.EscapePattern's reason: the
-            // '\' the shared pass introduces is an escape character and must NOT be doubled by this
-            // one, and a literal '\' in the value was already doubled and carries no '[' for this pass
-            // to see.
-            escaped = escaped.Replace("[", $"{PatternEscapeCharacter}[", StringComparison.Ordinal);
-        }
+        // SQL-5's '[' pass is NOT re-implemented here. Both this adapter and MssqlDialect route through
+        // the one Core helper, because an unescaped '[' silently WIDENS a match set — wrong rows, no
+        // exception — and a second copy of that decision is precisely what moving SqlPatternEscaping
+        // into Craticula.Core was meant to prevent. The composition order the two passes require is
+        // stated once, there.
+        var escaped = context.Semantics.PatternMatchTreatsLeftBracketAsMetacharacter
+            ? SqlPatternEscaping.EscapeIncludingLeftBracket(value.Value, PatternEscapeCharacter)
+            : SqlPatternEscaping.Escape(value.Value, PatternEscapeCharacter);
 
         var pattern = node.Op switch
         {

@@ -18,11 +18,14 @@ namespace Craticula.Core.Schema;
 /// consumers now target the same database through completely different machinery, and AR-4 requires
 /// them to return the same rows.</para>
 ///
-/// SEM-4 (dates &amp; zones) has no corresponding method here: it is almost entirely "must NOT"
-/// constraints on compiler <em>rendering</em> (never emit a zone clause for a <c>datetimeValue</c>,
-/// never promote a <c>dateValue</c> to a Mongo <c>Date</c>) rather than a callable decision — a
-/// future compiler author should read SEM-4 in <c>spec/semantics.md</c> directly rather than expect
-/// a resolver method for it.
+/// SEM-4 (dates &amp; zones) has no method <em>here</em>, but since #1645 it is no longer purely a rule
+/// to read. Its <b>reading</b> half — which absolute instant a <c>datetimeValue</c> denotes — is now a
+/// callable decision, <see cref="Craticula.Core.Ir.IsoInstant.TryParseUtc"/>, and all four consumers go
+/// through it. <b>Call that rather than parsing the text again:</b> a second parse is how two backends
+/// come to disagree about which moment a wire string names, which is the divergence AR-4 forbids.
+/// What remains uncallable is SEM-4's <em>rendering</em> half — "must NOT" constraints on output (never
+/// emit a zone clause for a <c>datetimeValue</c>, never promote a <c>dateValue</c> to a Mongo
+/// <c>Date</c>) — and for those, read SEM-4 in <c>spec/semantics.md</c> directly.
 /// </summary>
 public static class SemanticsResolver
 {

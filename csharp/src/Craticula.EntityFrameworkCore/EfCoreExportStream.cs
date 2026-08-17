@@ -139,12 +139,23 @@ public static class EfCoreExportStream
                 filtered = filtered.Where(after);
             }
 
+            // ChunkSize + 1, and the extra row is a PROBE that is never emitted. Without it the
+            // uniqueness check below is blind in the one place a row is actually lost: when two rows
+            // share the stable key ACROSS a chunk edge, the boundary predicate ("strictly after the
+            // last row emitted") excludes the second one, so it is never fetched and there is nothing
+            // left to compare it against. The adjacent-row check alone therefore only sees duplicates
+            // that happen to land inside one chunk — which is a function of the chunk size, not of the
+            // data, and at the 5,000 default it misses roughly one duplicate pair in 5,000. What it
+            // misses is a silently SHORT export that is otherwise perfectly well formed.
+            //
+            // One extra row per chunk, discarded, is the whole cost.
             var chunk = EfCoreQueryBuilder.ApplyProjection(
-                EfCoreQueryBuilder.ApplyOrdering(filtered, keys, context).Take(chunking.ChunkSize),
+                EfCoreQueryBuilder.ApplyOrdering(filtered, keys, context).Take(chunking.ChunkSize + 1),
                 request.Schema,
                 projected);
 
             var rowsInChunk = 0;
+            var probed = false;
 
             await foreach (var cells in chunk.AsAsyncEnumerable()
                 .WithCancellation(cancellationToken).ConfigureAwait(false))
@@ -163,16 +174,28 @@ public static class EfCoreExportStream
                 // false positive — SC-5 declares the key unique, so two equal values are a schema defect
                 // whether or not this particular export would have dropped anything.
                 var stableKey = cells[columns.Count + stableKeyIndex];
+
+                if (rowsInChunk == chunking.ChunkSize)
+                {
+                    // The probe row. It is never emitted and never becomes the boundary — its only job
+                    // is to be compared, because it is the row the NEXT chunk's predicate would drop if
+                    // it duplicates the stable key of the last row emitted here.
+                    probed = true;
+
+                    if (Equals(stableKey, boundary[stableKeyIndex]))
+                    {
+                        throw DuplicateStableKey(request.Schema.StableKey, stableKey);
+                    }
+
+                    break;
+                }
+
+                // The same defect inside one chunk, where the rows ARE adjacent in the result. Both
+                // checks are needed: this one cannot see across a chunk edge, and the probe above only
+                // looks at the edge.
                 if (rowsInChunk > 0 && Equals(stableKey, boundary[stableKeyIndex]))
                 {
-                    throw new EfCoreCompilationException(
-                        $"Two rows share the stable key '{request.Schema.StableKey}' (value '{stableKey}'). SC-5 " +
-                        "declares that key unique and EXP-3's keyset chunking relies on it: it is the last key of " +
-                        "every ordering this adapter emits (SEM-6), and it is what makes the sort a TOTAL order " +
-                        "that a boundary predicate can split. Without uniqueness the walk does not loop or " +
-                        "repeat — it silently omits the duplicate at a chunk edge, producing a short export that " +
-                        "looks complete. Fix the schema's stableKey; a larger chunk size only moves which row is " +
-                        "lost.");
+                    throw DuplicateStableKey(request.Schema.StableKey, stableKey);
                 }
 
                 for (var index = 0; index < keys.Count; index++)
@@ -184,9 +207,11 @@ public static class EfCoreExportStream
                 yield return new ExportRow(new ArraySegment<object?>(cells, 0, columns.Count));
             }
 
-            // A short chunk is the end of the data: the ordering is total, so there is no arrangement in
-            // which the engine returns fewer rows than asked for and more remain.
-            if (rowsInChunk < chunking.ChunkSize)
+            // No probe row means the engine had nothing beyond this chunk: the ordering is total, so
+            // there is no arrangement in which it returns fewer rows than asked for and more remain.
+            // Testing the probe rather than `rowsInChunk < ChunkSize` also covers the exactly-full last
+            // chunk, which would otherwise cost one more empty round trip.
+            if (!probed)
             {
                 yield break;
             }
@@ -194,4 +219,22 @@ public static class EfCoreExportStream
             walked = true;
         }
     }
+
+    /// <summary>
+    /// SEM-6's uniqueness, reported rather than trusted from the declaration — because the consequence
+    /// of it being false is silent. The boundary predicate is "strictly after the last row emitted", so
+    /// the walk can never repeat a row or fail to terminate; what it does instead, when two rows share a
+    /// stable key, is <b>skip</b> the second one, producing a short export that is otherwise perfectly
+    /// well formed.
+    ///
+    /// <para>It cannot produce a false positive: SC-5 declares the key unique, so two equal values are a
+    /// schema defect whether or not this particular export would have dropped anything.</para>
+    /// </summary>
+    private static EfCoreCompilationException DuplicateStableKey(string stableKeyField, object? value) =>
+        new($"Two rows share the stable key '{stableKeyField}' (value '{value}'). SC-5 declares that key " +
+            "unique and EXP-3's keyset chunking relies on it: it is the last key of every ordering this " +
+            "adapter emits (SEM-6), and it is what makes the sort a TOTAL order that a boundary predicate " +
+            "can split. Without uniqueness the walk does not loop or repeat — it silently omits the " +
+            "duplicate, producing a short export that looks complete. Fix the schema's stableKey; a " +
+            "different chunk size only moves which row is lost.");
 }

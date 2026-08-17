@@ -182,7 +182,7 @@ public sealed class MssqlDialect : ISqlDialect
     /// one to see.)</para>
     /// </summary>
     private static string EscapePattern(string value) =>
-        SqlPatternEscaping.Escape(value, PatternEscape).Replace("[", $"{PatternEscape}[", StringComparison.Ordinal);
+        SqlPatternEscaping.EscapeIncludingLeftBracket(value, PatternEscape);
 
     public string RenderSetMembership(
         string quotedColumn,

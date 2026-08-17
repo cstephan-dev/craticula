@@ -53,7 +53,26 @@ public sealed class GridSchemaModelCacheKeyFactory : IModelCacheKeyFactory
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        return (context.GetType(), (context as IGridSchemaModel)?.Schema, designTime);
+        // Registering this factory is an explicit opt-in, so a context that registers it and does NOT
+        // implement IGridSchemaModel is unambiguously a half-finished configuration rather than a host
+        // that wanted EF's default. Left as `as ... ?.Schema`, the schema component would be null, the
+        // key would collapse back to EF's own (Type, designTime), and the second schema would silently
+        // reuse the first one's model — which is the exact defect this factory exists to remove, and it
+        // resurfaces as one of the two misleading errors named in this file's remarks ("Cannot create a
+        // DbSet for 'Dictionary<string, object>'…"), neither of which mentions caching. Naming the
+        // missing interface here costs one cast and turns a silent mis-cache into a sentence.
+        if (context is not IGridSchemaModel schemaModel)
+        {
+            throw new InvalidOperationException(
+                $"'{context.GetType().Name}' registers {nameof(GridSchemaModelCacheKeyFactory)} but does not " +
+                $"implement {nameof(IGridSchemaModel)}, so the schema cannot take part in the model cache key. " +
+                "EF caches one model per DbContext type, so without it every schema after the first would " +
+                "silently reuse the first one's model and fail later with an error that does not mention " +
+                $"caching. Implement {nameof(IGridSchemaModel)} on the context (returning the same " +
+                $"{nameof(GridSchema)} its OnModelCreating builds from), or remove the factory registration.");
+        }
+
+        return (context.GetType(), schemaModel.Schema, designTime);
     }
 }
 
