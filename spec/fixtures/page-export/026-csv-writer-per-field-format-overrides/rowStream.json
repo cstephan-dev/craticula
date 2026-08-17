@@ -1,0 +1,40 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 1001,
+      "orderDate": "2026-01-05",
+      "customerName": "Acme, Inc.",
+      "totalAmount": "1234.50",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "Ship to dock 3; ask for Ana"
+    },
+    {
+      "id": 1002,
+      "orderDate": "2026-01-05",
+      "customerName": "Bill \"Big\" Ross Ltd",
+      "totalAmount": "99.00",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "Delivered\nsigned by J. Ross"
+    },
+    {
+      "id": 1003,
+      "orderDate": "2026-02-14",
+      "customerName": "Zenith Retail",
+      "totalAmount": "0.00",
+      "status": "shipped",
+      "region": "APAC",
+      "notes": null
+    }
+  ]
+}

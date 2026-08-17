@@ -31,9 +31,11 @@ public class MongoConformanceFixtureTests
     /// <c>001</c>-<c>004</c> are #1639's single-dialect MySQL/SQL Server/SQLite showcases and
     /// <c>005</c> is Oracle's, none of which carries a Mongo arm at all. Discovery filters on the
     /// artifact's presence, so they need no exclusion entry — there is nothing to compare
-    /// against. <c>page-export</c> contributes 14 of its 25 for the same reason: <c>012</c>-<c>020</c>,
-    /// <c>022</c> and <c>025</c> exercise CSV-writer behavior on a single representative backend and
-    /// carry a Postgres arm only.</para>
+    /// against. <c>page-export</c> contributes fewer than its directory count for the same reason:
+    /// <c>012</c>-<c>020</c>, <c>022</c>, <c>025</c> and <c>026</c> exercise CSV-writer behavior on a
+    /// single representative backend and carry a Postgres arm only. Stated as the rule rather than as
+    /// a subtraction on purpose — the arithmetic form went stale in #1653 while
+    /// <see cref="InScopeCategories"/>'s own count did not move, so nothing failed.</para>
     ///
     /// <para><c>page-export</c> joined in #1650 (EXP-1/EXP-2), and brought <c>sort-paging</c> from 11
     /// to 12 with it: both blockages were the same one — <c>AgGridRequestParser</c> could not read

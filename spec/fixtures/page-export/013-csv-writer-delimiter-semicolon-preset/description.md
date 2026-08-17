@@ -23,16 +23,22 @@ follows the active delimiter**.
 
 `totalAmount` still renders `1234.50` with a `.`, because this file overrides the delimiter and
 nothing else. EXP-4 makes `;` a **delimiter** preset; EXP-5 keeps number and date formatting on the
-invariant culture until a per-field override says otherwise (#1631 owns that schema field), and
-pairing the two would make these bytes depend on a coupling the TRD does not state.
+invariant culture until a per-field override says otherwise, and pairing the two *here* would make
+this fixture's bytes depend on a coupling the TRD does not state — and would make one fixture test
+two requirements at once.
 
 The pairing is nonetheless the reason the preset exists, and it is legal: `;` delimiter + `,` decimal
 separator is the classic French/European locale, and it is exactly what EXP-5's collision guard
-permits *because* the delimiter is no longer `,`. The collision it forbids is `,` delimiter + `,`
-decimal separator, which no fixture can pin — the writer refuses before producing any bytes, so
-there is no output file to compare. That refusal is unit-tested in `Craticula.Export.Csv.Tests`;
-the *legal* `;` + `,` pairing has no fixture-level oracle either, and the category README records
-both gaps.
+permits *because* the delimiter is no longer `,`. **Fixture 026 is that pairing**, added by #1653 with
+EXP-5's per-field overrides: this fixture's request, row stream and `writerConfig.json` byte for byte,
+over a `schema.json` that declares `format.decimalSeparator: ","` on `totalAmount` (and a
+`format.datePattern` on `orderDate`). The diff between the two expected files is therefore exactly
+EXP-5's overrides, with EXP-4's quoting — this fixture's subject — held constant.
+
+The collision the guard forbids is `,` delimiter + `,` decimal separator, from either source, and no
+fixture can pin it: the writer refuses before producing any bytes, so there is no output file to
+compare. That refusal is unit-tested in `Craticula.Export.Csv.Tests`, in both its writer-wide and its
+per-field form; the category README records why it cannot be a fixture.
 
 ## Documented writer expectation (EXP-4) — asserted
 

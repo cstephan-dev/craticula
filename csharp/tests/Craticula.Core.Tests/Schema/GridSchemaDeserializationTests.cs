@@ -49,6 +49,14 @@ public class GridSchemaDeserializationTests
           "groupable": true,
           "aggregatable": ["sum", "avg", "min", "max", "count"],
           "exportable": false
+        },
+        "amount": {
+          "type": "decimal",
+          "format": { "decimalSeparator": "," }
+        },
+        "createdOn": {
+          "type": "date",
+          "format": { "datePattern": "dd/MM/yyyy" }
         }
       }
     }
@@ -66,7 +74,7 @@ public class GridSchemaDeserializationTests
         Assert.Equal("tenantId", staticFilter.Field);
         Assert.Equal(ComparisonOperator.Eq, staticFilter.Op);
         Assert.Equal(42L, Assert.IsType<Int64Value>(staticFilter.Value).Value);
-        Assert.Equal(4, schema.Fields.Count);
+        Assert.Equal(6, schema.Fields.Count);
     }
 
     [Fact]
@@ -131,6 +139,30 @@ public class GridSchemaDeserializationTests
         Assert.False(quantity.Exportable);
     }
 
+    /// <summary>
+    /// EXP-5's two per-field overrides, each declared on a field whose type makes it meaningful — a
+    /// decimal separator on the <c>decimal</c>, a date pattern on the <c>date</c>. Round-tripped
+    /// separately from the <see cref="TextOptions"/> case above because they are a different nested
+    /// record with a different consumer: nothing in a compiler reads either one, and
+    /// <c>page-export/026</c>'s byte-identical artifact is the fixture that says so.
+    /// </summary>
+    [Fact]
+    public void RoundTrips_FieldConfig_Format_Overrides()
+    {
+        var schema = GridSchema.Parse(Json);
+
+        Assert.Equal(',', schema.Fields["amount"].Format!.DecimalSeparator);
+        Assert.Null(schema.Fields["amount"].Format!.DatePattern);
+
+        Assert.Equal("dd/MM/yyyy", schema.Fields["createdOn"].Format!.DatePattern);
+        Assert.Null(schema.Fields["createdOn"].Format!.DecimalSeparator);
+
+        // A field that declares neither carries no FormatOptions at all, rather than an empty one:
+        // "no override" and "an override that overrides nothing" must not be two spellings of the
+        // same state, because the writer's fallback reads the null.
+        Assert.Null(schema.Fields["quantity"].Format);
+    }
+
     [Fact]
     public void Applies_Documented_Defaults_When_Optional_Properties_Are_Absent()
     {
@@ -158,6 +190,7 @@ public class GridSchemaDeserializationTests
         Assert.Null(id.Text);
         Assert.True(id.Exportable);
         Assert.Null(id.Label);
+        Assert.Null(id.Format);
     }
 
     /// <summary>

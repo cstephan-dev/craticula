@@ -32,8 +32,11 @@ public class SearchConformanceFixtureTests
     /// <c>005</c> is #1642's Oracle one, none of which carries a Search arm at all. Discovery filters
     /// on the artifact's presence, so they need no exclusion entry — there is nothing to compare
     /// against. <c>ag-grid-majors</c> contributes 6 of its 8 for the same reason (<c>007</c> and
-    /// <c>008</c> are rejection fixtures), and <c>page-export</c> 14 of its 25 (<c>012</c>-<c>020</c>,
-    /// <c>022</c> and <c>025</c> exercise CSV-writer behavior on a single representative backend).
+    /// <c>008</c> are rejection fixtures), and <c>page-export</c> fewer than its directory count
+    /// (<c>012</c>-<c>020</c>, <c>022</c>, <c>025</c> and <c>026</c> exercise CSV-writer behavior on a
+    /// single representative backend). That one is stated as the rule rather than as a subtraction on
+    /// purpose — its arithmetic form went stale in #1653 while <see cref="InScopeCategories"/>'s own
+    /// count did not move, so nothing failed.
     /// <c>group-aggregation</c> contributes 22 of its 23 because <c>020</c> has no Search arm at all:
     /// ordering a grouped level by an aggregate is refused on this backend (OSE-11(c)).</para>
     ///

@@ -37,10 +37,14 @@ public class FormulaInjectionHardeningTests
     /// is that neither EXP-6 nor OWASP includes it, not that including it would be expensive. That is
     /// worth stating precisely, because the class remarks justify tab and CR by their being
     /// <em>invisible</em> (a consumer that strips one promotes the character behind it to first
-    /// position), and that argument reads as though it covers LF too. If it should, the place to settle
-    /// it is EXP-6 in the TRD, not a widened trigger set here. And <b>the apostrophe itself is not a
-    /// trigger</b>, which is what makes the rule safe to apply to already-hardened text: the writer can
-    /// never emit two.</para>
+    /// position), and that argument reads as though it covers LF too. <b>#1653 settled it where this
+    /// comment said it had to be settled: at EXP-6 itself</b>, in <c>docs/TRD-grid-query-compiler.md</c>
+    /// §6.1 — LF is absent because in a CSV it is the RECORD separator (RFC 4180), so a consumer reads a
+    /// bare LF as a line boundary rather than as intra-field whitespace to strip, and the strip-and-promote
+    /// pathway that makes tab and CR dangerous does not exist for it. Read that clause before widening
+    /// this set; it also records the one observation that would justify doing so. And <b>the apostrophe
+    /// itself is not a trigger</b>, which is what makes the rule safe to apply to already-hardened text:
+    /// the writer can never emit two.</para>
     /// </summary>
     [Theory]
     [InlineData("plain")]

@@ -28,9 +28,10 @@ public enum ExportScope
 /// <para><b>Resolved, not echoed.</b> <see cref="Columns"/> is always the final, ordered list the
 /// export emits — the wire's own <c>exportColumns</c> when it supplied one, otherwise every field the
 /// schema declares <see cref="Craticula.Core.Schema.FieldConfig.Exportable"/>, in declaration order
-/// (EXP-1(b)). Resolving it here rather than in each compiler is what keeps the SQL and Mongo
-/// projections from being able to disagree about the default, and is why
-/// <see cref="AgGridParseOptions.Schema"/> is required for an export request.</para>
+/// (EXP-1(b)) — and each entry carries its resolved header and its
+/// <see cref="Craticula.Core.Schema.FieldConfig.Format"/> (EXP-5). Resolving it here rather than in each
+/// compiler is what keeps the SQL and Mongo projections from being able to disagree about the default,
+/// and is why <see cref="AgGridParseOptions.Schema"/> is required for an export request.</para>
 ///
 /// <para><b>This type is the wire half only.</b> What it resolves <em>to</em> —
 /// <see cref="Craticula.Core.Export.ExportColumn"/> and

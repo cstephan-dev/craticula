@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.pluries.dev/craticula/v1/grid-schema.schema.json",
   "title": "Craticula GridSchema",
-  "description": "The host-declared field allowlist and per-field configuration every compilation requires (SC-1..SC-5). This is a spec-level assumption authored for the conformance fixture suite (#1630) ahead of the actual GridSchema model/validator (#1631) — #1631 must conform to this shape, not the other way around, since this schema exists first. Every field a compilation touches (in filters, sort, group, aggregations) MUST appear in 'fields'; a colId absent from 'fields' is what the allowlist (SC-1) exists to reject.",
+  "description": "The host-declared field allowlist and per-field configuration every compilation requires (SC-1..SC-5). This is a spec-level assumption authored for the conformance fixture suite (#1630) ahead of the actual GridSchema model/validator (#1631) — #1631 must conform to this shape, not the other way around, since this schema exists first. That precedence applies to what existed then; members added later were added here and in the model by the same story ('source' in #1638, per-field 'format' in #1653), so for those two the two are one change and neither leads. Every field a compilation touches (in filters, sort, group, aggregations) MUST appear in 'fields'; a colId absent from 'fields' is what the allowlist (SC-1) exists to reject.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -72,6 +72,10 @@
           "type": "string",
           "minLength": 1,
           "description": "EXP-1: the export header text for this field when exportColumns doesn't supply its own header override ('headers from schema labels'). Falls back to the field's colId when absent."
+        },
+        "format": {
+          "$ref": "#/$defs/formatOptions",
+          "description": "EXP-5: per-field format overrides for the CSV/TSV writer. Absent means the invariant-culture default. Host-declared and never client-influenced — no AG Grid request carries a format, which is why EXP-5 puts the override in schema config. Like 'label', it reaches no compiler and appears in no expected artifact: page-export/026 is 013's inputs with these overrides added and pins a byte-identical postgres.artifact.json. Added in #1653."
         }
       },
       "required": ["type"]
@@ -104,6 +108,25 @@
             "keywordSubField": { "type": "string", "description": "SC-3: the .keyword-style exact-match/substring sub-field name, for term/wildcard/prefix/regexp ops on an analyzed field." },
             "normalizedSubField": { "type": "string", "description": "SC-3 (plural sub-field names): a keyword sub-field maintained via an ICU-folding normalizer at index time, used for case-insensitive ORDER BY / range comparisons (SEM-1) where ES/OpenSearch's query-time case_insensitive parameter is unavailable (range queries, in the pinned 7.10-era subset). Distinct from keywordSubField — only declare it for a field that needs case-insensitive ordering." }
           }
+        }
+      }
+    },
+
+    "formatOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "EXP-5's two per-field overrides, and only those two: the requirement names a date pattern and a decimal separator, so a third (thousands separator, boolean spelling, culture name) would be an invention every language port then has to reproduce.",
+      "properties": {
+        "datePattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "EXP-5's date pattern, replacing the writer's ISO 8601 default for this field only. Only meaningful when type is 'date' or 'datetime'. Written in the LDML/CLDR field letters every platform's formatter shares — yyyy, MM, dd, HH, mm, ss and literal separators — so 'dd/MM/yyyy' means the same to .NET, Java and a JavaScript port; a pattern outside that shared subset is not portable and must not appear in a fixture. A pattern no formatter can apply is rejected when the schema is parsed, not when the first date cell is written, which a streaming export cannot recover from. Note that an offset specifier (z/K) renders the host machine's offset when applied to a value that carries none, so it is meaningful only for a column an adapter yields with an offset."
+        },
+        "decimalSeparator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1,
+          "description": "EXP-5's decimal separator for this field, overriding the writer-wide default ('.', invariant culture). Only meaningful when type is 'decimal' or 'double' — an integral value has no fractional part to separate. Equal to the writer's active delimiter this is EXP-5's collision, and it is the same defect as the writer-wide one: the export is refused before its first byte by the writer, the only party that knows the delimiter. See schemas/writer-config.schema.json for the writer-wide default this overrides."
         }
       }
     },
