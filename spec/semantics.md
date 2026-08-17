@@ -1408,7 +1408,11 @@ general projection rule:
   verbatim, so **EXP-6's formula-injection hardening applies to the header row exactly as it applies
   to values**: a header beginning `=`, `+`, `-`, `@`, tab or CR is prefixed with `'` like any cell.
   EXP-6's wording is about values because no header existed when it was written; the row a header
-  lands in is a spreadsheet row like any other.
+  lands in is a spreadsheet row like any other. It applies **unconditionally** here — #1652 narrowed
+  EXP-6's scope for *cells*, and whatever that narrowing spares, it has nothing to exclude on this
+  side, because a header is always text. What the narrowing is, is the TRD's EXP-6 to state and not
+  this addendum's: the claim above is EXP-1(b)'s own (a `header` is client text), and restating the
+  cell rule here is what would make the two drift.
 - **The resolution happens once, in the request adapter**, not per compiler: an unknown colId, a
   colId the schema declares non-exportable, a repeated colId, and an explicitly empty list are all
   refused there. All four are hard failures in **every** `GridSchema` mode — Lenient's contract is
@@ -1454,10 +1458,14 @@ carve-out bypasses), GRP-3 (the projection rule this one composes with), SEM-6 (
 `sort-paging/012` for the `page: none` shape on all three backends. EXP-3..EXP-8 — streaming and
 chunking, the CSV writer, its formatting and injection hardening, and the row-count limit — have no
 compiled form and are **not restated here**; the TRD §6.1 prose is their normative home. #1651 built
-the writer half of EXP-4/EXP-5, and its oracle is the byte-exact `expected/export.csv`/`.tsv` files
-in `page-export/012`-`015` and `/025` (see that category's README for the file shapes and for which
-cases are still prose). EXP-6's injection hardening is #1652's; EXP-3 and EXP-7 are the execution
-adapters'.
+the writer half of EXP-4/EXP-5 and #1652 EXP-6's injection hardening, and their oracle is the
+byte-exact `expected/export.csv`/`.tsv` files in `page-export/012`-`020`, `/022` and `/025` — eleven of
+that category's twenty-five cases, which is every writer-facing one except `021` (EXP-7's row limit
+produces no output to compare). See the category README for the file shapes. #1652 also **narrowed
+EXP-6's scope**, and that narrowing is stated at EXP-6 itself in the TRD — deliberately not here, and
+not in summary either: it turns on a distinction fine enough (which spelling of the type test, not
+just which types) that a second copy would be wrong within a story or two. `page-export/018` is its
+oracle. EXP-3 and EXP-7 are the execution adapters'.
 
 ---
 

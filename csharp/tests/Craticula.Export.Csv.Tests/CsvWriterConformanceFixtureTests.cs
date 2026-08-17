@@ -17,10 +17,10 @@ namespace Craticula.Export.Csv.Tests;
 /// difference between what was decoded and what was on disk. A test comparing strings would pass on
 /// a missing BOM, which is the single most likely regression in this module.</para>
 ///
-/// <para><b>The expected files are hand-authored (#1651), like every artifact in this suite.</b> They
-/// were written record by record from EXP-4's rules, not captured from this writer's output, so a
-/// disagreement is informative in both directions and must be investigated rather than resolved by
-/// regenerating the file.</para>
+/// <para><b>The expected files are hand-authored (#1651, and #1652's six the same way), like every
+/// artifact in this suite.</b> They were written record by record from EXP-4's and EXP-6's rules, not
+/// captured from this writer's output, so a disagreement is informative in both directions and must be
+/// investigated rather than resolved by regenerating the file.</para>
 /// </summary>
 public class CsvWriterConformanceFixtureTests
 {
@@ -30,16 +30,16 @@ public class CsvWriterConformanceFixtureTests
     /// Only <c>page-export</c> has any: the writer's input is an export, and an export request is
     /// what that category is for.
     ///
-    /// <para>Five of that category's 25 cases carry a row stream: <c>012</c>-<c>015</c> (EXP-4's
-    /// delimiter presets and BOM on/off, #1651's DoD) and <c>025</c> (tab, authored by #1651 because
-    /// nothing pinned TSV output bytes). The other six writer-documenting cases — <c>016</c>-<c>020</c>
-    /// and <c>022</c> — are EXP-6's hostile values and stay prose until #1652 implements the
-    /// formula-injection prefixing they document; <c>021</c> is EXP-7's row limit, which is an
-    /// execution-adapter concern with no writer output at all.</para>
+    /// <para>Eleven of that category's 25 cases carry a row stream: <c>012</c>-<c>015</c> (EXP-4's
+    /// delimiter presets and BOM on/off, #1651's DoD), <c>025</c> (tab, authored by #1651 because
+    /// nothing pinned TSV output bytes), and <c>016</c>-<c>020</c> plus <c>022</c> (EXP-6's six trigger
+    /// characters, converted from prose by #1652 together with the prefixing they document). That is
+    /// every writer-documenting case in the category but one: <c>021</c> is EXP-7's row limit, which is
+    /// an execution-adapter concern with no writer output at all.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
-        ("page-export", 5)
+        ("page-export", 11)
     ];
 
     /// <summary>
@@ -218,11 +218,14 @@ public class CsvWriterConformanceFixtureTests
     }
 
     [Fact]
-    public void The_Writer_Suite_Is_All_5_Fixtures_That_Carry_A_Row_Stream()
+    public void The_Writer_Suite_Is_All_11_Fixtures_That_Carry_A_Row_Stream()
     {
-        // 5 with NOTHING subtracted. The number moves when #1652 gives 016-020/022 their own row
-        // streams and expected files (six more) — that story's DoD is exactly this count going to 11.
-        Assert.Equal(5, InScopeFixtures.Count);
+        // 11 with NOTHING subtracted: #1651's five (012-015, 025) plus the six EXP-6 hostile-value
+        // cases #1652 converted from prose (016-020, 022). Those six were the whole of the gap this
+        // runner recorded when it was written, so the number now covers every page-export case whose
+        // subject the writer implements — 021 (EXP-7's row limit) has no writer output at all, and a
+        // twelfth would mean a new fixture, not a converted one.
+        Assert.Equal(11, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 

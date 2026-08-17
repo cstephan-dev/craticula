@@ -1,0 +1,3 @@
+﻿id,orderDate,customerName,totalAmount,status,region,notes
+1701,2026-03-09,Caldera Systems,75.25,shipped,AMER,'+1234567890
+1702,2026-03-11,Dunmore Supply,512.00,shipped,EMEA,'+1234567890

@@ -38,11 +38,12 @@ survive a string comparison — against `expected/export.csv`/`.tsv`, whose exte
 own `exportFormat`. `writerConfig.json` is present **only** when the case overrides a writer default,
 so a case proving a default is graded against bytes the defaults produced. `rowStream.json` and
 `writerConfig.json` validate against `schemas/row-stream.schema.json` and
-`schemas/writer-config.schema.json`. Five cases carry the tier today, all in `page-export/`
-(`012`-`015` and `025`); that category's own README says which of its writer-facing cases are still
-prose and why. **These files are deliberately not `dataset.json`/`expectedRows.json`** — see the
-"Deferred" section below for what those two names are reserved for, and the category README for why a
-row stream is not a database seed.
+`schemas/writer-config.schema.json`. Eleven cases carry the tier, all in `page-export/`: `012`-`015`
+and `025` (#1651, EXP-4/EXP-5) plus `016`-`020` and `022` (#1652, EXP-6's formula-injection prefixing).
+That is every writer-facing case in that category except `021`, whose subject — EXP-7's row limit —
+produces no output to compare; the category README says so and says why. **These files are deliberately
+not `dataset.json`/`expectedRows.json`** — see the "Deferred" section below for what those two names are
+reserved for, and the category README for why a row stream is not a database seed.
 
 Every `expected/<backend>.artifact.json` validates against its shape schema in `schemas/`
 (`sql-artifact.schema.json` for every SQL dialect, `mongo-artifact.schema.json`,
@@ -362,7 +363,7 @@ weak oracle for the change — both send `groupKeys: []`, so the discard was pin
 category's contribution is therefore **24 Postgres and 14 Mongo/Search arms**, not the 23 and 13 the
 census above was taken over.
 
-## The writer tier arrives, and one fixture was authored for it (#1651)
+## The writer tier arrives, and one fixture was authored for it (#1651, completed by #1652)
 
 `Craticula.Export.Csv` is the first module in this repo that is not a compiler: it consumes a row
 stream and emits bytes, so nothing it does can be graded by an artifact. #1651 gave EXP-4's four
@@ -377,8 +378,17 @@ format field's *actual* effect — which delimiter the writer uses — pinned by
 is byte-identical to `012`'s and its expected bytes are not. That takes the category to **25 Postgres
 arms** (Mongo and Search stay at 14 — a writer case carries a single representative backend).
 
-Six writer-facing cases remain prose on purpose: `016`-`020` and `022` are EXP-6's formula-injection
-values, which #1652 implements. `021` is EXP-7's row limit and has no writer output at all.
+**#1652 converted the last six (`016`-`020`, `022`)** when it implemented EXP-6's `'`-prefixing, taking
+the tier to eleven cases and **no new fixture** — the six already existed and already documented the
+rule in prose, so the story's whole delivery on this side was replacing prose with bytes. One of them
+was widened rather than merely converted: `018` now carries a **negative `decimal`** beside its hostile
+string, the only negative number in the suite, because #1652 narrowed EXP-6 to spare the cells the
+writer formatted from a numeric, date/time or boolean value (a literal reading would render `-500.25`
+as `'-500.25`, i.e. as text) and nothing else here could have caught that regressing. The `662` artifacts and the three compiler runners' counts did not
+move: a converted case compiles exactly as it did.
+
+`021` is the one writer-facing case still prose, and permanently: EXP-7's row limit is an
+execution-adapter concern with no writer output at all to compare.
 
 ## Case-insensitivity mechanism policy (SEM-1)
 

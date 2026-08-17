@@ -1,0 +1,31 @@
+{
+  "columns": [
+    "id",
+    "orderDate",
+    "customerName",
+    "totalAmount",
+    "status",
+    "region",
+    "notes"
+  ],
+  "rows": [
+    {
+      "id": 2201,
+      "orderDate": "2026-04-06",
+      "customerName": "Kelvin Freight",
+      "totalAmount": "460.00",
+      "status": "shipped",
+      "region": "APAC",
+      "notes": "\tImportant client"
+    },
+    {
+      "id": 2202,
+      "orderDate": "2026-04-08",
+      "customerName": "Larkspur Media",
+      "totalAmount": "27.50",
+      "status": "shipped",
+      "region": "EMEA",
+      "notes": "\tImportant client"
+    }
+  ]
+}
