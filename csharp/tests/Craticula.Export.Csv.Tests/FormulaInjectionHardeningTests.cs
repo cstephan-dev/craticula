@@ -30,10 +30,17 @@ public class FormulaInjectionHardeningTests
     /// <summary>
     /// The near misses, which are the half of the rule that decides how much ordinary data survives it.
     ///
-    /// <para>Two are worth reading twice. <b>LF is not a trigger and CR is</b> — EXP-6 lists CR alone,
-    /// and a writer that "helpfully" added LF would prefix every cell of every multi-line text column
-    /// in the product. And <b>the apostrophe itself is not a trigger</b>, which is what makes the rule
-    /// safe to apply to already-hardened text: the writer can never emit two.</para>
+    /// <para>Two are worth reading twice. <b>LF is not a trigger and CR is</b>, because EXP-6 lists CR
+    /// alone and OWASP's canonical set is these six. Note what the cost of adding LF would <em>not</em>
+    /// be: only the FIRST character is examined, so it would touch cells that <em>begin</em> with a line
+    /// feed, not every multi-line cell — the blast radius is small, and the honest reason to leave LF out
+    /// is that neither EXP-6 nor OWASP includes it, not that including it would be expensive. That is
+    /// worth stating precisely, because the class remarks justify tab and CR by their being
+    /// <em>invisible</em> (a consumer that strips one promotes the character behind it to first
+    /// position), and that argument reads as though it covers LF too. If it should, the place to settle
+    /// it is EXP-6 in the TRD, not a widened trigger set here. And <b>the apostrophe itself is not a
+    /// trigger</b>, which is what makes the rule safe to apply to already-hardened text: the writer can
+    /// never emit two.</para>
     /// </summary>
     [Theory]
     [InlineData("plain")]

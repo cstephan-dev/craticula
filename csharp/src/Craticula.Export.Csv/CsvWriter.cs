@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text;
 using Craticula.Core.Export;
 
@@ -307,20 +308,36 @@ public static class CsvWriter
     /// worst an adapter bug can now cost is a spurious <c>'</c> on a cell — visible, reportable, and
     /// not a vulnerability.
     ///
-    /// <para>The excluded set is closed and mirrors <see cref="CsvValueFormatter.Format"/>'s own
-    /// numeric, temporal and boolean arms, which is what keeps the two from drifting: a type added
-    /// there without being added here becomes hardened rather than becoming a hole.
-    /// <see cref="TimeSpan"/> is excluded although the formatter has no arm for it — a negative
-    /// duration renders <c>-01:30:00</c>, and it is a machine-rendered quantity like any other.</para>
+    /// <para><b>The excluded set must cover every type <see cref="CsvValueFormatter.Format"/> renders
+    /// as a number, and that is more than its explicit arms.</b> The formatter ends in
+    /// <c>IFormattable formattable => formattable.ToString(null, InvariantCulture)</c>, so a BCL numeric
+    /// it never names still comes out as digits — and a negative one still leads with <c>-</c>. Hence
+    /// <see cref="Half"/>, <see cref="Int128"/>, <see cref="UInt128"/>, <see cref="nint"/>,
+    /// <see cref="nuint"/> and <see cref="BigInteger"/> below: none has a <c>FieldType</c> and none
+    /// appears in the formatter's switch, but <c>BigInteger</c> in particular is what Npgsql reads a
+    /// PostgreSQL <c>numeric</c> into once it exceeds <see cref="decimal"/>'s range, which makes it a
+    /// live path rather than a hypothetical one. Prefixing it would produce <c>'-42</c> — the exact
+    /// corruption this narrowing exists to prevent, arriving through the one door the narrowing did not
+    /// look at. <see cref="TimeSpan"/> is excluded on the same reasoning: a negative duration renders
+    /// <c>-01:30:00</c>.</para>
+    ///
+    /// <para>The direction of the residual risk is what makes that list safe to be incomplete: a
+    /// numeric type still missing from it is hardened, costing a visible spurious <c>'</c>, whereas a
+    /// text type wrongly added to it would be a silent hole. So <b>add a type here only when it is a
+    /// machine-rendered quantity</b> — never to silence a stray apostrophe on something that might
+    /// carry client text.</para>
     ///
     /// <para><see langword="null"/> is in scope and costs nothing:
     /// <see cref="CsvValueFormatter.Format"/> maps it to the empty string, which
-    /// <see cref="FormulaInjectionHardening"/> never prefixes.</para>
+    /// <see cref="FormulaInjectionHardening"/> never prefixes. A <see cref="Nullable{T}"/> cell needs no
+    /// arm of its own — boxing one that has a value yields a box of <c>T</c>, so it matches <c>T</c>'s
+    /// pattern here, and an empty one boxes to <see langword="null"/>.</para>
     /// </summary>
     private static bool IsInHardeningScope(object? value) => value switch
     {
         bool or byte or sbyte or short or ushort or int or uint or long or ulong => false,
         decimal or double or float => false,
+        Half or Int128 or UInt128 or nint or nuint or BigInteger => false,
         DateOnly or DateTime or DateTimeOffset or TimeOnly or TimeSpan => false,
         _ => true
     };
@@ -350,10 +367,12 @@ public static class CsvWriter
     /// own newlines would be the writer editing data it was asked to transport.</para>
     /// </summary>
     /// <param name="harden">Whether this field is in EXP-6's scope — <see langword="true"/> for every
-    /// header, and for a data cell only when the adapter's value was a <see cref="string"/>. Combined
-    /// here with <see cref="CsvWriterOptions.HardenFormulaInjection"/>, which is the host's "configurable
-    /// off": the scope answers <em>which</em> fields the rule covers, the option whether it runs at all,
-    /// and both must hold. See the class remarks for why the scope is narrower than EXP-6's wording.</param>
+    /// header, and for a data cell whatever <see cref="IsInHardeningScope"/> says, which is every value
+    /// <em>except</em> a numeric, temporal or boolean one. Combined here with
+    /// <see cref="CsvWriterOptions.HardenFormulaInjection"/>, which is the host's "configurable off": the
+    /// scope answers <em>which</em> fields the rule covers, the option whether it runs at all, and both
+    /// must hold. See the class remarks for why the scope is narrower than EXP-6's wording, and
+    /// <see cref="IsInHardeningScope"/> for why it is spelled as an exclusion.</param>
     private static void AppendField(
         StringBuilder record, string text, CsvWriterOptions options, bool harden)
     {

@@ -1408,11 +1408,11 @@ general projection rule:
   verbatim, so **EXP-6's formula-injection hardening applies to the header row exactly as it applies
   to values**: a header beginning `=`, `+`, `-`, `@`, tab or CR is prefixed with `'` like any cell.
   EXP-6's wording is about values because no header existed when it was written; the row a header
-  lands in is a spreadsheet row like any other. It applies **unconditionally** here, and #1652's
-  narrowing of EXP-6 — which spares only cells the writer formatted from a numeric, date/time or
-  boolean value — does not weaken that: a header is always text, so the narrowing has nothing to
-  exclude on this side. See the TRD's EXP-6 for the narrowing itself — this addendum still restates
-  none of EXP-4..EXP-8.
+  lands in is a spreadsheet row like any other. It applies **unconditionally** here — #1652 narrowed
+  EXP-6's scope for *cells*, and whatever that narrowing spares, it has nothing to exclude on this
+  side, because a header is always text. What the narrowing is, is the TRD's EXP-6 to state and not
+  this addendum's: the claim above is EXP-1(b)'s own (a `header` is client text), and restating the
+  cell rule here is what would make the two drift.
 - **The resolution happens once, in the request adapter**, not per compiler: an unknown colId, a
   colId the schema declares non-exportable, a repeated colId, and an explicitly empty list are all
   refused there. All four are hard failures in **every** `GridSchema` mode — Lenient's contract is
@@ -1461,12 +1461,11 @@ compiled form and are **not restated here**; the TRD §6.1 prose is their normat
 the writer half of EXP-4/EXP-5 and #1652 EXP-6's injection hardening, and their oracle is the
 byte-exact `expected/export.csv`/`.tsv` files in `page-export/012`-`020`, `/022` and `/025` — eleven of
 that category's twenty-five cases, which is every writer-facing one except `021` (EXP-7's row limit
-produces no output to compare). See the category README for the file shapes. #1652 also **narrowed**
-EXP-6, sparing the cells it formatted from a numeric, date/time or boolean value and hardening every
-other cell (the rule is normative as that exclusion, not as "string-valued cells" — see the TRD for
-why the polarity matters); that narrowing is recorded at EXP-6 itself in the TRD, and the only trace
-of it here is the unconditional-for-headers note under EXP-1(b) above. EXP-3 and EXP-7 are the
-execution adapters'.
+produces no output to compare). See the category README for the file shapes. #1652 also **narrowed
+EXP-6's scope**, and that narrowing is stated at EXP-6 itself in the TRD — deliberately not here, and
+not in summary either: it turns on a distinction fine enough (which spelling of the type test, not
+just which types) that a second copy would be wrong within a story or two. `page-export/018` is its
+oracle. EXP-3 and EXP-7 are the execution adapters'.
 
 ---
 

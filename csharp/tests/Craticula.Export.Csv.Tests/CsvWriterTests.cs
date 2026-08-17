@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text;
 using Craticula.Core.Export;
 
@@ -189,6 +190,57 @@ public class CsvWriterTests
             [new ExportRow([-500.25m, -42L, -1.5d, -7.25f, new DateOnly(2026, 3, 16), "-2+3"])]);
 
         Assert.Equal("-500.25,-42,-1.5,-7.25,2026-03-16,'-2+3\r\n", output);
+    }
+
+    /// <summary>
+    /// The numeric types <see cref="CsvValueFormatter"/> renders through its <see cref="IFormattable"/>
+    /// tail rather than through an arm of its own — so the "is it a number" question cannot be answered
+    /// by reading that switch alone, which is how they came to be missing from the scope test at first.
+    /// <b><see cref="BigInteger"/> is the one that matters</b>: Npgsql reads a PostgreSQL <c>numeric</c>
+    /// into it once the value exceeds <see cref="decimal"/>'s range, so a large negative amount reaches
+    /// the writer as one on a perfectly ordinary column. Prefixing it would be exactly the corruption
+    /// the narrowing exists to prevent, arriving through the door the narrowing did not look at.
+    /// </summary>
+    [Fact]
+    public void Does_Not_Prefix_A_Negative_Bcl_Numeric_The_Formatter_Renders_Through_Its_Formattable_Tail()
+    {
+        var options = CsvWriterOptions.Default with { IncludeHeaderRow = false, WriteByteOrderMark = false };
+
+        var output = Write(
+            options,
+            Columns(5),
+            [new ExportRow([
+                BigInteger.Parse("-79228162514264337593543950336"),
+                Int128.MinValue,
+                (nint)(-42),
+                (Half)(-1.5f),
+                "-2+3"])]);
+
+        Assert.Equal(
+            $"-79228162514264337593543950336,{Int128.MinValue},-42,-1.5,'-2+3\r\n",
+            output);
+    }
+
+    /// <summary>
+    /// A nullable column — the ordinary shape of almost every database column — must behave as its
+    /// underlying type on both sides of the scope test. Boxing a <see cref="Nullable{T}"/> that has a
+    /// value yields a box of <c>T</c>, so no arm of its own is needed; this states that rather than
+    /// leaving it to be re-derived, because the failure it would otherwise hide is the corrupting one
+    /// (a nullable <see cref="decimal"/> column getting <c>'-500.25</c>).
+    /// </summary>
+    [Fact]
+    public void Treats_A_Nullable_Cell_As_Its_Underlying_Type_On_Both_Sides_Of_The_Scope_Test()
+    {
+        var options = CsvWriterOptions.Default with { IncludeHeaderRow = false, WriteByteOrderMark = false };
+
+        decimal? negativeAmount = -500.25m;
+        long? negativeCount = -42L;
+        DateOnly? date = new DateOnly(2026, 3, 16);
+        decimal? absent = null;
+
+        var output = Write(options, Columns(4), [new ExportRow([negativeAmount, negativeCount, date, absent])]);
+
+        Assert.Equal("-500.25,-42,2026-03-16,\r\n", output);
     }
 
     /// <summary>A driver's own wrapper around a text column, as MongoDB's <c>BsonString</c> and

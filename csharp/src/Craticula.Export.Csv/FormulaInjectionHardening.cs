@@ -39,12 +39,18 @@ namespace Craticula.Export.Csv;
 ///
 /// <para><b>This method decides HOW, never WHICH.</b> It hardens whatever text it is handed;
 /// <see cref="CsvWriter"/> decides which fields are handed to it, and that scope is narrower than
-/// EXP-6's unqualified wording — a cell is hardened only when the adapter's value was a
-/// <see cref="string"/>, plus every header. The reason is <c>-</c>: it is also the leading character of
-/// every negative number, and prefixing <c>-500.25</c> would produce <c>'-500.25</c>, which a
-/// spreadsheet renders as text rather than as a number and so corrupts the very data the export
-/// exists to deliver. See <see cref="CsvWriter"/>'s remarks, and
-/// <c>docs/TRD-grid-query-compiler.md</c>'s EXP-6, where the narrowing is recorded normatively.</para>
+/// EXP-6's unqualified wording — every header, and every data cell <em>except</em> those the writer
+/// formatted from a numeric, temporal or boolean value. The reason is <c>-</c>: it is also the leading
+/// character of every negative number, and prefixing <c>-500.25</c> would produce <c>'-500.25</c>,
+/// which a spreadsheet renders as text rather than as a number and so corrupts the very data the
+/// export exists to deliver.</para>
+///
+/// <para><b>Do not "simplify" that scope to <c>value is string</c>.</b> It reads as the same rule and
+/// is not: the two agree on every type either one names and part company on an unanticipated one, so a
+/// text column arriving as a driver's wrapper would be written <em>unhardened</em> with nothing in the
+/// output looking wrong. <see cref="CsvWriter.IsInHardeningScope"/> is deliberately an exclusion for
+/// that reason and carries the full argument; <c>docs/TRD-grid-query-compiler.md</c>'s EXP-6 records
+/// the narrowing normatively.</para>
 ///
 /// <para>Pure and public so it can be graded directly rather than only through the bytes of a whole
 /// file: the six triggers, the near misses and the disabled path are one-line assertions here, which

@@ -16,9 +16,13 @@ namespace Craticula.Core.Export;
 ///
 /// <para><b>EXP-6's formula-injection hardening covers the header row too, not only the values.</b>
 /// A wire-supplied <c>header</c> is arbitrary client text carried verbatim to the writer, so a header
-/// beginning <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab or CR must be prefixed with <c>'</c> exactly
-/// as a cell value is — the row it lands in is a spreadsheet row like any other. Stated here because
-/// #1650 is where the header became a first-class resolved value and #1651/#1652 read it.</para></param>
+/// beginning <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab or CR must be prefixed with <c>'</c> — the row
+/// it lands in is a spreadsheet row like any other. It applies <b>unconditionally</b>: #1652 narrowed
+/// EXP-6's scope for cell <em>values</em>, sparing the ones a writer formatted from a number or a date,
+/// and a header is never one of those — it is client text by construction, so there is nothing for the
+/// narrowing to exclude here. Stated because #1650 is where the header became a first-class resolved
+/// value and #1651/#1652 read it; what the cell rule is belongs to the writer and to the TRD's
+/// EXP-6.</para></param>
 /// <remarks>
 /// <b>Why this lives in <c>Craticula.Core</c> and not beside the wire adapter that resolves it.</b>
 /// It is the hand-off type between EXP-1(b)'s resolution (a grid adapter's job) and EXP-4's writer (a
