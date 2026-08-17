@@ -1,0 +1,65 @@
+using Craticula.Core.Export;
+
+namespace Craticula.Export.Csv;
+
+/// <summary>
+/// One row of an export, as an execution adapter yields it: the cell values <b>positionally aligned
+/// with the resolved <see cref="ExportColumn"/> list</b>, still as CLR values (a <see cref="decimal"/>, a
+/// <see cref="DateOnly"/>, a <see langword="null"/>) rather than as text. Formatting is EXP-5's and
+/// belongs to the writer, not to whoever read the row off a cursor.
+///
+/// <para><b>Why positional rather than a name-keyed map.</b> EXP-1(b) makes the projection an
+/// <em>ordered</em> list, and every compiler renders it in exactly that order — the Postgres
+/// <c>SELECT</c> list, MongoDB's <c>$project</c>. An adapter reading a
+/// <c>DbDataReader</c> therefore already has the values in this order, and a dictionary would make
+/// it build one lookup per row for a mapping that cannot differ. It also removes a whole failure
+/// mode: a name-keyed row can silently disagree with the projection (a missing key becomes an empty
+/// cell), whereas a length mismatch is caught by <see cref="CsvWriter"/> on the first row.
+/// <see cref="FromCells"/> exists for the adapters whose driver hands back a name-keyed document
+/// (MongoDB, OpenSearch) and makes that mapping the ONE place the two representations meet.</para>
+///
+/// <para>A <see langword="struct"/> wrapping the caller's own list: constructing one allocates
+/// nothing beyond what the adapter already had, which is what lets a million-row export (EXP-7)
+/// stream through <see cref="CsvWriter"/> without the writer being the thing that materializes
+/// it.</para>
+/// </summary>
+public readonly struct ExportRow
+{
+    private readonly IReadOnlyList<object?>? values;
+
+    /// <summary>Wraps <paramref name="values"/> as one row, in the resolved column list's order. The
+    /// list is not copied — it may be reused by the caller once the row has been written.</summary>
+    public ExportRow(IReadOnlyList<object?> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        this.values = values;
+    }
+
+    /// <summary>The number of cells, compared against the column count on every row.</summary>
+    public int Count => values?.Count ?? 0;
+
+    /// <summary>The cell at <paramref name="index"/>, unformatted.</summary>
+    public object? this[int index] => values is null
+        ? throw new InvalidOperationException("This ExportRow was never initialized with any values.")
+        : values[index];
+
+    /// <summary>
+    /// Projects a name-keyed document onto <paramref name="columns"/>, in that order. A colId absent
+    /// from <paramref name="cells"/> yields <see langword="null"/> — an adapter whose driver omits
+    /// missing fields (MongoDB does) is the reason this is a lookup rather than a length check, and
+    /// "absent" and "stored null" are the same empty cell in a CSV file either way.
+    /// </summary>
+    public static ExportRow FromCells(IReadOnlyDictionary<string, object?> cells, IReadOnlyList<ExportColumn> columns)
+    {
+        ArgumentNullException.ThrowIfNull(cells);
+        ArgumentNullException.ThrowIfNull(columns);
+
+        var projected = new object?[columns.Count];
+        for (var index = 0; index < columns.Count; index++)
+        {
+            projected[index] = cells.TryGetValue(columns[index].ColId, out var value) ? value : null;
+        }
+
+        return new ExportRow(projected);
+    }
+}

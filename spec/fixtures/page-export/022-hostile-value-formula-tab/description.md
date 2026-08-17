@@ -15,9 +15,9 @@ show what would land in an exported cell without needing a seeded dataset
 (`dataset.json`/`expectedRows.json` are deferred per docs/feat/1630/context.md decision #3 — no
 database exists yet to derive real row content from).
 
-**Category-completeness note:** fixtures 016-020 cover four of EXP-6's five documented trigger
-characters (`=`, `+`, `-`, `@`) plus a leading CR (020) — this fixture adds the remaining trigger,
-a leading tab, which none of 016-020 exercise on its own.
+**Category-completeness note:** fixtures 016-020 cover five of EXP-6's six documented trigger
+characters — `=`, `+`, `-`, `@` (016-019) plus a leading CR (020) — and this fixture adds the sixth
+and last, a leading tab, which none of 016-020 exercise on its own.
 
 ## Key expectation — the compiler passes the value through unchanged
 

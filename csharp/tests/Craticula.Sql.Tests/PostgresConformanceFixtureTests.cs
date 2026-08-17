@@ -38,11 +38,16 @@ public class PostgresConformanceFixtureTests
     ///
     /// <para><c>page-export</c> joined in #1650 (EXP-1/EXP-2), and brought <c>sort-paging</c> from 11
     /// to 12 with it: both blockages were the same one — <c>AgGridRequestParser</c> could not read
-    /// <c>exportScope</c>, so no export request could be fed end to end. All <b>24</b> of its cases are
+    /// <c>exportScope</c>, so no export request could be fed end to end. All <b>25</b> of its cases are
     /// in scope, not just the fourteen carrying a Mongo/Search arm: <c>012</c>-<c>020</c> and
-    /// <c>022</c> document CSV-<em>writer</em> behavior that has no compiler half yet, but their
-    /// <c>postgres.artifact.json</c> is an ordinary compiled query and is compared like any
-    /// other.</para>
+    /// <c>022</c> document CSV-<em>writer</em> behavior, but their <c>postgres.artifact.json</c> is an
+    /// ordinary compiled query and is compared like any other. The most recent of them, <c>025</c>,
+    /// was authored by #1651 to pin TSV <em>output</em> bytes, and its arm here is byte-identical to
+    /// <c>012</c>'s — which is the point: <c>exportFormat</c> changes the writer's delimiter and
+    /// nothing a compiler emits. That relation is not left as prose:
+    /// <c>Craticula.Export.Csv.Tests.CsvWriterConformanceFixtureTests</c>
+    /// .<c>The_Tsv_Fixture_Is_The_Comma_Fixtures_Request_With_Only_Its_ExportFormat_Changed</c>
+    /// asserts it, together with the request difference that makes it meaningful.</para>
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
@@ -53,7 +58,7 @@ public class PostgresConformanceFixtureTests
         ("filter-tree", 15),
         ("sort-paging", 12),
         ("ag-grid-majors", 6),
-        ("page-export", 24)
+        ("page-export", 25)
     ];
 
     /// <summary>
@@ -172,15 +177,16 @@ public class PostgresConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_All_172_Fixtures_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_All_173_Fixtures_In_The_Scoped_Categories()
     {
-        // 172 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
-        // artifact in a scoped category is compiled and compared. The number last moved when #1650's
-        // review pass authored page-export/024; before that #1650 itself released page-export (23) and
-        // sort-paging/012 from exclusion and authored page-export/023, and #1644's review pass added
-        // group-aggregation/023 — the one case carrying both a consumed groupKeys and a filterModel,
-        // which pins GRP-5's drill-down-leads clause order in `params`.
-        Assert.Equal(172, InScopeFixtures.Count);
+        // 173 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
+        // artifact in a scoped category is compiled and compared. The number last moved when #1651
+        // authored page-export/025 (TSV writer output); before that #1650's review pass authored
+        // page-export/024, #1650 itself released page-export (23) and sort-paging/012 from exclusion
+        // and authored page-export/023, and #1644's review pass added group-aggregation/023 — the one
+        // case carrying both a consumed groupKeys and a filterModel, which pins GRP-5's
+        // drill-down-leads clause order in `params`.
+        Assert.Equal(173, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -205,7 +211,7 @@ public class PostgresConformanceFixtureTests
     [Fact]
     public void Every_Postgres_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "172 in scope": every postgres.artifact.json in the repo
+        // The count that closes the loop on "173 in scope": every postgres.artifact.json in the repo
         // is either exercised above, or inside a category/fixture this class excludes BY NAME. The
         // category table plus Every_Fixture_Category_On_Disk_… does not close it — an artifact added
         // under an EXCLUDED category (adversarial/) would leave every count untouched and go silently
@@ -221,7 +227,7 @@ public class PostgresConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "postgres.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(172, onDisk);
+        Assert.Equal(173, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }

@@ -1,3 +1,4 @@
+using Craticula.Core.Export;
 using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 
@@ -9,7 +10,7 @@ namespace Craticula.AgGrid.Tests;
 /// group-export carve-out, and EXP-1(b)'s resolved projection.
 ///
 /// <para><b>What is here and what is a fixture.</b> The compiled SHAPES this contract produces are
-/// pinned by <c>spec/fixtures/page-export/</c> — 23 Postgres arms and 13 Mongo/Search ones, all
+/// pinned by <c>spec/fixtures/page-export/</c> — 25 Postgres arms and 14 Mongo/Search ones, all
 /// running end to end through the three conformance runners, including <c>023</c> which was authored
 /// by this story specifically so <c>exportable: false</c> is not a compiler path whose only oracle is
 /// a unit test. What is here is what a compiled artifact CANNOT show: the rejections, and the

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Craticula.Core.Export;
 using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 

@@ -33,8 +33,9 @@ behavior defaults **on** and is configurable off (EXP-6).
 
 ## Additional note — this value doubles up on two EXP-6/EXP-4 concerns
 
-This value's **leading character is a CR** (`\r`), the fifth of EXP-6's five trigger characters
-(`=`, `+`, `-`, `@`, tab, CR) not otherwise covered by fixtures 016-019 — so the future writer
+This value's **leading character is a CR** (`\r`), one of the two of EXP-6's six trigger characters
+(`=`, `+`, `-`, `@`, tab, CR) not otherwise covered by fixtures 016-019 — the other is the tab, which
+fixture 022 carries — so the future writer
 must still prefix it with a leading apostrophe. It **also** embeds a double quote (`"`), a comma
 (the default CSV delimiter), and a newline (`\n`) inside the value itself — independent of the
 formula-injection concern, RFC 4180 (EXP-4) requires the writer to wrap this field in double

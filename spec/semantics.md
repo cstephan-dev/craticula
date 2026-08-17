@@ -1453,7 +1453,11 @@ carve-out bypasses), GRP-3 (the projection rule this one composes with), SEM-6 (
 `page: none` keeps), OSE-13 and MDB-10. `spec/fixtures/page-export/` is the artifact oracle, plus
 `sort-paging/012` for the `page: none` shape on all three backends. EXP-3..EXP-8 — streaming and
 chunking, the CSV writer, its formatting and injection hardening, and the row-count limit — have no
-compiled form and are owned by #1651/#1652 and the execution adapters.
+compiled form and are **not restated here**; the TRD §6.1 prose is their normative home. #1651 built
+the writer half of EXP-4/EXP-5, and its oracle is the byte-exact `expected/export.csv`/`.tsv` files
+in `page-export/012`-`015` and `/025` (see that category's README for the file shapes and for which
+cases are still prose). EXP-6's injection hardening is #1652's; EXP-3 and EXP-7 are the execution
+adapters'.
 
 ---
 
@@ -2330,7 +2334,7 @@ rather than one body with optional members, and `size: 0` beside a `sort` orders
 `max_result_window`, with a cursor cache it assigns by name to the **execution adapter** (#1622).
 `max_result_window` is index configuration absent from `GridSchema` and from the IR; the cursor is
 the previous page's last sort values, which an offset-based AG Grid SSRM request never sends and
-`$defs/pageSpec` has nowhere to carry. All 159 `search.artifact.json` files pin the offset form.
+`$defs/pageSpec` has nowhere to carry. All 160 `search.artifact.json` files pin the offset form.
 `spec/fixtures/schemas/search-artifact.schema.json` admits the member so that #1622 can use it
 without a schema change; nothing does today.
 
@@ -2485,7 +2489,7 @@ compiled body varies with a property that changes nothing else about which docum
 saving is bandwidth between the engine and the host process, which is an *execution*-adapter
 trade-off (the same register as EXP-3's streaming and chunking, which is what that id really names)
 rather than a compiled-query
-semantic. The thirteen `page-export/` Search arms pin the absence: `008` narrows to three of seven
+semantic. The fourteen `page-export/` Search arms pin the absence: `008` narrows to three of seven
 columns on SQL and MongoDB and its Search arm carries only a `query` and a `sort`. If a host wants the
 bandwidth, `_source` is an adapter-level addition to the request it sends, not a change to this
 contract.
