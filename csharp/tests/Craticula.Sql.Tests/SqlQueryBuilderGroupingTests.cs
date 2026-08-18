@@ -282,9 +282,10 @@ public class SqlQueryBuilderGroupingTests
             [new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "totalRevenue" }],
             sort: [new SortItem { Field = "totalRevenue", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }]);
 
+        // AGG-6's wrap reaches BOTH occurrences, because AggregateCall composes the expression once.
         Assert.Contains(
-            "SUM(\"amount\") AS \"totalRevenue\" FROM \"sales\" GROUP BY \"region\" " +
-            "ORDER BY SUM(\"amount\") DESC NULLS FIRST, \"region\" ASC NULLS LAST",
+            "COALESCE(SUM(\"amount\"), 0) AS \"totalRevenue\" FROM \"sales\" GROUP BY \"region\" " +
+            "ORDER BY COALESCE(SUM(\"amount\"), 0) DESC NULLS FIRST, \"region\" ASC NULLS LAST",
             query.Sql,
             StringComparison.Ordinal);
 
@@ -298,6 +299,11 @@ public class SqlQueryBuilderGroupingTests
     /// uniformity choice: T-SQL emulates <c>NULLS FIRST</c> with a <c>CASE</c>, and a select-list
     /// alias inside a <c>CASE</c> resolves against the <c>FROM</c> scope — <c>[amount_sum]</c> is not
     /// a column of <c>sales</c>, so the statement would fail with "Invalid column name".
+    ///
+    /// <para>Since AGG-6 the emulated bucket wraps an expression that can no longer be NULL, so this
+    /// key is inert on a <c>sum</c> — kept, and asserted, because SEM-6 licenses no omission of a null
+    /// marker on a nullability inference, and because the same emulation is fully live one function
+    /// over (see <c>dialect-parity/024</c>, which orders by an <c>AVG</c>).</para>
     /// </summary>
     [Fact]
     public void On_Sql_Server_The_Emulated_Null_Bucket_Wraps_The_Aggregate_Expression_Not_Its_Alias()
@@ -309,7 +315,8 @@ public class SqlQueryBuilderGroupingTests
             dialect: MssqlDialect.Instance);
 
         Assert.Contains(
-            "ORDER BY CASE WHEN SUM([amount]) IS NULL THEN 1 ELSE 0 END DESC, SUM([amount]) DESC",
+            "ORDER BY CASE WHEN COALESCE(SUM([amount]), 0) IS NULL THEN 1 ELSE 0 END DESC, " +
+            "COALESCE(SUM([amount]), 0) DESC",
             query.Sql,
             StringComparison.Ordinal);
         Assert.DoesNotContain("[amount_sum] IS NULL", query.Sql, StringComparison.Ordinal);

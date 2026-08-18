@@ -1,6 +1,6 @@
 {
   "dialect": "mssql",
-  "sql": "SELECT [region] AS [region], SUM([amount]) AS [amount_sum] FROM [sales_fact] WHERE [amount] > @p1 GROUP BY [region] ORDER BY CASE WHEN SUM([amount]) IS NULL THEN 1 ELSE 0 END DESC, SUM([amount]) DESC, CASE WHEN [region] IS NULL THEN 1 ELSE 0 END ASC, [region] ASC OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY",
+  "sql": "SELECT [region] AS [region], COALESCE(SUM([amount]), 0) AS [amount_sum] FROM [sales_fact] WHERE [amount] > @p1 GROUP BY [region] ORDER BY CASE WHEN COALESCE(SUM([amount]), 0) IS NULL THEN 1 ELSE 0 END DESC, COALESCE(SUM([amount]), 0) DESC, CASE WHEN [region] IS NULL THEN 1 ELSE 0 END ASC, [region] ASC OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY",
   "params": [
     "1000",
     0,

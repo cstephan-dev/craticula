@@ -353,8 +353,12 @@ public static class MongoPipelineBuilder
 
             // MDB-10: a stage document is a map, so a repeated key is LAST-WINS rather than an error
             // — one accumulator would vanish from a syntactically perfect pipeline, and the grid
-            // would read a column that silently holds another column's number. AGG-2 derives the name
-            // from `valueCols[].id`, which is client-supplied, so this is reachable from the wire.
+            // would read a column that silently holds another column's number.
+            //
+            // No longer reachable from an AG Grid request: #1886 moved the same check upstream into
+            // Craticula.Core's AggregationValidator, which every entry point runs, because
+            // Craticula.Sql had no equivalent and the condition is a property of the request rather
+            // than of this stage's shape. Kept as defence in depth for a host that builds IR directly.
             if (group.ContainsKey(output))
             {
                 throw new MongoCompilationException(

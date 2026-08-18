@@ -1,6 +1,6 @@
 {
   "dialect": "mysql",
-  "sql": "SELECT `region` AS `region`, SUM(`amount`) AS `totalRevenue` FROM `sales_fact` GROUP BY `region` ORDER BY ISNULL(`region`) ASC, `region` ASC LIMIT ? OFFSET ?",
+  "sql": "SELECT `region` AS `region`, COALESCE(SUM(`amount`), 0) AS `totalRevenue` FROM `sales_fact` GROUP BY `region` ORDER BY ISNULL(`region`) ASC, `region` ASC LIMIT ? OFFSET ?",
   "params": [
     100,
     0

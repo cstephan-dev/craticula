@@ -300,13 +300,23 @@ public class MongoPipelineGroupingTests
         Assert.Contains("reserved", failure.Message);
     }
 
+    /// <summary>
+    /// The same last-wins hazard one stage earlier: <c>$group</c> is a document too, so the second
+    /// accumulator would replace the first and the grid would read one column holding another
+    /// column's number, out of a pipeline that is syntactically perfect.
+    ///
+    /// <para><b>The refusal moved layers in #1886, and the exception type is the evidence.</b>
+    /// <c>Craticula.Sql</c> had no equivalent guard — it emitted the column twice and let the driver
+    /// decide — so the check now lives in <c>Craticula.Core</c>'s <see cref="AggregationValidator"/>,
+    /// which <see cref="MongoPipelineBuilder.Build"/> runs on entry like every other compiler. What
+    /// this test therefore pins is that the pipeline is still refused, one layer up and now on all
+    /// four backends at once. <c>RenderGroup</c>'s own <c>ContainsKey</c> guard is deliberately kept
+    /// but is no longer reachable from any public entry point of this assembly.</para>
+    /// </summary>
     [Fact]
     public void Two_Aggregations_Cannot_Share_One_Output_Name()
     {
-        // The same last-wins hazard one stage earlier: `$group` is a document too, so the second
-        // accumulator would replace the first and the grid would read one column holding another
-        // column's number, out of a pipeline that is syntactically perfect.
-        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+        var failure = Assert.Throws<AggregationValidationException>(() => Compile(
             Group(["region", "segment"], "EMEA"),
             [
                 new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "total" },

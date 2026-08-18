@@ -1,6 +1,6 @@
 {
   "dialect": "oracle",
-  "sql": "SELECT \"region\" AS \"region\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE \"amount\" > :p1 GROUP BY \"region\" ORDER BY SUM(\"amount\") DESC NULLS FIRST, \"region\" ASC NULLS LAST OFFSET :p2 ROWS FETCH NEXT :p3 ROWS ONLY",
+  "sql": "SELECT \"region\" AS \"region\", COALESCE(SUM(\"amount\"), 0) AS \"amount_sum\" FROM \"sales_fact\" WHERE \"amount\" > :p1 GROUP BY \"region\" ORDER BY COALESCE(SUM(\"amount\"), 0) DESC NULLS FIRST, \"region\" ASC NULLS LAST OFFSET :p2 ROWS FETCH NEXT :p3 ROWS ONLY",
   "params": [
     "1000",
     0,

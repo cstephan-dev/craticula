@@ -1,6 +1,6 @@
 # `dialect-parity/` — dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7)
 
-Per `spec/fixtures/README.md`'s category index, this directory proves two distinct things, kept
+Per `spec/fixtures/README.md`'s category index, this directory proves three distinct things, kept
 structurally separate by coverage tier (see each case's own `description.md` for its tier and the
 specific SEM rule/mechanism it pins):
 
@@ -12,13 +12,21 @@ specific SEM rule/mechanism it pins):
    logical outcome* on **every** backend — all five SQL dialects (Postgres/MSSQL/MySQL/SQLite, plus
    **Oracle** since #1642) + MongoDB + Search — through each backend's own native mechanism.
    18 parity directories (`006`-`023`) × 7 backend artifacts = 126 artifact files, still only 18
-   fixture cases — the category holds 23 directories in all, the other five being the single-artifact
-   mechanics showcases above.
+   fixture cases.
 
    *Identical logical outcome, not identical text — and `019` is where that distinction stops being
    pedantic.* Oracle's `''` is NULL, so `blank`'s text arm collapses there (**SQL-7**); its arm is the
    one artifact in this category whose structure differs from its Postgres arm rather than only its
    tokens, and it differs precisely in order to reach the same rows.
+3. **A SQL-only parity case** (`024`, added #1886): the same request compiled for all five SQL
+   dialects and for **no** document store. AGG-6's `sum` wrap is visible in emitted SQL text and
+   invisible in a `$group` stage or an `aggs` container — MongoDB and Elasticsearch already answer
+   the rule natively and emit the identical token before and after it — so an arm for either would
+   grade nothing. It is the only grouped request in this category, and the only case whose subject is
+   an aggregate rather than a filter or a sort.
+
+The category therefore holds **24 directories**: five single-artifact mechanics showcases, 18
+all-seven parity showcases, and this one.
 
 `011`-`020` cover the SEM-7 `contains`-vs-tokenized-`match` trap (correct artifact + anti-pattern
 documentation), the `searchMode: "analyzed"` escape hatch, and further SEM-1/2/7 mechanics not
@@ -40,7 +48,10 @@ All cases model the same `employees` domain `sort-paging/` uses (`id` int64 stab
 string, `age` int64, `salary` decimal, `department` string), plus a few fixture-local additions
 (`employeeCode`, `jobTitle`, `remarks`) introduced only where a case's own mechanic needs a field
 with a distinct configuration (case-sensitive opt-in, `searchMode: "analyzed"`) that would be
-confusing to bolt onto a field reused elsewhere in this category.
+confusing to bolt onto a field reused elsewhere in this category. `024` stays in that domain and adds
+no field: it groups the same `department` and aggregates the same `salary` and `age`, declaring the
+SC-2 `groupable`/`aggregatable` flags those roles require — the only members of this category's
+schemas that no earlier case had a reason to set.
 
 ## Cases
 
@@ -69,6 +80,7 @@ confusing to bolt onto a field reused elsewhere in this category.
 | 021 | `sem1-case-sensitive-contains` | parity showcase (all 7) | Case-**sensitive** `contains` — `014`'s schema verbatim with only the operator changed. The one case where a dialect changes operator rather than token: SQLite renders `GLOB` (D3), since its `LIKE` is unconditionally ASCII-CI. Its `*` filter value is a metacharacter in two of the four escape alphabets | SEM-1, SEM-7, SC-3, SEC-4 |
 | 022 | `sec4-tsql-bracket-wildcard-escaping` | parity showcase (all 7) | `[` is a **fourth** `LIKE` wildcard on SQL Server and on no other v1 dialect — `020`'s schema verbatim with only the filter value changed, so the mssql arm is the only one whose bound value is escaped (D5) | SEM-7, SEC-4 |
 | 023 | `sem1-mixed-case-sensitivity-one-request` | parity showcase (all 7) | An insensitive **and** a sensitive string compared in one request — `006`'s and `014`'s schemas merged. The five SQL dialects attach `COLLATE` per operand and need nothing new; MongoDB's collation is query-level, so the sensitive comparison escapes into `{"$expr": …}` (**MDB-9**). The suite's only `$expr` artifact | SEM-1, SC-3, SQL-6, **MDB-9** |
+| 024 | `agg6-empty-group-sum-coalesced-avg-null` | five SQL dialects (no document store) | **AGG-6**: `SUM` wrapped as `COALESCE(SUM(x), 0)` and `AVG`/`MIN`/`MAX` left bare, in one statement — a grouped level ordered by the **`avg`**, which is the only shape in the suite that catches over-applying the wrap as well as omitting it. `COALESCE` is ANSI, so all five arms differ in quoting and paging tokens alone | **AGG-6**, GRP-4, SEM-3, SEM-6, AR-8, AR-9 |
 
 ## Notes on artifact construction
 

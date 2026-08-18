@@ -27,7 +27,8 @@ namespace Craticula.Sql;
 /// become real IR predicates merged through <see cref="FilterTreeMerge"/> (so SQL-2's wrap applies
 /// to them exactly as it does to a user's own <c>and</c>), and none of the protocol's own keys fold
 /// case (GRP-2). Everything grouping adds to the emitted text is ANSI —
-/// <c>GROUP BY</c>, <c>SUM</c>/<c>MIN</c>/<c>MAX</c>/<c>AVG</c>/<c>COUNT</c>, <c>AS</c> — so BM-2
+/// <c>GROUP BY</c>, <c>SUM</c>/<c>MIN</c>/<c>MAX</c>/<c>AVG</c>/<c>COUNT</c>, <c>AS</c>, and #1886's
+/// AGG-6 <c>COALESCE</c> around the first of those (see <see cref="AggregateCall"/>) — so BM-2
 /// needed <b>no</b> new <see cref="ISqlDialect"/> member; the drill-down predicate and the ordering
 /// keys reuse <see cref="ISqlDialect.RenderScalarComparison"/> and
 /// <see cref="ISqlDialect.RenderSortKey"/> unchanged.</para>
@@ -301,12 +302,27 @@ public static class SqlQueryBuilder
     private static string Alias(string expression, string logicalName, Context context) =>
         $"{expression} AS {context.Dialect.QuoteIdentifier(logicalName)}";
 
-    /// <summary>The aggregate expression itself — <c>SUM("amount")</c>. Composed in one place because
-    /// it is emitted twice: once in the projection under its output name, and once in the
-    /// <c>ORDER BY</c> (see <see cref="ResolveGroupedSortTarget"/> for why the ordering repeats the
-    /// expression rather than referring back to the name).</summary>
-    private static string AggregateCall(Aggregation aggregation, Context context) =>
-        $"{Function(aggregation.Func)}({ResolveColumn(aggregation.Field, context)})";
+    /// <summary>The aggregate expression itself — <c>AVG("amount")</c>, or AGG-6's
+    /// <c>COALESCE(SUM("amount"), 0)</c>. Composed in one place because it is emitted twice: once in
+    /// the projection under its output name, and once in the <c>ORDER BY</c> (see
+    /// <see cref="ResolveGroupedSortTarget"/> for why the ordering repeats the expression rather than
+    /// referring back to the name) — so the wrap reaching both is a property of this method, not two
+    /// call sites agreeing.
+    ///
+    /// <para><b>AGG-6, and the reason it is <c>sum</c> alone.</b> The rule and the whole argument for
+    /// it live in <c>spec/semantics.md</c>; what a reader here needs is only that SQL is the one
+    /// backend of four whose engine answer disagrees with it, and that <c>AVG</c>/<c>MIN</c>/<c>MAX</c>
+    /// already agree and must therefore stay bare. Wrapping them too would read as tidier and would
+    /// fabricate a <c>0</c> for a group that has nothing to average.</para></summary>
+    private static string AggregateCall(Aggregation aggregation, Context context)
+    {
+        var call = $"{Function(aggregation.Func)}({ResolveColumn(aggregation.Field, context)})";
+
+        // Two arguments and a literal zero, identical on all five dialects because it is ANSI — an
+        // ISqlDialect member for it would be the duplicate-instead-of-share smell that interface's own
+        // note warns about.
+        return aggregation.Func is AggregationFunc.Sum ? $"COALESCE({call}, 0)" : call;
+    }
 
     /// <summary>
     /// AR-8's closed v1 function set. These five spellings are ANSI SQL and identical on every

@@ -5,7 +5,8 @@
 The aggregation carries an explicit `alias: "totalRevenue"` (the adapter wired the ColumnVO's
 `id` into the IR's optional `alias` field because the host wants a specific, stable output key
 rather than the compiler's derived default). Every backend uses `totalRevenue` verbatim as the
-output identifier -- `SUM("amount") AS "totalRevenue"`, Mongo `$group` output key
+output identifier -- `COALESCE(SUM("amount"), 0) AS "totalRevenue"` (AGG-6 wraps the SQL `sum`; the
+alias is unaffected by the wrap and is what this case is about), Mongo `$group` output key
 `totalRevenue`, Search agg name `totalRevenue`. Contrast with 015, where `alias` is absent and
 the compiler falls back to its default naming.
 

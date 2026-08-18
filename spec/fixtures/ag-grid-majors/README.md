@@ -179,7 +179,9 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   switching one case would have split this category instead of unsplitting the suite.
   #1638 unsplit the suite the other way: **always quote** is now normative
   (`spec/semantics.md`, SQL-1), the 144 unquoted artifacts were re-authored, and case 004 now reads
-  `SELECT "department" AS "department", SUM("salary") AS "salary_sum" FROM "employees" ...`. The
+  `SELECT "department" AS "department", SUM("salary") AS "salary_sum" FROM "employees" ...` (that
+  `SUM` became `COALESCE(SUM("salary"), 0)` in #1886, when AGG-6 pinned an empty group's `sum` at 0 —
+  a change to the aggregate, not to the quoting this bullet is about). The
   deciding argument was not the head-count but a latent execution-tier bug the artifact tier cannot
   see: `dialect-parity/` declares camelCase physical columns that unquoted PostgreSQL folds to
   lowercase, so those queries would have failed against a real table at T-1b (#1624). A

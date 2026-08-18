@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT \"segment\" AS \"segment\", SUM(\"amount\") AS \"amountSum\", AVG(\"amount\") AS \"amountAvg\" FROM \"sales_fact\" WHERE \"region\" = $1 GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT \"segment\" AS \"segment\", COALESCE(SUM(\"amount\"), 0) AS \"amountSum\", AVG(\"amount\") AS \"amountAvg\" FROM \"sales_fact\" WHERE \"region\" = $1 GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "EMEA",
     100,

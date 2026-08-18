@@ -1044,9 +1044,13 @@ public static class SearchQueryBuilder
 
             // The `aggs` container is a JSON object, so a repeated key is last-wins rather than an
             // error — MDB-10's third collision, reached on a different backend by the same mechanism.
-            // AGG-2 derives the name from `valueCols[].id`, which is client-supplied, so it is
-            // reachable from the wire, and the grid would read one column holding another column's
-            // number.
+            // The grid would read one column holding another column's number.
+            //
+            // No longer reachable from an AG Grid request: #1886 moved the same check upstream into
+            // Craticula.Core's AggregationValidator, which every entry point runs, because
+            // Craticula.Sql had no equivalent and the condition is a property of the request rather
+            // than of this container's shape. Kept as defence in depth for a host that builds IR
+            // directly.
             if (aggs.ContainsKey(output))
             {
                 throw new SearchCompilationException(

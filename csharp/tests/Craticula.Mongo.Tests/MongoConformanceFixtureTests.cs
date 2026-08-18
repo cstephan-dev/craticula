@@ -27,11 +27,14 @@ public class MongoConformanceFixtureTests
     /// <see cref="Each_In_Scope_Category_Contributes_Exactly_The_Fixture_Count_It_Declares"/> rather
     /// than being silently unexercised.
     ///
-    /// <para><c>dialect-parity</c> contributes 18 rather than its 23 directories:
+    /// <para><c>dialect-parity</c> contributes 18 rather than its 24 directories:
     /// <c>001</c>-<c>004</c> are #1639's single-dialect MySQL/SQL Server/SQLite showcases and
     /// <c>005</c> is Oracle's, none of which carries a Mongo arm at all. Discovery filters on the
     /// artifact's presence, so they need no exclusion entry — there is nothing to compare
-    /// against. <c>page-export</c> contributes fewer than its directory count for the same reason:
+    /// against. <c>024</c> is #1886's AGG-6 case and carries the five SQL arms only, for a different
+    /// reason worth keeping distinct: this backend is already conformant with that rule and emits the
+    /// identical token before and after it, so a Mongo arm would grade nothing.
+    /// <c>page-export</c> contributes fewer than its directory count for the same reason:
     /// <c>012</c>-<c>020</c>, <c>022</c>, <c>025</c> and <c>026</c> exercise CSV-writer behavior on a
     /// single representative backend and carry a Postgres arm only. Stated as the rule rather than as
     /// a subtraction on purpose — the arithmetic form went stale in #1653 while

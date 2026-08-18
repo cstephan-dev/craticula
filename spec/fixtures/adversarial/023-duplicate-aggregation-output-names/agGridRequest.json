@@ -1,0 +1,30 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "name",
+      "displayName": "Name",
+      "field": "name"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "total",
+      "displayName": "Total",
+      "field": "amount",
+      "aggFunc": "sum"
+    },
+    {
+      "id": "total",
+      "displayName": "Total",
+      "field": "quantity",
+      "aggFunc": "sum"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": []
+}

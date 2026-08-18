@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT \"product\" AS \"product\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE ((\"region\" = $1 AND \"segment\" = $2) AND (\"fiscal_year\" >= $3 AND \"quantity\" < $4)) GROUP BY \"product\" ORDER BY \"product\" ASC NULLS LAST LIMIT $5 OFFSET $6",
+  "sql": "SELECT \"product\" AS \"product\", COALESCE(SUM(\"amount\"), 0) AS \"amount_sum\" FROM \"sales_fact\" WHERE ((\"region\" = $1 AND \"segment\" = $2) AND (\"fiscal_year\" >= $3 AND \"quantity\" < $4)) GROUP BY \"product\" ORDER BY \"product\" ASC NULLS LAST LIMIT $5 OFFSET $6",
   "params": [
     "EMEA",
     "Enterprise",

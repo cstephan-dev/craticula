@@ -20,9 +20,10 @@
         "max-page-size-exceeded",
         "uncoercible-value",
         "unknown-operator",
+        "duplicate-output-name",
         "malformed-request"
       ],
-      "description": "The specific SEC-3/SEC-6/SEM-5 condition this fixture exercises."
+      "description": "The specific SEC-3/SEC-6/SEM-5/GRP-4 condition this fixture exercises. 'duplicate-output-name' (added #1886) is two aggregations resolving to the same GRP-4 output name: legal-looking on every backend and silently lossy on all of them, so it is refused in the shared AggregationValidator rather than by any one compiler."
     },
     "note": {
       "type": "string",

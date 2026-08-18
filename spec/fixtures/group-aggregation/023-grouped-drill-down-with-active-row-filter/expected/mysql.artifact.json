@@ -1,6 +1,6 @@
 {
   "dialect": "mysql",
-  "sql": "SELECT `product` AS `product`, SUM(`amount`) AS `amount_sum` FROM `sales_fact` WHERE ((`region` = ? AND `segment` = ?) AND (`fiscal_year` >= ? AND `quantity` < ?)) GROUP BY `product` ORDER BY ISNULL(`product`) ASC, `product` ASC LIMIT ? OFFSET ?",
+  "sql": "SELECT `product` AS `product`, COALESCE(SUM(`amount`), 0) AS `amount_sum` FROM `sales_fact` WHERE ((`region` = ? AND `segment` = ?) AND (`fiscal_year` >= ? AND `quantity` < ?)) GROUP BY `product` ORDER BY ISNULL(`product`) ASC, `product` ASC LIMIT ? OFFSET ?",
   "params": [
     "EMEA",
     "Enterprise",

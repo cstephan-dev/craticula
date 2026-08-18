@@ -1,0 +1,5 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT \"department\" AS \"department\", COALESCE(SUM(\"salary\"), 0) AS \"salary_sum\", AVG(\"age\") AS \"age_avg\" FROM \"employees\" GROUP BY \"department\" ORDER BY AVG(\"age\") ASC NULLS LAST, \"department\" ASC NULLS LAST LIMIT $1 OFFSET $2",
+  "params": [100, 0]
+}

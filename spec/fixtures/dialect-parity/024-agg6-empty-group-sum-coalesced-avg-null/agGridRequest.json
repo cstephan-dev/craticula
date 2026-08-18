@@ -1,0 +1,18 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    { "id": "department", "displayName": "Department", "field": "department" }
+  ],
+  "valueCols": [
+    { "id": "salary", "displayName": "Salary", "field": "salary", "aggFunc": "sum" },
+    { "id": "age", "displayName": "Age", "field": "age", "aggFunc": "avg" }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    { "colId": "age", "sort": "asc" }
+  ]
+}

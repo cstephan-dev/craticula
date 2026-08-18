@@ -1,6 +1,6 @@
 {
   "dialect": "sqlite",
-  "sql": "SELECT \"region\" AS \"region\", SUM(\"amount\") AS \"totalRevenue\" FROM \"sales_fact\" GROUP BY \"region\" ORDER BY \"region\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "sql": "SELECT \"region\" AS \"region\", COALESCE(SUM(\"amount\"), 0) AS \"totalRevenue\" FROM \"sales_fact\" GROUP BY \"region\" ORDER BY \"region\" ASC NULLS LAST LIMIT ? OFFSET ?",
   "params": [
     100,
     0
