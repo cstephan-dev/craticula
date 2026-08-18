@@ -92,6 +92,33 @@ public class GroupingPlanTests
     }
 
     /// <summary>
+    /// The OTHER half of the input is validated too, which is not symmetry for its own sake.
+    ///
+    /// <para><c>GroupSpec</c> is checked transitively — <see cref="DrillDownFilter.Synthesize"/> runs
+    /// <c>GroupSpecValidator</c>, and that is what makes the <c>GroupCols[consumed]</c> index safe (the
+    /// test above). The aggregations had no such cover: while the three copies of this dispatch were
+    /// <see langword="private"/>, each sat two lines below its own builder's
+    /// <c>AggregationValidator.Validate</c> call, so the assembly boundary was the enforcement. #1885
+    /// made the entry point public and that boundary stopped existing — the same shape #1645's review
+    /// found when <c>SqlPatternEscaping</c> became reachable from <c>Craticula.Mongo</c>.</para>
+    ///
+    /// <para>What it protects, concretely: <c>SearchQueryBuilder.RequireOutputName</c> deliberately
+    /// <b>skips</b> its OSE-11 identifier check whenever an <c>Alias</c> is present, because
+    /// <c>ir.schema.json</c> holds <c>alias</c> to <c>^[A-Za-z_][A-Za-z0-9_]*$</c> and the validator is
+    /// assumed to have enforced it. Elasticsearch reads an aggregation name through a
+    /// <c>buckets_path</c> mini-language where <c>&gt;</c> navigates and <c>.</c> selects, so an alias
+    /// that reached a name unchecked would land in query text as syntax.</para>
+    /// </summary>
+    [Fact]
+    public void An_Unvalidated_Alias_Cannot_Reach_A_Consumer_Through_This_Entry_Point()
+    {
+        var ex = Assert.Throws<AggregationValidationException>(() =>
+            GroupingPlan.Resolve(Spec(["region"]), [Agg("amount", AggregationFunc.Sum, "totals>amount")]));
+
+        Assert.NotEmpty(ex.Errors);
+    }
+
+    /// <summary>
     /// Absent <c>valueCols</c> resolve to an EMPTY list rather than <see langword="null"/>, which is
     /// the whole reason the plan normalises them: every consumer's projection loop would otherwise
     /// need a second null check, and the one that forgot would throw on the most ordinary grouping

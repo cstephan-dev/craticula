@@ -50,8 +50,8 @@ public sealed record Aggregation
     /// <para><b>Why the rule lives on this type rather than in a compiler.</b> It is normative in
     /// <c>spec/semantics.md</c>'s GRP-4 — "stated here because it lands in query text as an identifier
     /// and every port must choose the same one" — and it is a function of <see cref="Field"/> and
-    /// <see cref="Func"/> and nothing else. All four consumers (the SQL, Mongo and Search compilers,
-    /// and the EF Core adapter) need exactly this name, so it belongs where the data it is derived
+    /// <see cref="Func"/> and nothing else. The SQL, Mongo and Search compilers all need exactly this
+    /// name — and the EF Core adapter will when #1887 lifts its refusal — so it belongs where the data it is derived
     /// from lives; three private copies of the expression were what #1885 removed.</para>
     ///
     /// <para><b>It is a name, not a validated identifier.</b> <see cref="AggregationValidator"/>

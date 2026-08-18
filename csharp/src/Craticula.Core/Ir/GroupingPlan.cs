@@ -11,9 +11,11 @@ namespace Craticula.Core.Ir;
 /// equal lengths are the <em>drill-down leaf</em>, which buckets by nothing and emits raw rows. Both
 /// are restricted by the already-consumed keys, as real IR (GRP-5).</para>
 ///
-/// <para><b>Why it takes IR pieces rather than a request.</b> Four consumers reach this dispatch
-/// through four unrelated request types — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c>,
-/// <c>SearchQueryRequest</c> and the EF Core adapter's own (#1887) — and no signature naming any one
+/// <para><b>Why it takes IR pieces rather than a request.</b> Three consumers reach this dispatch
+/// today through three unrelated request types — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c> and
+/// <c>SearchQueryRequest</c> — and a fourth is the reason this extraction happened at all: the EF Core
+/// adapter <em>refuses</em> grouping today (<c>EfCoreQueryBuilder</c> throws on a non-null
+/// <c>Group</c>), and #1887 is what makes it a caller. No signature naming any one
 /// of them can serve the other three. Each of those types is the shape of a <em>backend's</em> input
 /// (a dialect, a collation sink, an index name); the dispatch reads none of that, only the two IR
 /// members below, both of which are already <c>Craticula.Core.Ir</c> types. Taking them directly is
@@ -31,7 +33,8 @@ namespace Craticula.Core.Ir;
 /// same request. The identical argument that moved <see cref="DrillDownFilter"/>,
 /// <see cref="IsoInstant"/> and <see cref="FilterNodeFields"/> here applies unchanged.</para>
 ///
-/// <para><b>This type is legitimately for all four consumers, and that is worth stating.</b> #1645's
+/// <para><b>This type is legitimately for every compiler and adapter that groups, and that is worth
+/// stating.</b> #1645's
 /// review found that moving <see cref="Craticula.Core.Schema.SqlPatternEscaping"/> into Core made it
 /// <em>reachable</em> from <c>Craticula.Mongo</c>, where SEM-7 forbids conflating it with regex
 /// escaping — the assembly boundary had silently been the enforcement, and stopped being it. Nothing
@@ -72,6 +75,24 @@ public sealed record GroupingPlan(
     /// </summary>
     public static GroupingPlan? Resolve(GroupSpec? group, IReadOnlyList<Aggregation>? aggregations)
     {
+        // Defense in depth, for DrillDownFilter.Synthesize's reason and mirroring its first line: a
+        // caller can reach a public IR entry point with hand-built input. The GroupSpec half is already
+        // covered — Synthesize below validates it, which is what makes the GroupCols[consumed] index
+        // safe — and this is the other half.
+        //
+        // It is not decorative. SearchQueryBuilder.RequireOutputName deliberately SKIPS its OSE-11
+        // identifier check when an Alias is present, and says why: ir.schema.json holds `alias` to
+        // ^[A-Za-z_][A-Za-z0-9_]*$, so the alias is taken as already checked. An aggregation name is
+        // read by Elasticsearch through a buckets_path mini-language where '>' navigates and '.'
+        // selects, so an unvalidated alias arriving this way would land in query text as syntax. While
+        // these three copies were private that coupling sat two lines from each builder's own
+        // AggregationValidator call; #1885 made the entry point public, and the assembly boundary
+        // stopped being the thing enforcing it — the same shape #1645's review found when
+        // SqlPatternEscaping became reachable from Craticula.Mongo.
+        //
+        // Idempotent for every current caller: all four validate before they get here.
+        AggregationValidator.Validate(aggregations);
+
         if (group is null)
         {
             return null;
