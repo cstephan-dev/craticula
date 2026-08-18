@@ -92,7 +92,7 @@ public static class SqlQueryBuilder
         }
 
         var parameters = new SqlParameterBag(dialect);
-        var grouping = GroupingPlan.Resolve(request);
+        var grouping = GroupingPlan.Resolve(request.Group, request.Aggregations);
         var context = new Context(request.Schema, dialect, parameters);
 
         var sql = new StringBuilder("SELECT ")
@@ -233,44 +233,6 @@ public static class SqlQueryBuilder
     // ---- grouping (BM-2) --------------------------------------------------------------------------
 
     /// <summary>
-    /// GRP-1: what a <see cref="GroupSpec"/> resolves to for this one request —
-    /// <see langword="null"/> when the request carries no group state at all.
-    /// </summary>
-    /// <param name="GroupColumn">The next not-yet-consumed group column, which this level buckets by;
-    /// <see langword="null"/> when every group column has been consumed and the request is the
-    /// drill-down leaf (<c>spec/fixtures/group-aggregation/005</c>, <c>006</c>).</param>
-    /// <param name="DrillDown">The already-consumed keys as real IR (GRP-5), or
-    /// <see langword="null"/> at the top group level.</param>
-    /// <param name="Aggregations">AR-8's <c>valueCols</c>, empty rather than null so the projection
-    /// loop needs no second null check. Ignored on the leaf, which projects rows, not aggregates.</param>
-    private sealed record GroupingPlan(
-        string? GroupColumn,
-        FilterNode? DrillDown,
-        IReadOnlyList<Aggregation> Aggregations)
-    {
-        public static GroupingPlan? Resolve(SqlQueryRequest request)
-        {
-            if (request.Group is not { } group)
-            {
-                return null;
-            }
-
-            // GRP-5's synthesis lives in Core, not here: GridFilterPipeline needs the identical
-            // predicates to charge the client's groupKeys against SEC-3's leaf budget, and two
-            // implementations that merely agreed today would be free to drift. GRP-1's arity rule
-            // (consumed <= GroupCols.Count, which the index below relies on) is enforced by the
-            // GroupSpecValidator that Synthesize runs, and by Build's own explicit call to it.
-            var drillDown = DrillDownFilter.Synthesize(group);
-            var consumed = group.GroupKeys.Count;
-
-            return new GroupingPlan(
-                consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null,
-                drillDown,
-                request.Aggregations ?? []);
-        }
-    }
-
-    /// <summary>
     /// GRP-3: what the statement selects.
     ///
     /// <list type="bullet">
@@ -306,7 +268,7 @@ public static class SqlQueryBuilder
 
             foreach (var aggregation in grouping.Aggregations)
             {
-                items.Add($"{AggregateCall(aggregation, context)} AS {context.Dialect.QuoteIdentifier(OutputName(aggregation))}");
+                items.Add($"{AggregateCall(aggregation, context)} AS {context.Dialect.QuoteIdentifier(aggregation.OutputName)}");
             }
 
             return string.Join(", ", items);
@@ -368,17 +330,6 @@ public static class SqlQueryBuilder
 
         _ => throw new SqlCompilationException($"Unknown aggregation function '{func}'.")
     };
-
-    /// <summary>
-    /// GRP-4: an aggregate's output name — AGG-2's <see cref="Aggregation.Alias"/> when the adapter
-    /// set one (<c>ColumnVO.id</c> differed from <c>ColumnVO.field</c>), and otherwise the compiler
-    /// default <c>&lt;field&gt;_&lt;func&gt;</c> the fixtures pin (<c>amount_sum</c>, <c>id_count</c>).
-    /// The alias is the one identifier in a compiled statement that does not come from the schema
-    /// allowlist, which is why <see cref="AggregationValidator"/> holds it to
-    /// <c>ir.schema.json</c>'s identifier pattern before it ever reaches here.
-    /// </summary>
-    private static string OutputName(Aggregation aggregation) =>
-        aggregation.Alias ?? $"{aggregation.Field}_{aggregation.Func.ToString().ToLowerInvariant()}";
 
     // ---- filter tree ----------------------------------------------------------------------------
 
@@ -779,18 +730,21 @@ public static class SqlQueryBuilder
     /// forces it — a per-dialect split here would be a semantic difference dressed as a spelling one,
     /// which is exactly what <see cref="ISqlDialect"/>'s seam exists to keep out.</para>
     ///
-    /// <para>The match is against <c>Alias ?? Field</c>, which is AGG-2's <c>ColumnVO.id</c>
+    /// <para>The match is against <see cref="Aggregation.ColumnId"/>, AGG-2's <c>ColumnVO.id</c>
     /// reconstructed: the grid sends the <em>column's</em> id in <c>sortModel</c>, and AGG-2 sets
-    /// <see cref="Aggregation.Alias"/> from that id exactly when it differs from the field. Anything
-    /// else is rejected rather than rendered — a plausible-looking statement the engine refuses is
-    /// worse than a compiler error naming the reason.</para>
+    /// <see cref="Aggregation.Alias"/> from that id exactly when it differs from the field. Note it is
+    /// NOT <see cref="Aggregation.OutputName"/> — the two coincide only when an alias is set, and an
+    /// unaliased aggregation's column id is the bare field while its output name is
+    /// <c>&lt;field&gt;_&lt;func&gt;</c>. Anything else is rejected rather than rendered — a
+    /// plausible-looking statement the engine refuses is worse than a compiler error naming the
+    /// reason.</para>
     /// </summary>
     private static (string Column, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
     {
         foreach (var aggregation in aggregations)
         {
-            if ((aggregation.Alias ?? aggregation.Field) == sortField)
+            if (aggregation.ColumnId == sortField)
             {
                 return (AggregateCall(aggregation, context), ResolveField(aggregation.Field, context));
             }

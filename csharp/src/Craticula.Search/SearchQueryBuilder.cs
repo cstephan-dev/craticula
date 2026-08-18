@@ -66,7 +66,7 @@ public static class SearchQueryBuilder
         AggregationValidator.Validate(request.Aggregations);
 
         var context = new Context(request.Schema);
-        var grouping = GroupingPlan.Resolve(request);
+        var grouping = GroupingPlan.Resolve(request.Group, request.Aggregations);
 
         // OSE-3: a grouping request's clauses come from two provenances that must be conjoined
         // (GRP-5's drill-down and the user's own filter), and `bool.filter` is this DSL's conjunction
@@ -927,40 +927,6 @@ public static class SearchQueryBuilder
 
     // ---- grouping (BM-2) --------------------------------------------------------------------------
 
-    /// <summary>GRP-1: what a <see cref="GroupSpec"/> resolves to for this one request —
-    /// <see langword="null"/> when the request carries no group state at all.</summary>
-    /// <param name="GroupColumn">The next not-yet-consumed group column, which this level buckets by;
-    /// <see langword="null"/> when every group column has been consumed and the request is the
-    /// drill-down leaf.</param>
-    /// <param name="DrillDown">The already-consumed keys as real IR (GRP-5), or
-    /// <see langword="null"/> at the top group level.</param>
-    /// <param name="Aggregations">AR-8's <c>valueCols</c>, empty rather than null.</param>
-    private sealed record GroupingPlan(
-        string? GroupColumn,
-        FilterNode? DrillDown,
-        IReadOnlyList<Aggregation> Aggregations)
-    {
-        public static GroupingPlan? Resolve(SearchQueryRequest request)
-        {
-            if (request.Group is not { } group)
-            {
-                return null;
-            }
-
-            // GRP-5's synthesis lives in Core and is called by ALL THREE compilers and by
-            // GridFilterPipeline (which charges the client's groupKeys against SEC-3's leaf budget).
-            // It is a pure function, so deriving it here is safe; re-implementing it would let the
-            // backends drift.
-            var drillDown = DrillDownFilter.Synthesize(group);
-            var consumed = group.GroupKeys.Count;
-
-            return new GroupingPlan(
-                consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null,
-                drillDown,
-                request.Aggregations ?? []);
-        }
-    }
-
     /// <summary>
     /// BM-2/AGG-5/OSE-11: the grouped level's <c>composite</c> aggregation and its sub-aggregations.
     ///
@@ -1109,10 +1075,13 @@ public static class SearchQueryBuilder
     }
 
     /// <summary>
-    /// GRP-4/OSE-11: an aggregate's output name — AGG-2's <see cref="Aggregation.Alias"/> when the
-    /// adapter set one (<c>ColumnVO.id</c> differed from <c>ColumnVO.field</c>), otherwise the
-    /// compiler default <c>&lt;field&gt;_&lt;func&gt;</c> — <b>validated against the very pattern
+    /// GRP-4/OSE-11: an aggregate's <see cref="Aggregation.OutputName"/> — the shared GRP-4 rule,
+    /// which is AGG-2's <see cref="Aggregation.Alias"/> when the adapter set one
+    /// (<c>ColumnVO.id</c> differed from <c>ColumnVO.field</c>) and otherwise the compiler default
+    /// <c>&lt;field&gt;_&lt;func&gt;</c> — <b>validated against the very pattern
     /// <c>ir.schema.json</c> already imposes on <c>alias</c></b> (<c>^[A-Za-z_][A-Za-z0-9_]*$</c>).
+    /// The composition is not repeated here; only the check this backend needs on top of it is, which
+    /// is why the wrapper survived #1885's extraction while the two other compilers' copies did not.
     ///
     /// <para>The default is where the guard was missing. <see cref="AggregationValidator"/> checks an
     /// explicit alias precisely because it "lands in generated query text as an identifier … where
@@ -1127,7 +1096,7 @@ public static class SearchQueryBuilder
     /// </summary>
     private static string RequireOutputName(Aggregation aggregation)
     {
-        var name = aggregation.Alias ?? $"{aggregation.Field}_{aggregation.Func.ToString().ToLowerInvariant()}";
+        var name = aggregation.OutputName;
 
         if (aggregation.Alias is null && !IdentifierPattern.IsMatch(name))
         {
@@ -1221,10 +1190,12 @@ public static class SearchQueryBuilder
                 continue;
             }
 
-            // GRP-4: matched against `alias ?? field`, AGG-2's ColumnVO.id reconstructed — the grid
-            // sends the COLUMN's id in sortModel, and AGG-2 sets the alias from that id exactly when
-            // it differs from the field.
-            throw aggregations.Any(a => (a.Alias ?? a.Field) == key.Field)
+            // GRP-4: matched against Aggregation.ColumnId, AGG-2's ColumnVO.id reconstructed — the
+            // grid sends the COLUMN's id in sortModel, and AGG-2 sets the alias from that id exactly
+            // when it differs from the field. Not OutputName: an unaliased aggregation's column id is
+            // the bare field, so matching on the output name would misreport the request that this
+            // backend actually cannot express as one it merely does not recognise.
+            throw aggregations.Any(a => a.ColumnId == key.Field)
                 ? new SearchCompilationException(
                     $"The grouped level on '{groupColumn}' is ordered by the aggregate '{key.Field}', which a " +
                     "composite aggregation cannot express. A composite enumerates buckets in composite-key order " +

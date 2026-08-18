@@ -146,7 +146,7 @@ public static class MongoPipelineBuilder
     /// touches is <paramref name="context"/>'s own sink, so <see cref="Build"/> can run it twice.</summary>
     private static List<JsonObject> Compose(MongoQueryRequest request, Context context)
     {
-        var grouping = GroupingPlan.Resolve(request);
+        var grouping = GroupingPlan.Resolve(request.Group, request.Aggregations);
 
         var stages = new List<JsonObject>();
 
@@ -333,40 +333,6 @@ public static class MongoPipelineBuilder
 
     // ---- grouping (BM-2) --------------------------------------------------------------------------
 
-    /// <summary>GRP-1: what a <see cref="GroupSpec"/> resolves to for this one request —
-    /// <see langword="null"/> when the request carries no group state at all.</summary>
-    /// <param name="GroupColumn">The next not-yet-consumed group column, which this level buckets by;
-    /// <see langword="null"/> when every group column has been consumed and the request is the
-    /// drill-down leaf.</param>
-    /// <param name="DrillDown">The already-consumed keys as real IR (GRP-5), or
-    /// <see langword="null"/> at the top group level.</param>
-    /// <param name="Aggregations">AR-8's <c>valueCols</c>, empty rather than null.</param>
-    private sealed record GroupingPlan(
-        string? GroupColumn,
-        FilterNode? DrillDown,
-        IReadOnlyList<Aggregation> Aggregations)
-    {
-        public static GroupingPlan? Resolve(MongoQueryRequest request)
-        {
-            if (request.Group is not { } group)
-            {
-                return null;
-            }
-
-            // GRP-5's synthesis lives in Core and is called by BOTH compilers and by
-            // GridFilterPipeline (which charges the client's groupKeys against SEC-3's leaf budget).
-            // It is a pure function, so deriving it twice is safe; re-implementing it here would let
-            // the two drift.
-            var drillDown = DrillDownFilter.Synthesize(group);
-            var consumed = group.GroupKeys.Count;
-
-            return new GroupingPlan(
-                consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null,
-                drillDown,
-                request.Aggregations ?? []);
-        }
-    }
-
     /// <summary>
     /// The grouped level's <c>$group</c> stage: <c>_id</c> is the bucket key, followed by one
     /// accumulator per <c>valueCol</c> under its GRP-4 output name.
@@ -383,7 +349,7 @@ public static class MongoPipelineBuilder
 
         foreach (var aggregation in aggregations)
         {
-            var output = OutputName(aggregation);
+            var output = aggregation.OutputName;
 
             // MDB-10: a stage document is a map, so a repeated key is LAST-WINS rather than an error
             // — one accumulator would vanish from a syntactically perfect pipeline, and the grid
@@ -433,17 +399,6 @@ public static class MongoPipelineBuilder
     {
         ["$cond"] = new JsonArray(IsNullExpression(reference), 0, 1)
     };
-
-    /// <summary>
-    /// GRP-4: an aggregate's output name — AGG-2's <see cref="Aggregation.Alias"/> when the adapter
-    /// set one (<c>ColumnVO.id</c> differed from <c>ColumnVO.field</c>), otherwise the compiler
-    /// default <c>&lt;field&gt;_&lt;func&gt;</c>. It names the accumulator in <c>$group</c>, it is
-    /// what a later <c>$sort</c> addresses (on MongoDB the aggregate IS a real document field after
-    /// <c>$group</c>, so GRP-4's "repeat the expression, do not refer back to the output name" is a
-    /// SQL-only rule and explicitly does not reach here), and it is what the grid reads back.
-    /// </summary>
-    private static string OutputName(Aggregation aggregation) =>
-        aggregation.Alias ?? $"{aggregation.Field}_{aggregation.Func.ToString().ToLowerInvariant()}";
 
     /// <summary>
     /// The <c>$project</c> body for an ordered list of logical field names — GRP-3's drill-down leaf
@@ -1097,18 +1052,25 @@ public static class MongoPipelineBuilder
     /// treat it as missing and order every document equally, which is worse than SQL's outright
     /// rejection and is why this is checked rather than passed through.
     ///
-    /// <para>The match is against <c>Alias ?? Field</c>, AGG-2's <c>ColumnVO.id</c> reconstructed:
-    /// the grid sends the <em>column's</em> id in <c>sortModel</c>, and AGG-2 sets the alias from
-    /// that id exactly when it differs from the field.</para>
+    /// <para>The match is against <see cref="Aggregation.ColumnId"/>, AGG-2's <c>ColumnVO.id</c>
+    /// reconstructed: the grid sends the <em>column's</em> id in <c>sortModel</c>, and AGG-2 sets the
+    /// alias from that id exactly when it differs from the field. What the resolved key then
+    /// <em>addresses</em> is the aggregate's <see cref="Aggregation.OutputName"/>, and the two are
+    /// different values whenever there is no alias — see those members' own docs.</para>
+    ///
+    /// <para>Addressing the output name is a MongoDB-only liberty: after <c>$group</c> the aggregate
+    /// IS a real field of the document a later <c>$sort</c> stage reads, not an alias in a
+    /// <c>SELECT</c> scope, so GRP-4's "repeat the expression, do not refer back to the output name"
+    /// is a SQL rule and explicitly does not reach here.</para>
     /// </summary>
     private static (string Bucket, string Path, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
     {
         foreach (var aggregation in aggregations)
         {
-            if ((aggregation.Alias ?? aggregation.Field) == sortField)
+            if (aggregation.ColumnId == sortField)
             {
-                var output = OutputName(aggregation);
+                var output = aggregation.OutputName;
                 return ($"__{output}NullBucket", output, ResolveField(aggregation.Field, context));
             }
         }
