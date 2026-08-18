@@ -267,8 +267,9 @@ public class SqlQueryBuilderGroupingTests
     }
 
     /// <summary>
-    /// AR-9/GRP-4: a sort naming an aggregated column is ADDRESSED by <c>Alias ?? Field</c> — AGG-2's
-    /// <c>ColumnVO.id</c> reconstructed — so an aggregation the adapter DID alias is found by that
+    /// AR-9/GRP-4: a sort naming an aggregated column is ADDRESSED by
+    /// <see cref="Aggregation.ColumnId"/> — AGG-2's <c>ColumnVO.id</c> reconstructed, and since #1885
+    /// a member of the IR type that owns the rule — so an aggregation the adapter DID alias is found by that
     /// alias and not by its field. What it then ORDERS BY is the aggregate expression, not the alias:
     /// an output name is not usable inside an expression on PostgreSQL or T-SQL, and SEM-3's null
     /// placement is emulated with exactly such an expression on two of the five dialects.
