@@ -239,13 +239,16 @@ public static class SqlQueryBuilder
     /// <list type="bullet">
     /// <item><description><b>Grouped level</b> — the group column aliased to its logical field name
     /// (always, even when the two coincide), then one aggregate per <c>valueCol</c> under its own
-    /// output name. An aggregate whose output name equals the group column's own logical name is
-    /// rejected rather than rendered: a <c>SELECT</c> list is flat, so the two would share one column
-    /// name where <c>Craticula.Mongo</c>'s <c>_id</c> and <c>Craticula.Search</c>'s nested
-    /// <c>aggs</c> keep the group key and the aggregates in separate namespaces by construction — this
-    /// is the one backend where the collision is even representable. See
-    /// <see cref="ResolveGroupedSortTarget"/>'s remarks for the second, sharper failure this same
-    /// shape produces in the <c>ORDER BY</c>.</description></item>
+    /// output name. <see cref="GroupingPlan.Resolve"/> already rejects a request whose aggregation
+    /// output name collides with this level's own group column — moved there in #1887's review of
+    /// this method's own #1886 fix, once EF Core became a fourth backend the collision is reachable
+    /// from (every backend's grid row is the identical flat, colId-keyed shape, so this was never
+    /// really SQL-specific): by the time this method runs, <paramref name="grouping"/> is guaranteed to
+    /// carry no such aggregation. See <see cref="ResolveGroupedSortTarget"/>'s remarks for the second,
+    /// sharper failure this same shape produces in the <c>ORDER BY</c> — matched through the shared
+    /// <see cref="GroupedSortTarget"/> helper, but still rendered and refused by each compiler's own
+    /// <c>ResolveGroupedSortTarget</c> rather than by <see cref="GroupingPlan.Resolve"/> (that rejection
+    /// depends on the request's <em>sort</em>, which this dispatch does not see).</description></item>
     /// <item><description><b>Drill-down leaf</b> — every declared field, in the schema's own
     /// declaration order, aliased back to its logical name only where the physical column differs.
     /// A grouping request's rows are named at every level, which <c>SELECT *</c> cannot do: it
@@ -273,19 +276,11 @@ public static class SqlQueryBuilder
         {
             var items = new List<string> { Alias(ResolveColumn(groupColumn, context), groupColumn, context) };
 
+            // No output-name-vs-group-column collision guard here: GroupingPlan.Resolve (Core) already
+            // rejected it — Build calls it, above, strictly before this method is ever reached — so
+            // `grouping.Aggregations` is provably free of one by the time this loop runs (#1887).
             foreach (var aggregation in grouping.Aggregations)
             {
-                if (aggregation.OutputName == groupColumn)
-                {
-                    throw new SqlCompilationException(
-                        $"An aggregation's output name '{aggregation.OutputName}' collides with this grouped " +
-                        $"level's own group column '{groupColumn}' (GRP-3 always projects it under its logical " +
-                        "name). A SELECT list would then name the same column twice, and SEM-6's tiebreaker — " +
-                        $"which orders by '{groupColumn}' for exactly this reason, since its values are unique " +
-                        "per bucket by construction — would silently bind to this aggregate instead. Give this " +
-                        $"valueCol a distinct `id` (alias) so its output name is no longer '{groupColumn}'.");
-                }
-
                 items.Add($"{AggregateCall(aggregation, context)} AS {context.Dialect.QuoteIdentifier(aggregation.OutputName)}");
             }
 

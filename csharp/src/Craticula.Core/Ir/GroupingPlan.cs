@@ -100,10 +100,58 @@ public sealed record GroupingPlan(
 
         var drillDown = DrillDownFilter.Synthesize(group);
         var consumed = group.GroupKeys.Count;
+        var groupColumn = consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null;
+        var resolvedAggregations = aggregations ?? [];
 
-        return new GroupingPlan(
-            consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null,
-            drillDown,
-            aggregations ?? []);
+        if (groupColumn is not null)
+        {
+            RejectOutputNameCollisionWithGroupColumn(groupColumn, resolvedAggregations);
+        }
+
+        return new GroupingPlan(groupColumn, drillDown, resolvedAggregations);
+    }
+
+    /// <summary>
+    /// GRP-3: a grouped level's flat projection is <c>[groupColumn, ...aggregates]</c> under GRP-3's
+    /// own naming rule, so an aggregation whose <see cref="Aggregation.OutputName"/> equals
+    /// <paramref name="groupColumn"/> would share one output column with the group key itself — moved
+    /// here from <c>Craticula.Sql.SqlQueryBuilder</c> (#1887's review of #1886's fix), because the row
+    /// every backend ultimately hands a grid is the identical flat, colId-keyed shape regardless of
+    /// which compiler produced it: MongoDB's <c>_id</c> and Elasticsearch's nested <c>aggs</c> keep the
+    /// group key and the aggregates apart only INTERNALLY, until the adapter assembling the outward row
+    /// object puts them back together. So this is a contract-level hazard reachable from every backend,
+    /// not a SQL-rendering quirk — hence one check here rather than a copy per compiler/adapter.
+    ///
+    /// <para><b>Skipped when <paramref name="groupColumn"/> is <see langword="null"/></b> (a drill-down
+    /// leaf) — a leaf has no group column for an aggregate's name to collide with, and its own
+    /// <see cref="Aggregations"/> is ignored entirely (it projects rows, not aggregates).</para>
+    ///
+    /// <para>Collect-all-then-throw, mirroring <see cref="AggregationValidator"/>'s own pattern: every
+    /// colliding aggregation is named in one exception rather than reporting only the first.</para>
+    /// </summary>
+    private static void RejectOutputNameCollisionWithGroupColumn(
+        string groupColumn, IReadOnlyList<Aggregation> aggregations)
+    {
+        var colliding = new List<int>();
+        for (var i = 0; i < aggregations.Count; i++)
+        {
+            if (aggregations[i].OutputName == groupColumn)
+            {
+                colliding.Add(i);
+            }
+        }
+
+        if (colliding.Count == 0)
+        {
+            return;
+        }
+
+        throw new AggregationValidationException([
+            $"aggregations[{string.Join(", ", colliding)}] resolve to the output name '{groupColumn}', which " +
+            "collides with this grouped level's own group column (GRP-3 always projects it under that name). " +
+            "A grid row is flat and keyed by colId regardless of backend, so the group column and a same-named " +
+            "aggregate output cannot coexist. Give the colliding valueCol(s) a distinct `id` (alias) so their " +
+            $"output name is no longer '{groupColumn}'."
+        ]);
     }
 }

@@ -1,3 +1,4 @@
+using Craticula.Core.Ir;
 using Microsoft.EntityFrameworkCore;
 
 namespace Craticula.EntityFrameworkCore;
@@ -31,6 +32,12 @@ public static class EfCoreGridQuery
     /// tiebreaker exists to prevent, and why <c>ApplyOrdering</c> can never return an empty key list),
     /// and the projection must come last so that a field the request sorts or filters on but does not
     /// project is still available to the clauses that need it.</para>
+    ///
+    /// <para><b>#1887: dispatches internally on <see cref="GroupingPlan.Resolve"/>.</b> No new public
+    /// entry point and no change to <see cref="EfCoreGridPage"/>'s shape: a drill-down leaf still
+    /// compiles through the ordinary per-row pipeline above, and a grouped level's
+    /// <c>Columns</c> is <c>[groupColumn, ...aggregations.Select(a =&gt; a.OutputName)]</c>, which
+    /// <c>Columns</c> + <c>Rows</c> + <c>RowCount</c> already fit without a new member.</para>
     /// </summary>
     /// <param name="source">The <c>FROM</c> target — a <c>DbSet</c>, or
     /// <see cref="GridSchemaPropertyBag.Query"/> for a host with no entity classes. Any EF global query
@@ -42,7 +49,7 @@ public static class EfCoreGridQuery
     /// (<see cref="EfCoreGridPage.RowCount"/>). Defaults to <see langword="false"/>: it is a second
     /// round trip, and a grid needs the total once per filter change rather than once per block.</param>
     /// <param name="cancellationToken">EXP-7's cancellation hook, observed by both queries.</param>
-    public static async Task<EfCoreGridPage> FetchPageAsync<TRow>(
+    public static Task<EfCoreGridPage> FetchPageAsync<TRow>(
         IQueryable<TRow> source,
         EfCoreQueryRequest request,
         EfCoreProviderSemantics semantics,
@@ -53,6 +60,50 @@ public static class EfCoreGridQuery
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(semantics);
 
+        var grouping = GroupingPlan.Resolve(request.Group, request.Aggregations);
+
+        return grouping switch
+        {
+            null => FetchUngroupedPageAsync(source, request, semantics, includeRowCount, cancellationToken),
+
+            // GRP-1: every group column consumed — the drill-down leaf, raw rows restricted by the
+            // already-consumed groupKeys.
+            { GroupColumn: null } => FetchDrillDownLeafPageAsync(source, request, semantics, grouping, includeRowCount, cancellationToken),
+
+            // A grouped level: GroupBy + aggregate selectors.
+            _ => FetchGroupedLevelPageAsync(source, request, semantics, grouping, includeRowCount, cancellationToken)
+        };
+    }
+
+    /// <summary>
+    /// The filtered row count on its own, for a host that fetches the total on a different cadence from
+    /// the blocks — the same query <see cref="FetchPageAsync{TRow}"/> runs when asked, exposed so that
+    /// asking for it separately cannot mean asking a different question.
+    ///
+    /// <para><b>Ungrouped only, deliberately unchanged by #1887.</b> A grouped request still reaches
+    /// <see cref="EfCoreQueryBuilder.ApplyFilter{TRow}"/>'s own refusal here — no grouped count use is
+    /// required by this ticket's DoD, and a grouped level's own count
+    /// (<see cref="EfCoreQueryBuilder.CountGroupsAsync{TRow}"/>, a BUCKET count) answers a different
+    /// question from this method's row count, so widening this one's meaning silently would be exactly
+    /// the "right shape, wrong answer" failure the rest of this file refuses elsewhere.</para>
+    /// </summary>
+    public static Task<long> CountAsync<TRow>(
+        IQueryable<TRow> source,
+        EfCoreQueryRequest request,
+        EfCoreProviderSemantics semantics,
+        CancellationToken cancellationToken = default) =>
+        EfCoreQueryBuilder.ApplyFilter(source, request, semantics).LongCountAsync(cancellationToken);
+
+    // ---- the three branches -------------------------------------------------------------------------
+
+    /// <summary>Today's path, unchanged: filter, order, row window, projection.</summary>
+    private static async Task<EfCoreGridPage> FetchUngroupedPageAsync<TRow>(
+        IQueryable<TRow> source,
+        EfCoreQueryRequest request,
+        EfCoreProviderSemantics semantics,
+        bool includeRowCount,
+        CancellationToken cancellationToken)
+    {
         var filtered = EfCoreQueryBuilder.ApplyFilter(source, request, semantics);
 
         // Counted on the FILTERED query with no ordering and no row window — AG Grid's rowCount is "how
@@ -71,29 +122,106 @@ public static class EfCoreGridQuery
             request.Schema,
             columns);
 
+        return new EfCoreGridPage
+        {
+            Columns = columns,
+            Rows = await MaterializeRowsAsync(page, cancellationToken).ConfigureAwait(false),
+            RowCount = rowCount
+        };
+    }
+
+    /// <summary>
+    /// GRP-1's drill-down leaf: the already-consumed <c>groupKeys</c> (<paramref name="grouping"/>'s
+    /// own <see cref="GroupingPlan.DrillDown"/>) AND-composed with the request's own filter, then the
+    /// EXISTING per-row pipeline — ordering, row window, projection — unchanged. GRP-3's leaf projects
+    /// every declared field under its logical name (the same <see cref="EfCoreQueryBuilder.ResolveProjection"/>
+    /// fallback the ungrouped path uses), and its <c>ORDER BY</c> stays ordinary SEM-1/Ungrouped (only
+    /// the drill-down predicate itself is GRP-2-exact) — <see cref="EfCoreQueryBuilder.ResolveSortKeys(EfCoreQueryRequest)"/>
+    /// is reused unchanged for that reason.
+    /// </summary>
+    private static async Task<EfCoreGridPage> FetchDrillDownLeafPageAsync<TRow>(
+        IQueryable<TRow> source,
+        EfCoreQueryRequest request,
+        EfCoreProviderSemantics semantics,
+        GroupingPlan grouping,
+        bool includeRowCount,
+        CancellationToken cancellationToken)
+    {
+        var context = EfCoreQueryBuilder.ValidateAndBuildRowContext(request, semantics, typeof(TRow));
+
+        var filtered = EfCoreQueryBuilder.ApplyGroupedFilter(source, grouping.DrillDown, request.Filter, context);
+
+        var rowCount = includeRowCount
+            ? await filtered.LongCountAsync(cancellationToken).ConfigureAwait(false)
+            : (long?)null;
+
+        var columns = EfCoreQueryBuilder.ResolveProjection(request);
+
+        var page = EfCoreQueryBuilder.ApplyProjection(
+            EfCoreQueryBuilder.ApplyRowWindow(
+                EfCoreQueryBuilder.ApplyOrdering(filtered, EfCoreQueryBuilder.ResolveSortKeys(request), context),
+                request.Page),
+            request.Schema,
+            columns);
+
+        return new EfCoreGridPage
+        {
+            Columns = columns,
+            Rows = await MaterializeRowsAsync(page, cancellationToken).ConfigureAwait(false),
+            RowCount = rowCount
+        };
+    }
+
+    /// <summary>
+    /// A grouped level: the same drill-down + user-filter composition as the leaf (GRP-5's own
+    /// "already-consumed keys"), then <see cref="EfCoreQueryBuilder.ApplyGroupedLevel{TRow}"/>'s
+    /// <c>GroupBy</c>/aggregate composition, the ordinary <see cref="EfCoreQueryBuilder.ApplyRowWindow{TRow}"/>
+    /// (instantiated with <c>TRow = object?[]</c> — it has no dependency on what a row IS), and
+    /// <c>Columns = [groupColumn, ...aggregations.Select(a =&gt; a.OutputName)]</c>. The row count is a
+    /// BUCKET count (<see cref="EfCoreQueryBuilder.CountGroupsAsync{TRow}"/>), not a row count — no
+    /// <c>groupLevelInfo</c>-style metadata (#1649's, explicitly out of scope here).
+    /// </summary>
+    private static async Task<EfCoreGridPage> FetchGroupedLevelPageAsync<TRow>(
+        IQueryable<TRow> source,
+        EfCoreQueryRequest request,
+        EfCoreProviderSemantics semantics,
+        GroupingPlan grouping,
+        bool includeRowCount,
+        CancellationToken cancellationToken)
+    {
+        var context = EfCoreQueryBuilder.ValidateAndBuildRowContext(request, semantics, typeof(TRow));
+        var groupColumn = grouping.GroupColumn!;
+
+        var filtered = EfCoreQueryBuilder.ApplyGroupedFilter(source, grouping.DrillDown, request.Filter, context);
+
+        var rowCount = includeRowCount
+            ? await EfCoreQueryBuilder.CountGroupsAsync(filtered, groupColumn, context, cancellationToken).ConfigureAwait(false)
+            : (long?)null;
+
+        var page = EfCoreQueryBuilder.ApplyRowWindow(
+            EfCoreQueryBuilder.ApplyGroupedLevel(filtered, groupColumn, grouping.Aggregations, request.Sort, context),
+            request.Page);
+
+        var columns = new List<string>(1 + grouping.Aggregations.Count) { groupColumn };
+        columns.AddRange(grouping.Aggregations.Select(aggregation => aggregation.OutputName));
+
+        return new EfCoreGridPage
+        {
+            Columns = columns,
+            Rows = await MaterializeRowsAsync(page, cancellationToken).ConfigureAwait(false),
+            RowCount = rowCount
+        };
+    }
+
+    private static async Task<List<IReadOnlyList<object?>>> MaterializeRowsAsync(
+        IQueryable<object?[]> page, CancellationToken cancellationToken)
+    {
         var rows = new List<IReadOnlyList<object?>>();
         await foreach (var cells in page.AsAsyncEnumerable().WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             rows.Add(cells);
         }
 
-        return new EfCoreGridPage
-        {
-            Columns = columns,
-            Rows = rows,
-            RowCount = rowCount
-        };
+        return rows;
     }
-
-    /// <summary>
-    /// The filtered row count on its own, for a host that fetches the total on a different cadence from
-    /// the blocks — the same query <see cref="FetchPageAsync{TRow}"/> runs when asked, exposed so that
-    /// asking for it separately cannot mean asking a different question.
-    /// </summary>
-    public static Task<long> CountAsync<TRow>(
-        IQueryable<TRow> source,
-        EfCoreQueryRequest request,
-        EfCoreProviderSemantics semantics,
-        CancellationToken cancellationToken = default) =>
-        EfCoreQueryBuilder.ApplyFilter(source, request, semantics).LongCountAsync(cancellationToken);
 }
