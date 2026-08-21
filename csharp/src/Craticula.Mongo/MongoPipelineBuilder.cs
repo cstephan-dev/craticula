@@ -1080,6 +1080,16 @@ public static class MongoPipelineBuilder
     /// unaliased functions over one field share a column id while resolving to distinct, legal output
     /// names. The FIRST match here used to win silently — Sql's byte-identical copy of this method had
     /// the same gap, which is why the matching itself is shared now rather than compiler-local.</para>
+    ///
+    /// <para><b>A single match does not end the check either — the group column is a candidate too.</b>
+    /// A request that groups by field X and also aggregates X unaliased (or aliases an aggregate
+    /// explicitly back onto X) makes <c><paramref name="sortField"/> == <paramref name="groupColumn"/></c>
+    /// true at the same time an aggregation's <see cref="Aggregation.ColumnId"/> matches it. This
+    /// method used to return the aggregate's bucket the moment it found one, never asking whether the
+    /// group column matched too — Sql's copy had the identical ordering bug, and SEM-6's own
+    /// tiebreaker (minted from <paramref name="groupColumn"/> because its values are unique per bucket)
+    /// is what reaches this branch on the most ordinary grouped request of all, with no explicit sort
+    /// at all. <see cref="GroupedSortTarget.MatchesGroupColumnToo"/> is the shared check.</para>
     /// </summary>
     private static (string Bucket, string Path, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
@@ -1090,6 +1100,12 @@ public static class MongoPipelineBuilder
         {
             throw new MongoCompilationException(
                 $"Ambiguous $sort target for a grouped level. {GroupedSortTarget.DescribeAmbiguity(sortField, matches)}");
+        }
+
+        if (GroupedSortTarget.MatchesGroupColumnToo(sortField, groupColumn, matches))
+        {
+            throw new MongoCompilationException(
+                $"Ambiguous $sort target for a grouped level. {GroupedSortTarget.DescribeGroupColumnAmbiguity(sortField, matches)}");
         }
 
         if (matches.Count == 1)

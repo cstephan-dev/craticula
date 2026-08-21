@@ -51,16 +51,18 @@ public class DialectConformanceFixtureTests
     /// deliberately scans <em>every</em> category: an arm added elsewhere must show up as a count
     /// mismatch here, not disappear because this suite only looked in one directory.</para>
     ///
-    /// <para><b>Oracle's 42 is the full-parity count and is deliberately two short of MySQL's 44.</b>
-    /// #1642 authored an arm everywhere a case carries all six backends — <c>dialect-parity/006</c>-
-    /// <c>023</c> (18) and all of <c>group-aggregation/</c> (23) — and none in
-    /// <c>dialect-parity/001</c>-<c>005</c>, which are single-engine mechanics showcases (MySQL's
-    /// <c>ISNULL</c>, T-SQL's <c>OFFSET/FETCH</c>, SQLite's ASCII-CI <c>LIKE</c>, Postgres's
-    /// <c>ILIKE</c>) that exist to document one named engine and have no Postgres arm to transform.
-    /// The asymmetry in this table is therefore the coverage policy, not a gap. <em>(This paragraph
-    /// said 39 and 41 while the table beside it said 41 and 43: #1644's review pass added
-    /// <c>dialect-parity/023</c> and <c>group-aggregation/023</c>, each carrying every dialect arm,
-    /// and updated the table only. Corrected in #1650's review pass.)</em></para>
+    /// <para><b>Oracle's 42 is the full-parity count, and the other three add their own single-engine
+    /// showcases on top of it.</b> The shared base is <c>dialect-parity/006</c>-<c>023</c> (18, every
+    /// case carrying all six backends) plus <c>024</c> (1, #1886's AGG-6 discriminator — SQL-only, no
+    /// Mongo/Search arm, but it DOES carry all five SQL dialects including Oracle's) plus
+    /// <c>group-aggregation/</c> in full (23) = <b>42</b>, which is exactly Oracle's count because
+    /// Oracle has no single-engine showcase among <c>dialect-parity/001</c>-<c>005</c>. The other
+    /// three each add theirs on top of that same 42: SQLite +1 (<c>004</c>, ASCII-CI <c>LIKE</c>) and
+    /// T-SQL +1 (<c>003</c>, <c>OFFSET/FETCH</c>) reach 43; MySQL +2 (<c>001</c> AND <c>002</c> are
+    /// both <c>ISNULL</c> showcases) reaches 44. The asymmetry in this table is therefore the coverage
+    /// policy, not a gap. <em>(This paragraph once summed to 41 while claiming 42 — it had not been
+    /// updated for <c>024</c>'s contribution, the same drift class #1644's review pass corrected here
+    /// once already for <c>023</c>. Corrected again in #1886's review pass.)</em></para>
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [

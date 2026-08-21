@@ -365,6 +365,51 @@ public class SqlQueryBuilderGroupingTests
     }
 
     /// <summary>
+    /// The #1886 review's second finding: an aggregation's OutputName can collide with its own
+    /// grouped level's group column, since <c>RenderProjection</c> had no check against it — SQL is
+    /// the only backend where the two ever share one flat namespace (Mongo's group key stays under
+    /// its reserved <c>_id</c>; Search's aggregates live nested inside the composite's own <c>aggs</c>
+    /// container, never as siblings of the level's own name). An explicit alias set to the group
+    /// column's own name is the simplest repro. Before this fix it compiled to
+    /// <c>SELECT "region" AS "region", COALESCE(SUM("amount"), 0) AS "region"</c> — two columns
+    /// sharing one name, which every SQL engine accepts.
+    /// </summary>
+    [Fact]
+    public void An_Aggregation_Aliased_To_Its_Own_Group_Columns_Name_Is_Rejected_Not_Rendered()
+    {
+        var exception = Assert.Throws<SqlCompilationException>(() => Compile(
+            Group(["region"]),
+            [new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "region" }]));
+
+        Assert.Contains("region", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Finding 2's second, sharper defect: the group column is ALSO a candidate for
+    /// <c>ResolveGroupedSortTarget</c>, and a match among the aggregations does not rule it out.
+    /// Grouping by field X and aggregating that SAME field unaliased makes the unaliased
+    /// aggregation's column id (AGG-2: the bare field) equal X too — <c>ColumnId</c> and
+    /// <c>OutputName</c> diverge here (<c>"amount"</c> vs <c>"amount_sum"</c>), so this repro does
+    /// NOT trip the projection-collision guard above; it isolates the <c>ORDER BY</c> resolution bug
+    /// on its own, and carries no explicit sort at all.
+    ///
+    /// <para>Before this fix, SEM-6's own auto-appended tiebreaker — minted from the group column
+    /// specifically because its values are unique per bucket — silently resolved to the aggregate
+    /// instead. Nothing about the request looks like it is asking to order by an aggregate; the
+    /// tiebreaker exists to break ties deterministically and would instead have broken them on a
+    /// value that need not be unique at all.</para>
+    /// </summary>
+    [Fact]
+    public void Grouping_By_A_Field_Also_Aggregated_Unaliased_Over_Itself_Is_Rejected_Not_Guessed()
+    {
+        var exception = Assert.Throws<SqlCompilationException>(() => Compile(
+            Group(["amount"]),
+            [new Aggregation { Field = "amount", Func = AggregationFunc.Sum }]));
+
+        Assert.Contains("amount", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// More keys than levels is not a drill-down at all — it is a malformed request, and consuming
     /// only as many as fit would silently return a DIFFERENT bucket's rows.
     ///

@@ -48,9 +48,37 @@ public static class GroupedSortTarget
     /// </summary>
     public static string DescribeAmbiguity(string sortField, IReadOnlyList<Aggregation> matches) =>
         $"The sort key '{sortField}' matches {matches.Count} aggregations " +
-        $"({string.Join(", ", matches.Select(a => a.Func))}) that share one column id because neither " +
-        "declares an alias (AGG-2's ColumnVO.id defaults to the field itself). Their output names " +
-        "already differ (#1886), but the sort key does not carry a func, so the request does not say " +
-        "which one to order by. Send an explicit `id` (an alias) on the valueCols that should be " +
-        "sortable, so each has its own column id.";
+        $"({string.Join(", ", matches.Select(a => a.Func))}) that all resolve to the column id " +
+        $"'{sortField}' (AGG-2's ColumnVO.id — either the field itself, unaliased, or an explicit " +
+        "alias set to it). Their output names already differ (#1886), but a sort key names a COLUMN, " +
+        "not a function, so the request does not say which of these the client means. Give each " +
+        "valueCol needed in sortModel a distinct `id` (alias) so its column id is no longer " +
+        $"'{sortField}'.";
+
+    /// <summary>
+    /// The ambiguity <see cref="MatchingByColumnId"/> alone cannot see: whether <paramref
+    /// name="sortField"/> ALSO names the level's own group column, on top of whatever it matched
+    /// among the aggregations. Both compilers held the identical bug — resolve the aggregation match
+    /// first and return, never asking about the group column at all — reachable the moment a request
+    /// both groups by a field and aggregates that same field unaliased (AGG-2 defaults an unaliased
+    /// aggregation's <see cref="Aggregation.ColumnId"/> to the bare field, which then equals the group
+    /// column's own name) or aliases an aggregate explicitly back onto it. A caller must check this
+    /// ALONGSIDE <paramref name="matches"/>.Count, not after acting on it — by the time a caller has
+    /// already returned the aggregate, asking this is too late.
+    /// </summary>
+    public static bool MatchesGroupColumnToo(string sortField, string groupColumn, IReadOnlyList<Aggregation> matches) =>
+        matches.Count > 0 && sortField == groupColumn;
+
+    /// <summary>
+    /// One sentence describing the group-column ambiguity <see cref="MatchesGroupColumnToo"/> flags,
+    /// shared for the same reason <see cref="DescribeAmbiguity"/> is.
+    /// </summary>
+    public static string DescribeGroupColumnAmbiguity(string sortField, IReadOnlyList<Aggregation> matches) =>
+        $"The sort key '{sortField}' names this level's own group column, but it also matches " +
+        $"{matches.Count} aggregation{(matches.Count == 1 ? "" : "s")} " +
+        $"({string.Join(", ", matches.Select(a => a.Func))}) whose column id (AGG-2's ColumnVO.id) is " +
+        $"the same '{sortField}' — reachable when the request groups by a field and also aggregates " +
+        "that same field, unaliased or aliased back onto it. The request does not say whether the " +
+        "client means the bucket key or the aggregate. Give the aggregation a distinct `id` (alias) so " +
+        $"its column id is no longer '{sortField}'.";
 }

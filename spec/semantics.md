@@ -1181,6 +1181,17 @@ restatement in `SqlQueryBuilder`. The TRD's EXP-3 is **streaming**; the column l
   rendered; the engine would refuse the statement anyway, and a compiler error names the reason.
   **This is a statement about the IR's colId space, not AG Grid's** — see AG-6 below, which is what
   makes the two the same space by the time a compiler sees them.
+- **A sort key that matches MORE THAN ONE aggregation's column id MUST be rejected too, not resolved
+  to the first (#1886).** AGG-2's alias rule and this bullet's own `alias ?? field` match are
+  independent of AGG-1's output-name uniqueness: two unaliased functions over one field
+  (`sum(amount)` + `avg(amount)`, AGG-2's own example) have distinct output names — `amount_sum`,
+  `amount_avg` — while sharing the column id `amount`, because that id is `alias ?? field`, never
+  `alias ?? "<field>_<func>"`. A sort key naming `amount` therefore does not say which of the two the
+  client means; a compiler that quietly picked one (the first declared, say) would produce the exact
+  plausible-looking wrong statement the bullet above already refuses for a colId outside the
+  projection entirely. Pinned by unit tests alone, there being no artifact for a request that does
+  not compile (SQL-7(b)'s precedent) — a *grouped* request whose only aggregates collide on column id
+  has no sort naming that id in the fixture suite, so nothing here moves an artifact.
 - A drill-down **leaf** is an ordinary row query in this respect and keeps SEM-6's `stableKey`.
 
 **AG-6. AG Grid addresses a grouped sort through the row-group *display* column, whose colId the

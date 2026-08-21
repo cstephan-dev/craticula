@@ -239,7 +239,13 @@ public static class SqlQueryBuilder
     /// <list type="bullet">
     /// <item><description><b>Grouped level</b> — the group column aliased to its logical field name
     /// (always, even when the two coincide), then one aggregate per <c>valueCol</c> under its own
-    /// output name.</description></item>
+    /// output name. An aggregate whose output name equals the group column's own logical name is
+    /// rejected rather than rendered: a <c>SELECT</c> list is flat, so the two would share one column
+    /// name where <c>Craticula.Mongo</c>'s <c>_id</c> and <c>Craticula.Search</c>'s nested
+    /// <c>aggs</c> keep the group key and the aggregates in separate namespaces by construction — this
+    /// is the one backend where the collision is even representable. See
+    /// <see cref="ResolveGroupedSortTarget"/>'s remarks for the second, sharper failure this same
+    /// shape produces in the <c>ORDER BY</c>.</description></item>
     /// <item><description><b>Drill-down leaf</b> — every declared field, in the schema's own
     /// declaration order, aliased back to its logical name only where the physical column differs.
     /// A grouping request's rows are named at every level, which <c>SELECT *</c> cannot do: it
@@ -269,6 +275,17 @@ public static class SqlQueryBuilder
 
             foreach (var aggregation in grouping.Aggregations)
             {
+                if (aggregation.OutputName == groupColumn)
+                {
+                    throw new SqlCompilationException(
+                        $"An aggregation's output name '{aggregation.OutputName}' collides with this grouped " +
+                        $"level's own group column '{groupColumn}' (GRP-3 always projects it under its logical " +
+                        "name). A SELECT list would then name the same column twice, and SEM-6's tiebreaker — " +
+                        $"which orders by '{groupColumn}' for exactly this reason, since its values are unique " +
+                        "per bucket by construction — would silently bind to this aggregate instead. Give this " +
+                        $"valueCol a distinct `id` (alias) so its output name is no longer '{groupColumn}'.");
+                }
+
                 items.Add($"{AggregateCall(aggregation, context)} AS {context.Dialect.QuoteIdentifier(aggregation.OutputName)}");
             }
 
@@ -762,6 +779,20 @@ public static class SqlQueryBuilder
     /// remarks): two unaliased functions over one field share a column id while resolving to distinct,
     /// legal output names. The FIRST match here used to win silently; now every match is required to
     /// be the only one.</para>
+    ///
+    /// <para><b>A match among the aggregations does not end the check either — the group column
+    /// itself is a candidate too</b>, and matching both is the same silent-pick failure one register
+    /// up: a request that groups by field X and also aggregates X unaliased (or aliases an aggregate
+    /// explicitly back onto X) makes <c><paramref name="sortField"/> == <paramref name="groupColumn"/></c>
+    /// true at the same time an aggregation's <see cref="Aggregation.ColumnId"/> matches it. This
+    /// method used to return the aggregate the moment it found one, without ever asking whether the
+    /// group column matched too — the exact shape of bug #1886 (Mongo's copy has the identical
+    /// ordering). SEM-6's own tiebreaker is what reaches this branch on the most ordinary grouped
+    /// request of all (no explicit sort, tiebreaker alone): it is minted from
+    /// <paramref name="groupColumn"/> precisely because the group column's values are unique per
+    /// bucket by construction, so silently redirecting it to an aggregate defeats the one guarantee it
+    /// exists to provide. <see cref="GroupedSortTarget.MatchesGroupColumnToo"/> is the shared check,
+    /// since Mongo's compiler needed the identical fix.</para>
     /// </summary>
     private static (string Column, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
@@ -772,6 +803,12 @@ public static class SqlQueryBuilder
         {
             throw new SqlCompilationException(
                 $"Ambiguous ORDER BY target for a grouped level. {GroupedSortTarget.DescribeAmbiguity(sortField, matches)}");
+        }
+
+        if (GroupedSortTarget.MatchesGroupColumnToo(sortField, groupColumn, matches))
+        {
+            throw new SqlCompilationException(
+                $"Ambiguous ORDER BY target for a grouped level. {GroupedSortTarget.DescribeGroupColumnAmbiguity(sortField, matches)}");
         }
 
         if (matches.Count == 1)

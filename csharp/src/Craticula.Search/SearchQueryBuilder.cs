@@ -1046,11 +1046,14 @@ public static class SearchQueryBuilder
             // error — MDB-10's third collision, reached on a different backend by the same mechanism.
             // The grid would read one column holding another column's number.
             //
-            // No longer reachable from an AG Grid request: #1886 moved the same check upstream into
+            // Fully redundant, not merely narrowed: #1886 moved the same check upstream into
             // Craticula.Core's AggregationValidator, which every entry point runs, because
             // Craticula.Sql had no equivalent and the condition is a property of the request rather
-            // than of this container's shape. Kept as defence in depth for a host that builds IR
-            // directly.
+            // than of this container's shape. RenderAggregations has exactly one caller, this
+            // method's own Build, which validates first — so unlike RenderGroup's "_id" guard in
+            // Craticula.Mongo (a genuinely different collision Core's check cannot see), there is no
+            // "host that builds IR directly" this branch still protects. Kept anyway as a second,
+            // free-standing statement of MDB-10's third instance, not as reachable code.
             if (aggs.ContainsKey(output))
             {
                 throw new SearchCompilationException(

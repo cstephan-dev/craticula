@@ -28,7 +28,7 @@ public class MongoPipelineGroupingTests
             ["id"] = Field(FieldType.String),
             ["region"] = Field(FieldType.String),
             ["segment"] = Field(FieldType.String),
-            ["amount"] = Field(FieldType.Decimal, AggregationFunc.Sum, AggregationFunc.Count)
+            ["amount"] = Field(FieldType.Decimal, AggregationFunc.Sum, AggregationFunc.Count, AggregationFunc.Avg)
         }
     };
 
@@ -271,6 +271,25 @@ public class MongoPipelineGroupingTests
         Assert.Contains("amount", failure.Message);
         Assert.Contains("Sum", failure.Message);
         Assert.Contains("Avg", failure.Message);
+    }
+
+    /// <summary>
+    /// The #1886 review's second finding, and Sql's copy had the identical ordering bug: the group
+    /// column is ALSO a candidate for <c>ResolveGroupedSortTarget</c>, and a match among the
+    /// aggregations does not rule it out. Grouping by field X and aggregating that SAME field
+    /// unaliased makes the unaliased aggregation's column id (AGG-2: the bare field) equal X too.
+    /// Before this fix, SEM-6's own auto-appended tiebreaker — minted from the group column
+    /// specifically because its values are unique per bucket — silently resolved to the aggregate's
+    /// bucket instead, on a request carrying no explicit sort at all.
+    /// </summary>
+    [Fact]
+    public void Grouping_By_A_Field_Also_Aggregated_Unaliased_Over_Itself_Is_Rejected_Not_Guessed()
+    {
+        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+            Group(["region"]),
+            [new Aggregation { Field = "region", Func = AggregationFunc.Count }]));
+
+        Assert.Contains("region", failure.Message);
     }
 
     [Fact]
