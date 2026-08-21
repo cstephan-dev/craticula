@@ -42,7 +42,9 @@ public class AdversarialFixtureAllowlistTests
     }
 
     /// <summary>#1872's own reason value, distinct from <see cref="AssertRejectedAsUnknownField"/>'s
-    /// -- the colId in these two fixtures IS allowlisted, just declared filterable:false.</summary>
+    /// -- the colId in every fixture that uses this helper IS allowlisted, just declared
+    /// filterable:false (via filterModel, setValuesRequest.colId, or, #1907, a consumed groupKeys
+    /// drill-down key).</summary>
     private static void AssertRejectedAsFieldNotFilterable(string fixtureDir)
     {
         var path = RepoPaths.Fixture("adversarial", fixtureDir, "expected", "rejection.json");

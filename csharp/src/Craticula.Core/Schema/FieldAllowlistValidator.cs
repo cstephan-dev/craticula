@@ -172,7 +172,7 @@ public static class FieldAllowlistValidator
         }
 
         var groupCols = group?.GroupCols ?? [];
-        var consumedKeyCount = group?.GroupKeys.Count ?? 0;
+        var consumedKeyCount = group?.GroupKeys?.Count ?? 0;
 
         for (var i = 0; i < groupCols.Count; i++)
         {

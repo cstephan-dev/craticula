@@ -41,9 +41,10 @@ public class FieldAllowlistValidatorTests
         }
     };
 
-    /// <summary>#1907: a schema whose <c>region</c> field is declared BOTH <c>groupable: true</c> AND
-    /// <c>filterable: false</c> — the combination that lets a request group by it while still
-    /// forbidding a client from drilling into one specific value of it.</summary>
+    /// <summary>#1907: a schema whose <c>region</c> AND <c>segment</c> fields are BOTH declared
+    /// <c>groupable: true, filterable: false</c> — two candidates so a test can prove the consumed
+    /// check is POSITIONAL (index &lt; GroupKeys.Count), not merely "some key is present somewhere in
+    /// this GroupSpec".</summary>
     private static GridSchema MakeSchemaWithGroupableNonFilterableField(GridSchemaMode mode) => new()
     {
         Mode = mode,
@@ -53,7 +54,8 @@ public class FieldAllowlistValidatorTests
         {
             ["id"] = new() { Type = FieldType.Int64 },
             ["name"] = new() { Type = FieldType.String },
-            ["region"] = new() { Type = FieldType.String, Groupable = true, Filterable = false }
+            ["region"] = new() { Type = FieldType.String, Groupable = true, Filterable = false },
+            ["segment"] = new() { Type = FieldType.String, Groupable = true, Filterable = false }
         }
     };
 
@@ -297,6 +299,30 @@ public class FieldAllowlistValidatorTests
         var group = new GroupSpec { GroupCols = ["region"], GroupKeys = [] };
 
         FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations: null);
+    }
+
+    /// <summary>Proves the consumed check is POSITIONAL (index &lt; GroupKeys.Count), not "some
+    /// non-filterable colId is present anywhere in GroupCols with at least one key consumed overall".
+    /// Both <c>region</c> (index 0, consumed) and <c>segment</c> (index 1, NOT yet consumed) are
+    /// declared filterable:false; only one key is supplied. A naive "GroupKeys.Count &gt; 0" check
+    /// would wrongly flag BOTH columns (two violations); the correct positional check flags ONLY the
+    /// consumed one.</summary>
+    [Fact]
+    public void ValidateStructuralColumns_ChecksFilterableByPosition_NotJustWhetherAnyKeyIsConsumed()
+    {
+        var schema = MakeSchemaWithGroupableNonFilterableField(GridSchemaMode.Strict);
+        var group = new GroupSpec
+        {
+            GroupCols = ["region", "segment"],
+            GroupKeys = [new StringValue { Value = "West" }]
+        };
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations: null));
+
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("region", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
     }
 
     /// <summary>A consumed key that is BOTH not groupable (the schema-wide default) AND not filterable
