@@ -480,6 +480,12 @@ runner **174 → 175**, the non-Postgres SQL arms **168 → 172**, artifacts on 
 (161) and Search (160) are unmoved, as is the writer tier (12). All four runners' `ExcludedFixtures`
 are still empty.
 
+**`adversarial/024`/`025` (#1872) added `field-not-filterable`** — the new rejection reason for a
+colId present in `GridSchema.fields` but declared `filterable: false` (SC-2), referenced in a filter
+condition or as `setValuesRequest.colId`. `adversarial` moves **23 → 25** directories; no other
+runner or artifact count moves, since every case in this category compiles to `expected/rejection.json`
+alone and none of the four backend runners ever iterates it.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,

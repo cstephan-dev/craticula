@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "allowlist",
+  "reason": "field-not-filterable",
+  "note": "setValuesRequest.colId 'costBasis' is present in GridSchema.fields but declared filterable:false (SC-2) — rejected in EVERY GridSchemaMode, since the colId is the entire question rather than a condition on it (mirrors GroupSpec.GroupCols/Aggregation.Field's own no-Lenient-carve-out precedent)."
+}

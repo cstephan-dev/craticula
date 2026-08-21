@@ -78,16 +78,13 @@ public static class GridFilterPipeline
         // fundamental of the two first.
         FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations);
 
-        // Deferred to #1872 ("Enforce SC-2 capability flags: filterable on the filter and set-values
-        // paths"): this only checks colId membership (SC-1), not the per-field
-        // FieldConfig.Filterable capability flag (SC-2), so a field declared filterable:false can
-        // still be filtered on. (The group/aggregation capability flags above ARE enforced, because
-        // #1640's review found them enforced nowhere at all; Filterable stays deferred for the reason
-        // #1631 deferred it — no fixture exercises it.) It is ONE gap, not two: BM-3's
-        // setValuesSpec.colId would be held to this same flag (see
-        // FieldAllowlistValidator.ValidateStructuralColumns), and #1872 closes both call sites
-        // together — enforcing it on only one would refuse a column's set-filter value list while
-        // still honouring that column's own filterModel entry.
+        // #1872: this also enforces the per-field FieldConfig.Filterable capability flag (SC-2), not
+        // just colId membership (SC-1) — a field declared filterable:false is treated exactly like an
+        // unknown colId (Strict rejects, Lenient strips the condition), for the reason Validate's own
+        // doc gives. BM-3's setValuesSpec.colId is held to the identical flag in
+        // FieldAllowlistValidator.ValidateStructuralColumns (ProcessSetValues below), closing both
+        // call sites together — a host can no longer refuse a column's set-filter values while still
+        // honouring that column's own filterModel entry.
         var allowlistResult = FieldAllowlistValidator.Validate(schema, CollectFieldNames(merged));
         var allowlisted = FieldAllowlistValidator.Strip(merged, allowlistResult.Stripped);
 
@@ -155,8 +152,9 @@ public static class GridFilterPipeline
     /// mirror-image reason — a group path is structural context, not a transient narrowing.)</para>
     /// </summary>
     /// <exception cref="UnknownFieldException"><see cref="SetValuesSpec.ColId"/> is not in the
-    /// schema's allowlist — in every <see cref="GridSchemaMode"/>, since it is the question rather
-    /// than a condition on it.</exception>
+    /// schema's allowlist, or (#1872) is allowlisted but declared
+    /// <see cref="FieldConfig.Filterable"/><c> == false</c> — in every <see cref="GridSchemaMode"/>
+    /// for both, since it is the question rather than a condition on it.</exception>
     /// <exception cref="TypeCoercionException">A <see cref="SetValuesSpec.SearchPrefix"/> was supplied
     /// against a column that is not declared <see cref="FieldType.String"/>.</exception>
     public static FilterNode? ProcessSetValues(

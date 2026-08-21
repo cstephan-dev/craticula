@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "allowlist",
+  "reason": "field-not-filterable",
+  "note": "colId 'costBasis' referenced by filterModel is present in GridSchema.fields but declared filterable:false (SC-2) — Strict rejects it, unlike a genuinely unknown colId's own reason value."
+}
