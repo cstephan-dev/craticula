@@ -21,9 +21,10 @@
         "uncoercible-value",
         "unknown-operator",
         "duplicate-output-name",
-        "malformed-request"
+        "malformed-request",
+        "field-not-filterable"
       ],
-      "description": "The specific SEC-3/SEC-6/SEM-5/GRP-4 condition this fixture exercises. 'duplicate-output-name' (added #1886) is two aggregations resolving to the same GRP-4 output name: legal-looking on every backend and silently lossy on all of them, so it is refused in the shared AggregationValidator rather than by any one compiler."
+      "description": "The specific SEC-3/SEC-6/SEM-5/GRP-4 condition this fixture exercises. 'duplicate-output-name' (added #1886) is two aggregations resolving to the same GRP-4 output name: legal-looking on every backend and silently lossy on all of them, so it is refused in the shared AggregationValidator rather than by any one compiler. 'field-not-filterable' (added #1872) is a colId that IS in the schema's allowlist but declared FieldConfig.Filterable:false, referenced in a filter condition (filterModel/customFilters) or as a setValuesRequest.colId — distinct from 'unknown-field' because the colId exists, it is merely disallowed for this use."
     },
     "note": {
       "type": "string",

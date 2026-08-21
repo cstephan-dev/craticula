@@ -10,37 +10,62 @@ namespace Craticula.Core.Schema;
 ///
 /// <para><b>Two entry points, because two kinds of colId reference exist and they must fail
 /// differently.</b> <see cref="Validate"/>/<see cref="Strip"/> handle a <em>filter</em> colId, which
-/// <see cref="GridSchemaMode.Lenient"/> may silently drop. <see cref="ValidateStructuralColumns"/>
-/// handles the colIds that define what the answer IS — a <c>groupSpec</c>'s columns, an
-/// aggregation's field and a <c>setValuesSpec</c>'s target column — which no mode may drop, and which
-/// additionally have to satisfy SC-2's per-field
-/// <see cref="FieldConfig.Groupable"/>/<see cref="FieldConfig.Aggregatable"/> capability flags. See
-/// that method for the reasoning.</para>
+/// <see cref="GridSchemaMode.Lenient"/> may silently drop — checking both SC-1 membership and (#1872)
+/// SC-2's <see cref="FieldConfig.Filterable"/> flag. <see cref="ValidateStructuralColumns"/> handles
+/// the colIds that define what the answer IS — a <c>groupSpec</c>'s columns, an aggregation's field
+/// and a <c>setValuesSpec</c>'s target column — which no mode may drop, and which additionally have
+/// to satisfy SC-2's per-field <see cref="FieldConfig.Groupable"/>/<see cref="FieldConfig.Aggregatable"/>/
+/// (#1872) <see cref="FieldConfig.Filterable"/> capability flags. See that method for the
+/// reasoning.</para>
 /// </summary>
 public static class FieldAllowlistValidator
 {
     /// <summary>
-    /// Checks <paramref name="colIds"/> against <paramref name="schema"/>'s field allowlist.
-    /// In <see cref="GridSchemaMode.Strict"/>, throws <see cref="UnknownFieldException"/> naming
-    /// every unlisted colId found (all of them, not just the first). In
+    /// Checks <paramref name="colIds"/> against <paramref name="schema"/>'s field allowlist AND,
+    /// for a colId that IS listed, SC-2's <see cref="FieldConfig.Filterable"/> capability flag
+    /// (#1872). In <see cref="GridSchemaMode.Strict"/>, throws <see cref="UnknownFieldException"/>
+    /// naming every rejected colId found (all of them, not just the first). In
     /// <see cref="GridSchemaMode.Lenient"/>, returns the allowed/stripped split without throwing —
     /// callers walking a <see cref="Ir.FilterNode"/> tree must then apply that split via
     /// <see cref="Strip"/>; this method alone never mutates a tree.
+    ///
+    /// <para><b>A non-filterable colId is treated exactly like an unknown one, deliberately
+    /// (#1872).</b> Both are a <em>condition</em> the request cannot be honoured for, and SC-1's own
+    /// reasoning for why Lenient may drop an unknown condition applies unchanged: dropping it only
+    /// WIDENS the result set, a trade a host configuring Lenient has already accepted. There is
+    /// nothing about "the field exists but this host declared it not filterable" that makes the
+    /// condition more dangerous to drop than "the field does not exist at all" — the client-visible
+    /// effect is identical either way. Contrast <see cref="ValidateStructuralColumns"/>, where the
+    /// SAME flag is checked but Lenient does NOT apply, because those colIds are the shape of the
+    /// answer rather than a condition narrowing it.</para>
+    ///
+    /// <para>The two rejection reasons stay distinguishable in the Strict-mode exception message
+    /// (a genuinely unknown colId keeps its bare, unchanged wording; a known-but-non-filterable one
+    /// is suffixed with why) without changing what <see cref="AllowlistResult.Stripped"/> carries —
+    /// <see cref="Strip"/> matches on the BARE colId, so decorating that list would silently break
+    /// Lenient-mode stripping.</para>
     /// </summary>
     public static AllowlistResult Validate(GridSchema schema, IEnumerable<string> colIds)
     {
         var allowed = new List<string>();
         var stripped = new List<string>();
+        var violations = new List<AllowlistViolation>();
 
         foreach (var colId in colIds)
         {
-            if (schema.Fields.ContainsKey(colId))
+            if (!schema.Fields.TryGetValue(colId, out var config))
             {
-                allowed.Add(colId);
+                stripped.Add(colId);
+                violations.Add(new AllowlistViolation(colId, colId, "unknown-field"));
+            }
+            else if (!config.Filterable)
+            {
+                stripped.Add(colId);
+                violations.Add(new AllowlistViolation(colId, $"{colId} (declared filterable:false)", "field-not-filterable"));
             }
             else
             {
-                stripped.Add(colId);
+                allowed.Add(colId);
             }
         }
 
@@ -49,9 +74,9 @@ public static class FieldAllowlistValidator
         // neither Strict nor Lenient (unreachable today now that GridSchemaJson.Options rejects
         // out-of-range enum values, but this is the allowlist's own defense-in-depth) must fail
         // closed, not silently strip.
-        if (schema.Mode != GridSchemaMode.Lenient && stripped.Count > 0)
+        if (schema.Mode != GridSchemaMode.Lenient && violations.Count > 0)
         {
-            throw new UnknownFieldException(stripped);
+            throw new UnknownFieldException(violations);
         }
 
         return new AllowlistResult(allowed, stripped);
@@ -65,8 +90,9 @@ public static class FieldAllowlistValidator
     /// in <paramref name="schema"/>'s allowlist AND declared capable of the use it is being put to —
     /// <see cref="FieldConfig.Groupable"/> for a group column,
     /// <see cref="FieldConfig.Aggregatable"/> containing the requested
-    /// <see cref="Aggregation.Func"/> for an aggregation. Reports every violation found, not just the
-    /// first, matching this file's own collect-then-throw shape.
+    /// <see cref="Aggregation.Func"/> for an aggregation, and (#1872)
+    /// <see cref="FieldConfig.Filterable"/> for a <c>setValuesSpec.colId</c>. Reports every violation
+    /// found, not just the first, matching this file's own collect-then-throw shape.
     ///
     /// <para><b>Lenient mode does not apply here, deliberately.</b> SC-1's Lenient contract is that
     /// an unknown <em>condition</em> silently vanishes; a condition that vanishes only widens the
@@ -90,18 +116,16 @@ public static class FieldAllowlistValidator
     /// host maps them onto the one <c>rejectedAt: "allowlist"</c> stage
     /// <c>spec/fixtures/adversarial/003-unknown-colid-row-group</c> pins.</para>
     ///
-    /// <para><b>A <c>setValuesSpec.colId</c> gets the membership check but no capability check, and
-    /// that is a decision rather than an omission.</b> The flag it would be held to is
+    /// <para><b>A <c>setValuesSpec.colId</c> gets the SAME capability check as a group column, and
+    /// that symmetry is #1872's whole point.</b> The flag it is held to is
     /// <see cref="FieldConfig.Filterable"/> — a set filter's value list is the filter UI's own data
     /// source, so <c>groupable</c>/<c>sortable</c> are the wrong questions even though the compiled
-    /// query buckets and orders the column. And <c>Filterable</c> is enforced <em>nowhere</em> today,
-    /// including on the filter path itself (see <see cref="GridFilterPipeline.Process"/>'s note at
-    /// the allowlist stage). Enforcing it here alone would refuse
-    /// <c>setValuesRequest.colId: "region"</c> while happily honouring
-    /// <c>filterModel: {"region": …}</c> in the very same grid — so the gap stays in one place, and
-    /// closing it closes both at once. It is owned by <b>#1872</b>, "Enforce SC-2 capability flags:
-    /// filterable on the filter and set-values paths", which is the single work item for both call
-    /// sites.</para>
+    /// query buckets and orders the column. <see cref="Validate"/> enforces the identical flag on
+    /// the ordinary filter path too, so a host can no longer refuse <c>setValuesRequest.colId:
+    /// "region"</c> while still honouring <c>filterModel: {"region": …}</c> in the same grid — the
+    /// two call sites close together. Unlike <see cref="Validate"/>'s filter-tree check, though,
+    /// Lenient does NOT strip this one: see this method's own remarks above on why a
+    /// <c>setValuesSpec.colId</c> is the entire question rather than a narrowing condition.</para>
     /// </summary>
     public static void ValidateStructuralColumns(
         GridSchema schema,
@@ -111,22 +135,37 @@ public static class FieldAllowlistValidator
     {
         ArgumentNullException.ThrowIfNull(schema);
 
-        var rejected = new List<string>();
+        var violations = new List<AllowlistViolation>();
 
-        if (setValues is not null && !schema.Fields.ContainsKey(setValues.ColId))
+        if (setValues is not null)
         {
-            rejected.Add($"{setValues.ColId} (setValuesRequest.colId: not present in GridSchema.fields)");
+            if (!schema.Fields.TryGetValue(setValues.ColId, out var config))
+            {
+                violations.Add(new AllowlistViolation(
+                    setValues.ColId,
+                    $"{setValues.ColId} (setValuesRequest.colId: not present in GridSchema.fields)",
+                    "unknown-field"));
+            }
+            else if (!config.Filterable)
+            {
+                violations.Add(new AllowlistViolation(
+                    setValues.ColId,
+                    $"{setValues.ColId} (setValuesRequest.colId: declared filterable:false)",
+                    "field-not-filterable"));
+            }
         }
 
         foreach (var colId in group?.GroupCols ?? [])
         {
             if (!schema.Fields.TryGetValue(colId, out var config))
             {
-                rejected.Add($"{colId} (rowGroupCols: not present in GridSchema.fields)");
+                violations.Add(new AllowlistViolation(
+                    colId, $"{colId} (rowGroupCols: not present in GridSchema.fields)", "unknown-field"));
             }
             else if (!config.Groupable)
             {
-                rejected.Add($"{colId} (rowGroupCols: declared groupable:false)");
+                violations.Add(new AllowlistViolation(
+                    colId, $"{colId} (rowGroupCols: declared groupable:false)", "unknown-field"));
             }
         }
 
@@ -134,19 +173,22 @@ public static class FieldAllowlistValidator
         {
             if (!schema.Fields.TryGetValue(aggregation.Field, out var config))
             {
-                rejected.Add($"{aggregation.Field} (valueCols: not present in GridSchema.fields)");
+                violations.Add(new AllowlistViolation(
+                    aggregation.Field, $"{aggregation.Field} (valueCols: not present in GridSchema.fields)", "unknown-field"));
             }
             else if (!config.Aggregatable.Contains(aggregation.Func))
             {
-                rejected.Add(
+                violations.Add(new AllowlistViolation(
+                    aggregation.Field,
                     $"{aggregation.Field} (valueCols: '{aggregation.Func.ToString().ToLowerInvariant()}' is not in " +
-                    $"its declared aggregatable set)");
+                    $"its declared aggregatable set)",
+                    "unknown-field"));
             }
         }
 
-        if (rejected.Count > 0)
+        if (violations.Count > 0)
         {
-            throw new UnknownFieldException(rejected);
+            throw new UnknownFieldException(violations);
         }
     }
 

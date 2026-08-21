@@ -66,15 +66,17 @@ safe-parameterization behavior, not here.
 | 021 | `021-duplicate-json-keys-deserializer-fuzz` | `requestParsing` | `malformed-request` | SEC-6, SEC-2 |
 | 022 | `022-null-where-object-required-deserializer-fuzz` | `requestParsing` | `malformed-request` | SEC-6, AR-8 |
 | 023 | `023-duplicate-aggregation-output-names` | `requestParsing` | `duplicate-output-name` | AGG-2, GRP-4, SEC-2, SEC-6, AR-8 |
+| 024 | `024-filterable-false-in-filter-model` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1 |
+| 025 | `025-filterable-false-as-set-values-target` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1, GRP-6 |
 
 ## Breakdown by validation stage
 
-- `allowlist`: 4 (001–003, 019)
+- `allowlist`: 6 (001–003, 019, 024–025)
 - `resourceLimits`: 8 (004–011)
 - `typeCoercion`: 4 (012–015)
 - `requestParsing`: 7 (016–018, 020–023)
 
-**Total: 23 fixtures.**
+**Total: 25 fixtures.**
 
 ## Notes on construction
 
@@ -106,3 +108,11 @@ safe-parameterization behavior, not here.
   aggregates silently. Its `schema.json` is `003`'s with one edit, `amount` gaining `aggregatable`,
   so the request's only defect is the duplicated `ColumnVO.id` and not an SC-2 capability the field
   was never granted.
+- **024/025** (#1872) added `field-not-filterable` to `rejection.schema.json`'s enum, deliberately
+  distinct from `unknown-field`: both pairs' colId (`costBasis`) IS present in `GridSchema.fields` —
+  the base schema plus one new field declared `filterable: false`, everything else identical to
+  001–003's shared shape — so the rejection is a capability-flag failure (SC-2), not an allowlist
+  membership failure (SC-1). `024` puts it in an ordinary `filterModel` condition (Strict rejects it,
+  though — unlike 001–003/019 — Lenient would silently strip it instead, since it is still only a
+  *condition*); `025` puts the same colId in `setValuesRequest.colId`, which no `GridSchemaMode` may
+  drop, mirroring `003`'s own no-Lenient-carve-out for `rowGroupCols`.

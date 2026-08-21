@@ -41,6 +41,18 @@ public class AdversarialFixtureAllowlistTests
         Assert.Equal("unknown-field", rejection.RootElement.GetProperty("reason").GetString());
     }
 
+    /// <summary>#1872's own reason value, distinct from <see cref="AssertRejectedAsUnknownField"/>'s
+    /// -- the colId in these two fixtures IS allowlisted, just declared filterable:false.</summary>
+    private static void AssertRejectedAsFieldNotFilterable(string fixtureDir)
+    {
+        var path = RepoPaths.Fixture("adversarial", fixtureDir, "expected", "rejection.json");
+        Assert.True(File.Exists(path), $"Fixture rejection oracle not found at '{path}'.");
+        using var rejection = JsonDocument.Parse(File.ReadAllText(path));
+
+        Assert.Equal("allowlist", rejection.RootElement.GetProperty("rejectedAt").GetString());
+        Assert.Equal("field-not-filterable", rejection.RootElement.GetProperty("reason").GetString());
+    }
+
     [Fact]
     public void Fixture001_UnknownColId_In_FilterModel_Throws_UnknownFieldException()
     {
@@ -121,5 +133,99 @@ public class AdversarialFixtureAllowlistTests
 
         Assert.Contains(ex.ColIds, rejected => rejected.StartsWith(colId, StringComparison.Ordinal));
         AssertRejectedAsUnknownField(fixtureDir);
+    }
+
+    /// <summary>#1872: a colId present in the schema's allowlist but declared filterable:false,
+    /// referenced by an ordinary filterModel condition. Distinct from 001-003's genuinely unknown
+    /// colId -- this one IS allowlisted, so <see cref="FieldAllowlistValidator.Validate"/>'s own
+    /// capability check is what rejects it.</summary>
+    [Fact]
+    public void Fixture024_NonFilterableColId_In_FilterModel_Throws_UnknownFieldException()
+    {
+        const string fixtureDir = "024-filterable-false-in-filter-model";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        var colId = request.RootElement.GetProperty("filterModel").EnumerateObject().Single().Name;
+        Assert.False(schema.Fields[colId].Filterable, $"Fixture {fixtureDir}'s own colId '{colId}' must be declared filterable:false for this case to test anything.");
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.Validate(schema, [colId]));
+
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
+        AssertRejectedAsFieldNotFilterable(fixtureDir);
+    }
+
+    /// <summary>The pipeline itself refuses it, not only a direct validator call -- mirrors
+    /// <see cref="Fixture003_Is_Rejected_By_The_Pipeline_Itself_Not_Only_By_A_Direct_Validator_Call"/>.</summary>
+    [Fact]
+    public void Fixture024_Is_Rejected_By_The_Pipeline_Itself_Not_Only_By_A_Direct_Validator_Call()
+    {
+        const string fixtureDir = "024-filterable-false-in-filter-model";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        var colId = request.RootElement.GetProperty("filterModel").EnumerateObject().Single().Name;
+        var filter = new ComparisonNode
+        {
+            Field = colId,
+            Op = ComparisonOperator.Gt,
+            Value = new DecimalValue { Value = "100" }
+        };
+
+        var ex = Assert.Throws<UnknownFieldException>(() => GridFilterPipeline.Process(
+            nativeFilter: filter,
+            customFilters: null,
+            page: new RangePage { StartRow = 0, EndRow = 100 },
+            schema: schema,
+            limits: new ResourceLimits()));
+
+        // Reason, not just colId — the pipeline must reject this AS non-filterable, not merely reject
+        // it (an "unknown-field" verdict on the same colId would pass a colId-only assertion too).
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
+        AssertRejectedAsFieldNotFilterable(fixtureDir);
+    }
+
+    /// <summary>#1872's set-values counterpart to <see cref="Fixture024_NonFilterableColId_In_FilterModel_Throws_UnknownFieldException"/>
+    /// -- the same colId, this time as <c>setValuesRequest.colId</c>, which
+    /// <see cref="FieldAllowlistValidator.ValidateStructuralColumns"/> rejects rather than
+    /// <see cref="FieldAllowlistValidator.Validate"/>.</summary>
+    [Fact]
+    public void Fixture025_NonFilterableColId_As_SetValuesTarget_Throws_UnknownFieldException()
+    {
+        const string fixtureDir = "025-filterable-false-as-set-values-target";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        var colId = request.RootElement.GetProperty("setValuesRequest").GetProperty("colId").GetString()!;
+        Assert.False(schema.Fields[colId].Filterable, $"Fixture {fixtureDir}'s own colId '{colId}' must be declared filterable:false for this case to test anything.");
+
+        var ex = Assert.Throws<UnknownFieldException>(() => FieldAllowlistValidator.ValidateStructuralColumns(
+            schema, group: null, aggregations: null, new SetValuesSpec { ColId = colId }));
+
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
+        AssertRejectedAsFieldNotFilterable(fixtureDir);
+    }
+
+    /// <summary>The pipeline itself refuses it, not only a direct validator call -- via
+    /// <see cref="GridFilterPipeline.ProcessSetValues"/>, GRP-6's own entry point.</summary>
+    [Fact]
+    public void Fixture025_Is_Rejected_By_The_Pipeline_Itself_Not_Only_By_A_Direct_Validator_Call()
+    {
+        const string fixtureDir = "025-filterable-false-as-set-values-target";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        var colId = request.RootElement.GetProperty("setValuesRequest").GetProperty("colId").GetString()!;
+
+        var ex = Assert.Throws<UnknownFieldException>(() => GridFilterPipeline.ProcessSetValues(
+            nativeFilter: null,
+            customFilters: null,
+            setValues: new SetValuesSpec { ColId = colId },
+            schema: schema,
+            limits: new ResourceLimits()));
+
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
+        AssertRejectedAsFieldNotFilterable(fixtureDir);
     }
 }

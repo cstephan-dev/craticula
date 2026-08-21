@@ -991,7 +991,7 @@ forgets returns wrong rows rather than an error.
 *The colIds are client-controlled, and pass the same boundary as a filter's.* `rowGroupCols` and
 `valueCols` arrive off the wire exactly as `filterModel` does, so every `groupCols` entry and every
 aggregation `field` MUST pass the SC-1 allowlist, and MUST additionally satisfy SC-2's per-field
-`groupable` / `aggregatable` capability flags — the one place those flags are enforced at all.
+`groupable` / `aggregatable` capability flags.
 **SC-1's Lenient mode does not apply to either.** Lenient may silently drop an unknown *condition*,
 because the result merely widens and a host can knowingly accept that; neither of these is a
 condition. Dropping a `groupCol` changes which level the response describes — and, with its
@@ -1411,15 +1411,20 @@ grid maps by key, so there is no name for a client to look anything up by.
 **every** schema mode, on GRP-1's reasoning taken one step further: a `groupCol` that Lenient dropped
 would at least leave a differently-shaped answer, whereas the `colId` here *is* the question — drop it
 and a compiler has no column to select, while an empty value list would tell the grid that the column
-has no values rather than that the server declined to say. The capability flag it would be held to is
-SC-2's `filterable` (a set filter's value list is the filter UI's own data source, so `groupable` and
+has no values rather than that the server declined to say. The capability flag it is held to is SC-2's
+`filterable` (a set filter's value list is the filter UI's own data source, so `groupable` and
 `sortable` are the wrong questions even though the compiled query buckets and orders the column) —
-that flag is enforced nowhere today, on this path or on the filter path, and closing the gap must
-close both at once: refusing a column's set-filter values while still honouring that same column's
-`filterModel` entry would be incoherent. The gap is named and owned rather than merely noted —
-**#1872**, "Enforce SC-2 capability flags: `filterable` on the filter and set-values paths" — so a
-port reading this rule knows it is reading a deferral with a date on it rather than a silent
-omission.
+**#1872** enforces the identical flag on the ordinary filter path too, so a host can no longer refuse
+a column's set-filter values while still honouring that same column's `filterModel` entry.
+
+**The two paths are NOT held to the same Lenient-mode rule, deliberately (#1872).** On the filter
+path, a `filterable:false` colId referenced in `filterModel`/`customFilters` is treated exactly like
+an unknown one: Strict rejects it, Lenient silently strips the condition — it is still only a
+*condition*, and dropping one only widens the result set, the trade SC-1's Lenient mode already
+exists to let a host accept. As a `setValuesRequest.colId`, though, no mode may drop it, for the
+identical reason the paragraph above gives for the plain unknown-field case: the `colId` here *is*
+the question, not a condition narrowing it, so there is no narrower answer left to give once it is
+gone.
 
 **Cross-links.** `$defs/groupSpec` (`groupCols`, `groupKeys`), `$defs/aggregation`,
 `$defs/sortItem`, `$defs/setValuesSpec`, AGG-1..AGG-4 (AGG-4 pins the `terms` ordering GRP-6(a)'s

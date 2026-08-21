@@ -24,6 +24,22 @@ public class FieldAllowlistValidatorTests
         }
     };
 
+    /// <summary>#1872: a schema whose <c>costBasis</c> field IS allowlisted but declared
+    /// <c>filterable: false</c> — distinct from an unlisted colId, which <see cref="MakeSchema"/>'s
+    /// two fields alone already cover.</summary>
+    private static GridSchema MakeSchemaWithNonFilterableField(GridSchemaMode mode) => new()
+    {
+        Mode = mode,
+        Source = "items",
+        StableKey = "id",
+        Fields = new Dictionary<string, FieldConfig>
+        {
+            ["id"] = new() { Type = FieldType.Int64 },
+            ["name"] = new() { Type = FieldType.String },
+            ["costBasis"] = new() { Type = FieldType.Decimal, Filterable = false }
+        }
+    };
+
     [Fact]
     public void Strict_DoesNotThrow_WhenAllColIdsAreListed()
     {
@@ -55,6 +71,63 @@ public class FieldAllowlistValidatorTests
             () => FieldAllowlistValidator.Validate(schema, ["secretNotes", "id", "internalRank"]));
 
         Assert.Equal(["secretNotes", "internalRank"], ex.ColIds);
+    }
+
+    // ---- #1872: SC-2's filterable flag, enforced on the same filter-tree path ------------------------
+
+    /// <summary>A non-filterable colId is treated exactly like an unknown one for Strict/Lenient
+    /// purposes (see <see cref="FieldAllowlistValidator.Validate"/>'s own doc for why) -- Strict
+    /// rejects it, naming WHY it differs from a genuinely unknown colId.</summary>
+    [Fact]
+    public void Strict_Throws_UnknownFieldException_ForANonFilterableColId()
+    {
+        var schema = MakeSchemaWithNonFilterableField(GridSchemaMode.Strict);
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.Validate(schema, ["id", "costBasis"]));
+
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("costBasis", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
+    }
+
+    /// <summary>The two rejection reasons stay distinguishable when BOTH occur in one request: a
+    /// genuinely unknown colId keeps its bare, unchanged wording (matching
+    /// <see cref="Strict_CollectsEveryUnlistedColId_NotJustTheFirst"/>'s own exact-string
+    /// assertion), while the non-filterable one is suffixed with why.</summary>
+    [Fact]
+    public void Strict_CollectsBothUnknownAndNonFilterableColIds_WithDistinctReasons()
+    {
+        var schema = MakeSchemaWithNonFilterableField(GridSchemaMode.Strict);
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.Validate(schema, ["secretNotes", "id", "costBasis"]));
+
+        // Distinguishable by DisplayText (pre-existing string-based contract, unchanged) AND by the
+        // machine-readable Reason (#1872's own addition) — not just one or the other.
+        Assert.Equal(2, ex.ColIds.Count);
+        Assert.Contains("secretNotes", ex.ColIds);
+        Assert.Contains("costBasis (declared filterable:false)", ex.ColIds);
+
+        Assert.Equal(2, ex.Violations.Count);
+        Assert.Equal("unknown-field", ex.Violations.Single(v => v.ColId == "secretNotes").Reason);
+        Assert.Equal("field-not-filterable", ex.Violations.Single(v => v.ColId == "costBasis").Reason);
+    }
+
+    /// <summary>Lenient strips a non-filterable colId the SAME way it strips an unknown one --
+    /// dropping a condition only widens the result, the trade Lenient mode already exists to let a
+    /// host accept (contrast <see cref="FieldAllowlistValidator.ValidateStructuralColumns"/>, where
+    /// the identical flag is NOT Lenient-strippable for <c>setValuesSpec.colId</c>).</summary>
+    [Fact]
+    public void Lenient_StripsNonFilterableColIds_AndKeepsFilterableOnes_WithoutThrowing()
+    {
+        var schema = MakeSchemaWithNonFilterableField(GridSchemaMode.Lenient);
+
+        var result = FieldAllowlistValidator.Validate(schema, ["id", "costBasis", "name"]);
+
+        Assert.Equal(["id", "name"], result.Allowed);
+        // Bare colId, not decorated -- Strip() matches on this exact string.
+        Assert.Equal(["costBasis"], result.Stripped);
     }
 
     [Fact]
@@ -116,5 +189,48 @@ public class FieldAllowlistValidatorTests
 
         Assert.Equal(2, result.Nodes.Count);
         Assert.Same(untouched, result.Nodes[0]);
+    }
+
+    // ---- #1872: ValidateStructuralColumns holds setValuesSpec.colId to the SAME Filterable flag,
+    // ---- but WITHOUT a Lenient carve-out (mirrors GroupSpec.GroupCols/Aggregation.Field) ------------
+
+    [Fact]
+    public void ValidateStructuralColumns_Throws_ForANonFilterableSetValuesColId_InStrictMode()
+    {
+        var schema = MakeSchemaWithNonFilterableField(GridSchemaMode.Strict);
+        var setValues = new SetValuesSpec { ColId = "costBasis" };
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group: null, aggregations: null, setValues));
+
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("costBasis", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
+    }
+
+    /// <summary>The decisive contrast with <see cref="Lenient_StripsNonFilterableColIds_AndKeepsFilterableOnes_WithoutThrowing"/>:
+    /// the IDENTICAL flag on the IDENTICAL colId still throws in Lenient mode here, because a
+    /// <c>setValuesSpec.colId</c> is the entire question rather than a condition narrowing it.</summary>
+    [Fact]
+    public void ValidateStructuralColumns_Throws_ForANonFilterableSetValuesColId_EvenInLenientMode()
+    {
+        var schema = MakeSchemaWithNonFilterableField(GridSchemaMode.Lenient);
+        var setValues = new SetValuesSpec { ColId = "costBasis" };
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group: null, aggregations: null, setValues));
+
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("costBasis", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
+    }
+
+    [Fact]
+    public void ValidateStructuralColumns_DoesNotThrow_ForAFilterableSetValuesColId()
+    {
+        var schema = MakeSchemaWithNonFilterableField(GridSchemaMode.Strict);
+        var setValues = new SetValuesSpec { ColId = "name" };
+
+        FieldAllowlistValidator.ValidateStructuralColumns(schema, group: null, aggregations: null, setValues);
     }
 }
