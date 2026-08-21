@@ -570,8 +570,9 @@ public class CrossCompilerGroupingTests
             Aggregations = request.Aggregations
         });
 
-        // Both express it: Postgres orders by the aggregate expression, Mongo by the $group output.
-        Assert.Contains("ORDER BY SUM(\"amount\")", sql.Sql, StringComparison.Ordinal);
+        // Both express it: Postgres orders by the aggregate expression — AGG-6's wrap included, since
+        // the ordering repeats whatever the projection computed — and Mongo by the $group output.
+        Assert.Contains("ORDER BY COALESCE(SUM(\"amount\"), 0)", sql.Sql, StringComparison.Ordinal);
         Assert.Contains(
             "amount_sum",
             mongo.Pipeline.First(stage => stage.ContainsKey("$sort")).ToJsonString(),

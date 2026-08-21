@@ -125,6 +125,16 @@ public static class AgGridRequestParser
         var sort = ParseSortModel(root, group, rowGroupCols);
         var page = ParsePage(root, export);
 
+        // EXP-1(a) is applied BEFORE the validators below, and the order is deliberate: an export's
+        // group state and valueCols are discarded, so they are never held to GroupSpecValidator's or
+        // AggregationValidator's invariants — including the #1886 output-name uniqueness check.
+        // `page-export/011` sends two valueCols on `totalAmount` (sum + avg); its output names
+        // differ, so it happens to pass that check unaided and does not depend on this ordering
+        // today. What the ordering guards against is a request an export legitimately carries but a
+        // grid never would — e.g. two identical (field, func) pairs — which would otherwise be
+        // rejected before the carve-out ever got to discard it. Validating first would decide the
+        // fate of aggregations the compiled IR does not contain. See ApplyExportCarveOut for what
+        // "discarded" covers.
         (group, aggregations) = ApplyExportCarveOut(export, group, aggregations);
 
         FilterNodeValidator.Validate(nativeFilter);

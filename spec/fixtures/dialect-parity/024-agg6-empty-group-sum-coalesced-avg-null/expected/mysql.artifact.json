@@ -1,0 +1,5 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT `department` AS `department`, COALESCE(SUM(`salary`), 0) AS `salary_sum`, AVG(`age`) AS `age_avg` FROM `employees` GROUP BY `department` ORDER BY ISNULL(AVG(`age`)) ASC, AVG(`age`) ASC, ISNULL(`department`) ASC, `department` ASC LIMIT ? OFFSET ?",
+  "params": [100, 0]
+}

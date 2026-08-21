@@ -1,6 +1,6 @@
 {
   "dialect": "oracle",
-  "sql": "SELECT \"product\" AS \"product\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE (\"region\" = :p1 AND \"segment\" = :p2) GROUP BY \"product\" ORDER BY \"product\" ASC NULLS LAST OFFSET :p3 ROWS FETCH NEXT :p4 ROWS ONLY",
+  "sql": "SELECT \"product\" AS \"product\", COALESCE(SUM(\"amount\"), 0) AS \"amount_sum\" FROM \"sales_fact\" WHERE (\"region\" = :p1 AND \"segment\" = :p2) GROUP BY \"product\" ORDER BY \"product\" ASC NULLS LAST OFFSET :p3 ROWS FETCH NEXT :p4 ROWS ONLY",
   "params": [
     "EMEA",
     "Enterprise",

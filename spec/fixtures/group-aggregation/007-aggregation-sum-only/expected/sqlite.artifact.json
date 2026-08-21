@@ -1,6 +1,6 @@
 {
   "dialect": "sqlite",
-  "sql": "SELECT \"segment\" AS \"segment\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE \"region\" = ? GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "sql": "SELECT \"segment\" AS \"segment\", COALESCE(SUM(\"amount\"), 0) AS \"amount_sum\" FROM \"sales_fact\" WHERE \"region\" = ? GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT ? OFFSET ?",
   "params": [
     "EMEA",
     100,

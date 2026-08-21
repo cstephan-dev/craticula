@@ -57,7 +57,7 @@ public class PostgresConformanceFixtureTests
     [
         ("operators", 47),
         ("date-presets", 26),
-        ("dialect-parity", 19),
+        ("dialect-parity", 20),
         ("group-aggregation", 23),
         ("filter-tree", 15),
         ("sort-paging", 12),
@@ -181,10 +181,14 @@ public class PostgresConformanceFixtureTests
     }
 
     [Fact]
-    public void The_End_To_End_Suite_Is_All_174_Fixtures_In_The_Scoped_Categories()
+    public void The_End_To_End_Suite_Is_All_175_Fixtures_In_The_Scoped_Categories()
     {
-        // 174 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
-        // artifact in a scoped category is compiled and compared. The number last moved when #1653
+        // 175 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
+        // artifact in a scoped category is compiled and compared. The number last moved when #1886
+        // authored dialect-parity/024 (AGG-6's discriminator: a grouped level ordered by an AVG,
+        // beside a COALESCE-wrapped SUM in the same projection — the only case whose ORDER BY fails
+        // both when the wrap is missing and when it is over-applied; over-applying it to a projected
+        // AVG/MIN/MAX is separately caught by group-aggregation/008-010,012,013). Before that #1653
         // authored page-export/026 (EXP-5's per-field format overrides — a schema member no compiler
         // reads, which is why that arm is byte-identical to 013's); before that #1651
         // authored page-export/025 (TSV writer output), #1650's review pass authored
@@ -192,7 +196,7 @@ public class PostgresConformanceFixtureTests
         // and authored page-export/023, and #1644's review pass added group-aggregation/023 — the one
         // case carrying both a consumed groupKeys and a filterModel, which pins GRP-5's
         // drill-down-leads clause order in `params`.
-        Assert.Equal(174, InScopeFixtures.Count);
+        Assert.Equal(175, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -217,7 +221,7 @@ public class PostgresConformanceFixtureTests
     [Fact]
     public void Every_Postgres_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "174 in scope": every postgres.artifact.json in the repo
+        // The count that closes the loop on "175 in scope": every postgres.artifact.json in the repo
         // is either exercised above, or inside a category/fixture this class excludes BY NAME. The
         // category table plus Every_Fixture_Category_On_Disk_… does not close it — an artifact added
         // under an EXCLUDED category (adversarial/) would leave every count untouched and go silently
@@ -233,7 +237,7 @@ public class PostgresConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "postgres.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(174, onDisk);
+        Assert.Equal(175, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }

@@ -27,7 +27,8 @@ namespace Craticula.Sql;
 /// become real IR predicates merged through <see cref="FilterTreeMerge"/> (so SQL-2's wrap applies
 /// to them exactly as it does to a user's own <c>and</c>), and none of the protocol's own keys fold
 /// case (GRP-2). Everything grouping adds to the emitted text is ANSI —
-/// <c>GROUP BY</c>, <c>SUM</c>/<c>MIN</c>/<c>MAX</c>/<c>AVG</c>/<c>COUNT</c>, <c>AS</c> — so BM-2
+/// <c>GROUP BY</c>, <c>SUM</c>/<c>MIN</c>/<c>MAX</c>/<c>AVG</c>/<c>COUNT</c>, <c>AS</c>, and #1886's
+/// AGG-6 <c>COALESCE</c> around the first of those (see <see cref="AggregateCall"/>) — so BM-2
 /// needed <b>no</b> new <see cref="ISqlDialect"/> member; the drill-down predicate and the ordering
 /// keys reuse <see cref="ISqlDialect.RenderScalarComparison"/> and
 /// <see cref="ISqlDialect.RenderSortKey"/> unchanged.</para>
@@ -238,7 +239,13 @@ public static class SqlQueryBuilder
     /// <list type="bullet">
     /// <item><description><b>Grouped level</b> — the group column aliased to its logical field name
     /// (always, even when the two coincide), then one aggregate per <c>valueCol</c> under its own
-    /// output name.</description></item>
+    /// output name. An aggregate whose output name equals the group column's own logical name is
+    /// rejected rather than rendered: a <c>SELECT</c> list is flat, so the two would share one column
+    /// name where <c>Craticula.Mongo</c>'s <c>_id</c> and <c>Craticula.Search</c>'s nested
+    /// <c>aggs</c> keep the group key and the aggregates in separate namespaces by construction — this
+    /// is the one backend where the collision is even representable. See
+    /// <see cref="ResolveGroupedSortTarget"/>'s remarks for the second, sharper failure this same
+    /// shape produces in the <c>ORDER BY</c>.</description></item>
     /// <item><description><b>Drill-down leaf</b> — every declared field, in the schema's own
     /// declaration order, aliased back to its logical name only where the physical column differs.
     /// A grouping request's rows are named at every level, which <c>SELECT *</c> cannot do: it
@@ -268,6 +275,17 @@ public static class SqlQueryBuilder
 
             foreach (var aggregation in grouping.Aggregations)
             {
+                if (aggregation.OutputName == groupColumn)
+                {
+                    throw new SqlCompilationException(
+                        $"An aggregation's output name '{aggregation.OutputName}' collides with this grouped " +
+                        $"level's own group column '{groupColumn}' (GRP-3 always projects it under its logical " +
+                        "name). A SELECT list would then name the same column twice, and SEM-6's tiebreaker — " +
+                        $"which orders by '{groupColumn}' for exactly this reason, since its values are unique " +
+                        "per bucket by construction — would silently bind to this aggregate instead. Give this " +
+                        $"valueCol a distinct `id` (alias) so its output name is no longer '{groupColumn}'.");
+                }
+
                 items.Add($"{AggregateCall(aggregation, context)} AS {context.Dialect.QuoteIdentifier(aggregation.OutputName)}");
             }
 
@@ -301,12 +319,27 @@ public static class SqlQueryBuilder
     private static string Alias(string expression, string logicalName, Context context) =>
         $"{expression} AS {context.Dialect.QuoteIdentifier(logicalName)}";
 
-    /// <summary>The aggregate expression itself — <c>SUM("amount")</c>. Composed in one place because
-    /// it is emitted twice: once in the projection under its output name, and once in the
-    /// <c>ORDER BY</c> (see <see cref="ResolveGroupedSortTarget"/> for why the ordering repeats the
-    /// expression rather than referring back to the name).</summary>
-    private static string AggregateCall(Aggregation aggregation, Context context) =>
-        $"{Function(aggregation.Func)}({ResolveColumn(aggregation.Field, context)})";
+    /// <summary>The aggregate expression itself — <c>AVG("amount")</c>, or AGG-6's
+    /// <c>COALESCE(SUM("amount"), 0)</c>. Composed in one place because it is emitted twice: once in
+    /// the projection under its output name, and once in the <c>ORDER BY</c> (see
+    /// <see cref="ResolveGroupedSortTarget"/> for why the ordering repeats the expression rather than
+    /// referring back to the name) — so the wrap reaching both is a property of this method, not two
+    /// call sites agreeing.
+    ///
+    /// <para><b>AGG-6, and the reason it is <c>sum</c> alone.</b> The rule and the whole argument for
+    /// it live in <c>spec/semantics.md</c>; what a reader here needs is only that SQL is the one
+    /// backend of four whose engine answer disagrees with it, and that <c>AVG</c>/<c>MIN</c>/<c>MAX</c>
+    /// already agree and must therefore stay bare. Wrapping them too would read as tidier and would
+    /// fabricate a <c>0</c> for a group that has nothing to average.</para></summary>
+    private static string AggregateCall(Aggregation aggregation, Context context)
+    {
+        var call = $"{Function(aggregation.Func)}({ResolveColumn(aggregation.Field, context)})";
+
+        // Two arguments and a literal zero, identical on all five dialects because it is ANSI — an
+        // ISqlDialect member for it would be the duplicate-instead-of-share smell that interface's own
+        // note warns about.
+        return aggregation.Func is AggregationFunc.Sum ? $"COALESCE({call}, 0)" : call;
+    }
 
     /// <summary>
     /// AR-8's closed v1 function set. These five spellings are ANSI SQL and identical on every
@@ -717,8 +750,10 @@ public static class SqlQueryBuilder
     /// the raw aggregated column (<c>ORDER BY "amount"</c> is not in the projection and would be
     /// invalid).
     ///
-    /// <para><b>The ordering repeats the aggregate EXPRESSION — <c>SUM("amount")</c> — rather than
-    /// referring back to its select-list alias.</b> An output name is only conditionally usable in
+    /// <para><b>The ordering repeats the aggregate EXPRESSION — <c>SUM("amount")</c>, or
+    /// <c>COALESCE(SUM("amount"), 0)</c> for a <c>sum</c> since AGG-6 (<see cref="AggregateCall"/>
+    /// applies uniformly to the projection and the <c>ORDER BY</c>, so the two can never disagree) —
+    /// rather than referring back to its select-list alias.</b> An output name is only conditionally usable in
     /// <c>ORDER BY</c>: PostgreSQL's <c>SELECT</c> documentation states that an output column name
     /// "has to stand alone, that is, it cannot be used in an expression", and T-SQL binds the same
     /// way — an alias inside a <c>CASE</c> resolves against the <c>FROM</c> scope and raises "Invalid
@@ -738,16 +773,47 @@ public static class SqlQueryBuilder
     /// <c>&lt;field&gt;_&lt;func&gt;</c>. Anything else is rejected rather than rendered — a
     /// plausible-looking statement the engine refuses is worse than a compiler error naming the
     /// reason.</para>
+    ///
+    /// <para><b>More than one match is that same rejection, not a pick.</b> #1886's output-name
+    /// uniqueness does not imply column-id uniqueness (see <see cref="GroupedSortTarget"/>'s own
+    /// remarks): two unaliased functions over one field share a column id while resolving to distinct,
+    /// legal output names. The FIRST match here used to win silently; now every match is required to
+    /// be the only one.</para>
+    ///
+    /// <para><b>A match among the aggregations does not end the check either — the group column
+    /// itself is a candidate too</b>, and matching both is the same silent-pick failure one register
+    /// up: a request that groups by field X and also aggregates X unaliased (or aliases an aggregate
+    /// explicitly back onto X) makes <c><paramref name="sortField"/> == <paramref name="groupColumn"/></c>
+    /// true at the same time an aggregation's <see cref="Aggregation.ColumnId"/> matches it. This
+    /// method used to return the aggregate the moment it found one, without ever asking whether the
+    /// group column matched too — the exact shape of bug #1886 (Mongo's copy has the identical
+    /// ordering). SEM-6's own tiebreaker is what reaches this branch on the most ordinary grouped
+    /// request of all (no explicit sort, tiebreaker alone): it is minted from
+    /// <paramref name="groupColumn"/> precisely because the group column's values are unique per
+    /// bucket by construction, so silently redirecting it to an aggregate defeats the one guarantee it
+    /// exists to provide. <see cref="GroupedSortTarget.MatchesGroupColumnToo"/> is the shared check,
+    /// since Mongo's compiler needed the identical fix.</para>
     /// </summary>
     private static (string Column, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
     {
-        foreach (var aggregation in aggregations)
+        var matches = GroupedSortTarget.MatchingByColumnId(sortField, aggregations);
+
+        if (matches.Count > 1)
         {
-            if (aggregation.ColumnId == sortField)
-            {
-                return (AggregateCall(aggregation, context), ResolveField(aggregation.Field, context));
-            }
+            throw new SqlCompilationException(
+                $"Ambiguous ORDER BY target for a grouped level. {GroupedSortTarget.DescribeAmbiguity(sortField, matches)}");
+        }
+
+        if (GroupedSortTarget.MatchesGroupColumnToo(sortField, groupColumn, matches))
+        {
+            throw new SqlCompilationException(
+                $"Ambiguous ORDER BY target for a grouped level. {GroupedSortTarget.DescribeGroupColumnAmbiguity(sortField, matches)}");
+        }
+
+        if (matches.Count == 1)
+        {
+            return (AggregateCall(matches[0], context), ResolveField(matches[0].Field, context));
         }
 
         if (sortField == groupColumn)

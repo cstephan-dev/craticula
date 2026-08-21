@@ -882,6 +882,79 @@ with a client-side reorder, which would defeat server-side paging's whole purpos
 case. Fixtures exercising composite null-bucket ordering mark this explicitly rather than silently
 pinning three-way-identical output that ES/OpenSearch cannot actually produce.
 
+**AGG-6. An aggregate over a group with no non-null values: `sum` is `0`; `avg`, `min` and `max` are
+`null`.** "No non-null values" covers both shapes a host can hit — a group whose every row carries
+NULL in the aggregated field, and (on the backends where an aggregation runs over an empty input at
+all) a group with no rows. `count` is not part of this rule and needs no clause: AGG-1 already makes
+it a count of non-null occurrences, which is `0` on all four backends by construction.
+
+*Where the four backends stand today, and who has to move.* Three of them already answer this way;
+one does not:
+
+| | `sum`, no non-null values | `avg` / `min` / `max` |
+|---|---|---|
+| SQL compiler | `SUM(x)` → **NULL** — the outlier | bare call → null |
+| EF Core (AR-4, once #1887 lifts its refusal of aggregations) | provider emits `COALESCE(SUM(x), 0.0)` → **0** | bare call → null |
+| MongoDB | `{"$sum": ref}` → **0** | `$avg`/`$min`/`$max` → null |
+| ES/OpenSearch | `sum` metric → **0** | `avg`/`min`/`max` → null |
+
+So compilers targeting SQL **MUST** wrap `sum`, and only `sum`, in a two-argument null-coalesce with
+a literal zero — `COALESCE(SUM(x), 0)`, which is ANSI and spelled identically by all five v1 dialects,
+so it is composed in the builder rather than behind BM-1's dialect seam. They **MUST NOT**
+wrap `avg`, `min` or `max`: those three already agree with the other backends, and a wrap there would
+turn "this group has nothing to average" into a fabricated `0`. Mongo and Search compilers change
+nothing; in particular they **MUST NOT** grow a companion count and a conditional in order to recover
+a NULL.
+
+*Why `0` and not NULL, which was the incumbent SQL answer.* NULL is **not recoverable** on the two
+document stores. `$sum` and the `sum` metric return `0` for an empty set, and a genuine sum of zero is
+indistinguishable from an empty one, so a NULL rule would oblige every `sum` on both backends to carry
+a companion count plus a conditional on top of it. `0` costs one `COALESCE` on one backend. It is
+therefore the only one of the two answers implementable on all four, which is what G3 (one logical
+answer per request, whatever the backend) asks for — and it is the answer EF Core's provider already
+generates unprompted.
+
+*What this rests on, stated plainly — because no tier in this repository grades it.* An artifact
+compares emitted **text**; it cannot see what a number comes back as. The four rows above are
+therefore evidence of four different strengths, and collapsing them into one confident table would
+be the dishonest move:
+
+- The **SQL** row is the standard's own answer (`SUM` over an empty set is NULL) and was reproduced
+  during #1886 against the SQLite database this repository's AR-4 harness already stands up. It is
+  the only row an existing harness *could* assert today, and it does not: no executed case here
+  groups.
+- The **EF Core** row is what the provider generates for an aggregate over a nullable column,
+  observed the same way. Nothing exercises it either — that path still refuses aggregations until
+  **#1887**.
+- The **MongoDB** and **ES/OpenSearch** rows are **documented engine behaviour, read from the
+  vendors' documentation and not measured anywhere**. There is no live engine in this repository.
+
+Confirming all four against real servers is the T-1b execution tier's (**#1624**), and the natural
+first case is precisely an all-null group. Until that runs, this rule is a *decision* backed by
+documentation, not an observation — a narrower claim than the other AGG-* rules make, recorded rather
+than smoothed over.
+
+*The ordering consequence is part of the rule, not a side effect.* GRP-4 makes a grouped level's
+`ORDER BY` repeat the aggregate **expression**, so the wrap appears there too, and
+`ORDER BY COALESCE(SUM(x), 0)` places a group with no non-null values among the zeroes where
+`ORDER BY SUM(x)` placed it with the NULLs — i.e. wherever AR-9/SEM-3's `nullsPosition` had sent it.
+Row order for such a group legitimately changes, on every SQL dialect at once. The `nullsPosition`
+machinery is still emitted around the wrapped expression (MySQL's leading `ISNULL(…)` key, SQL
+Server's `CASE WHEN … IS NULL`, the others' `NULLS FIRST`/`LAST`) even though it can no longer fire:
+SEM-6's "no schema state licenses omitting the marker" is unconditional, and suppressing a sort key
+on a nullability inference is a semantic special case no rule grants. On an `avg`/`min`/`max`
+ordering key the same machinery is fully live, which is the difference the fixtures pin.
+
+*Pinned by* every grouped SQL artifact carrying a `sum` — `group-aggregation/001`-`004`, `007`,
+`012`-`015`, `020`, `021`, `023` on all five dialects, and `ag-grid-majors/004` on Postgres only —
+and discriminated **in the `ORDER BY`** by `dialect-parity/024`, which orders a grouped level by an
+**`avg`** while a wrapped `sum` sits beside it in the same projection. No other fixture orders a
+grouped level by anything but a `sum` or a group column, so `024` is the only case that fails when
+the wrap is missing from a `sum`'s `ORDER BY` **and** when it is over-applied to `avg`'s. It does not
+follow that over-applying the wrap goes otherwise undetected: `AVG`/`MIN`/`MAX` appear bare in the
+*projection* of `008`-`010`, `012`, `013` as well, and those fail exactly the same way `024` does if
+the wrap reaches their `SELECT` list.
+
 ---
 
 ## Addendum — grouping semantics (GRP-1..GRP-6; not numbered SEM-*, for the same reason as the
@@ -1078,7 +1151,8 @@ restatement in `SqlQueryBuilder`. The TRD's EXP-3 is **streaming**; the column l
 
 **GRP-4. A grouped level orders by what it projects, and breaks ties on its group column.**
 - A sort key naming an **aggregated column** orders by that aggregate's **expression**
-  (`ORDER BY SUM("amount")`), never by the raw column, which the projection does not contain. The key
+  (`ORDER BY SUM("amount")` — `ORDER BY COALESCE(SUM("amount"), 0)` for a `sum`, since AGG-6), never
+  by the raw column, which the projection does not contain. The key
   is matched against `alias ?? field`, i.e. AGG-2's `ColumnVO.id` reconstructed — the grid sends the
   *column's* id, and AGG-2 sets the alias from that id exactly when it differs from the field.
 - **Repeat the expression; do not refer back to the output name.** An output column name is only
@@ -1107,6 +1181,17 @@ restatement in `SqlQueryBuilder`. The TRD's EXP-3 is **streaming**; the column l
   rendered; the engine would refuse the statement anyway, and a compiler error names the reason.
   **This is a statement about the IR's colId space, not AG Grid's** — see AG-6 below, which is what
   makes the two the same space by the time a compiler sees them.
+- **A sort key that matches MORE THAN ONE aggregation's column id MUST be rejected too, not resolved
+  to the first (#1886).** AGG-2's alias rule and this bullet's own `alias ?? field` match are
+  independent of AGG-1's output-name uniqueness: two unaliased functions over one field
+  (`sum(amount)` + `avg(amount)`, AGG-2's own example) have distinct output names — `amount_sum`,
+  `amount_avg` — while sharing the column id `amount`, because that id is `alias ?? field`, never
+  `alias ?? "<field>_<func>"`. A sort key naming `amount` therefore does not say which of the two the
+  client means; a compiler that quietly picked one (the first declared, say) would produce the exact
+  plausible-looking wrong statement the bullet above already refuses for a colId outside the
+  projection entirely. Pinned by unit tests alone, there being no artifact for a request that does
+  not compile (SQL-7(b)'s precedent) — a *grouped* request whose only aggregates collide on column id
+  has no sort naming that id in the fixture suite, so nothing here moves an artifact.
 - A drill-down **leaf** is an ordinary row query in this respect and keeps SEM-6's `stableKey`.
 
 **AG-6. AG Grid addresses a grouped sort through the row-group *display* column, whose colId the
@@ -1827,7 +1912,8 @@ that is not its Postgres arm with tokens substituted; SQL-7(b) is pinned by unit
 **Cross-links.** `grid-schema.schema.json` (`source`), `$defs/andNode`, `$defs/orNode`,
 `$defs/notNode`, `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`notContains`,
 `contains`), `$defs/setOperator` (`in`, `notIn`), `$defs/textOptions` (`caseSensitivity`), SEM-1,
-SEM-7, SEC-4, and BM-1's `Dialect` interface.
+SEM-7, SEC-4, **AGG-6** (the one aggregate wrap this family renders, and the only backend that
+renders one), and BM-1's `Dialect` interface.
 
 ---
 
@@ -2051,9 +2137,10 @@ different rendering rule rather than a configuration option.
 **Cross-links.** `spec/fixtures/schemas/mongo-artifact.schema.json` (the two artifact shapes),
 `$defs/andNode`, `$defs/orNode`, `$defs/notNode`, `$defs/unaryOperator`, `$defs/binaryOperator`,
 `$defs/setOperator`, `$defs/rangeComparisonNode`, `$defs/sortItem`, SEM-1, SEM-2, SEM-3, SEM-4,
-SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, GRP-2..GRP-6, and the SQL addendum's SQL-0 (`source`),
-SQL-2 (the composite wrap this one parallels) and SQL-3 (the negation-on-the-operator rule MDB-4
-reaches independently).
+SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, **AGG-6** (already satisfied natively here — `$sum` returns
+0 and the other three return null, so no accumulator changes), GRP-2..GRP-6, and the SQL addendum's
+SQL-0 (`source`), SQL-2 (the composite wrap this one parallels) and SQL-3 (the
+negation-on-the-operator rule MDB-4 reaches independently).
 
 ---
 
@@ -2529,5 +2616,7 @@ does diverge, the seam to add is the one this project already uses for that shap
 **Cross-links.** `spec/fixtures/schemas/search-artifact.schema.json` (the member set OSE-13 rests on),
 `$defs/andNode`, `$defs/orNode`, `$defs/notNode`, `$defs/unaryOperator`, `$defs/binaryOperator`,
 `$defs/setOperator`, `$defs/rangeComparisonNode`, `$defs/sortItem`, `$defs/setValuesSpec`, SEM-1,
-SEM-2, SEM-3, SEM-4, SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, AGG-4, **AGG-5**, GRP-2..GRP-6, and the
-SQL addendum's SQL-0 (`source`) and SQL-2 (the composite wrap OSE-2 parallels).
+SEM-2, SEM-3, SEM-4, SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, AGG-4, **AGG-5**, **AGG-6** (already
+satisfied natively here — the `sum` metric returns 0 and the other three return null, so no metric
+aggregation changes), GRP-2..GRP-6, and the SQL addendum's SQL-0 (`source`) and SQL-2 (the composite
+wrap OSE-2 parallels).

@@ -282,9 +282,10 @@ public class SqlQueryBuilderGroupingTests
             [new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "totalRevenue" }],
             sort: [new SortItem { Field = "totalRevenue", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }]);
 
+        // AGG-6's wrap reaches BOTH occurrences, because AggregateCall composes the expression once.
         Assert.Contains(
-            "SUM(\"amount\") AS \"totalRevenue\" FROM \"sales\" GROUP BY \"region\" " +
-            "ORDER BY SUM(\"amount\") DESC NULLS FIRST, \"region\" ASC NULLS LAST",
+            "COALESCE(SUM(\"amount\"), 0) AS \"totalRevenue\" FROM \"sales\" GROUP BY \"region\" " +
+            "ORDER BY COALESCE(SUM(\"amount\"), 0) DESC NULLS FIRST, \"region\" ASC NULLS LAST",
             query.Sql,
             StringComparison.Ordinal);
 
@@ -298,6 +299,11 @@ public class SqlQueryBuilderGroupingTests
     /// uniformity choice: T-SQL emulates <c>NULLS FIRST</c> with a <c>CASE</c>, and a select-list
     /// alias inside a <c>CASE</c> resolves against the <c>FROM</c> scope — <c>[amount_sum]</c> is not
     /// a column of <c>sales</c>, so the statement would fail with "Invalid column name".
+    ///
+    /// <para>Since AGG-6 the emulated bucket wraps an expression that can no longer be NULL, so this
+    /// key is inert on a <c>sum</c> — kept, and asserted, because SEM-6 licenses no omission of a null
+    /// marker on a nullability inference, and because the same emulation is fully live one function
+    /// over (see <c>dialect-parity/024</c>, which orders by an <c>AVG</c>).</para>
     /// </summary>
     [Fact]
     public void On_Sql_Server_The_Emulated_Null_Bucket_Wraps_The_Aggregate_Expression_Not_Its_Alias()
@@ -309,7 +315,8 @@ public class SqlQueryBuilderGroupingTests
             dialect: MssqlDialect.Instance);
 
         Assert.Contains(
-            "ORDER BY CASE WHEN SUM([amount]) IS NULL THEN 1 ELSE 0 END DESC, SUM([amount]) DESC",
+            "ORDER BY CASE WHEN COALESCE(SUM([amount]), 0) IS NULL THEN 1 ELSE 0 END DESC, " +
+            "COALESCE(SUM([amount]), 0) DESC",
             query.Sql,
             StringComparison.Ordinal);
         Assert.DoesNotContain("[amount_sum] IS NULL", query.Sql, StringComparison.Ordinal);
@@ -329,6 +336,77 @@ public class SqlQueryBuilderGroupingTests
             sort: [new SortItem { Field = "segment", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }]));
 
         Assert.Contains("segment", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The gap #1886's review found and #1886 itself left open: output-name uniqueness
+    /// (<c>AggregationValidator</c>) does not imply column-id uniqueness. <c>sum</c> and <c>avg</c>
+    /// over one unaliased field — <c>page-export/011</c>'s own shape — resolve to distinct, legal
+    /// output names (<c>amount_sum</c>, <c>amount_avg</c>) while sharing one column id (<c>amount</c>).
+    /// A request is free to carry both; what it must not do is ask to SORT by that shared id, because
+    /// nothing in the request says which of the two functions is meant.
+    ///
+    /// <para>Before this fix, <c>ResolveGroupedSortTarget</c> silently took the FIRST aggregation
+    /// whose column id matched — so reordering a request's own <c>valueCols</c> array, with nothing
+    /// else different, changed which aggregate a grid page sorted by. That is precisely the
+    /// plausible-looking wrong answer this method's own doc says a compiler error should replace.</para>
+    /// </summary>
+    [Fact]
+    public void Sorting_By_A_Column_Id_Shared_By_Two_Unaliased_Aggregations_Is_Rejected_Not_Guessed()
+    {
+        var exception = Assert.Throws<SqlCompilationException>(() => Compile(
+            Group(["region"]),
+            [SumAmount, new Aggregation { Field = "amount", Func = AggregationFunc.Avg }],
+            sort: [new SortItem { Field = "amount", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }]));
+
+        Assert.Contains("amount", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Sum", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Avg", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The #1886 review's second finding: an aggregation's OutputName can collide with its own
+    /// grouped level's group column, since <c>RenderProjection</c> had no check against it — SQL is
+    /// the only backend where the two ever share one flat namespace (Mongo's group key stays under
+    /// its reserved <c>_id</c>; Search's aggregates live nested inside the composite's own <c>aggs</c>
+    /// container, never as siblings of the level's own name). An explicit alias set to the group
+    /// column's own name is the simplest repro. Before this fix it compiled to
+    /// <c>SELECT "region" AS "region", COALESCE(SUM("amount"), 0) AS "region"</c> — two columns
+    /// sharing one name, which every SQL engine accepts.
+    /// </summary>
+    [Fact]
+    public void An_Aggregation_Aliased_To_Its_Own_Group_Columns_Name_Is_Rejected_Not_Rendered()
+    {
+        var exception = Assert.Throws<SqlCompilationException>(() => Compile(
+            Group(["region"]),
+            [new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "region" }]));
+
+        Assert.Contains("region", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Finding 2's second, sharper defect: the group column is ALSO a candidate for
+    /// <c>ResolveGroupedSortTarget</c>, and a match among the aggregations does not rule it out.
+    /// Grouping by field X and aggregating that SAME field unaliased makes the unaliased
+    /// aggregation's column id (AGG-2: the bare field) equal X too — <c>ColumnId</c> and
+    /// <c>OutputName</c> diverge here (<c>"amount"</c> vs <c>"amount_sum"</c>), so this repro does
+    /// NOT trip the projection-collision guard above; it isolates the <c>ORDER BY</c> resolution bug
+    /// on its own, and carries no explicit sort at all.
+    ///
+    /// <para>Before this fix, SEM-6's own auto-appended tiebreaker — minted from the group column
+    /// specifically because its values are unique per bucket — silently resolved to the aggregate
+    /// instead. Nothing about the request looks like it is asking to order by an aggregate; the
+    /// tiebreaker exists to break ties deterministically and would instead have broken them on a
+    /// value that need not be unique at all.</para>
+    /// </summary>
+    [Fact]
+    public void Grouping_By_A_Field_Also_Aggregated_Unaliased_Over_Itself_Is_Rejected_Not_Guessed()
+    {
+        var exception = Assert.Throws<SqlCompilationException>(() => Compile(
+            Group(["amount"]),
+            [new Aggregation { Field = "amount", Func = AggregationFunc.Sum }]));
+
+        Assert.Contains("amount", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

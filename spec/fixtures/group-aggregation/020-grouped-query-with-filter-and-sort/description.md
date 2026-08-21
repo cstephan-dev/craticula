@@ -23,7 +23,9 @@ latter two as a T-1b execution risk with the note that "both engines resolve sel
 output column name "has to stand alone, that is, it cannot be used in an expression" — the Postgres
 arm was legal only because the alias did stand alone — and T-SQL binds an alias inside a `CASE`
 against the `FROM` scope, raising Msg 207 *Invalid column name*. GRP-4 now requires the aggregate
-expression in the ordering path, and all five arms read `SUM(…)` there, **including Postgres's**,
+expression in the ordering path, and all five arms read the aggregate expression there
+(`COALESCE(SUM(…), 0)` since #1886's AGG-6; `SUM(…)` when this note was written), **including
+Postgres's**,
 which was already legal: "which of these two forms an engine accepts" is a semantic difference, not
 a per-dialect spelling, so splitting it across dialects would put it in the wrong layer. The alias
 still names the aggregate in the projection, which is what the grid reads the response back by.

@@ -15,8 +15,8 @@ cases is the request shape.
 
 **`source` (added #1638) is a convention here, not a derivation.** Every other category's `source`
 was read back out of that fixture's own expected artifact's `FROM` clause — the authoritative
-per-fixture answer. These 22 fixtures have no artifact to read (that is the point of the category),
-so all 22 carry `source: "items"`, chosen to match their shared generic goods-shaped field set
+per-fixture answer. These 23 fixtures have no artifact to read (that is the point of the category),
+so all 23 carry `source: "items"`, chosen to match their shared generic goods-shaped field set
 (`name`/`price`/`quantity`/`amount`/`active`). Nothing in this category depends on the value: no
 case here ever reaches a compiler, so no `FROM` clause is ever emitted. Keep new cases on the same
 value unless one is deliberately testing something about `source` itself.
@@ -65,15 +65,16 @@ safe-parameterization behavior, not here.
 | 020 | `020-filter-value-array-injection` | `requestParsing` | `malformed-request` | SEC-2, SEC-6, AR-6 |
 | 021 | `021-duplicate-json-keys-deserializer-fuzz` | `requestParsing` | `malformed-request` | SEC-6, SEC-2 |
 | 022 | `022-null-where-object-required-deserializer-fuzz` | `requestParsing` | `malformed-request` | SEC-6, AR-8 |
+| 023 | `023-duplicate-aggregation-output-names` | `requestParsing` | `duplicate-output-name` | AGG-2, GRP-4, SEC-2, SEC-6, AR-8 |
 
 ## Breakdown by validation stage
 
 - `allowlist`: 4 (001–003, 019)
 - `resourceLimits`: 8 (004–011)
 - `typeCoercion`: 4 (012–015)
-- `requestParsing`: 6 (016–018, 020–022)
+- `requestParsing`: 7 (016–018, 020–023)
 
-**Total: 22 fixtures.**
+**Total: 23 fixtures.**
 
 ## Notes on construction
 
@@ -98,3 +99,10 @@ safe-parameterization behavior, not here.
   is caught at the same `allowlist` stage as 001–003, not `requestParsing`. Its adversarial value
   is exactly that: an attacker gains nothing from the shape, because the allowlist rejects it
   before the shape could ever matter.
+- **023** is the first case whose `reason` was added to `rejection.schema.json`'s enum by a later
+  story (`duplicate-output-name`, #1886). It is also the first whose defect is invisible to every
+  engine: `018`/`020` send a shape no parser can read, while this one compiles to a statement all
+  five SQL dialects, MongoDB and Elasticsearch accept — and each of them then drops one of the two
+  aggregates silently. Its `schema.json` is `003`'s with one edit, `amount` gaining `aggregatable`,
+  so the request's only defect is the duplicated `ColumnVO.id` and not an SC-2 capability the field
+  was never granted.

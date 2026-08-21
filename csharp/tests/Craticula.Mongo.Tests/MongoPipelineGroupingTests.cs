@@ -28,7 +28,7 @@ public class MongoPipelineGroupingTests
             ["id"] = Field(FieldType.String),
             ["region"] = Field(FieldType.String),
             ["segment"] = Field(FieldType.String),
-            ["amount"] = Field(FieldType.Decimal, AggregationFunc.Sum, AggregationFunc.Count)
+            ["amount"] = Field(FieldType.Decimal, AggregationFunc.Sum, AggregationFunc.Count, AggregationFunc.Avg)
         }
     };
 
@@ -249,6 +249,49 @@ public class MongoPipelineGroupingTests
         Assert.Contains("the $group stage does not produce", failure.Message);
     }
 
+    /// <summary>
+    /// Sql's copy of this method had the identical gap — first-match on
+    /// <see cref="Aggregation.ColumnId"/> — which is why the matching itself moved to
+    /// <see cref="GroupedSortTarget"/> rather than being fixed twice. <c>sum</c> and <c>avg</c> over
+    /// one unaliased field resolve to distinct output names (#1886) while sharing one column id, so a
+    /// request naming that id in <c>sortModel</c> does not say which of the two it means. Before this
+    /// fix the FIRST aggregation in the request's own array won silently.
+    /// </summary>
+    [Fact]
+    public void Sorting_By_A_Column_Id_Shared_By_Two_Unaliased_Aggregations_Is_Rejected_Not_Guessed()
+    {
+        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+            Group(["region"]),
+            [
+                new Aggregation { Field = "amount", Func = AggregationFunc.Sum },
+                new Aggregation { Field = "amount", Func = AggregationFunc.Avg }
+            ],
+            sort: [new SortItem { Field = "amount", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }]));
+
+        Assert.Contains("amount", failure.Message);
+        Assert.Contains("Sum", failure.Message);
+        Assert.Contains("Avg", failure.Message);
+    }
+
+    /// <summary>
+    /// The #1886 review's second finding, and Sql's copy had the identical ordering bug: the group
+    /// column is ALSO a candidate for <c>ResolveGroupedSortTarget</c>, and a match among the
+    /// aggregations does not rule it out. Grouping by field X and aggregating that SAME field
+    /// unaliased makes the unaliased aggregation's column id (AGG-2: the bare field) equal X too.
+    /// Before this fix, SEM-6's own auto-appended tiebreaker — minted from the group column
+    /// specifically because its values are unique per bucket — silently resolved to the aggregate's
+    /// bucket instead, on a request carrying no explicit sort at all.
+    /// </summary>
+    [Fact]
+    public void Grouping_By_A_Field_Also_Aggregated_Unaliased_Over_Itself_Is_Rejected_Not_Guessed()
+    {
+        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+            Group(["region"]),
+            [new Aggregation { Field = "region", Func = AggregationFunc.Count }]));
+
+        Assert.Contains("region", failure.Message);
+    }
+
     [Fact]
     public void An_Aggregation_Alias_Names_The_Accumulator_And_Is_What_A_Sort_Key_Matches()
     {
@@ -300,13 +343,31 @@ public class MongoPipelineGroupingTests
         Assert.Contains("reserved", failure.Message);
     }
 
+    /// <summary>
+    /// The same last-wins hazard one stage earlier: <c>$group</c> is a document too, so the second
+    /// accumulator would replace the first and the grid would read one column holding another
+    /// column's number, out of a pipeline that is syntactically perfect.
+    ///
+    /// <para><b>The refusal moved layers in #1886, and the exception type is the evidence — for THIS
+    /// shape only.</b> <c>Craticula.Sql</c> had no equivalent guard — it emitted the column twice and
+    /// let the driver decide — so two aggregations colliding with each other is now caught one layer
+    /// up, in <c>Craticula.Core</c>'s <see cref="AggregationValidator"/>, which
+    /// <see cref="MongoPipelineBuilder.Build"/> runs on entry like every other compiler. What this
+    /// test pins is that THAT collision is still refused, now on all four backends at once.</para>
+    ///
+    /// <para><b><c>RenderGroup</c>'s own <c>ContainsKey</c> guard is NOT redundant, and is not merely
+    /// kept as a courtesy.</b> Core's check only compares aggregations against each other; it has no
+    /// notion of <c>_id</c>, the bucket key this stage seeds into <c>group</c> before the loop below
+    /// runs. An aggregation whose output name resolves to <c>_id</c> — reachable from the wire via an
+    /// explicit alias, which <c>ir.schema.json</c>'s identifier pattern permits — collides with the
+    /// SEED, not with a sibling aggregation, and only this method's own guard sees that. See
+    /// <see cref="An_Aggregation_Aliased_To_The_Bucket_Key_Is_Refused_Not_Silently_Overwritten"/>
+    /// below for that case, which <see cref="AggregationValidator"/> alone does not catch.</para>
+    /// </summary>
     [Fact]
     public void Two_Aggregations_Cannot_Share_One_Output_Name()
     {
-        // The same last-wins hazard one stage earlier: `$group` is a document too, so the second
-        // accumulator would replace the first and the grid would read one column holding another
-        // column's number, out of a pipeline that is syntactically perfect.
-        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+        var failure = Assert.Throws<AggregationValidationException>(() => Compile(
             Group(["region", "segment"], "EMEA"),
             [
                 new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "total" },
@@ -314,6 +375,27 @@ public class MongoPipelineGroupingTests
             ]));
 
         Assert.Contains("output name 'total'", failure.Message);
+    }
+
+    /// <summary>
+    /// The case <see cref="AggregationValidator"/> structurally cannot cover, because it is not a
+    /// collision between two aggregations: an alias of <c>_id</c> passes the shared validator (the
+    /// identifier pattern has nothing against it, and there is only one aggregation to compare it
+    /// to), then reaches <see cref="MongoPipelineBuilder.RenderGroup"/>, whose own guard is what
+    /// catches it — because <c>group</c> is seeded with the <c>_id</c> bucket key BEFORE this
+    /// aggregation's output name is ever checked against it. Without that seed-then-check ordering,
+    /// or without the guard itself, <c>group["_id"]</c> would be silently overwritten by the
+    /// accumulator, and the response would carry no bucket key at all.
+    /// </summary>
+    [Fact]
+    public void An_Aggregation_Aliased_To_The_Bucket_Key_Is_Refused_Not_Silently_Overwritten()
+    {
+        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+            Group(["region"]),
+            [new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "_id" }]));
+
+        Assert.Contains("output name '_id'", failure.Message);
+        Assert.Contains("bucket key", failure.Message);
     }
 
     [Fact]

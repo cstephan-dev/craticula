@@ -1,3 +1,6 @@
+using System.Text.Json;
+using Craticula.Core.Ir;
+
 namespace Craticula.AgGrid.Tests;
 
 /// <summary>
@@ -95,6 +98,71 @@ public class AgGridRequestParserRejectionTests
 
         var ex = Assert.Throws<AgGridRequestParseException>(() => AgGridRequestParser.Parse(requestJson));
         Assert.Equal("malformed-request", ex.Reason);
+    }
+
+    /// <summary>
+    /// #1886's fixture, and the one adversarial case whose payload every backend would have
+    /// <em>accepted</em>: two <c>valueCols</c> share one <c>ColumnVO.id</c> over two different
+    /// fields, so AGG-2 aliases both <c>total</c> and GRP-4 resolves both to one output name. The
+    /// refusal comes from <see cref="AggregationValidator"/> — shared, so all four backends inherit
+    /// it — which is why the exception here is Core's rather than this parser's
+    /// <see cref="AgGridRequestParseException"/>, and why the fixture's oracle names the stage
+    /// (<c>requestParsing</c>) rather than a compiler.
+    /// </summary>
+    [Fact]
+    public void Adversarial_023_Two_ValueCols_Resolving_To_One_Output_Name_Are_Rejected()
+    {
+        const string fixtureDir = "023-duplicate-aggregation-output-names";
+        var requestJson = File.ReadAllText(RepoPaths.Fixture("adversarial", fixtureDir, "agGridRequest.json"));
+
+        var ex = Assert.Throws<AggregationValidationException>(() => AgGridRequestParser.Parse(requestJson));
+
+        // Both offending positions and the colliding name, so the message tells a host WHICH two
+        // valueCols to fix.
+        Assert.Contains("aggregations[0, 1]", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("'total'", ex.Message, StringComparison.Ordinal);
+
+        // Cross-checked against the fixture's own oracle rather than against a literal repeated here:
+        // if the case's intent ever changes, this breaks instead of passing for any rejection at all.
+        using var rejection = JsonDocument.Parse(
+            File.ReadAllText(RepoPaths.Fixture("adversarial", fixtureDir, "expected", "rejection.json")));
+
+        Assert.Equal("requestParsing", rejection.RootElement.GetProperty("rejectedAt").GetString());
+        Assert.Equal("duplicate-output-name", rejection.RootElement.GetProperty("reason").GetString());
+    }
+
+    /// <summary>
+    /// The counter-case that keeps the rule above from being read as "one field, one aggregation":
+    /// <c>sum</c> and <c>avg</c> over the SAME field with no alias resolve to <c>totalAmount_sum</c> and
+    /// <c>totalAmount_avg</c>, which do not collide — <c>page-export/011</c> is that exact shape
+    /// (both <c>valueCols</c> carry <c>id == field == "totalAmount"</c>) and is compiled on Postgres.
+    /// <c>group-aggregation/012</c> is NOT this shape: its two <c>valueCols</c> carry distinct ids,
+    /// so AGG-2 gives each an explicit alias before either default is ever computed. Asserted here
+    /// because a uniqueness check written against <see cref="Aggregation.ColumnId"/> instead of
+    /// <see cref="Aggregation.OutputName"/> would pass the fixture above and reject this, and both
+    /// are one-line changes.
+    /// </summary>
+    [Fact]
+    public void Two_Functions_Over_One_Unaliased_Field_Are_Accepted_Because_Their_Output_Names_Differ()
+    {
+        const string request = """
+            {
+              "startRow": 0, "endRow": 100,
+              "rowGroupCols": [ { "id": "region", "displayName": "Region", "field": "region" } ],
+              "valueCols": [
+                { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "sum" },
+                { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "avg" }
+              ],
+              "pivotCols": [], "pivotMode": false, "groupKeys": [],
+              "filterModel": null, "sortModel": []
+            }
+            """;
+
+        var parsed = AgGridRequestParser.Parse(request);
+
+        Assert.Equal(
+            ["amount_sum", "amount_avg"],
+            parsed.Aggregations!.Select(aggregation => aggregation.OutputName));
     }
 
     [Fact]

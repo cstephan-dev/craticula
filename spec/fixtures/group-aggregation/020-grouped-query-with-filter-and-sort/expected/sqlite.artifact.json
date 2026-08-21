@@ -1,6 +1,6 @@
 {
   "dialect": "sqlite",
-  "sql": "SELECT \"region\" AS \"region\", SUM(\"amount\") AS \"amount_sum\" FROM \"sales_fact\" WHERE \"amount\" > ? GROUP BY \"region\" ORDER BY SUM(\"amount\") DESC NULLS FIRST, \"region\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "sql": "SELECT \"region\" AS \"region\", COALESCE(SUM(\"amount\"), 0) AS \"amount_sum\" FROM \"sales_fact\" WHERE \"amount\" > ? GROUP BY \"region\" ORDER BY COALESCE(SUM(\"amount\"), 0) DESC NULLS FIRST, \"region\" ASC NULLS LAST LIMIT ? OFFSET ?",
   "params": [
     "1000",
     100,

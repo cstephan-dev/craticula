@@ -353,14 +353,26 @@ public static class MongoPipelineBuilder
 
             // MDB-10: a stage document is a map, so a repeated key is LAST-WINS rather than an error
             // — one accumulator would vanish from a syntactically perfect pipeline, and the grid
-            // would read a column that silently holds another column's number. AGG-2 derives the name
-            // from `valueCols[].id`, which is client-supplied, so this is reachable from the wire.
+            // would read a column that silently holds another column's number.
+            //
+            // NOT fully covered by #1886's upstream AggregationValidator, and still load-bearing —
+            // do not delete this as "made redundant". Core's check only compares aggregations
+            // against EACH OTHER; it has no notion of "_id", which is this stage's bucket key and is
+            // seeded into `group` before this loop runs. An aggregation whose OutputName resolves to
+            // "_id" — reachable from the wire via an explicit alias, e.g. {"id":"_id","field":"amount",
+            // "aggFunc":"sum"}, which "^[A-Za-z_][A-Za-z0-9_]*$" (ir.schema.json's own alias pattern)
+            // permits and AggregationValidator therefore accepts — collides with the seed rather than
+            // with another aggregation, and only this ContainsKey check (which runs against the
+            // pre-seeded dictionary, not a fresh one) catches it. Measured: the request above throws
+            // here rather than silently overwriting the bucket key.
             if (group.ContainsKey(output))
             {
                 throw new MongoCompilationException(
-                    $"Two aggregations resolve to the output name '{output}' (GRP-4: an alias, or the " +
-                    "<field>_<func> default). A $group stage is a document, so the second would silently " +
-                    "replace the first — the request names the same output column twice.");
+                    $"An aggregation resolves to the output name '{output}', which collides with either " +
+                    "another aggregation's output name or the grouped level's own bucket key (GRP-4: an " +
+                    "alias, or the <field>_<func> default). A $group stage is a document, so the later " +
+                    "one would silently replace the earlier — the request names an output column the " +
+                    "same as something else in this stage.");
             }
 
             group[output] = RenderAccumulator(aggregation, context);
@@ -1062,17 +1074,44 @@ public static class MongoPipelineBuilder
     /// IS a real field of the document a later <c>$sort</c> stage reads, not an alias in a
     /// <c>SELECT</c> scope, so GRP-4's "repeat the expression, do not refer back to the output name"
     /// is a SQL rule and explicitly does not reach here.</para>
+    ///
+    /// <para><b>More than one match is rejected, not picked.</b> #1886's output-name uniqueness does
+    /// not imply column-id uniqueness (see <see cref="GroupedSortTarget"/>'s own remarks): two
+    /// unaliased functions over one field share a column id while resolving to distinct, legal output
+    /// names. The FIRST match here used to win silently — Sql's byte-identical copy of this method had
+    /// the same gap, which is why the matching itself is shared now rather than compiler-local.</para>
+    ///
+    /// <para><b>A single match does not end the check either — the group column is a candidate too.</b>
+    /// A request that groups by field X and also aggregates X unaliased (or aliases an aggregate
+    /// explicitly back onto X) makes <c><paramref name="sortField"/> == <paramref name="groupColumn"/></c>
+    /// true at the same time an aggregation's <see cref="Aggregation.ColumnId"/> matches it. This
+    /// method used to return the aggregate's bucket the moment it found one, never asking whether the
+    /// group column matched too — Sql's copy had the identical ordering bug, and SEM-6's own
+    /// tiebreaker (minted from <paramref name="groupColumn"/> because its values are unique per bucket)
+    /// is what reaches this branch on the most ordinary grouped request of all, with no explicit sort
+    /// at all. <see cref="GroupedSortTarget.MatchesGroupColumnToo"/> is the shared check.</para>
     /// </summary>
     private static (string Bucket, string Path, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
     {
-        foreach (var aggregation in aggregations)
+        var matches = GroupedSortTarget.MatchingByColumnId(sortField, aggregations);
+
+        if (matches.Count > 1)
         {
-            if (aggregation.ColumnId == sortField)
-            {
-                var output = aggregation.OutputName;
-                return ($"__{output}NullBucket", output, ResolveField(aggregation.Field, context));
-            }
+            throw new MongoCompilationException(
+                $"Ambiguous $sort target for a grouped level. {GroupedSortTarget.DescribeAmbiguity(sortField, matches)}");
+        }
+
+        if (GroupedSortTarget.MatchesGroupColumnToo(sortField, groupColumn, matches))
+        {
+            throw new MongoCompilationException(
+                $"Ambiguous $sort target for a grouped level. {GroupedSortTarget.DescribeGroupColumnAmbiguity(sortField, matches)}");
+        }
+
+        if (matches.Count == 1)
+        {
+            var output = matches[0].OutputName;
+            return ($"__{output}NullBucket", output, ResolveField(matches[0].Field, context));
         }
 
         if (sortField == groupColumn)

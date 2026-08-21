@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "duplicate-output-name",
+  "note": "Two valueCols carry the same ColumnVO.id ('total') over two DIFFERENT fields, so AGG-2 gives both the alias 'total' and GRP-4 resolves both to the output name 'total'. Every backend loses one of them silently: a Mongo $group stage and an ES aggs container are JSON objects (last key wins), and a SQL SELECT list simply names the column twice and lets the driver pick. The grid would then read 'total' and get a number belonging to the other column."
+}

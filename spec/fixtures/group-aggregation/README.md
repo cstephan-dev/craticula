@@ -23,7 +23,8 @@ input rather than an unexplained constant in the output.
 
 **Identifier quoting started here and is now the suite-wide rule.** These 20 artifacts were the only
 quoted ones in the suite (`SELECT "region" AS "region", SUM("amount") AS "amount_sum" FROM
-"sales_fact"`) against 144 unquoted ones elsewhere. #1638 resolved that contradiction in this
+"sales_fact"` — that `SUM` is `COALESCE(SUM("amount"), 0)` since #1886, see the AGG-6 note below)
+against 144 unquoted ones elsewhere. #1638 resolved that contradiction in this
 category's favour — always quote, including the table and every alias — and re-authored the other
 144. **On quoting alone**, nothing here changed: this category is the reference for that form. It is
 now aligned with the rest of the addendum too — the two points on which it was not are settled below
@@ -249,9 +250,9 @@ Ordering a grouped level by an aggregate is a real, user-visible gap on OpenSear
 needs a different grouped-ordering strategy, owned by #1622 and gradeable only against a live cluster
 (#1624).
 
-## Aggregation semantics addendum (AGG-1..AGG-5) — applied category-wide
+## Aggregation semantics addendum (AGG-1..AGG-6) — applied category-wide
 
-`spec/semantics.md`'s "Addendum — aggregation semantics" section pins five rules this category's
+`spec/semantics.md`'s "Addendum — aggregation semantics" section pins six rules this category's
 artifacts follow; a review pass re-aligned every fixture to them:
 
 - **AGG-1** — `count` aggregates non-null occurrences of the counted field, never a bare row count.
@@ -274,6 +275,14 @@ artifacts follow; a review pass re-aligned every fixture to them:
   documented, accepted divergence: ES/OpenSearch's composite null bucket always sorts first,
   regardless of requested direction, unlike Postgres/Mongo which both honor it. Flagged in each
   affected case's `description.md`, not silently worked around.
+- **AGG-6** (#1886) — a `sum` over a group with no non-null values is `0`; `avg`/`min`/`max` are
+  `null`. Mongo and Search already answer that natively, so **no arm here changed**; the SQL arms of
+  every case carrying a `sum` (001-004, 007, 012-015, 020, 021, 023) now read
+  `COALESCE(SUM(<col>), 0)`, and their `AVG`/`MIN`/`MAX` calls are deliberately left bare. `020` is
+  the one case where the wrap also reaches the `ORDER BY` — it orders a grouped level by its `sum` —
+  so an empty group now sorts with the zeroes rather than at AR-9's `nullsPosition`. The
+  discriminating case for the rule lives outside this category, in `dialect-parity/024`, because it
+  needs a grouped level ordered by an **`avg`** and nothing here has one.
 
 ## Design note — `groupKeys` uses the typed `typedValue` form, not raw scalars
 

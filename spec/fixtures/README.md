@@ -429,6 +429,57 @@ WRONG file — and would have been written out silently. It is refused before th
 offending field, and unit-tested; a refused export produces no bytes to compare, which is why neither
 form of the collision can be a fixture.
 
+## AGG-6 lands, and 61 SQL artifacts move with it (#1886)
+
+`spec/semantics.md`'s **AGG-6** settles what an aggregate over a group with no non-null values is:
+`sum` is `0`, `avg`/`min`/`max` are `null`. The three other backends already answer that way — the EF
+provider generates `COALESCE(SUM(x), 0.0)` unprompted, and MongoDB's `$sum` and Elasticsearch's `sum`
+metric both return `0` for an empty set — so **SQL was the outlier, one against three**, and the SQL
+compiler is the only one that changed. AGG-6 itself records how strong the evidence for each of those
+four rows is, which is not the same for all four and is not something any artifact can grade.
+
+**61 artifacts gained a `COALESCE`**: 13 Postgres, 12 each on MSSQL/MySQL/SQLite/Oracle, across
+`group-aggregation/001`-`004`, `007`, `012`-`015`, `020`, `021`, `023` and `ag-grid-majors/004`. The
+`AVG`/`MIN`/`MAX` calls in ten of those same artifacts were **not** touched, which is the rule's other
+half. No Mongo or Search artifact changed, and none should have.
+
+*The transformation is textual, and applied to the fixtures' own hand-authored SQL* — never a dump of
+the compiler's output, the standing rule this suite has kept since #1638. `COALESCE` is ANSI and
+spelled identically by all five dialects, so no arm needed anything but the wrap, and none of the five
+diverges here.
+
+**One statement's ordering moved, and that is the rule working.**
+`group-aggregation/020` orders a grouped level by its `sum`, so its `ORDER BY` now repeats
+`COALESCE(SUM(…), 0)` (three times over on MySQL and SQL Server, whose null-placement emulation wraps
+the expression twice more). A group with no non-null values therefore sorts **with the zeroes**, where
+it previously sorted with the NULLs at AR-9's requested `nullsPosition` — an ordering change, on every
+dialect at once, stated in AGG-6 rather than absorbed as a byte diff. The `nullsPosition` keys are
+still emitted around the wrapped expression even though they can no longer fire: SEM-6 licenses no
+omission of a null marker on a nullability inference.
+
+**`dialect-parity/024` was authored** as the discriminator none of the 61 provides. It orders a
+grouped level by an **`avg`** while a wrapped `sum` sits beside it in the same projection — the only
+case in the suite whose `ORDER BY` fails both when the wrap is missing and when it is over-applied to
+the `avg`, since no other fixture orders a grouped level by anything but a `sum` or a group column.
+(Over-applying the wrap to a *projected* `avg`/`min`/`max` is separately caught by `group-aggregation/008`-`010`,
+`012`, `013`, which carry those bare in their `SELECT` list.) It carries **five SQL
+arms and no document-store arm**, a third coverage tier for that category: `$sum` and the `sum` metric
+are the same token before and after AGG-6, so a Mongo or Search arm would grade nothing. The honest
+limit is recorded in AGG-6 itself — those two backends' engine behaviour is *documented*, not measured
+in this repository, and confirming it belongs to the T-1b execution tier (**#1624**).
+
+**`adversarial/023` was authored** for the second rule the same story carried: two aggregations
+resolving to one GRP-4 output name are refused in `Craticula.Core`'s shared `AggregationValidator`,
+upstream of all four backends. MongoDB and Elasticsearch each already refused it in their own
+compiler; `Craticula.Sql` did not — it emitted `SELECT SUM("x") AS "n", AVG("x") AS "n"` and let the
+driver decide which one the grid read. It is the category's first `duplicate-output-name` case, and
+its `reason` is the first value added to `rejection.schema.json`'s enum after that file was written.
+
+The counts moved: `dialect-parity` **23 → 24** directories, `adversarial` **22 → 23**, the Postgres
+runner **174 → 175**, the non-Postgres SQL arms **168 → 172**, artifacts on disk **663 → 668**. Mongo
+(161) and Search (160) are unmoved, as is the writer tier (12). All four runners' `ExcludedFixtures`
+are still empty.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,
@@ -584,8 +635,8 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
 | `page-export/` | AG-3/EXP-2 page spec, EXP-1 export + EXP-4/EXP-5/EXP-8 byte-exact writer output (delimiters, BOM, per-field formats) + EXP-6 hostile CSV values | ~20 |
-| `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits | ~20 |
-| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7, MDB-9) | ~23 |
+| `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits, duplicate aggregation output names | ~20 |
+| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7, MDB-9) + AGG-6's five-SQL-dialect aggregate case | ~24 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |
 
 Each category directory has its own `README.md` enumerating its cases and the specific requirement

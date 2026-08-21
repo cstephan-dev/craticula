@@ -120,11 +120,18 @@ public class SearchQueryGroupingTests
     /// aggregation container is a JSON object, so a repeated key is last-wins and the grid would read
     /// one column holding another column's number. AGG-2 takes the name from the client-supplied
     /// <c>valueCols[].id</c>, so it is reachable from the wire.
+    ///
+    /// <para><b>#1886 moved the refusal into <see cref="AggregationValidator"/></b>, which
+    /// <see cref="SearchQueryBuilder.Build"/> runs on entry — because <c>Craticula.Sql</c> had no
+    /// equivalent guard and the condition is a property of the request, not of this container's
+    /// shape. The request is still refused; the exception type says by which layer.
+    /// <c>RenderAggregations</c>' own <c>ContainsKey</c> guard is kept but is no longer reachable
+    /// from any public entry point of this assembly.</para>
     /// </summary>
     [Fact]
     public void Two_Aggregations_Resolving_To_One_Output_Name_Are_Refused()
     {
-        var exception = Assert.Throws<SearchCompilationException>(() => Compile([
+        var exception = Assert.Throws<AggregationValidationException>(() => Compile([
             new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "total" },
             new Aggregation { Field = "amount", Func = AggregationFunc.Avg, Alias = "total" }
         ]));
