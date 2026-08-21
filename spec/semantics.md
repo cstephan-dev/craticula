@@ -920,15 +920,16 @@ therefore evidence of four different strengths, and collapsing them into one con
 be the dishonest move:
 
 - The **SQL** row is the standard's own answer (`SUM` over an empty set is NULL) and was reproduced
-  during #1886 against the SQLite database this repository's AR-4 harness already stands up. It is
-  the only row an existing harness *could* assert today, and it does not: no executed case here
-  groups.
-- The **EF Core** row is now **measured**, not merely read from generated SQL: **#1887** lifted the
-  refusal, and `EfCoreGroupingTests.An_All_Null_Group_Sums_To_Zero_And_Averages_Mins_And_Maxes_To_Null`
-  runs an all-null group through the real SQLite database this repository's harness stands up,
-  asserting `sum → 0` and `avg`/`min`/`max → null` as executed results — not through the AR-4
-  cross-compiler harness, which still carries no grouped case at all (that gap is #1887's follow-up,
-  not this rule's).
+  during #1886 against the SQLite database this repository's AR-4 harness already stands up. **#1888**
+  is what makes it an executed case *in that harness* rather than a standalone reproduction:
+  `EfCoreGroupedExecutionEqualityTests`'s case `013` compiles `group-aggregation/013` with
+  `SqlQueryBuilder` and runs it against real SQLite — not the bare `SUM` this row's own name suggests,
+  but the `COALESCE(SUM(x), 0)`-wrapped statement #1886 mandated, which is the SQL row's own MUST, not
+  its incumbent answer.
+- The **EF Core** row is measured two ways now: `EfCoreGroupingTests.An_All_Null_Group_Sums_To_Zero_And_Averages_Mins_And_Maxes_To_Null`
+  (#1887, a hand-built request) and, since **#1888**, the same `group-aggregation/013` case in the AR-4
+  cross-compiler harness — both assert `sum → 0` and `avg`/`min`/`max → null` as executed results,
+  the second one alongside the SQL row above from the identical seeded database.
 - The **MongoDB** and **ES/OpenSearch** rows are **documented engine behaviour, read from the
   vendors' documentation and not measured anywhere**. There is no live engine in this repository.
 

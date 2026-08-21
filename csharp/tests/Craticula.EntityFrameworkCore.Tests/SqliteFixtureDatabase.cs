@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 using Craticula.Sql;
 using Microsoft.Data.Sqlite;
@@ -121,6 +122,113 @@ internal sealed class SqliteFixtureDatabase : IDisposable
         for (var index = 0; index < Schema.FieldOrder.Count; index++)
         {
             ordinals[index] = reader.GetOrdinal(PhysicalColumn(Schema, Schema.FieldOrder[index]));
+        }
+
+        var rows = new List<IReadOnlyList<object?>>();
+        while (reader.Read())
+        {
+            var cells = new object?[Schema.FieldOrder.Count];
+            for (var index = 0; index < cells.Length; index++)
+            {
+                cells[index] = ReadDeclared(reader, ordinals[index], Schema.Fields[Schema.FieldOrder[index]].Type);
+            }
+
+            rows.Add(cells);
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// #1888: reads a compiled GROUPED-LEVEL query back by its own output order — GRP-3's
+    /// <c>[groupColumn, ...aggregations]</c> — rather than by <see cref="GridSchema.FieldOrder"/>'s
+    /// physical mapping, which <see cref="ExecuteCompiled"/> uses and which does not describe a
+    /// grouped level's <c>SELECT</c> list at all: each output row is a bucket, not a physical row, and
+    /// the group column keeps its OWN logical name as its alias (<c>"region" AS "region"</c>) while
+    /// each aggregation is aliased to its <see cref="Aggregation.OutputName"/> — both read back here
+    /// by that alias via <see cref="SqliteDataReader.GetOrdinal(string)"/>, exactly the column names
+    /// <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/>'s own <c>page.Columns</c> carries.
+    ///
+    /// <para>The group column is read as the SCHEMA's own declared type (its value is one of the
+    /// schema's own field values, just bucketed). Each aggregation is read as its SOURCE field's
+    /// declared type — <c>sum</c>/<c>avg</c>/<c>min</c>/<c>max</c> all preserve it — <b>except
+    /// <c>count</c>, whose SQL result is always an integer regardless of what it counts</b> (AGG-1):
+    /// <c>group-aggregation/011</c> counts a <c>string</c> field, so reading it through that field's
+    /// own type would call <see cref="SqliteDataReader.GetString(int)"/> on an INTEGER column. Read as
+    /// <see cref="int"/> rather than <see cref="long"/> deliberately, to match the boxed CLR type EF's
+    /// own <c>int?</c> wrap (<see cref="EfCoreQueryBuilder"/>'s <c>BuildAggregateExpression</c>)
+    /// produces — a width difference here would be an artifact of this harness's own two reading
+    /// paths, not a fact about either compiler, and the parity assertion must not trip on it.</para>
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<object?>> ExecuteCompiledGroupedLevel(
+        SqlQuery query, string groupColumn, IReadOnlyList<Aggregation> aggregations)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = NumberPlaceholders(query.Sql, query.Parameters.Count);
+
+        for (var index = 0; index < query.Parameters.Count; index++)
+        {
+            command.Parameters.Add(new SqliteParameter($"?{index + 1}", query.Parameters[index] ?? DBNull.Value));
+        }
+
+        using var reader = command.ExecuteReader();
+
+        var groupOrdinal = reader.GetOrdinal(groupColumn);
+        var groupType = Schema.Fields[groupColumn].Type;
+
+        var aggregateOrdinals = new int[aggregations.Count];
+        for (var i = 0; i < aggregations.Count; i++)
+        {
+            aggregateOrdinals[i] = reader.GetOrdinal(aggregations[i].OutputName);
+        }
+
+        var rows = new List<IReadOnlyList<object?>>();
+        while (reader.Read())
+        {
+            var cells = new object?[1 + aggregations.Count];
+            cells[0] = ReadDeclared(reader, groupOrdinal, groupType);
+
+            for (var i = 0; i < aggregations.Count; i++)
+            {
+                cells[i + 1] = aggregations[i].Func == AggregationFunc.Count
+                    ? (reader.IsDBNull(aggregateOrdinals[i]) ? null : Convert.ToInt32(reader.GetInt64(aggregateOrdinals[i])))
+                    : ReadDeclared(reader, aggregateOrdinals[i], Schema.Fields[aggregations[i].Field].Type);
+            }
+
+            rows.Add(cells);
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// #1888: reads a compiled DRILL-DOWN LEAF query (<c>group-aggregation/005</c>/<c>006</c>) back by
+    /// <see cref="GridSchema.FieldOrder"/>'s LOGICAL names, rather than <see cref="ExecuteCompiled"/>'s
+    /// physical-column mapping. A leaf's <c>SELECT</c> list is GRP-3's full-field projection, rendered
+    /// as an explicit column list under each field's LOGICAL alias (<c>"fiscal_year" AS "fiscalYear"</c>
+    /// wherever <c>physical.sql.column</c> differs from the field name, a bare <c>"id"</c> where it does
+    /// not) rather than the bare <c>SELECT *</c> the rest of this harness's fixtures compile to — so the
+    /// reader's own column names ARE the logical ones already, and re-deriving the physical name to look
+    /// them up (as <see cref="ExecuteCompiled"/> does) throws <c>ArgumentOutOfRangeException</c> the
+    /// moment a field's physical column differs from its logical name, which is exactly this category's
+    /// <c>fiscalYear</c>/<c>fiscal_year</c> pair.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<object?>> ExecuteCompiledLeafProjection(SqlQuery query)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = NumberPlaceholders(query.Sql, query.Parameters.Count);
+
+        for (var index = 0; index < query.Parameters.Count; index++)
+        {
+            command.Parameters.Add(new SqliteParameter($"?{index + 1}", query.Parameters[index] ?? DBNull.Value));
+        }
+
+        using var reader = command.ExecuteReader();
+
+        var ordinals = new int[Schema.FieldOrder.Count];
+        for (var index = 0; index < Schema.FieldOrder.Count; index++)
+        {
+            ordinals[index] = reader.GetOrdinal(Schema.FieldOrder[index]);
         }
 
         var rows = new List<IReadOnlyList<object?>>();

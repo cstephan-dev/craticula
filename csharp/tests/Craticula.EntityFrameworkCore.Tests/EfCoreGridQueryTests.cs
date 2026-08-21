@@ -6,9 +6,10 @@ namespace Craticula.EntityFrameworkCore.Tests;
 /// <summary>
 /// The grid entry point's own contract: what a page carries, and what the optional count means.
 ///
-/// <para>The ROWS a page contains are asserted by <see cref="EfCoreExecutionEqualityTests"/>, against the
-/// SQL compiler and against a hand-computed sequence. What is left for here is the envelope — which is
-/// the part #1645 had to invent, and therefore the part with no oracle behind it at all
+/// <para>The ROWS a page contains are asserted by <see cref="EfCoreExecutionEqualityTests"/> (ungrouped
+/// pages) and <see cref="EfCoreGroupedExecutionEqualityTests"/> (grouped/leaf pages, #1888), each against
+/// the SQL compiler and against a hand-computed sequence. What is left for here is the envelope — which
+/// is the part #1645 had to invent, and therefore the part with no oracle behind it at all
 /// (see <see cref="EfCoreGridPage"/> on why it is deliberately not OQ-8's shared response type).</para>
 /// </summary>
 public class EfCoreGridQueryTests
