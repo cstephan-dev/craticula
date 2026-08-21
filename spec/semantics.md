@@ -894,7 +894,7 @@ one does not:
 | | `sum`, no non-null values | `avg` / `min` / `max` |
 |---|---|---|
 | SQL compiler | `SUM(x)` → **NULL** — the outlier | bare call → null |
-| EF Core (AR-4, once #1887 lifts its refusal of aggregations) | provider emits `COALESCE(SUM(x), 0.0)` → **0** | bare call → null |
+| EF Core (AR-4, since #1887) | provider emits `COALESCE(SUM(x), 0.0)` → **0** | bare call → null |
 | MongoDB | `{"$sum": ref}` → **0** | `$avg`/`$min`/`$max` → null |
 | ES/OpenSearch | `sum` metric → **0** | `avg`/`min`/`max` → null |
 
@@ -923,9 +923,12 @@ be the dishonest move:
   during #1886 against the SQLite database this repository's AR-4 harness already stands up. It is
   the only row an existing harness *could* assert today, and it does not: no executed case here
   groups.
-- The **EF Core** row is what the provider generates for an aggregate over a nullable column,
-  observed the same way. Nothing exercises it either — that path still refuses aggregations until
-  **#1887**.
+- The **EF Core** row is now **measured**, not merely read from generated SQL: **#1887** lifted the
+  refusal, and `EfCoreGroupingTests.An_All_Null_Group_Sums_To_Zero_And_Averages_Mins_And_Maxes_To_Null`
+  runs an all-null group through the real SQLite database this repository's harness stands up,
+  asserting `sum → 0` and `avg`/`min`/`max → null` as executed results — not through the AR-4
+  cross-compiler harness, which still carries no grouped case at all (that gap is #1887's follow-up,
+  not this rule's).
 - The **MongoDB** and **ES/OpenSearch** rows are **documented engine behaviour, read from the
   vendors' documentation and not measured anywhere**. There is no live engine in this repository.
 

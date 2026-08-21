@@ -11,11 +11,12 @@ namespace Craticula.Core.Ir;
 /// equal lengths are the <em>drill-down leaf</em>, which buckets by nothing and emits raw rows. Both
 /// are restricted by the already-consumed keys, as real IR (GRP-5).</para>
 ///
-/// <para><b>Why it takes IR pieces rather than a request.</b> Three consumers reach this dispatch
-/// today through three unrelated request types — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c> and
-/// <c>SearchQueryRequest</c> — and a fourth is the reason this extraction happened at all: the EF Core
-/// adapter <em>refuses</em> grouping today (<c>EfCoreQueryBuilder</c> throws on a non-null
-/// <c>Group</c>), and #1887 is what makes it a caller. No signature naming any one
+/// <para><b>Why it takes IR pieces rather than a request.</b> Four consumers reach this dispatch
+/// through four unrelated request types — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c>,
+/// <c>SearchQueryRequest</c> and, since #1887, <c>EfCoreQueryRequest</c> (via
+/// <c>Craticula.EntityFrameworkCore.EfCoreGridQuery.FetchPageAsync</c> — the EF Core adapter
+/// <em>refused</em> grouping before that story, which is what made the fourth consumer the reason this
+/// extraction happened at all). No signature naming any one
 /// of them can serve the other three. Each of those types is the shape of a <em>backend's</em> input
 /// (a dialect, a collation sink, an index name); the dispatch reads none of that, only the two IR
 /// members below, both of which are already <c>Craticula.Core.Ir</c> types. Taking them directly is
@@ -90,7 +91,11 @@ public sealed record GroupingPlan(
         // stopped being the thing enforcing it — the same shape #1645's review found when
         // SqlPatternEscaping became reachable from Craticula.Mongo.
         //
-        // Idempotent for every current caller: all four validate before they get here.
+        // Idempotent for every current caller: Sql/Mongo/Search validate before calling Resolve, so
+        // this is their second, harmless pass. EfCoreGridQuery is the opposite order — it calls
+        // Resolve (and so this validation) FIRST, before EfCoreQueryBuilder.ValidateAndBuildRowContext
+        // validates again for the RowContext it builds — but the guarantee is the same either way: no
+        // caller reaches a downstream step with unvalidated aggregations.
         AggregationValidator.Validate(aggregations);
 
         if (group is null)
@@ -100,10 +105,58 @@ public sealed record GroupingPlan(
 
         var drillDown = DrillDownFilter.Synthesize(group);
         var consumed = group.GroupKeys.Count;
+        var groupColumn = consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null;
+        var resolvedAggregations = aggregations ?? [];
 
-        return new GroupingPlan(
-            consumed < group.GroupCols.Count ? group.GroupCols[consumed] : null,
-            drillDown,
-            aggregations ?? []);
+        if (groupColumn is not null)
+        {
+            RejectOutputNameCollisionWithGroupColumn(groupColumn, resolvedAggregations);
+        }
+
+        return new GroupingPlan(groupColumn, drillDown, resolvedAggregations);
+    }
+
+    /// <summary>
+    /// GRP-3: a grouped level's flat projection is <c>[groupColumn, ...aggregates]</c> under GRP-3's
+    /// own naming rule, so an aggregation whose <see cref="Aggregation.OutputName"/> equals
+    /// <paramref name="groupColumn"/> would share one output column with the group key itself — moved
+    /// here from <c>Craticula.Sql.SqlQueryBuilder</c> (#1887's review of #1886's fix), because the row
+    /// every backend ultimately hands a grid is the identical flat, colId-keyed shape regardless of
+    /// which compiler produced it: MongoDB's <c>_id</c> and Elasticsearch's nested <c>aggs</c> keep the
+    /// group key and the aggregates apart only INTERNALLY, until the adapter assembling the outward row
+    /// object puts them back together. So this is a contract-level hazard reachable from every backend,
+    /// not a SQL-rendering quirk — hence one check here rather than a copy per compiler/adapter.
+    ///
+    /// <para><b>Skipped when <paramref name="groupColumn"/> is <see langword="null"/></b> (a drill-down
+    /// leaf) — a leaf has no group column for an aggregate's name to collide with, and its own
+    /// <see cref="Aggregations"/> is ignored entirely (it projects rows, not aggregates).</para>
+    ///
+    /// <para>Collect-all-then-throw, mirroring <see cref="AggregationValidator"/>'s own pattern: every
+    /// colliding aggregation is named in one exception rather than reporting only the first.</para>
+    /// </summary>
+    private static void RejectOutputNameCollisionWithGroupColumn(
+        string groupColumn, IReadOnlyList<Aggregation> aggregations)
+    {
+        var colliding = new List<int>();
+        for (var i = 0; i < aggregations.Count; i++)
+        {
+            if (aggregations[i].OutputName == groupColumn)
+            {
+                colliding.Add(i);
+            }
+        }
+
+        if (colliding.Count == 0)
+        {
+            return;
+        }
+
+        throw new AggregationValidationException([
+            $"aggregations[{string.Join(", ", colliding)}] resolve to the output name '{groupColumn}', which " +
+            "collides with this grouped level's own group column (GRP-3 always projects it under that name). " +
+            "A grid row is flat and keyed by colId regardless of backend, so the group column and a same-named " +
+            "aggregate output cannot coexist. Give the colliding valueCol(s) a distinct `id` (alias) so their " +
+            $"output name is no longer '{groupColumn}'."
+        ]);
     }
 }

@@ -164,4 +164,67 @@ public class GroupingPlanTests
             GroupingPlan.Resolve(group, null)!.DrillDown,
             GroupingPlan.Resolve(group, null)!.DrillDown);
     }
+
+    // ---- GRP-3's output-name/group-column collision guard (#1887) --------------------------------
+
+    /// <summary>
+    /// #1886 found and fixed this shape inside <c>Craticula.Sql.SqlQueryBuilder.RenderProjection</c>
+    /// alone; #1887's review of that fix moved the check itself here, because a flat, colId-keyed grid
+    /// row makes the collision reachable from every backend, not only SQL's <c>SELECT</c> list — an
+    /// aggregation aliased back onto its own level's group column is rejected before any compiler or
+    /// adapter ever sees it. This is the shape SQL's own now-unreachable local guard used to catch:
+    /// <c>SELECT "region" AS "region", COALESCE(SUM("amount"), 0) AS "region"</c>.
+    /// </summary>
+    [Fact]
+    public void An_Aggregation_Output_Name_Colliding_With_The_Group_Column_Is_Rejected()
+    {
+        var ex = Assert.Throws<AggregationValidationException>(() => GroupingPlan.Resolve(
+            Spec(["region"]),
+            [Agg("amount", AggregationFunc.Sum, "region")]));
+
+        Assert.Single(ex.Errors);
+        Assert.Contains("'region'", ex.Errors[0]);
+        Assert.Contains("group column", ex.Errors[0]);
+    }
+
+    /// <summary>Collect-all-then-throw applied to this guard too, mirroring
+    /// <see cref="AggregationValidator"/>'s own pattern: two aggregations colliding with the same
+    /// group column are named together in ONE error, not the first one found.</summary>
+    [Fact]
+    public void Every_Colliding_Aggregation_Is_Named_In_One_Error()
+    {
+        var ex = Assert.Throws<AggregationValidationException>(() => GroupingPlan.Resolve(
+            Spec(["region"]),
+            [Agg("amount", AggregationFunc.Sum, "region"), Agg("quantity", AggregationFunc.Count, "region")]));
+
+        Assert.Single(ex.Errors);
+        Assert.Contains("aggregations[0, 1]", ex.Errors[0]);
+    }
+
+    /// <summary>
+    /// A leaf has no group column for an aggregate's output name to collide with — its
+    /// <see cref="GroupingPlan.Aggregations"/> is ignored entirely (a leaf projects rows, not
+    /// aggregates) — so the SAME alias that would be rejected one level up must NOT be rejected here.
+    /// </summary>
+    [Fact]
+    public void A_Drill_Down_Leaf_Has_No_Group_Column_To_Collide_With()
+    {
+        var plan = GroupingPlan.Resolve(
+            Spec(["region"], "EMEA"),
+            [Agg("amount", AggregationFunc.Sum, "region")]);
+
+        Assert.NotNull(plan);
+        Assert.Null(plan.GroupColumn);
+    }
+
+    /// <summary>The ordinary, non-colliding shape must keep working: an aggregation over a DIFFERENT
+    /// field from the group column, unaliased, is exactly every other test in this file's shape.</summary>
+    [Fact]
+    public void A_Non_Colliding_Aggregation_Does_Not_Throw()
+    {
+        var plan = GroupingPlan.Resolve(Spec(["region"]), [Agg("amount", AggregationFunc.Sum)]);
+
+        Assert.NotNull(plan);
+        Assert.Equal("region", plan.GroupColumn);
+    }
 }

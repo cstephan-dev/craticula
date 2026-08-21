@@ -366,18 +366,25 @@ public class SqlQueryBuilderGroupingTests
 
     /// <summary>
     /// The #1886 review's second finding: an aggregation's OutputName can collide with its own
-    /// grouped level's group column, since <c>RenderProjection</c> had no check against it — SQL is
-    /// the only backend where the two ever share one flat namespace (Mongo's group key stays under
-    /// its reserved <c>_id</c>; Search's aggregates live nested inside the composite's own <c>aggs</c>
-    /// container, never as siblings of the level's own name). An explicit alias set to the group
-    /// column's own name is the simplest repro. Before this fix it compiled to
-    /// <c>SELECT "region" AS "region", COALESCE(SUM("amount"), 0) AS "region"</c> — two columns
-    /// sharing one name, which every SQL engine accepts.
+    /// grouped level's group column, since <c>RenderProjection</c> had no check against it when this
+    /// test was first written — SQL is the one backend where the two shared one flat namespace at the
+    /// time (Mongo's group key stays under its reserved <c>_id</c>; Search's aggregates live nested
+    /// inside the composite's own <c>aggs</c> container, never as siblings of the level's own name).
+    /// An explicit alias set to the group column's own name is the simplest repro. Before the #1886 fix
+    /// it compiled to <c>SELECT "region" AS "region", COALESCE(SUM("amount"), 0) AS "region"</c> — two
+    /// columns sharing one name, which every SQL engine accepts.
+    ///
+    /// <para><b>#1887 moved the check itself into <c>Craticula.Core.Ir.GroupingPlan.Resolve</c></b> —
+    /// once EF Core became a fourth backend the collision is reachable from (every backend's grid row
+    /// is the identical flat, colId-keyed shape), it stopped being a SQL-only hazard. This test now
+    /// asserts the THIN confirmation that <see cref="SqlQueryBuilder.Build"/> still refuses the shape
+    /// (it runs <c>GroupingPlan.Resolve</c> on entry, like every other compiler/adapter) rather than
+    /// the rule itself, which <c>Craticula.Core.Tests.Ir.GroupingPlanTests</c> now pins directly.</para>
     /// </summary>
     [Fact]
     public void An_Aggregation_Aliased_To_Its_Own_Group_Columns_Name_Is_Rejected_Not_Rendered()
     {
-        var exception = Assert.Throws<SqlCompilationException>(() => Compile(
+        var exception = Assert.Throws<AggregationValidationException>(() => Compile(
             Group(["region"]),
             [new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "region" }]));
 

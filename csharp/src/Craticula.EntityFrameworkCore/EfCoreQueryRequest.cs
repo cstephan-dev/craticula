@@ -52,23 +52,25 @@ public sealed record EfCoreQueryRequest
     public required PageSpec Page { get; init; }
 
     /// <summary>
-    /// <b>Refused</b> by every entry point in this package, with a message naming #1622 — not
-    /// ignored, and present for exactly that reason.
-    ///
-    /// <para>#1645 scoped grouping out (GRP-1..GRP-6, AG-6's auto-column colId, ordering a level by an
-    /// aggregate: the SQL compiler's hardest semantics, and a story of its own). The dangerous shape is
-    /// not a host that sets this and gets an error; it is a host that <em>has</em> group state — every
-    /// <c>AgGridParsedRequest</c> off a grouped grid does — and copies the rest of the IR across. Were
-    /// this property absent, that transcription would compile, run, and return the ungrouped leaf rows:
-    /// a wrong answer that looks entirely healthy. So the member exists in order to fail.</para>
-    /// </summary>
+    /// AR-8: AG Grid SSRM's row-group drill-down protocol. Compiled by
+    /// <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/> since #1887 (GRP-1..GRP-6: the grouped
+    /// level's projection and aggregates, GRP-2's exact bucket keys, GRP-4's tiebreaker substitution).
+    /// <see cref="EfCoreQueryBuilder.ApplyFilter{TRow}"/>/<see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}"/>
+    /// — the per-clause entry points, reached directly rather than through the grid orchestration —
+    /// still <b>refuse</b> a non-<see langword="null"/> value, naming why: those two apply a single
+    /// clause each, and neither has a defined meaning for "restrict/order by group state" on its own.
+    /// The member's own existence, independent of which entry point a caller reaches, is still worth
+    /// stating: a host that <em>has</em> group state (every <c>AgGridParsedRequest</c> off a grouped
+    /// grid does) and copies the rest of the IR across must not silently get the ungrouped leaf rows
+    /// back, which is what an ABSENT member would risk.</summary>
     public GroupSpec? Group { get; init; }
 
-    /// <summary>AR-8's <c>valueCols</c>. <b>Refused</b> when non-empty, for
-    /// <see cref="Group"/>'s reason — and refused independently of it, because AG Grid can send
-    /// <c>valueCols</c> with no <c>rowGroupCols</c> at all (pivot mode, or a grid whose user added an
-    /// aggregation before grouping), and silently dropping the aggregates would return leaf rows where
-    /// the caller asked for totals.</summary>
+    /// <summary>AR-8's <c>valueCols</c>, compiled alongside <see cref="Group"/> since #1887. Checked
+    /// independently of it at the per-clause entry points (<see cref="EfCoreQueryBuilder.ApplyFilter{TRow}"/>/
+    /// <see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}"/> refuse a non-empty value even with no
+    /// <see cref="Group"/> set), because AG Grid can send <c>valueCols</c> with no <c>rowGroupCols</c>
+    /// at all (pivot mode, or a grid whose user added an aggregation before grouping), and silently
+    /// dropping the aggregates there would return leaf rows where the caller asked for totals.</summary>
     public IReadOnlyList<Aggregation>? Aggregations { get; init; }
 
     /// <summary>

@@ -42,10 +42,18 @@ namespace Craticula.EntityFrameworkCore;
 /// parameterizes them instead of inlining literals — see <see cref="Bind"/>. Everything else that
 /// varies by engine arrives as data, in <see cref="EfCoreProviderSemantics"/>' five facts.</para>
 ///
-/// <para><b>Scope (#1645): filters, sort, paging. NOT grouping.</b> A request carrying a
-/// <see cref="GroupSpec"/> or an <see cref="Aggregation"/> is refused by every entry point — see
-/// <see cref="EfCoreQueryRequest.Group"/> for why the members exist in order to fail rather than being
-/// absent.</para>
+/// <para><b>Scope (#1645): filters, sort, paging.</b> A request carrying a <see cref="GroupSpec"/> or
+/// an <see cref="Aggregation"/> is refused by <see cref="ApplyFilter{TRow}"/>/
+/// <see cref="ApplyOrdering{TRow}"/> — the per-clause entry points, which still have no defined
+/// meaning for group state on their own.</para>
+///
+/// <para><b>Grouping (#1887, BM-2's EF counterpart).</b> <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/>
+/// dispatches on <see cref="GroupingPlan.Resolve"/> to a separate composition — see the "grouping"
+/// region below — that builds a <c>GroupBy</c>/aggregate-selector expression tree via
+/// <see cref="System.Linq.Expressions"/> and reflection, mirroring
+/// <c>Craticula.Sql.SqlQueryBuilder</c>'s own BM-2 composition. No grouping RULE is re-derived here
+/// either: GRP-1's dispatch, GRP-5's drill-down synthesis and the GRP-3/GRP-4 output-name guard all
+/// come from <c>Craticula.Core</c>, exactly as they do for the SQL, Mongo and Search compilers.</para>
 /// </summary>
 public static class EfCoreQueryBuilder
 {
@@ -295,8 +303,60 @@ public static class EfCoreQueryBuilder
     /// reached through a method that forgot one — and the <see cref="RowContext"/> the walk needs, built
     /// only after they hold. <see cref="EfCoreGridQuery"/> and <see cref="EfCoreExportStream"/> both go
     /// through it too, so a refusal below is reported once per request rather than once per clause.
+    ///
+    /// <para><b>Split in two since #1887</b> (<see cref="ValidateAndBuildRowContext"/> plus this
+    /// method's own two refusals): the new grouped orchestration in <see cref="EfCoreGridQuery"/> is a
+    /// LEGITIMATE caller with group state on the request, so it calls the validating half directly and
+    /// skips these two throws. <see cref="ApplyFilter{TRow}"/>/<see cref="ApplyOrdering{TRow}"/> keep
+    /// calling this method unchanged — a caller that reaches the per-clause entry points with group
+    /// state still gets the same refusal it always did, since nothing about those methods' own contract
+    /// changed.</para>
     /// </summary>
     internal static RowContext CreateValidatedContext(
+        EfCoreQueryRequest request, EfCoreProviderSemantics semantics, Type rowType)
+    {
+        var context = ValidateAndBuildRowContext(request, semantics, rowType);
+
+        // Refused, never ignored — and refused HERE, before anything is composed, so a grouped request
+        // cannot get half a query built for it. Silently dropping the group state would return the
+        // ungrouped leaf rows: the right shape, the wrong answer, and nothing to notice.
+        if (request.Group is not null)
+        {
+            throw new EfCoreCompilationException(
+                "This request carries a GroupSpec (rowGroupCols/groupKeys), which this entry point does not " +
+                "support — see #1622: it applies a single clause (filter/order/projection) and has no defined " +
+                "meaning for 'restrict/order by group state' on its own. Since #1887, compile a grouped request " +
+                "through EfCoreGridQuery.FetchPageAsync instead, which dispatches it to the grouped orchestration " +
+                "(spec/semantics.md GRP-1..GRP-6: the grouped level's projection and aggregates, GRP-2's exact " +
+                "bucket keys, GRP-4's tiebreaker substitution, AG-6's auto-column colId). Craticula.Sql compiles " +
+                "the same request too; dropping the group state deliberately, as EXP-1's export carve-out does, " +
+                "is the third option.");
+        }
+
+        if (request.Aggregations is { Count: > 0 })
+        {
+            throw new EfCoreCompilationException(
+                "This request carries AR-8 aggregations (valueCols), which this entry point does not support — " +
+                "it applies a single clause and has no defined meaning for an aggregate on its own. If the " +
+                "request also carries a GroupSpec, compile it through EfCoreGridQuery.FetchPageAsync instead " +
+                "(#1887's grouped orchestration). Checked independently of GroupSpec because AG Grid sends " +
+                "valueCols without rowGroupCols too (pivot mode, or a user who added an aggregation before " +
+                "grouping) — that shape has NO translation anywhere in this adapter yet (#1622: aggregating " +
+                "without a group column), and returning leaf rows where the caller asked for totals would be a " +
+                "wrong answer that looks healthy.");
+        }
+
+        return context;
+    }
+
+    /// <summary>
+    /// The structural-validator half of <see cref="CreateValidatedContext"/>, split out for #1887's
+    /// grouped orchestration: it needs the SAME defense-in-depth validation (a caller can reach it with
+    /// a hand-built <see cref="EfCoreQueryRequest"/> that never went through a pipeline) and the SAME
+    /// <see cref="RowContext"/>, but must NOT inherit the two refusals below — a grouped request is
+    /// exactly what it is built to compile.
+    /// </summary>
+    internal static RowContext ValidateAndBuildRowContext(
         EfCoreQueryRequest request, EfCoreProviderSemantics semantics, Type rowType)
     {
         var row = Expression.Parameter(rowType, "row");
@@ -308,29 +368,6 @@ public static class EfCoreQueryBuilder
         GroupSpecValidator.Validate(request.Group);
         AggregationValidator.Validate(request.Aggregations);
 
-        // Refused, never ignored — and refused HERE, before anything is composed, so a grouped request
-        // cannot get half a query built for it. Silently dropping the group state would return the
-        // ungrouped leaf rows: the right shape, the wrong answer, and nothing to notice.
-        if (request.Group is not null)
-        {
-            throw new EfCoreCompilationException(
-                "This request carries a GroupSpec (rowGroupCols/groupKeys), which the EF Core execution path does " +
-                "not yet support — see #1622. Grouping is where the row-group protocol's semantics live " +
-                "(spec/semantics.md GRP-1..GRP-6: the grouped level's projection and aggregates, GRP-2's exact " +
-                "bucket keys, GRP-4's tiebreaker substitution, AG-6's auto-column colId), and none of it is " +
-                "implemented here. Compile a grouped request with Craticula.Sql, or drop the group state " +
-                "deliberately as EXP-1's export carve-out does.");
-        }
-
-        if (request.Aggregations is { Count: > 0 })
-        {
-            throw new EfCoreCompilationException(
-                "This request carries AR-8 aggregations (valueCols), which the EF Core execution path does not yet " +
-                "support — see #1622. Checked independently of GroupSpec because AG Grid sends valueCols without " +
-                "rowGroupCols (pivot mode, or a user who added an aggregation before grouping), and returning leaf " +
-                "rows where the caller asked for totals is a wrong answer that looks healthy.");
-        }
-
         return new RowContext(row, request.Schema, semantics);
     }
 
@@ -341,16 +378,21 @@ public static class EfCoreQueryBuilder
     /// <see cref="ParameterExpression"/> every property access must be rooted in — two parameters for
     /// the same row would build a tree EF cannot translate — plus the schema and the provider facts.
     ///
-    /// <para>Deliberately WITHOUT <c>SqlQueryBuilder.Context</c>'s <c>IsGroupKeyMatch</c>: that flag
-    /// exists to give GRP-2's drill-down predicates a different case-sensitivity rule from a user's
-    /// own, and this adapter refuses row-group state outright, so there is no second provenance to
-    /// carry. When #1622 adds grouping here, that flag is the shape to copy — including its reason for
-    /// being set by the caller of the walk rather than inferred from a node.</para>
+    /// <para><paramref name="IsGroupKeyMatch"/> mirrors <c>Craticula.Sql.SqlQueryBuilder.Context</c>'s
+    /// field of the same name and purpose exactly (#1887): it carries GRP-2's PROVENANCE, not shape —
+    /// a drill-down predicate and the user's own filter are both ordinary IR, and yet the two resolve
+    /// case sensitivity by different rules (GRP-2's exact match for the former, SEM-1 for the latter).
+    /// It is set once, by the caller composing the two halves (see
+    /// <see cref="ApplyGroupedFilter{TRow}"/>), on the context the drill-down subtree is built under —
+    /// never inferred from a node, for the identical reason <c>SqlQueryBuilder.RenderWhere</c> gives:
+    /// the two are built as two separate walks precisely so nothing downstream has to tell them apart
+    /// by inspecting a tree they have both been merged into.</para>
     /// </summary>
     internal readonly record struct RowContext(
         ParameterExpression Row,
         GridSchema Schema,
-        EfCoreProviderSemantics Semantics);
+        EfCoreProviderSemantics Semantics,
+        bool IsGroupKeyMatch = false);
 
     private static Expression BuildNode(FilterNode node, RowContext context) => node switch
     {
@@ -509,7 +551,7 @@ public static class EfCoreQueryBuilder
     private static Expression Scalar(
         Expression property, FieldConfig field, ComparisonOperator op, TypedValue value, RowContext context)
     {
-        var mode = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation);
+        var mode = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation, context);
         var left = Collated(property, mode, context.Semantics);
         var right = Bind(EncodeValue(value, field, property.Type), left.Type);
 
@@ -586,7 +628,7 @@ public static class EfCoreQueryBuilder
                 "stringValue — run TypeCoercionValidator (SEM-5) before compiling.");
         }
 
-        var mode = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.PatternMatch);
+        var mode = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.PatternMatch, context);
 
         if (mode == SemanticsResolver.CaseSensitivityMode.Sensitive && context.Semantics.PatternMatchFoldsCase)
         {
@@ -667,7 +709,7 @@ public static class EfCoreQueryBuilder
         var values = node.Values
             ?? throw new EfCoreCompilationException($"Operator '{node.Op}' on field '{node.Field}' requires 'values'.");
 
-        var mode = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.Collation);
+        var mode = ResolveCaseSensitivity(field, node.Op, SemanticsResolver.CaseSensitivityMechanism.Collation, context);
         var left = Collated(property, mode, context.Semantics);
 
         var listType = typeof(List<>).MakeGenericType(left.Type);
@@ -718,10 +760,26 @@ public static class EfCoreQueryBuilder
     /// the scalar/set call sites only pass collation-family operators and the substring one only
     /// pattern-family operators. It fails loudly instead of degrading to "no mechanism", which would be
     /// a query that folds case in the wrong place.</para>
+    ///
+    /// <para><b>#1887: a predicate inside the synthesised drill-down is not a filter at all</b> — it is
+    /// a group-key MATCH, and GRP-2 requires it to agree with the <c>GROUP BY</c> that produced the
+    /// bucket label being expanded, exactly the reasoning
+    /// <c>Craticula.Sql.SqlQueryBuilder.ResolveCaseSensitivity</c> gives for the identical branch. It
+    /// therefore resolves through <see cref="SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity"/>
+    /// instead, and the provenance comes from <see cref="RowContext.IsGroupKeyMatch"/>, which
+    /// <see cref="ApplyGroupedFilter{TRow}"/> sets on the walk it starts over the drill-down — never
+    /// inferred from the node itself.</para>
     /// </summary>
     private static SemanticsResolver.CaseSensitivityMode ResolveCaseSensitivity(
-        FieldConfig field, ComparisonOperator op, SemanticsResolver.CaseSensitivityMechanism family)
+        FieldConfig field, ComparisonOperator op, SemanticsResolver.CaseSensitivityMechanism family, RowContext context)
     {
+        if (context.IsGroupKeyMatch)
+        {
+            return SemanticsResolver
+                .ResolveOrderingAndGroupKeyCaseSensitivity(field, SemanticsResolver.GroupingMode.Grouped)
+                .Mode;
+        }
+
         var decision = SemanticsResolver.ResolveCaseSensitivity(field, op);
 
         if (decision.Mode == SemanticsResolver.CaseSensitivityMode.Insensitive && decision.Mechanism != family)
@@ -799,9 +857,10 @@ public static class EfCoreQueryBuilder
                 ? SemanticsResolver.SortKeyProvenance.AppendedTiebreaker
                 : SemanticsResolver.SortKeyProvenance.Request;
 
-            // GroupingMode.Ungrouped always: this adapter refuses row-group state, so every key here is
-            // an ordinary one. #1622 will need the grouped mode for a grouped level's ORDER BY, and
-            // GRP-4's substitution of the group column for the stable key with it.
+            // GroupingMode.Ungrouped always: this method is reused unchanged for the drill-down leaf
+            // (#1887), which has no GROUP BY and so keeps SEM-6's stable-key tiebreaker — GRP-4's
+            // substitution of the group column for it is the GROUPED LEVEL's own rule, resolved by
+            // ApplyGroupedOrdering instead (GroupingMode.Grouped), never by this method.
             var mode = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
                 ResolveFieldConfig(key.Field, request.Schema),
                 SemanticsResolver.GroupingMode.Ungrouped,
@@ -814,7 +873,19 @@ public static class EfCoreQueryBuilder
     }
 
     private static IQueryable<TRow> Order<TRow>(
-        IQueryable<TRow> source, LambdaExpression key, bool descending, bool first)
+        IQueryable<TRow> source, LambdaExpression key, bool descending, bool first) =>
+        (IQueryable<TRow>)ApplyOrderingStep(source, typeof(TRow), key, descending, first);
+
+    /// <summary>
+    /// The reflection dispatch <see cref="Order{TRow}"/> performs, generalised over an untyped
+    /// <paramref name="source"/> and its own <paramref name="sourceType"/> — #1887's grouped-level
+    /// ordering (<see cref="ApplyGroupedOrdering{TRow}"/>) needs the SAME four
+    /// <see cref="Queryable"/> methods over <c>IGrouping&lt;TKey,TRow&gt;</c>, a type resolved at
+    /// runtime from the group column's declared <see cref="FieldType"/> rather than known at compile
+    /// time, so it cannot go through the generic <typeparamref name="TRow"/> parameter
+    /// <see cref="Order{TRow}"/> itself is typed on.
+    /// </summary>
+    private static object ApplyOrderingStep(object source, Type sourceType, LambdaExpression key, bool descending, bool first)
     {
         var name = (descending, first) switch
         {
@@ -825,10 +896,10 @@ public static class EfCoreQueryBuilder
         };
 
         // Reflection because the key's type varies per field and the Queryable methods are generic in
-        // it; there is no non-generic overload to call. `source` is an IOrderedQueryable<TRow> at
+        // it; there is no non-generic overload to call. `source` is an IOrderedQueryable<sourceType> at
         // runtime whenever `first` is false, which is what makes the ThenBy arms legal.
-        var method = OrderingMethods[name].MakeGenericMethod(typeof(TRow), key.ReturnType);
-        return (IQueryable<TRow>)method.Invoke(null, [source, key])!;
+        var method = OrderingMethods[name].MakeGenericMethod(sourceType, key.ReturnType);
+        return method.Invoke(null, [source, key])!;
     }
 
     private static readonly Dictionary<string, MethodInfo> OrderingMethods =
@@ -838,6 +909,367 @@ public static class EfCoreQueryBuilder
                 name => typeof(Queryable).GetMethods(BindingFlags.Public | BindingFlags.Static)
                     .Single(method => method.Name == name && method.GetParameters().Length == 2),
                 StringComparer.Ordinal);
+
+    // ---- grouping (#1887) -------------------------------------------------------------------------
+
+    /// <summary>
+    /// GRP-5: composes the drill-down predicate (already-consumed <c>groupKeys</c>, GRP-5's own IR)
+    /// with the request's own filter — the identical composition
+    /// <c>Craticula.Sql.SqlQueryBuilder.RenderWhere</c> performs, ported to expression trees. Used by
+    /// both the drill-down leaf and the grouped level (GRP-5's "the grouped level's own DrillDown is
+    /// the ALREADY-consumed keys").
+    ///
+    /// <para><b>The two halves are built as two SEPARATE walks, each under its own
+    /// <see cref="RowContext"/>, and joined with <see cref="Expression.AndAlso(Expression, Expression)"/>
+    /// — never merged into one <see cref="FilterNode"/> via <see cref="FilterTreeMerge.And"/> first.</b>
+    /// <c>Craticula.Sql</c> does not do that either, and for the reason recorded there: the two halves
+    /// resolve case sensitivity by different rules (GRP-2 for the drill-down, SEM-1 for the user's own
+    /// predicate), and the only thing that could tell a group-key match from a user predicate once both
+    /// are ordinary IR walked uniformly is the node's reference identity — a non-local invariant with no
+    /// guard. Rendering each half under its own <see cref="RowContext.IsGroupKeyMatch"/> removes the
+    /// invariant instead of documenting it.</para>
+    ///
+    /// <para>Built in this order — drill-down first — not merely joined in it, mirroring
+    /// <c>RenderWhere</c>'s own comment: there is no parameter bag here for the order to matter to, but
+    /// the order is kept anyway for consistency with the other three compilers' emitted text/pipeline.</para>
+    /// </summary>
+    internal static IQueryable<TRow> ApplyGroupedFilter<TRow>(
+        IQueryable<TRow> source, FilterNode? drillDown, FilterNode? filter, RowContext context)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        Expression? groupPath = drillDown is null ? null : BuildNode(drillDown, context with { IsGroupKeyMatch = true });
+
+        Expression? userFilter = null;
+        if (filter is { } userFilterNode)
+        {
+            FilterNodeValidator.Validate(userFilterNode);
+            userFilter = BuildNode(userFilterNode, context);
+        }
+
+        var predicate = (groupPath, userFilter) switch
+        {
+            (null, null) => (Expression?)null,
+            ({ } path, null) => path,
+            (null, { } user) => user,
+            ({ } path, { } user) => Expression.AndAlso(path, user)
+        };
+
+        return predicate is null ? source : source.Where(Expression.Lambda<Func<TRow, bool>>(predicate, context.Row));
+    }
+
+    /// <summary>
+    /// GRP-1's grouped level: <c>GroupBy</c> on <paramref name="groupColumn"/>, one aggregate selector
+    /// per <paramref name="aggregations"/> (AGG-1's non-null-count spelling for <c>count</c>), the
+    /// level's own <c>ORDER BY</c> (GRP-4) resolved and applied over the grouped sequence BEFORE the
+    /// final projection, and the flat <c>object?[]</c> shape every other projection in this file
+    /// produces — <c>[groupColumn, ...aggregates]</c>, so <see cref="ApplyRowWindow{TRow}"/> (with
+    /// <c>TRow = object?[]</c>) serves this level unchanged.
+    ///
+    /// <para><b>Why every step below is built via <see cref="System.Linq.Expressions"/> and reflection,
+    /// mirroring <see cref="Order{TRow}"/>/<see cref="OrderingMethods"/>.</b> The group key's CLR type —
+    /// and therefore the concrete <c>IGrouping&lt;TKey,TRow&gt;</c> this level's rows become — is only
+    /// known once <paramref name="groupColumn"/>'s declared <see cref="FieldType"/> is resolved, at
+    /// runtime; there is no <typeparamref name="TRow"/>-only generic signature that could express it.
+    /// So the <c>GroupBy</c>/<c>OrderBy</c>/<c>Select</c> composition below carries the intermediate
+    /// grouped query as <see cref="object"/> and dispatches each step through
+    /// <see cref="MethodInfo.MakeGenericMethod(Type[])"/> + <see cref="MethodInfo.Invoke"/> — the same
+    /// pattern <see cref="Order{TRow}"/> already uses for a per-field key type, one level up.</para>
+    /// </summary>
+    internal static IQueryable<object?[]> ApplyGroupedLevel<TRow>(
+        IQueryable<TRow> source, string groupColumn, IReadOnlyList<Aggregation> aggregations,
+        IReadOnlyList<SortItem>? sort, RowContext context)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var grouped = BuildGroupedQuery<TRow>(
+            source, groupColumn, context, out var groupingType, out var groupParam, out var keyExpression);
+
+        var sortKeys = SemanticsResolver.AppendStableKeyTiebreaker(sort, groupColumn, out var tiebreakerAppended);
+        grouped = ApplyGroupedOrdering<TRow>(
+            grouped, groupingType, groupParam, keyExpression, groupColumn, aggregations, sortKeys, tiebreakerAppended, context);
+
+        var cells = new Expression[1 + aggregations.Count];
+        cells[0] = Expression.Convert(keyExpression, typeof(object));
+        for (var i = 0; i < aggregations.Count; i++)
+        {
+            cells[i + 1] = Expression.Convert(BuildAggregateExpression<TRow>(groupParam, aggregations[i], context), typeof(object));
+        }
+
+        var projectionSelector = Expression.Lambda(Expression.NewArrayInit(typeof(object), cells), groupParam);
+        var projected = QueryableSelectMethod.MakeGenericMethod(groupingType, typeof(object[]))
+            .Invoke(null, [grouped, projectionSelector])!;
+
+        return (IQueryable<object?[]>)projected;
+    }
+
+    /// <summary>
+    /// The grouped level's row count — the bucket count, not a row count, mirroring
+    /// <c>Craticula.Sql.SqlQueryBuilder</c>'s "GRP-6(e)-style" reading of "how many rows this query
+    /// answers" one level up: for a grouped level that is "how many buckets", so this counts the
+    /// SAME <c>GroupBy</c> query <see cref="ApplyGroupedLevel{TRow}"/> builds, with no aggregate
+    /// selectors needed to answer it.
+    /// </summary>
+    internal static Task<long> CountGroupsAsync<TRow>(
+        IQueryable<TRow> source, string groupColumn, RowContext context, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var grouped = BuildGroupedQuery<TRow>(source, groupColumn, context, out var groupingType, out _, out _);
+        return (Task<long>)LongCountAsyncMethod.MakeGenericMethod(groupingType).Invoke(null, [grouped, cancellationToken])!;
+    }
+
+    /// <summary>
+    /// Builds <c>source.GroupBy(row =&gt; EF.Property&lt;TKey&gt;(row, physicalColumn))</c> — GRP-2's
+    /// key, which never folds case (no <see cref="Collated"/> call here, deliberately: a <c>GROUP BY</c>
+    /// key is one of the protocol's own bucket-identity keys). Returns the grouped query as
+    /// <see cref="object"/> (its true runtime shape is <c>IQueryable&lt;IGrouping&lt;TKey,TRow&gt;&gt;</c>
+    /// for a <paramref name="groupingType"/> resolved here), plus the pieces every caller needs to keep
+    /// building on top of it without re-deriving them: the grouping's own element type, the
+    /// <see cref="ParameterExpression"/> a later lambda over one group binds to, and that parameter's
+    /// <c>.Key</c> access already built once.
+    /// </summary>
+    private static object BuildGroupedQuery<TRow>(
+        IQueryable<TRow> source, string groupColumn, RowContext context,
+        out Type groupingType, out ParameterExpression groupParam, out Expression keyExpression)
+    {
+        var keyType = ClrTypeFor(ResolveFieldConfig(groupColumn, context.Schema).Type);
+        var keySelector = Expression.Lambda(Property(context, groupColumn), context.Row);
+
+        var grouped = QueryableGroupByMethod.MakeGenericMethod(typeof(TRow), keyType).Invoke(null, [source, keySelector])!;
+
+        groupingType = typeof(IGrouping<,>).MakeGenericType(keyType, typeof(TRow));
+        groupParam = Expression.Parameter(groupingType, "g");
+        keyExpression = Expression.Property(groupParam, groupingType.GetProperty(nameof(IGrouping<object, object>.Key))!);
+
+        return grouped;
+    }
+
+    /// <summary>
+    /// GRP-4: the grouped level's own <c>ORDER BY</c>, built over the grouped sequence
+    /// (<c>IGrouping&lt;TKey,TRow&gt;</c>) — BEFORE the final <c>Select</c> to <c>object?[]</c> —
+    /// exactly mirroring <c>Craticula.Sql.SqlQueryBuilder.RenderOrderBy</c>'s grouped branch: each key
+    /// resolves to either the group column itself or one of <paramref name="aggregations"/>'s own
+    /// expressions (never a raw aggregated column, and never a reference back to an output alias — see
+    /// <see cref="BuildAggregateExpression{TRow}"/>, built fresh here rather than referred to by name,
+    /// which is one code path instead of two that could drift), through the SAME
+    /// <see cref="GroupedSortTarget"/> shared by the SQL and Mongo compilers. SEM-6's appended
+    /// tiebreaker is minted from the GROUP COLUMN, not the schema's <see cref="GridSchema.StableKey"/>
+    /// (GRP-4) — the caller (<see cref="ApplyGroupedLevel{TRow}"/>) mints it that way BEFORE calling
+    /// here, so <paramref name="sort"/> already carries it and <paramref name="tiebreakerAppended"/>
+    /// only reports whether the trailing key is that minted one.
+    /// </summary>
+    private static object ApplyGroupedOrdering<TRow>(
+        object grouped, Type groupingType, ParameterExpression groupParam, Expression keyExpression,
+        string groupColumn, IReadOnlyList<Aggregation> aggregations,
+        IReadOnlyList<SortItem> sort, bool tiebreakerAppended, RowContext context)
+    {
+        var ordered = grouped;
+        var first = true;
+
+        for (var i = 0; i < sort.Count; i++)
+        {
+            var item = sort[i];
+            var (target, field) = ResolveGroupedSortTarget<TRow>(item.Field, groupColumn, aggregations, keyExpression, groupParam, context);
+
+            var provenance = tiebreakerAppended && i == sort.Count - 1
+                ? SemanticsResolver.SortKeyProvenance.AppendedTiebreaker
+                : SemanticsResolver.SortKeyProvenance.Request;
+
+            var caseSensitivity = SemanticsResolver
+                .ResolveOrderingAndGroupKeyCaseSensitivity(field, SemanticsResolver.GroupingMode.Grouped, provenance)
+                .Mode;
+
+            // SEM-3's null bucket, ahead of the value key itself — unconditional, exactly as
+            // ApplyOrdering<TRow> emits it for the ungrouped/leaf path, even on an aggregate (like
+            // `count`, wrapped nullable below) that can in practice never BE null.
+            ordered = ApplyOrderingStep(
+                ordered, groupingType,
+                Expression.Lambda(Expression.Equal(target, Expression.Constant(null, target.Type)), groupParam),
+                descending: item.NullsPosition == NullsPosition.First,
+                first: first);
+
+            ordered = ApplyOrderingStep(
+                ordered, groupingType,
+                Expression.Lambda(Collated(target, caseSensitivity, context.Semantics), groupParam),
+                descending: item.Direction == SortDirection.Desc,
+                first: false);
+
+            first = false;
+        }
+
+        return ordered;
+    }
+
+    /// <summary>
+    /// AR-9/GRP-4: what a grouped level's sort key actually orders by — the group column or one of
+    /// <paramref name="aggregations"/>, matched by <see cref="Aggregation.ColumnId"/> through the
+    /// shared <see cref="GroupedSortTarget"/> (never <see cref="Aggregation.OutputName"/> — see that
+    /// type's own remarks for why the two diverge and why a first-match pick is #1886's bug, not a
+    /// simplification). Mirrors <c>Craticula.Sql.SqlQueryBuilder.ResolveGroupedSortTarget</c> exactly,
+    /// including its two rejections (an ambiguous column id, and a column id that is ALSO the group
+    /// column's own name) — this adapter inherits both from the identical shared helper rather than
+    /// re-deriving either.
+    /// </summary>
+    private static (Expression Target, FieldConfig Field) ResolveGroupedSortTarget<TRow>(
+        string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations,
+        Expression keyExpression, ParameterExpression groupParam, RowContext context)
+    {
+        var matches = GroupedSortTarget.MatchingByColumnId(sortField, aggregations);
+
+        if (matches.Count > 1)
+        {
+            throw new EfCoreCompilationException(
+                $"Ambiguous ORDER BY target for a grouped level. {GroupedSortTarget.DescribeAmbiguity(sortField, matches)}");
+        }
+
+        if (GroupedSortTarget.MatchesGroupColumnToo(sortField, groupColumn, matches))
+        {
+            throw new EfCoreCompilationException(
+                $"Ambiguous ORDER BY target for a grouped level. {GroupedSortTarget.DescribeGroupColumnAmbiguity(sortField, matches)}");
+        }
+
+        if (matches.Count == 1)
+        {
+            return (BuildAggregateExpression<TRow>(groupParam, matches[0], context), ResolveFieldConfig(matches[0].Field, context.Schema));
+        }
+
+        if (sortField == groupColumn)
+        {
+            return (keyExpression, ResolveFieldConfig(sortField, context.Schema));
+        }
+
+        throw new EfCoreCompilationException(
+            $"A grouped query can be ordered only by its group column ('{groupColumn}') or by one of its " +
+            $"aggregations, but the request sorts on '{sortField}', which the grouped projection does not contain.");
+    }
+
+    /// <summary>
+    /// One aggregate selector, e.g. <c>g.Sum(row =&gt; EF.Property&lt;decimal?&gt;(row, "amount"))</c> —
+    /// built as an <see cref="Expression.Call(MethodInfo, Expression[])"/> NODE (never
+    /// <see cref="MethodInfo.Invoke"/>: unlike <see cref="BuildGroupedQuery{TRow}"/>'s <c>GroupBy</c> or
+    /// <see cref="ApplyGroupedOrdering{TRow}"/>'s <c>OrderBy</c>, this call is not a top-level query
+    /// composition step against a real <see cref="IQueryable{T}"/> — it is a SUB-expression inside the
+    /// body of a larger lambda (the level's projection, or one of its sort keys) that EF's own query
+    /// translator evaluates once that outer lambda is materialised).
+    ///
+    /// <para><b>AGG-1's trap, and why it is spelled rather than <c>g.Count()</c>.</b> A bare row count
+    /// answers a different question the moment the counted field can be <see langword="null"/> — it
+    /// counts every row in the bucket regardless of the field. The non-null-count form
+    /// (<c>g.Count(row =&gt; EF.Property&lt;T&gt;(row, field) != null)</c>) is <see cref="Enumerable.Count"/>'s
+    /// PREDICATE overload, matching <c>Craticula.Sql</c>'s <c>COUNT(&lt;field&gt;)</c> and
+    /// <c>Craticula.Mongo</c>'s conditional <c>$sum</c> — the identical rule realised through this
+    /// backend's own mechanism.</para>
+    ///
+    /// <para><b>Kept nullable even where an aggregate can never actually be null</b> (<c>count</c>'s
+    /// result, converted to <c>int?</c>) — the uniform, "even where inert" convention
+    /// <see cref="ApplyOrdering{TRow}"/>'s own null bucket already follows, so
+    /// <see cref="ApplyGroupedOrdering{TRow}"/> can build the SAME null-bucket comparison over every
+    /// aggregate without a second, nullability-conditional code path.</para>
+    ///
+    /// <para><b>AGG-6 (sum over an all-null group is 0, avg/min/max are null) needs no code here at
+    /// all.</b> EF's own translation of the nullable <c>Sum</c>/<c>Average</c>/<c>Min</c>/<c>Max</c>
+    /// overloads already answers it (measured, not assumed — see
+    /// <c>EfCoreGroupingTests.An_All_Null_Group_Sums_To_Zero_And_Averages_Mins_And_Maxes_To_Null</c>),
+    /// unlike <c>Craticula.Sql</c>, whose bare <c>SUM</c> disagrees with the ratified rule and needs
+    /// <c>AggregateCall</c>'s <c>COALESCE</c> wrap.</para>
+    /// </summary>
+    private static Expression BuildAggregateExpression<TRow>(
+        ParameterExpression groupParam, Aggregation aggregation, RowContext context)
+    {
+        var field = ResolveFieldConfig(aggregation.Field, context.Schema);
+        var elementRow = Expression.Parameter(typeof(TRow), "row");
+        var property = Property(elementRow, context.Schema, aggregation.Field);
+
+        if (aggregation.Func == AggregationFunc.Count)
+        {
+            var predicate = Expression.Lambda(
+                Expression.NotEqual(property, Expression.Constant(null, property.Type)), elementRow);
+            var call = Expression.Call(EnumerableCountMethod.MakeGenericMethod(typeof(TRow)), groupParam, predicate);
+
+            return Expression.Convert(call, typeof(int?));
+        }
+
+        var selector = Expression.Lambda(property, elementRow);
+
+        if (aggregation.Func is AggregationFunc.Min or AggregationFunc.Max)
+        {
+            var minOrMaxMethod = (aggregation.Func == AggregationFunc.Min ? EnumerableMinMethod : EnumerableMaxMethod)
+                .MakeGenericMethod(typeof(TRow), property.Type);
+
+            return Expression.Call(minOrMaxMethod, groupParam, selector);
+        }
+
+        // Sum/Avg have no defined translation outside the three numeric FieldTypes: Enumerable.Sum/
+        // Average are overloaded PER concrete numeric type rather than generic in it (unlike Min/Max),
+        // so a non-numeric field has no overload to resolve at all — refused here with a message that
+        // names the reason, rather than surfacing as a bare reflection lookup failure.
+        if (field.Type is not (FieldType.Int64 or FieldType.Decimal or FieldType.Double))
+        {
+            throw new EfCoreCompilationException(
+                $"Aggregation '{aggregation.Func}' on field '{aggregation.Field}' (declared '{field.Type}') has no " +
+                "defined LINQ translation: 'sum'/'avg' require a numeric field.");
+        }
+
+        var name = aggregation.Func == AggregationFunc.Sum ? nameof(Enumerable.Sum) : nameof(Enumerable.Average);
+        var method = ResolveSumOrAverageMethod(name, property.Type).MakeGenericMethod(typeof(TRow));
+
+        return Expression.Call(method, groupParam, selector);
+    }
+
+    /// <summary>
+    /// Resolves <c>Enumerable.Sum</c>/<c>Enumerable.Average</c>'s generic method DEFINITION whose
+    /// selector returns exactly <paramref name="selectorReturnType"/> (<c>long?</c>, <c>decimal?</c> or
+    /// <c>double?</c> — the three <see cref="ClrTypeFor"/> ever hands a numeric field). Unlike
+    /// <c>Min</c>/<c>Max</c>, which are generic in their result type, <c>Sum</c>/<c>Average</c> are a
+    /// family of overloads each fixed to one concrete numeric type, so the lookup is BY that type
+    /// rather than a single cached <see cref="MethodInfo"/>.
+    /// </summary>
+    private static MethodInfo ResolveSumOrAverageMethod(string name, Type selectorReturnType) =>
+        typeof(Enumerable).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(method => method.Name == name
+                && method.IsGenericMethodDefinition
+                && method.GetGenericArguments().Length == 1
+                && method.GetParameters().Length == 2
+                && method.GetParameters()[1].ParameterType.IsGenericType
+                && method.GetParameters()[1].ParameterType.GetGenericTypeDefinition() == typeof(Func<,>)
+                && method.GetParameters()[1].ParameterType.GetGenericArguments()[1] == selectorReturnType);
+
+    private static MethodInfo ResolveMinOrMaxMethodDefinition(string name) =>
+        typeof(Enumerable).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(method => method.Name == name
+                && method.IsGenericMethodDefinition
+                && method.GetGenericArguments().Length == 2
+                && method.GetParameters().Length == 2
+                && method.GetParameters()[1].ParameterType.IsGenericType
+                && method.GetParameters()[1].ParameterType.GetGenericTypeDefinition() == typeof(Func<,>));
+
+    private static readonly MethodInfo EnumerableMinMethod = ResolveMinOrMaxMethodDefinition(nameof(Enumerable.Min));
+
+    private static readonly MethodInfo EnumerableMaxMethod = ResolveMinOrMaxMethodDefinition(nameof(Enumerable.Max));
+
+    private static readonly MethodInfo EnumerableCountMethod = typeof(Enumerable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(method => method.Name == nameof(Enumerable.Count) && method.GetParameters().Length == 2);
+
+    private static readonly MethodInfo QueryableGroupByMethod = typeof(Queryable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(method => method.Name == nameof(Queryable.GroupBy)
+            && method.GetGenericArguments().Length == 2
+            && method.GetParameters().Length == 2);
+
+    private static readonly MethodInfo QueryableSelectMethod = typeof(Queryable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(method => method.Name == nameof(Queryable.Select)
+            && method.GetGenericArguments().Length == 2
+            && method.GetParameters().Length == 2
+            && method.GetParameters()[1].ParameterType.GetGenericArguments()[0].GetGenericArguments().Length == 2);
+
+    private static readonly MethodInfo LongCountAsyncMethod = typeof(EntityFrameworkQueryableExtensions)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(method => method.Name == nameof(EntityFrameworkQueryableExtensions.LongCountAsync)
+            && method.GetParameters().Length == 2
+            && method.GetParameters()[1].ParameterType == typeof(CancellationToken));
 
     // ---- schema resolution ------------------------------------------------------------------------
 
