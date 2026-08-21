@@ -26,7 +26,10 @@ namespace Craticula.EntityFrameworkCore;
 public sealed record EfCoreGridPage
 {
     /// <summary>The logical colIds each row's cells are positionally aligned with, in emission order —
-    /// <c>EfCoreQueryBuilder.ResolveProjection</c>'s answer for this request.</summary>
+    /// <c>EfCoreQueryBuilder.ResolveProjection</c>'s answer for an ordinary or drill-down-leaf request.
+    /// For a grouped level (#1887) this is instead <c>[groupColumn, ...aggregations.Select(a =&gt;
+    /// a.OutputName)]</c> (GRP-3) — the level has no export-style projection to resolve, since it
+    /// projects a bucket key and its aggregates rather than declared fields.</summary>
     public required IReadOnlyList<string> Columns { get; init; }
 
     /// <summary>The page's rows, each aligned with <see cref="Columns"/>, cells as native CLR values
@@ -35,7 +38,10 @@ public sealed record EfCoreGridPage
 
     /// <summary>
     /// The number of rows matching the filter with the row window removed — AG Grid SSRM's
-    /// <c>rowCount</c>, which lets the grid size its scrollbar and stop requesting blocks.
+    /// <c>rowCount</c>, which lets the grid size its scrollbar and stop requesting blocks. For a
+    /// grouped level (#1887) this is instead the number of BUCKETS at that level
+    /// (<c>EfCoreQueryBuilder.CountGroupsAsync</c>), the grouped analogue of the same question — how
+    /// many results this query answers, with its row window removed.
     /// <see langword="null"/> when the caller did not ask for it, which is distinct from <c>0</c>: the
     /// grid's own contract treats an unknown total as "keep asking", and a wrong zero would empty it.
     ///

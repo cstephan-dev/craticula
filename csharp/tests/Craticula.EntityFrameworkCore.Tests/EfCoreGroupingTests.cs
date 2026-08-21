@@ -72,14 +72,14 @@ public class EfCoreGroupingTests
         FilterNode? filter = null,
         IReadOnlyList<SortItem>? sort = null,
         GridSchema? schema = null) => new()
-    {
-        Schema = schema ?? Schema,
-        Filter = filter,
-        Sort = sort,
-        Page = new RangePage { StartRow = 0, EndRow = 100 },
-        Group = group,
-        Aggregations = aggregations
-    };
+        {
+            Schema = schema ?? Schema,
+            Filter = filter,
+            Sort = sort,
+            Page = new RangePage { StartRow = 0, EndRow = 100 },
+            Group = group,
+            Aggregations = aggregations
+        };
 
     private static async Task<EfCoreGridPage> Fetch(
         GridSchema schema, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows, EfCoreQueryRequest request)
@@ -330,5 +330,21 @@ public class EfCoreGroupingTests
     {
         await Assert.ThrowsAsync<GroupSpecValidationException>(() => Fetch(
             Schema, SalesRows, Request(Group(["region"], "EMEA", "Enterprise"))));
+    }
+
+    /// <summary>Mirrors <c>Craticula.Sql.SqlQueryBuilder.Build</c>'s identical guard: EXP-1's
+    /// group-export carve-out means the two never arrive together from the adapter, but a hand-built
+    /// request can still set both — there is no defined shape for "project these columns" over a
+    /// grouped level, and <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/> must refuse it rather than
+    /// silently pick one (the leaf branch would have applied it, the grouped branch would have
+    /// discarded it — an AR-4 divergence from the SQL path either way).</summary>
+    [Fact]
+    public async Task A_Request_Carrying_Both_A_GroupSpec_And_An_Export_Projection_Is_Rejected()
+    {
+        var request = Request(Group(["region"])) with { Projection = ["region", "amount"] };
+
+        var exception = await Assert.ThrowsAsync<EfCoreCompilationException>(() => Fetch(Schema, SalesRows, request));
+        Assert.Contains("GroupSpec", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("export projection", exception.Message, StringComparison.Ordinal);
     }
 }

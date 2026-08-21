@@ -324,23 +324,26 @@ public static class EfCoreQueryBuilder
         {
             throw new EfCoreCompilationException(
                 "This request carries a GroupSpec (rowGroupCols/groupKeys), which this entry point does not " +
-                "support — see #1622. Grouping is where the row-group protocol's semantics live " +
+                "support — see #1622: it applies a single clause (filter/order/projection) and has no defined " +
+                "meaning for 'restrict/order by group state' on its own. Since #1887, compile a grouped request " +
+                "through EfCoreGridQuery.FetchPageAsync instead, which dispatches it to the grouped orchestration " +
                 "(spec/semantics.md GRP-1..GRP-6: the grouped level's projection and aggregates, GRP-2's exact " +
-                "bucket keys, GRP-4's tiebreaker substitution, AG-6's auto-column colId). Since #1887 this " +
-                "particular entry point (filter/order/projection applied directly) is not where that support " +
-                "landed — compile a grouped request through EfCoreGridQuery.FetchPageAsync instead, which " +
-                "dispatches it to the grouped orchestration, with Craticula.Sql, or drop the group state " +
-                "deliberately as EXP-1's export carve-out does.");
+                "bucket keys, GRP-4's tiebreaker substitution, AG-6's auto-column colId). Craticula.Sql compiles " +
+                "the same request too; dropping the group state deliberately, as EXP-1's export carve-out does, " +
+                "is the third option.");
         }
 
         if (request.Aggregations is { Count: > 0 })
         {
             throw new EfCoreCompilationException(
                 "This request carries AR-8 aggregations (valueCols), which this entry point does not support — " +
-                "see #1622, and since #1887 see EfCoreGridQuery.FetchPageAsync for the grouped orchestration " +
-                "that does. Checked independently of GroupSpec because AG Grid sends valueCols without " +
-                "rowGroupCols (pivot mode, or a user who added an aggregation before grouping), and returning " +
-                "leaf rows where the caller asked for totals is a wrong answer that looks healthy.");
+                "it applies a single clause and has no defined meaning for an aggregate on its own. If the " +
+                "request also carries a GroupSpec, compile it through EfCoreGridQuery.FetchPageAsync instead " +
+                "(#1887's grouped orchestration). Checked independently of GroupSpec because AG Grid sends " +
+                "valueCols without rowGroupCols too (pivot mode, or a user who added an aggregation before " +
+                "grouping) — that shape has NO translation anywhere in this adapter yet (#1622: aggregating " +
+                "without a group column), and returning leaf rows where the caller asked for totals would be a " +
+                "wrong answer that looks healthy.");
         }
 
         return context;
@@ -854,9 +857,10 @@ public static class EfCoreQueryBuilder
                 ? SemanticsResolver.SortKeyProvenance.AppendedTiebreaker
                 : SemanticsResolver.SortKeyProvenance.Request;
 
-            // GroupingMode.Ungrouped always: this adapter refuses row-group state, so every key here is
-            // an ordinary one. #1622 will need the grouped mode for a grouped level's ORDER BY, and
-            // GRP-4's substitution of the group column for the stable key with it.
+            // GroupingMode.Ungrouped always: this method is reused unchanged for the drill-down leaf
+            // (#1887), which has no GROUP BY and so keeps SEM-6's stable-key tiebreaker — GRP-4's
+            // substitution of the group column for it is the GROUPED LEVEL's own rule, resolved by
+            // ApplyGroupedOrdering instead (GroupingMode.Grouped), never by this method.
             var mode = SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity(
                 ResolveFieldConfig(key.Field, request.Schema),
                 SemanticsResolver.GroupingMode.Ungrouped,

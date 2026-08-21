@@ -11,11 +11,12 @@ namespace Craticula.Core.Ir;
 /// equal lengths are the <em>drill-down leaf</em>, which buckets by nothing and emits raw rows. Both
 /// are restricted by the already-consumed keys, as real IR (GRP-5).</para>
 ///
-/// <para><b>Why it takes IR pieces rather than a request.</b> Three consumers reach this dispatch
-/// today through three unrelated request types — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c> and
-/// <c>SearchQueryRequest</c> — and a fourth is the reason this extraction happened at all: the EF Core
-/// adapter <em>refuses</em> grouping today (<c>EfCoreQueryBuilder</c> throws on a non-null
-/// <c>Group</c>), and #1887 is what makes it a caller. No signature naming any one
+/// <para><b>Why it takes IR pieces rather than a request.</b> Four consumers reach this dispatch
+/// through four unrelated request types — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c>,
+/// <c>SearchQueryRequest</c> and, since #1887, <c>EfCoreQueryRequest</c> (via
+/// <c>Craticula.EntityFrameworkCore.EfCoreGridQuery.FetchPageAsync</c> — the EF Core adapter
+/// <em>refused</em> grouping before that story, which is what made the fourth consumer the reason this
+/// extraction happened at all). No signature naming any one
 /// of them can serve the other three. Each of those types is the shape of a <em>backend's</em> input
 /// (a dialect, a collation sink, an index name); the dispatch reads none of that, only the two IR
 /// members below, both of which are already <c>Craticula.Core.Ir</c> types. Taking them directly is
@@ -90,7 +91,11 @@ public sealed record GroupingPlan(
         // stopped being the thing enforcing it — the same shape #1645's review found when
         // SqlPatternEscaping became reachable from Craticula.Mongo.
         //
-        // Idempotent for every current caller: all four validate before they get here.
+        // Idempotent for every current caller: Sql/Mongo/Search validate before calling Resolve, so
+        // this is their second, harmless pass. EfCoreGridQuery is the opposite order — it calls
+        // Resolve (and so this validation) FIRST, before EfCoreQueryBuilder.ValidateAndBuildRowContext
+        // validates again for the RowContext it builds — but the guarantee is the same either way: no
+        // caller reaches a downstream step with unvalidated aggregations.
         AggregationValidator.Validate(aggregations);
 
         if (group is null)

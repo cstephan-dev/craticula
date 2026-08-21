@@ -10,7 +10,10 @@ namespace Craticula.EntityFrameworkCore;
 /// <see cref="Craticula.Core.Schema.GridSchema"/> does not declare, a value whose variant disagrees
 /// with the declared type, a <c>values</c> array that is missing. Reached only by a request that
 /// skipped <c>GridFilterPipeline</c>.</description></item>
-/// <item><description><b>A shape this adapter refuses on purpose</b> — row-group state (#1622), a
+/// <item><description><b>A shape this adapter refuses on purpose</b> — row-group state reaching the
+/// per-clause entry points directly rather than through <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/>
+/// (each applies one clause and has no defined meaning for group state on its own), aggregations with
+/// no group column at all (#1622: pivot mode has no translation anywhere in this adapter), a
 /// <c>physical.sql</c> mapping form with no oracle, a case-sensitive substring match on a provider
 /// whose pattern operator folds case. Each of these is a place where the alternative is a query that
 /// runs and returns the wrong rows, which is the failure mode this project consistently prefers an

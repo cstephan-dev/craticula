@@ -51,8 +51,8 @@ public sealed record Aggregation
     /// <c>spec/semantics.md</c>'s GRP-4 — "stated here because it lands in query text as an identifier
     /// and every port must choose the same one" — and it is a function of <see cref="Field"/> and
     /// <see cref="Func"/> and nothing else. The SQL, Mongo and Search compilers all need exactly this
-    /// name — and the EF Core adapter will when #1887 lifts its refusal — so it belongs where the data it is derived
-    /// from lives; three private copies of the expression were what #1885 removed.</para>
+    /// name — and, since #1887, the EF Core adapter does too — so it belongs where the data it is
+    /// derived from lives; three private copies of the expression were what #1885 removed.</para>
     ///
     /// <para><b>It is a name, not a validated identifier.</b> <see cref="AggregationValidator"/>
     /// holds an explicit <see cref="Alias"/> to <c>ir.schema.json</c>'s identifier pattern, but

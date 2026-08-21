@@ -60,6 +60,19 @@ public static class EfCoreGridQuery
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(semantics);
 
+        // Mirrors Craticula.Sql.SqlQueryBuilder.Build's identical guard: EXP-1's group-export
+        // carve-out means AgGridRequestParser has already nulled the group state on any export, so
+        // the two are mutually exclusive by construction — checked rather than assumed, since a
+        // caller building the request by hand could set both, and there is no defined shape for
+        // "project these columns" over a grouped level that projects a bucket key and its aggregates.
+        if (request.Projection is not null && request.Group is not null)
+        {
+            throw new EfCoreCompilationException(
+                "A request carries both a GroupSpec and an EXP-1(b) export projection. An export emits leaf rows " +
+                "and discards group state (EXP-1's carve-out, applied by AgGridRequestParser), so the two never " +
+                "arrive together from the adapter.");
+        }
+
         var grouping = GroupingPlan.Resolve(request.Group, request.Aggregations);
 
         return grouping switch
