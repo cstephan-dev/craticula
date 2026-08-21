@@ -42,20 +42,39 @@ namespace Craticula.EntityFrameworkCore.Tests;
 /// through a hand-built <see cref="EfCoreQueryRequest"/> its own doc says explicitly is not a fixture.
 /// This is the fixture-driven counterpart.</para>
 ///
-/// <para><b>SQLite's decimal/datetime type-affinity divergence (<see cref="SqliteTypeAffinityDivergenceTests"/>)
-/// does not recur here.</b> Both documented divergences are about a COMPARISON operator
-/// (<c>&gt;</c>/<c>&lt;=</c>) reading a TEXT-stored value differently on the two paths (a raw lexicographic
-/// read vs EF's <c>ef_compare</c>/its own instant encoding); none of these 18 fixtures compares a
-/// <c>decimal</c> or <c>datetime</c> value at all (<c>020</c>'s <c>amount &gt; 1000</c> is the one
-/// row-level comparison in the population, and it is a plain numeric literal, not the boundary shape
-/// the divergence needs). Every fixture here that touches <c>amount</c> instead AGGREGATES it
-/// (<c>sum</c>/<c>avg</c>/<c>min</c>/<c>max</c>), and that is a DIFFERENT code path on both sides: EF
-/// translates the aggregate into the SAME native SQLite <c>SUM</c>/<c>AVG</c>/<c>MIN</c>/<c>MAX</c> the
-/// compiled statement calls (no <c>ef_compare</c> rewrite exists for an aggregate function), so the two
-/// paths ask SQLite the identical question over the identical TEXT-affinity column and get the identical
-/// answer -- measured here across all of <c>007</c>-<c>015</c>, <c>020</c>, <c>021</c>, <c>023</c>, every
-/// aggregated value seeded as a whole-cent amount specifically so SQLite's own TEXT-to-REAL coercion
-/// introduces no binary floating-point rounding for this suite to have to reason about.</para>
+/// <para><b>SQLite's decimal type-affinity divergence (<see cref="SqliteTypeAffinityDivergenceTests"/>)
+/// DOES recur in this population, twice over, and both are avoided by the choice of values rather than
+/// by the shape of the requests.</b></para>
+///
+/// <list type="number">
+/// <item><description><c>020</c>'s <c>amount &gt; 1000</c> is exactly
+/// <c>SqliteTypeAffinityDivergenceTests</c>' documented comparison divergence's shape (a decimal bound
+/// against a TEXT-affinity column, compiled as a numeric-string literal on one path and through
+/// <c>ef_compare</c> on the other) — it is avoided here only because every excluded value
+/// (<c>0.50</c>, <c>0.99</c>) starts with <c>'0'</c>, which sorts below <c>"1000"</c> under BOTH a
+/// lexicographic and a numeric reading. See <see cref="Datasets.RegionsFilteredAndSortedByTotal"/> for
+/// why: this case's own stated purpose is filter/sort COMPOSITION, and letting an unrelated type-affinity
+/// quirk decide its outcome would test the wrong thing.</description></item>
+/// <item><description><b>Grouped <c>min</c>/<c>max</c> over a <c>decimal</c>-as-TEXT column is a THIRD,
+/// previously undocumented divergence</b> (#1888's own finding) — <c>sum</c>/<c>avg</c> are safe
+/// (SQLite coerces TEXT to REAL before accumulating, proven in #1887's own
+/// <c>EfCoreGroupingTests.An_All_Null_Group_Sums_To_Zero_...</c>), but <c>min</c>/<c>max</c> use SQLite's
+/// ordinary value-comparison rule, an untranslated byte-wise <c>memcmp</c> for two TEXT operands:
+/// <c>"100.00" &lt; "50.00"</c> because <c>'1' &lt; '5'</c>, even though <c>100 &gt; 50</c>. EF's own
+/// <c>Min</c>/<c>Max</c> translation gives the numerically correct answer instead (measured, not
+/// assumed — see <see cref="SqliteTypeAffinityDivergenceTests.A_Grouped_Min_Max_Comparison_Disagrees_Because_Sqlite_Has_No_Decimal_Type"/>,
+/// which asserts the disagreement directly). Every <c>min</c>/<c>max</c> case in THIS file
+/// (<c>008</c>, <c>009</c>, <c>013</c>) instead keeps every value compared within one bucket at the
+/// SAME digit count, which sidesteps the hazard rather than papering over it — a future edit that
+/// introduces a digit-count mismatch inside one bucket's <c>min</c>/<c>max</c> values would silently
+/// flip the expected extremum on BOTH paths at once, since neither this file's parity assertion nor its
+/// independent-expectation assertion can tell a consistently-wrong answer from a right one.</description></item>
+/// </list>
+///
+/// <para><c>sum</c>/<c>avg</c> stay safe throughout (<c>007</c>-<c>015</c>, <c>020</c>, <c>021</c>,
+/// <c>023</c>), every aggregated value seeded as a whole-cent amount specifically so SQLite's own
+/// TEXT-to-REAL coercion introduces no binary floating-point rounding for this suite to have to reason
+/// about.</para>
 /// </summary>
 public class EfCoreGroupedExecutionEqualityTests
 {
@@ -383,6 +402,14 @@ public class EfCoreGroupedExecutionEqualityTests
     /// COLLAPSE into fewer groups than seeded rows, or an implementation that skipped grouping outright
     /// (echoing one output row per input row) would be indistinguishable from a correct one by row count
     /// alone.
+    ///
+    /// <para><b>A LEAF case (005/006) additionally must not have its expected order equal the surviving
+    /// rows' own dataset (insertion) order</b> -- mirroring
+    /// <see cref="EfCoreExecutionEqualityTests.Every_Case_Discriminates_Rather_Than_Matching_Everything_Or_Nothing"/>'s
+    /// identical check for its own sort-only cases. Both of THIS file's leaf cases exist specifically to
+    /// pin a SORT rule (005: SEM-1's collated key vs SEM-6's bare tiebreaker; 006: the tiebreaker's own
+    /// bare collation with no sortModel at all) -- a dataset whose expected order happened to equal
+    /// insertion order would pass under an implementation that dropped the ORDER BY entirely.</para>
     /// </summary>
     [Theory]
     [MemberData(nameof(CaseNames))]
@@ -393,6 +420,21 @@ public class EfCoreGroupedExecutionEqualityTests
 
         Assert.NotEmpty(testCase.ExpectedRows);
         Assert.NotEmpty(testCase.Discriminates);
+
+        if (testCase.ExpectedColumns.SequenceEqual(fixture.Schema.FieldOrder))
+        {
+            var survivorsInInsertionOrder = testCase.Dataset
+                .Where(row => !ExcludedByDrillDownOrFilter(row, fixture))
+                .Select(row => (IReadOnlyList<object?>)[.. testCase.ExpectedColumns.Select(column =>
+                    row.TryGetValue(column, out var value) ? value : null)])
+                .ToList();
+
+            Assert.False(
+                survivorsInInsertionOrder.SequenceEqual(testCase.ExpectedRows),
+                $"{fixture.Name} is a leaf case whose own discriminator is a SORT rule, so its expected " +
+                "order must differ from the surviving rows' plain dataset (insertion) order -- otherwise an " +
+                "implementation that dropped the ORDER BY entirely would pass unnoticed.");
+        }
 
         var hasDrillDown = fixture.Ef.Group is { GroupKeys.Count: > 0 };
         var hasFilter = fixture.Ef.Filter is not null;
@@ -521,8 +563,19 @@ public class EfCoreGroupedExecutionEqualityTests
         return fixture.Ef.Filter is { } filter && !EvaluateSimpleFilter(filter, row);
     }
 
-    /// <summary>GRP-2: a drill-down key match is exact, never case-folding -- ordinal/numeric equality,
-    /// the same mechanism <see cref="EfCoreQueryBuilder"/> resolves it through in production.</summary>
+    /// <summary>
+    /// GRP-2: a drill-down key match is exact, never case-folding -- ordinal/numeric equality, the same
+    /// mechanism <see cref="EfCoreQueryBuilder"/> resolves it through in production.
+    ///
+    /// <para>A missing/null cell genuinely fails the match (<c>(_, null) =&gt; false</c>) -- but an
+    /// unhandled NON-null combination (a dataset seeding an <see cref="int"/> where the key is a
+    /// <see cref="StringValue"/>, or a future <see cref="DecimalValue"/>/<see cref="BooleanValue"/>
+    /// group key this method has no arm for) THROWS rather than silently returning <see langword="false"/>:
+    /// this method backs the anti-tautology guard's own row-exclusion check, and a silent
+    /// false-means-excluded reading would let a dataset with a genuine type slip pass that guard
+    /// vacuously -- exactly the failure mode <see cref="EvaluateSimpleFilter"/>'s own doc refuses for
+    /// the identical reason, twenty lines below.</para>
+    /// </summary>
     private static bool MatchesExact(IReadOnlyDictionary<string, object?> row, string column, TypedValue key)
     {
         row.TryGetValue(column, out var value);
@@ -531,7 +584,11 @@ public class EfCoreGroupedExecutionEqualityTests
         {
             (StringValue s, string text) => string.Equals(s.Value, text, StringComparison.Ordinal),
             (Int64Value i, long l) => i.Value == l,
-            _ => false
+            (_, null) => false,
+            _ => throw new NotSupportedException(
+                $"This harness's own minimal drill-down matcher (test-dataset validation only, never a " +
+                $"compiler) does not support comparing a '{key.GetType().Name}' group key against a seeded " +
+                $"'{value?.GetType().Name}' value for column '{column}' -- extend it if a future case needs it.")
         };
     }
 

@@ -7,16 +7,18 @@ namespace Craticula.EntityFrameworkCore.Tests;
 /// <summary>
 /// #1887: GRP-1's grouped level and drill-down leaf, compiled through the EF Core path end to end
 /// against a real SQLite provider (mirroring <see cref="EfCoreExecutionEqualityTests"/>'s own
-/// "compile, seed, execute" shape) — plus the traps a hand-built request reaches that no fixture
-/// happens to exercise on this path yet: AGG-1's non-null count, AGG-6's empty-group answer, GRP-2's
-/// exact drill-down match, and the shared guards <see cref="GroupingPlan"/>/<see cref="GroupedSortTarget"/>
-/// already enforce for the SQL and Mongo compilers.
+/// "compile, seed, execute" shape) — plus the traps a hand-built request reaches: AGG-1's non-null
+/// count, AGG-6's empty-group answer, GRP-2's exact drill-down match, and the shared guards
+/// <see cref="GroupingPlan"/>/<see cref="GroupedSortTarget"/> already enforce for the SQL and Mongo
+/// compilers.
 ///
-/// <para>Everything the fixture suite DOES pin (the grouped projection shape, the drill-down
-/// predicates, the aggregate names) belongs to a fixture-driven equality test once a grouped fixture
-/// reaches this path; this file is deliberately the hand-built shapes that let one rule be pinned in
-/// isolation, the same division <c>SqlQueryBuilderGroupingTests</c>/<c>MongoPipelineGroupingTests</c>
-/// draw for their own compilers.</para>
+/// <para><b>#1888 is the fixture-driven counterpart this file's own hand-built shapes anticipated.</b>
+/// <see cref="EfCoreGroupedExecutionEqualityTests"/> now pins AGG-1 (<c>group-aggregation/011</c>),
+/// AGG-6 (<c>013</c>) and GRP-2 (<c>002</c>, <c>005</c>, <c>006</c>) through real fixtures, each also
+/// independently hand-computed. This file's own hand-built cases are kept anyway rather than deleted —
+/// they isolate ONE rule at a time with no other fixture machinery in the way, the same division
+/// <c>SqlQueryBuilderGroupingTests</c>/<c>MongoPipelineGroupingTests</c> draw for their own
+/// compilers.</para>
 /// </summary>
 public class EfCoreGroupingTests
 {

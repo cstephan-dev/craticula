@@ -1,15 +1,27 @@
 namespace Craticula.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// The inline datasets <see cref="EfCoreExecutionEqualityTests"/>' cases are seeded with — one method per
-/// case, keyed by LOGICAL colId, with a comment on every row saying why that row is there.
+/// The inline datasets two sibling harnesses' cases are seeded with — one method per case, keyed by
+/// LOGICAL colId, with a comment on every row saying why that row is there.
+/// <see cref="EfCoreExecutionEqualityTests"/> holds the ORIGINAL 12 ungrouped cases;
+/// <see cref="EfCoreGroupedExecutionEqualityTests"/> (#1888) added 18 more for the grouped/leaf
+/// population under <c>spec/fixtures/group-aggregation/</c>.
 ///
 /// <para><b>Each dataset is built around its fixture's own filter values, not around plausible-looking
-/// data.</b> A row on each side of every boundary, a null in every nullable column, and — wherever SEM-1
-/// is in play — values differing only in case. That is what turns "both paths returned the same rows"
-/// into evidence: a dataset all of whose rows match, or none of which does, would be satisfied by an
-/// implementation that ignored the filter entirely, which is the failure mode this repo has paid for
-/// before. The guards in that class hold every dataset here to those properties.</para>
+/// data</b> — a row on each side of every boundary, values differing only in case wherever SEM-1 is in
+/// play, and (a guard <see cref="EfCoreExecutionEqualityTests"/>'s OWN cases hold to unconditionally,
+/// via its <c>Every_Dataset_Has_A_Null_In_Every_Column_But_A_Unique_Non_Null_Stable_Key</c>) a null in
+/// every nullable column. That is what turns "both paths returned the same rows" into evidence: a
+/// dataset all of whose rows match, or none of which does, would be satisfied by an implementation that
+/// ignored the filter entirely, which is the failure mode this repo has paid for before.</para>
+///
+/// <para><b>The grouped population's own discrimination requirement is narrower and per-case rather
+/// than blanket-per-column</b> — a null in the AGGREGATED column specifically, an all-null group, a
+/// single-row group, or a null group key, whichever a given case claims
+/// (<c>EfCoreGroupedExecutionEqualityTests.DiscriminationProperty</c>), checked mechanically against
+/// each case's own dataset rather than assumed from this comment. Not every grouped dataset carries a
+/// null in every column — that would be the ungrouped harness's rule applied to a population it was
+/// never written for.</para>
 ///
 /// <para>Written inline rather than as <c>dataset.json</c> files: that name is reserved for #1655's
 /// execution tier, and a row whose purpose is "this is the one exactly ON the boundary" is only
@@ -315,7 +327,15 @@ internal static class Datasets
 
     /// <summary>group-aggregation/008: grouped at segment under region='EMEA', <c>min(amount)</c>.
     /// The excluded APAC row (1.00) is numerically below every surviving value, so an implementation
-    /// that dropped the drill-down would report the WRONG minimum, not merely an extra row.</summary>
+    /// that dropped the drill-down would report the WRONG minimum, not merely an extra row.
+    ///
+    /// <para>Every value compared within one bucket is kept at the SAME digit-count (10.00/50.00, not
+    /// e.g. 10.00/100.00) — SQLite's grouped MIN/MAX compares TEXT-affinity <c>amount</c> byte-wise
+    /// rather than numerically, which can invert the answer across a digit-count boundary. See
+    /// <see cref="SqliteTypeAffinityDivergenceTests.A_Grouped_Min_Max_Comparison_Disagrees_Because_Sqlite_Has_No_Decimal_Type"/>,
+    /// which asserts that divergence directly; this case sidesteps it to stay about the drill-down
+    /// exclusion it actually pins.</para>
+    /// </summary>
     public static IReadOnlyList<IReadOnlyDictionary<string, object?>> SegmentMins() =>
     [
         Row(("id", "1"), ("region", "EMEA"), ("segment", "Enterprise"), ("amount", 50.00m)),
@@ -327,7 +347,9 @@ internal static class Datasets
 
     /// <summary>group-aggregation/009: grouped at segment under region='EMEA', <c>max(amount)</c>.
     /// The excluded APAC row (999.00) is numerically above every surviving value, mirroring
-    /// 008's min case in the other direction.</summary>
+    /// 008's min case in the other direction -- and, like 008, every compared value inside one bucket
+    /// stays at one digit-count for the same reason (see 008's own comment and
+    /// <see cref="SqliteTypeAffinityDivergenceTests.A_Grouped_Min_Max_Comparison_Disagrees_Because_Sqlite_Has_No_Decimal_Type"/>).</summary>
     public static IReadOnlyList<IReadOnlyDictionary<string, object?>> SegmentMaxes() =>
     [
         Row(("id", "1"), ("region", "EMEA"), ("segment", "Enterprise"), ("amount", 10.00m)),
@@ -390,8 +412,10 @@ internal static class Datasets
     /// digit-counts can compare in the opposite order from their true numeric one (<c>"100.00" &lt;
     /// "50.00"</c> lexicographically, since <c>'1' &lt; '5'</c>, even though 100 &gt; 50) -- a real,
     /// separately-discovered SQLite/EF divergence for grouped MIN/MAX, out of scope for what THIS case
-    /// is pinning (AGG-6), and avoided here the same way the ungrouped harness avoids the two
-    /// divergences it already documents rather than tripping over them by accident.</para>
+    /// is pinning (AGG-6). It is NOT skipped quietly: unlike its OWN sidestep here,
+    /// <see cref="SqliteTypeAffinityDivergenceTests.A_Grouped_Min_Max_Comparison_Disagrees_Because_Sqlite_Has_No_Decimal_Type"/>
+    /// executes it deliberately and asserts the disagreement, the same "assert, never avoid silently"
+    /// discipline that file's other two cases already hold to.</para>
     /// </summary>
     public static IReadOnlyList<IReadOnlyDictionary<string, object?>> RegionSumMinMax() =>
     [

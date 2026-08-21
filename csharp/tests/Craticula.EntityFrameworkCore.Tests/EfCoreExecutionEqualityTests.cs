@@ -33,7 +33,14 @@ namespace Craticula.EntityFrameworkCore.Tests;
 /// (<c>decimal</c> and <c>datetime</c> comparisons/orderings). They are not skipped quietly: the two
 /// paths genuinely diverge there, on this engine only, and
 /// <see cref="SqliteTypeAffinityDivergenceTests"/> executes both and asserts the divergence together
-/// with its cause.</para>
+/// with its cause — joined since #1888 by a THIRD: grouped <c>min</c>/<c>max</c> over a
+/// <c>decimal</c>-as-TEXT column.</para>
+///
+/// <para><b>This file covers filters, sort and paging (AR-9/SEM-1..SEM-6/AG-3) — grouping and
+/// aggregation (GRP-1..GRP-6/AGG-1..AGG-6) are <see cref="EfCoreGroupedExecutionEqualityTests"/>'s (#1888),
+/// the identical AR-4 claim over the 18 fixtures under <c>spec/fixtures/group-aggregation/</c> that a
+/// grouped/leaf query can reach.</b> A separate file rather than 18 more entries here, for the reason
+/// that file's own doc gives: its cases have no stable-key-ordered rows to identify by at all.</para>
 /// </summary>
 public class EfCoreExecutionEqualityTests
 {
