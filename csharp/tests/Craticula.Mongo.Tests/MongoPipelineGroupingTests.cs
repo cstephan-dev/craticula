@@ -305,13 +305,21 @@ public class MongoPipelineGroupingTests
     /// accumulator would replace the first and the grid would read one column holding another
     /// column's number, out of a pipeline that is syntactically perfect.
     ///
-    /// <para><b>The refusal moved layers in #1886, and the exception type is the evidence.</b>
-    /// <c>Craticula.Sql</c> had no equivalent guard — it emitted the column twice and let the driver
-    /// decide — so the check now lives in <c>Craticula.Core</c>'s <see cref="AggregationValidator"/>,
-    /// which <see cref="MongoPipelineBuilder.Build"/> runs on entry like every other compiler. What
-    /// this test therefore pins is that the pipeline is still refused, one layer up and now on all
-    /// four backends at once. <c>RenderGroup</c>'s own <c>ContainsKey</c> guard is deliberately kept
-    /// but is no longer reachable from any public entry point of this assembly.</para>
+    /// <para><b>The refusal moved layers in #1886, and the exception type is the evidence — for THIS
+    /// shape only.</b> <c>Craticula.Sql</c> had no equivalent guard — it emitted the column twice and
+    /// let the driver decide — so two aggregations colliding with each other is now caught one layer
+    /// up, in <c>Craticula.Core</c>'s <see cref="AggregationValidator"/>, which
+    /// <see cref="MongoPipelineBuilder.Build"/> runs on entry like every other compiler. What this
+    /// test pins is that THAT collision is still refused, now on all four backends at once.</para>
+    ///
+    /// <para><b><c>RenderGroup</c>'s own <c>ContainsKey</c> guard is NOT redundant, and is not merely
+    /// kept as a courtesy.</b> Core's check only compares aggregations against each other; it has no
+    /// notion of <c>_id</c>, the bucket key this stage seeds into <c>group</c> before the loop below
+    /// runs. An aggregation whose output name resolves to <c>_id</c> — reachable from the wire via an
+    /// explicit alias, which <c>ir.schema.json</c>'s identifier pattern permits — collides with the
+    /// SEED, not with a sibling aggregation, and only this method's own guard sees that. See
+    /// <see cref="An_Aggregation_Aliased_To_The_Bucket_Key_Is_Refused_Not_Silently_Overwritten"/>
+    /// below for that case, which <see cref="AggregationValidator"/> alone does not catch.</para>
     /// </summary>
     [Fact]
     public void Two_Aggregations_Cannot_Share_One_Output_Name()
@@ -324,6 +332,27 @@ public class MongoPipelineGroupingTests
             ]));
 
         Assert.Contains("output name 'total'", failure.Message);
+    }
+
+    /// <summary>
+    /// The case <see cref="AggregationValidator"/> structurally cannot cover, because it is not a
+    /// collision between two aggregations: an alias of <c>_id</c> passes the shared validator (the
+    /// identifier pattern has nothing against it, and there is only one aggregation to compare it
+    /// to), then reaches <see cref="MongoPipelineBuilder.RenderGroup"/>, whose own guard is what
+    /// catches it — because <c>group</c> is seeded with the <c>_id</c> bucket key BEFORE this
+    /// aggregation's output name is ever checked against it. Without that seed-then-check ordering,
+    /// or without the guard itself, <c>group["_id"]</c> would be silently overwritten by the
+    /// accumulator, and the response would carry no bucket key at all.
+    /// </summary>
+    [Fact]
+    public void An_Aggregation_Aliased_To_The_Bucket_Key_Is_Refused_Not_Silently_Overwritten()
+    {
+        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+            Group(["region"]),
+            [new Aggregation { Field = "amount", Func = AggregationFunc.Sum, Alias = "_id" }]));
+
+        Assert.Contains("output name '_id'", failure.Message);
+        Assert.Contains("bucket key", failure.Message);
     }
 
     [Fact]

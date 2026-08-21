@@ -355,16 +355,24 @@ public static class MongoPipelineBuilder
             // — one accumulator would vanish from a syntactically perfect pipeline, and the grid
             // would read a column that silently holds another column's number.
             //
-            // No longer reachable from an AG Grid request: #1886 moved the same check upstream into
-            // Craticula.Core's AggregationValidator, which every entry point runs, because
-            // Craticula.Sql had no equivalent and the condition is a property of the request rather
-            // than of this stage's shape. Kept as defence in depth for a host that builds IR directly.
+            // NOT fully covered by #1886's upstream AggregationValidator, and still load-bearing —
+            // do not delete this as "made redundant". Core's check only compares aggregations
+            // against EACH OTHER; it has no notion of "_id", which is this stage's bucket key and is
+            // seeded into `group` before this loop runs. An aggregation whose OutputName resolves to
+            // "_id" — reachable from the wire via an explicit alias, e.g. {"id":"_id","field":"amount",
+            // "aggFunc":"sum"}, which "^[A-Za-z_][A-Za-z0-9_]*$" (ir.schema.json's own alias pattern)
+            // permits and AggregationValidator therefore accepts — collides with the seed rather than
+            // with another aggregation, and only this ContainsKey check (which runs against the
+            // pre-seeded dictionary, not a fresh one) catches it. Measured: the request above throws
+            // here rather than silently overwriting the bucket key.
             if (group.ContainsKey(output))
             {
                 throw new MongoCompilationException(
-                    $"Two aggregations resolve to the output name '{output}' (GRP-4: an alias, or the " +
-                    "<field>_<func> default). A $group stage is a document, so the second would silently " +
-                    "replace the first — the request names the same output column twice.");
+                    $"An aggregation resolves to the output name '{output}', which collides with either " +
+                    "another aggregation's output name or the grouped level's own bucket key (GRP-4: an " +
+                    "alias, or the <field>_<func> default). A $group stage is a document, so the later " +
+                    "one would silently replace the earlier — the request names an output column the " +
+                    "same as something else in this stage.");
             }
 
             group[output] = RenderAccumulator(aggregation, context);

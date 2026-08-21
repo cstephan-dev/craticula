@@ -53,8 +53,7 @@ public class DialectConformanceFixtureTests
     ///
     /// <para><b>Oracle's 42 is the full-parity count and is deliberately two short of MySQL's 44.</b>
     /// #1642 authored an arm everywhere a case carries all six backends — <c>dialect-parity/006</c>-
-    /// <c>023</c> (18, and 19 since #1886 added <c>024</c>) and all of <c>group-aggregation/</c> (23)
-    /// — and none in
+    /// <c>023</c> (18) and all of <c>group-aggregation/</c> (23) — and none in
     /// <c>dialect-parity/001</c>-<c>005</c>, which are single-engine mechanics showcases (MySQL's
     /// <c>ISNULL</c>, T-SQL's <c>OFFSET/FETCH</c>, SQLite's ASCII-CI <c>LIKE</c>, Postgres's
     /// <c>ILIKE</c>) that exist to document one named engine and have no Postgres arm to transform.

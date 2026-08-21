@@ -945,11 +945,15 @@ SEM-6's "no schema state licenses omitting the marker" is unconditional, and sup
 on a nullability inference is a semantic special case no rule grants. On an `avg`/`min`/`max`
 ordering key the same machinery is fully live, which is the difference the fixtures pin.
 
-*Pinned by* every grouped SQL artifact carrying a `sum` (`group-aggregation/001`-`004`, `007`,
-`012`-`015`, `020`, `021`, `023` and `ag-grid-majors/004`, on all five dialects), and discriminated
-by `dialect-parity/024`, which orders a grouped level by an **`avg`** while a `sum` sits beside it in
-the same projection — the one shape that fails both when `sum` is left bare and when the wrap is
-over-applied to the other three functions.
+*Pinned by* every grouped SQL artifact carrying a `sum` — `group-aggregation/001`-`004`, `007`,
+`012`-`015`, `020`, `021`, `023` on all five dialects, and `ag-grid-majors/004` on Postgres only —
+and discriminated **in the `ORDER BY`** by `dialect-parity/024`, which orders a grouped level by an
+**`avg`** while a wrapped `sum` sits beside it in the same projection. No other fixture orders a
+grouped level by anything but a `sum` or a group column, so `024` is the only case that fails when
+the wrap is missing from a `sum`'s `ORDER BY` **and** when it is over-applied to `avg`'s. It does not
+follow that over-applying the wrap goes otherwise undetected: `AVG`/`MIN`/`MAX` appear bare in the
+*projection* of `008`-`010`, `012`, `013` as well, and those fail exactly the same way `024` does if
+the wrap reaches their `SELECT` list.
 
 ---
 
@@ -1147,7 +1151,8 @@ restatement in `SqlQueryBuilder`. The TRD's EXP-3 is **streaming**; the column l
 
 **GRP-4. A grouped level orders by what it projects, and breaks ties on its group column.**
 - A sort key naming an **aggregated column** orders by that aggregate's **expression**
-  (`ORDER BY SUM("amount")`), never by the raw column, which the projection does not contain. The key
+  (`ORDER BY SUM("amount")` — `ORDER BY COALESCE(SUM("amount"), 0)` for a `sum`, since AGG-6), never
+  by the raw column, which the projection does not contain. The key
   is matched against `alias ?? field`, i.e. AGG-2's `ColumnVO.id` reconstructed — the grid sends the
   *column's* id, and AGG-2 sets the alias from that id exactly when it differs from the field.
 - **Repeat the expression; do not refer back to the output name.** An output column name is only

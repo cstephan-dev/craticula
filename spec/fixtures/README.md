@@ -459,8 +459,10 @@ omission of a null marker on a nullability inference.
 
 **`dialect-parity/024` was authored** as the discriminator none of the 61 provides. It orders a
 grouped level by an **`avg`** while a wrapped `sum` sits beside it in the same projection — the only
-case in the suite that fails when the wrap is *over*-applied as well as when it is missing, since no
-other fixture orders a grouped level by anything but a `sum` or a group column. It carries **five SQL
+case in the suite whose `ORDER BY` fails both when the wrap is missing and when it is over-applied to
+the `avg`, since no other fixture orders a grouped level by anything but a `sum` or a group column.
+(Over-applying the wrap to a *projected* `avg`/`min`/`max` is separately caught by `group-aggregation/008`-`010`,
+`012`, `013`, which carry those bare in their `SELECT` list.) It carries **five SQL
 arms and no document-store arm**, a third coverage tier for that category: `$sum` and the `sum` metric
 are the same token before and after AGG-6, so a Mongo or Search arm would grade nothing. The honest
 limit is recorded in AGG-6 itself — those two backends' engine behaviour is *documented*, not measured

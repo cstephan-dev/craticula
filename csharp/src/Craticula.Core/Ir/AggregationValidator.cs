@@ -19,14 +19,21 @@ namespace Craticula.Core.Ir;
 /// Two of the three compilers already refused it, for the same reason and in nearly the same words:
 /// a Mongo <c>$group</c> stage and an Elasticsearch <c>aggs</c> container are both JSON objects, so a
 /// repeated key is <em>last-wins</em> rather than an error and one accumulator vanishes from a
-/// syntactically perfect query. <c>Craticula.Sql</c> had no such guard at all: it emits
-/// <c>SELECT SUM("x") AS "n", AVG("x") AS "n"</c>, which every engine accepts, and the grid then
-/// reads whichever column the driver hands back first. The condition is a property of the
+/// syntactically perfect query. <c>Craticula.Sql</c> had no such guard at all: absent this check it
+/// would have emitted <c>SELECT SUM("x") AS "n", AVG("x") AS "n"</c>, which every engine accepts, and
+/// the grid would then read whichever column the driver hands back first. The condition is a property of the
 /// <em>request</em> — AGG-2 derives the name from <c>valueCols[].id</c>, which is client-supplied —
 /// so it belongs in the shared validator every entry point already runs, where all four backends
-/// (the EF Core adapter included) inherit it at once. The two per-compiler guards are deliberately
-/// KEPT as defence in depth for a host that builds IR directly; they are no longer reachable from an
-/// AG Grid request.</para>
+/// (the EF Core adapter included) inherit it at once. Both per-compiler guards are deliberately KEPT,
+/// and not for the same reason. Elasticsearch's is now fully redundant — its aggregation container
+/// starts empty, so nothing it seeds can collide, and this check alone covers everything it could
+/// ever catch. <b>MongoDB's is NOT redundant</b>, because this check only compares aggregations to
+/// <em>each other</em> — it has no notion of a compiler's own reserved output names. Mongo's
+/// <c>$group</c> stage carries one such name (its bucket key, <c>_id</c>), which a client-supplied
+/// alias can legally collide with: nothing here forbids the alias <c>_id</c>, so this validator
+/// accepts it, and only the Mongo compiler's own check — comparing an aggregation's output name
+/// against names the *pipeline itself* already reserves, not merely against other aggregations —
+/// catches it.</para>
 /// </summary>
 public static class AggregationValidator
 {

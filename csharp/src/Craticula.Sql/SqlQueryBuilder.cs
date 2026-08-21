@@ -733,8 +733,10 @@ public static class SqlQueryBuilder
     /// the raw aggregated column (<c>ORDER BY "amount"</c> is not in the projection and would be
     /// invalid).
     ///
-    /// <para><b>The ordering repeats the aggregate EXPRESSION — <c>SUM("amount")</c> — rather than
-    /// referring back to its select-list alias.</b> An output name is only conditionally usable in
+    /// <para><b>The ordering repeats the aggregate EXPRESSION — <c>SUM("amount")</c>, or
+    /// <c>COALESCE(SUM("amount"), 0)</c> for a <c>sum</c> since AGG-6 (<see cref="AggregateCall"/>
+    /// applies uniformly to the projection and the <c>ORDER BY</c>, so the two can never disagree) —
+    /// rather than referring back to its select-list alias.</b> An output name is only conditionally usable in
     /// <c>ORDER BY</c>: PostgreSQL's <c>SELECT</c> documentation states that an output column name
     /// "has to stand alone, that is, it cannot be used in an expression", and T-SQL binds the same
     /// way — an alias inside a <c>CASE</c> resolves against the <c>FROM</c> scope and raises "Invalid

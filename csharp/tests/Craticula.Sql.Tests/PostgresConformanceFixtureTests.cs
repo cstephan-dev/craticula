@@ -186,8 +186,9 @@ public class PostgresConformanceFixtureTests
         // 175 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
         // artifact in a scoped category is compiled and compared. The number last moved when #1886
         // authored dialect-parity/024 (AGG-6's discriminator: a grouped level ordered by an AVG,
-        // beside a COALESCE-wrapped SUM in the same projection — the only case in the suite that
-        // fails when the wrap is over-applied as well as when it is missing). Before that #1653
+        // beside a COALESCE-wrapped SUM in the same projection — the only case whose ORDER BY fails
+        // both when the wrap is missing and when it is over-applied; over-applying it to a projected
+        // AVG/MIN/MAX is separately caught by group-aggregation/008-010,012,013). Before that #1653
         // authored page-export/026 (EXP-5's per-field format overrides — a schema member no compiler
         // reads, which is why that arm is byte-identical to 013's); before that #1651
         // authored page-export/025 (TSV writer output), #1650's review pass authored

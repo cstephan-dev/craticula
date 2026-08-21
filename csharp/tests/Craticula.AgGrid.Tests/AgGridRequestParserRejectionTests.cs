@@ -133,11 +133,14 @@ public class AgGridRequestParserRejectionTests
 
     /// <summary>
     /// The counter-case that keeps the rule above from being read as "one field, one aggregation":
-    /// <c>sum</c> and <c>avg</c> over the SAME field with no alias resolve to <c>amount_sum</c> and
-    /// <c>amount_avg</c>, which do not collide — <c>group-aggregation/012</c> is that shape and is
-    /// compiled by every backend. Asserted here because a uniqueness check written against
-    /// <see cref="Aggregation.ColumnId"/> instead of <see cref="Aggregation.OutputName"/> would pass
-    /// the fixture above and reject this, and both are one-line changes.
+    /// <c>sum</c> and <c>avg</c> over the SAME field with no alias resolve to <c>totalAmount_sum</c> and
+    /// <c>totalAmount_avg</c>, which do not collide — <c>page-export/011</c> is that exact shape
+    /// (both <c>valueCols</c> carry <c>id == field == "totalAmount"</c>) and is compiled on Postgres.
+    /// <c>group-aggregation/012</c> is NOT this shape: its two <c>valueCols</c> carry distinct ids,
+    /// so AGG-2 gives each an explicit alias before either default is ever computed. Asserted here
+    /// because a uniqueness check written against <see cref="Aggregation.ColumnId"/> instead of
+    /// <see cref="Aggregation.OutputName"/> would pass the fixture above and reject this, and both
+    /// are one-line changes.
     /// </summary>
     [Fact]
     public void Two_Functions_Over_One_Unaliased_Field_Are_Accepted_Because_Their_Output_Names_Differ()

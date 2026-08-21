@@ -153,9 +153,13 @@ public class AggregationValidatorTests
 
     /// <summary>
     /// The counter-case, and the reason the rule is <see cref="Aggregation.OutputName"/> rather than
-    /// <see cref="Aggregation.ColumnId"/>: two functions over one unaliased field is the ordinary
-    /// shape <c>group-aggregation/012</c> compiles on every backend, and its two output names differ.
-    /// A uniqueness check written against the column id would reject it.
+    /// <see cref="Aggregation.ColumnId"/>: two functions over one unaliased field is a legal shape —
+    /// <c>page-export/011</c> compiles it on Postgres (its two <c>valueCols</c> both carry
+    /// <c>id == field == "totalAmount"</c>, so neither gets an alias) — and its two output names
+    /// differ (<c>totalAmount_sum</c>, <c>totalAmount_avg</c>). <c>group-aggregation/012</c> is a
+    /// DIFFERENT shape: its two <c>valueCols</c> carry distinct ids (<c>amountSum</c>/<c>amountAvg</c>),
+    /// so AGG-2 assigns each an explicit alias — it never reaches the unaliased default this test is
+    /// about. A uniqueness check written against the column id would reject the real shape.
     /// </summary>
     [Fact]
     public void Two_Different_Funcs_Over_One_Unaliased_Field_Do_Not_Collide()
