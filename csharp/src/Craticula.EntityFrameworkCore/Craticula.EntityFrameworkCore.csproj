@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Craticula.EntityFrameworkCore</RootNamespace>
   </PropertyGroup>
 
@@ -27,10 +24,9 @@
          see EfCoreProviderSemantics' five facts. A provider is the host's choice, declared next to
          its DbContext, and the test project references Sqlite for exactly that reason.
 
-         Version pinned inline, the convention every test project in this solution already follows
-         (there is no Directory.Packages.props / Directory.Build.props to central-manage it). 10.0.11
-         is the release that targets net10.0, which every project here does. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+         Version centrally managed in csharp/Directory.Packages.props (10.0.11, the release that
+         targets net10.0, which every project here does) — this file names only the package. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
 
   <ItemGroup>
