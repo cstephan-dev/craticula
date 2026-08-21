@@ -37,10 +37,12 @@ public static class GridFilterPipeline
     /// tree — they come straight off the wire's <c>rowGroupCols</c>/<c>valueCols</c>/<c>groupKeys</c>
     /// — and before this they went from the adapter to a compiler untouched. Passing them here does
     /// four things the filter path already had: SC-1/SC-2 through
-    /// <see cref="FieldAllowlistValidator.ValidateStructuralColumns"/>; SEC-3 over the tree that will
-    /// actually be compiled, i.e. including the <c>groupKeys</c> drill-down
-    /// (<see cref="DrillDownFilter.Synthesize"/>), since N client-supplied keys are N leaf predicates;
-    /// SEM-5's declared-type check over that same drill-down
+    /// <see cref="FieldAllowlistValidator.ValidateStructuralColumns"/> — which (#1907) also holds
+    /// every CONSUMED <c>groupKeys</c> entry to <see cref="FieldConfig.Filterable"/>, since it is about
+    /// to become a literal drill-down predicate below, functionally a filter condition regardless of
+    /// wire channel; SEC-3 over the tree that will actually be compiled, i.e. including the
+    /// <c>groupKeys</c> drill-down (<see cref="DrillDownFilter.Synthesize"/>), since N client-supplied
+    /// keys are N leaf predicates; SEM-5's declared-type check over that same drill-down
     /// (<see cref="TypeCoercionValidator.ValidateDeclaredTypes"/>), so a mistyped <c>groupKey</c> is a
     /// staged client rejection rather than a compiler precondition failure; and one place where the
     /// "may Lenient strip this?" question is answered rather than assumed. They are optional so an

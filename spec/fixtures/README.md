@@ -486,6 +486,12 @@ condition or as `setValuesRequest.colId`. `adversarial` moves **23 → 25** dire
 runner or artifact count moves, since every case in this category compiles to `expected/rejection.json`
 alone and none of the four backend runners ever iterates it.
 
+**`adversarial/026` (#1907, found by #1872's own code review)** extends `field-not-filterable` to a
+third surface: a `groupable: true, filterable: false` colId consumed as a `groupKeys` drill-down key
+(`DrillDownFilter.Synthesize` turns it into a literal filter predicate, same as `filterModel` would).
+`adversarial` moves **25 → 26** directories; no other runner or artifact count moves, for the same
+reason as `024`/`025`.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,

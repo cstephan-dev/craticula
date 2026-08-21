@@ -90,9 +90,12 @@ public static class FieldAllowlistValidator
     /// in <paramref name="schema"/>'s allowlist AND declared capable of the use it is being put to —
     /// <see cref="FieldConfig.Groupable"/> for a group column,
     /// <see cref="FieldConfig.Aggregatable"/> containing the requested
-    /// <see cref="Aggregation.Func"/> for an aggregation, and (#1872)
-    /// <see cref="FieldConfig.Filterable"/> for a <c>setValuesSpec.colId</c>. Reports every violation
-    /// found, not just the first, matching this file's own collect-then-throw shape.
+    /// <see cref="Aggregation.Func"/> for an aggregation, (#1872) <see cref="FieldConfig.Filterable"/>
+    /// for a <c>setValuesSpec.colId</c>, and (#1907) <see cref="FieldConfig.Filterable"/> again for
+    /// whichever prefix of <c>group.GroupCols</c> has already been CONSUMED by a
+    /// <c>group.GroupKeys</c> entry — see the remarks below on why only that prefix, not the whole
+    /// list, is held to it. Reports every violation found, not just the first, matching this file's
+    /// own collect-then-throw shape.
     ///
     /// <para><b>Lenient mode does not apply here, deliberately.</b> SC-1's Lenient contract is that
     /// an unknown <em>condition</em> silently vanishes; a condition that vanishes only widens the
@@ -115,6 +118,19 @@ public static class FieldAllowlistValidator
     /// to have an opinion about. Both failures surface as <see cref="UnknownFieldException"/> so a
     /// host maps them onto the one <c>rejectedAt: "allowlist"</c> stage
     /// <c>spec/fixtures/adversarial/003-unknown-colid-row-group</c> pins.</para>
+    ///
+    /// <para><b>Why only the CONSUMED prefix of <c>GroupCols</c> is held to <c>Filterable</c>
+    /// (#1907), not the whole list.</b> <see cref="DrillDownFilter.Synthesize"/> turns only the first
+    /// <c>group.GroupKeys.Count</c> entries of <c>GroupCols</c> into literal <c>WHERE col = &lt;client
+    /// value&gt;</c> predicates — the remaining, not-yet-drilled-into columns never become a predicate
+    /// in THIS request. Bucketing across every value of a <c>filterable: false</c> column (plain
+    /// <c>groupable: true</c> grouping, no key chosen) is unaffected — <c>Groupable</c> alone already
+    /// permits it. The client choosing ONE specific value to drill into is a different operation
+    /// entirely: functionally identical to the same condition sent through <c>filterModel</c>, merely
+    /// arriving over a different wire channel, and hard-failed for the same reason a consumed
+    /// <c>groupKey</c> can never be silently dropped either (see the Lenient remarks above) — doing so
+    /// would return a DIFFERENT (broader) bucket's rows mislabeled as the one the client asked for,
+    /// which is the exact row-level disclosure <c>filterable: false</c> exists to prevent.</para>
     ///
     /// <para><b>A <c>setValuesSpec.colId</c> gets the SAME capability check as a group column, and
     /// that symmetry is #1872's whole point.</b> The flag it is held to is
@@ -155,17 +171,40 @@ public static class FieldAllowlistValidator
             }
         }
 
-        foreach (var colId in group?.GroupCols ?? [])
+        var groupCols = group?.GroupCols ?? [];
+        var consumedKeyCount = group?.GroupKeys.Count ?? 0;
+
+        for (var i = 0; i < groupCols.Count; i++)
         {
+            var colId = groupCols[i];
+
             if (!schema.Fields.TryGetValue(colId, out var config))
             {
                 violations.Add(new AllowlistViolation(
                     colId, $"{colId} (rowGroupCols: not present in GridSchema.fields)", "unknown-field"));
+                continue;
             }
-            else if (!config.Groupable)
+
+            if (!config.Groupable)
             {
                 violations.Add(new AllowlistViolation(
                     colId, $"{colId} (rowGroupCols: declared groupable:false)", "unknown-field"));
+            }
+
+            // #1907: a CONSUMED group key (index < GroupKeys.Count) becomes a literal
+            // `WHERE col = <client value>` drill-down predicate (DrillDownFilter.Synthesize) --
+            // functionally a filter condition regardless of wire channel, so it is held to the SAME
+            // Filterable flag as an ordinary filterModel entry, hard-fail like every other structural
+            // colId here. An UNCONSUMED GroupCol (declared for a deeper drill level, no key supplied
+            // yet) is deliberately NOT checked: bucketing across every value via GROUP BY is what
+            // Groupable alone already permits, and is a materially different disclosure than one
+            // client-chosen value's rows.
+            if (i < consumedKeyCount && !config.Filterable)
+            {
+                violations.Add(new AllowlistViolation(
+                    colId,
+                    $"{colId} (rowGroupCols: consumed as a drill-down key, declared filterable:false)",
+                    "field-not-filterable"));
             }
         }
 

@@ -68,15 +68,16 @@ safe-parameterization behavior, not here.
 | 023 | `023-duplicate-aggregation-output-names` | `requestParsing` | `duplicate-output-name` | AGG-2, GRP-4, SEC-2, SEC-6, AR-8 |
 | 024 | `024-filterable-false-in-filter-model` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1 |
 | 025 | `025-filterable-false-as-set-values-target` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1, GRP-6 |
+| 026 | `026-filterable-false-as-drilldown-key` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1, GRP-1, GRP-2, GRP-5 |
 
 ## Breakdown by validation stage
 
-- `allowlist`: 6 (001–003, 019, 024–025)
+- `allowlist`: 7 (001–003, 019, 024–026)
 - `resourceLimits`: 8 (004–011)
 - `typeCoercion`: 4 (012–015)
 - `requestParsing`: 7 (016–018, 020–023)
 
-**Total: 25 fixtures.**
+**Total: 26 fixtures.**
 
 ## Notes on construction
 
@@ -116,3 +117,12 @@ safe-parameterization behavior, not here.
   though — unlike 001–003/019 — Lenient would silently strip it instead, since it is still only a
   *condition*); `025` puts the same colId in `setValuesRequest.colId`, which no `GridSchemaMode` may
   drop, mirroring `003`'s own no-Lenient-carve-out for `rowGroupCols`.
+- **026** (#1907, found by #1872's own code review) is a third `field-not-filterable` surface: its
+  colId (`region`) is declared `groupable: true, filterable: false` — bucketing is allowed, but the
+  request never sends a `filterModel` condition at all. Instead `rowGroupCols: [region]` +
+  `groupKeys: ["West"]` drills into one specific value, which `DrillDownFilter.Synthesize` turns into
+  a literal `region = 'West'` predicate — functionally a filter condition over a different wire
+  channel. No `GridSchemaMode` may drop it, for the same reason `003`'s `rowGroupCols` cannot: only
+  the CONSUMED prefix of `GroupCols` (i.e. columns with a corresponding `groupKeys` entry) is checked
+  — a `GroupCols` entry with no key chosen yet is untouched, since plain bucketing across every value
+  is exactly what `groupable: true` alone already permits.

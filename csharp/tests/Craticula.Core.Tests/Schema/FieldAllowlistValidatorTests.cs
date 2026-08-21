@@ -26,7 +26,8 @@ public class FieldAllowlistValidatorTests
 
     /// <summary>#1872: a schema whose <c>costBasis</c> field IS allowlisted but declared
     /// <c>filterable: false</c> — distinct from an unlisted colId, which <see cref="MakeSchema"/>'s
-    /// two fields alone already cover.</summary>
+    /// two fields alone already cover. <c>costBasis</c> is also NOT <c>groupable</c> (the default),
+    /// which #1907's "both violations" test below relies on.</summary>
     private static GridSchema MakeSchemaWithNonFilterableField(GridSchemaMode mode) => new()
     {
         Mode = mode,
@@ -37,6 +38,22 @@ public class FieldAllowlistValidatorTests
             ["id"] = new() { Type = FieldType.Int64 },
             ["name"] = new() { Type = FieldType.String },
             ["costBasis"] = new() { Type = FieldType.Decimal, Filterable = false }
+        }
+    };
+
+    /// <summary>#1907: a schema whose <c>region</c> field is declared BOTH <c>groupable: true</c> AND
+    /// <c>filterable: false</c> — the combination that lets a request group by it while still
+    /// forbidding a client from drilling into one specific value of it.</summary>
+    private static GridSchema MakeSchemaWithGroupableNonFilterableField(GridSchemaMode mode) => new()
+    {
+        Mode = mode,
+        Source = "items",
+        StableKey = "id",
+        Fields = new Dictionary<string, FieldConfig>
+        {
+            ["id"] = new() { Type = FieldType.Int64 },
+            ["name"] = new() { Type = FieldType.String },
+            ["region"] = new() { Type = FieldType.String, Groupable = true, Filterable = false }
         }
     };
 
@@ -232,5 +249,70 @@ public class FieldAllowlistValidatorTests
         var setValues = new SetValuesSpec { ColId = "name" };
 
         FieldAllowlistValidator.ValidateStructuralColumns(schema, group: null, aggregations: null, setValues);
+    }
+
+    // ---- #1907: a CONSUMED groupKeys entry is held to the SAME Filterable flag as an ordinary
+    // ---- filter condition, because DrillDownFilter.Synthesize turns it into one -----------------------
+
+    [Fact]
+    public void ValidateStructuralColumns_Throws_ForANonFilterableConsumedDrillDownKey_InStrictMode()
+    {
+        var schema = MakeSchemaWithGroupableNonFilterableField(GridSchemaMode.Strict);
+        var group = new GroupSpec { GroupCols = ["region"], GroupKeys = [new StringValue { Value = "West" }] };
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations: null));
+
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("region", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
+    }
+
+    /// <summary>The decisive contrast, mirroring <see cref="ValidateStructuralColumns_Throws_ForANonFilterableSetValuesColId_EvenInLenientMode"/>:
+    /// the IDENTICAL flag on the IDENTICAL colId still throws in Lenient mode, because dropping a
+    /// consumed drill-down key would silently return a DIFFERENT bucket's rows mislabeled as the one
+    /// the client asked for.</summary>
+    [Fact]
+    public void ValidateStructuralColumns_Throws_ForANonFilterableConsumedDrillDownKey_EvenInLenientMode()
+    {
+        var schema = MakeSchemaWithGroupableNonFilterableField(GridSchemaMode.Lenient);
+        var group = new GroupSpec { GroupCols = ["region"], GroupKeys = [new StringValue { Value = "West" }] };
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations: null));
+
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("region", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
+    }
+
+    /// <summary>The scoping proof: the SAME non-filterable-but-groupable column is untouched while it
+    /// is only declared for a (not-yet-drilled-into) grouping level — plain bucketing across every
+    /// value is exactly what <c>groupable: true</c> alone already permits. Only a CONSUMED key (see
+    /// the two tests above) triggers the check.</summary>
+    [Fact]
+    public void ValidateStructuralColumns_DoesNotThrow_ForANonFilterableGroupCol_WhenNoKeyIsConsumedYet()
+    {
+        var schema = MakeSchemaWithGroupableNonFilterableField(GridSchemaMode.Strict);
+        var group = new GroupSpec { GroupCols = ["region"], GroupKeys = [] };
+
+        FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations: null);
+    }
+
+    /// <summary>A consumed key that is BOTH not groupable (the schema-wide default) AND not filterable
+    /// reports two distinct violations, not just one — matching this file's "collect every violation"
+    /// precedent already pinned by <see cref="Strict_CollectsBothUnknownAndNonFilterableColIds_WithDistinctReasons"/>.</summary>
+    [Fact]
+    public void ValidateStructuralColumns_ReportsBothGroupableAndFilterableViolations_ForTheSameConsumedColId()
+    {
+        var schema = MakeSchemaWithNonFilterableField(GridSchemaMode.Strict);
+        var group = new GroupSpec { GroupCols = ["costBasis"], GroupKeys = [new StringValue { Value = "100" }] };
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations: null));
+
+        Assert.Equal(2, ex.Violations.Count);
+        Assert.Contains(ex.Violations, v => v.ColId == "costBasis" && v.Reason == "unknown-field" && v.DisplayText.Contains("groupable:false"));
+        Assert.Contains(ex.Violations, v => v.ColId == "costBasis" && v.Reason == "field-not-filterable");
     }
 }

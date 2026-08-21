@@ -991,7 +991,15 @@ forgets returns wrong rows rather than an error.
 *The colIds are client-controlled, and pass the same boundary as a filter's.* `rowGroupCols` and
 `valueCols` arrive off the wire exactly as `filterModel` does, so every `groupCols` entry and every
 aggregation `field` MUST pass the SC-1 allowlist, and MUST additionally satisfy SC-2's per-field
-`groupable` / `aggregatable` capability flags.
+`groupable` / `aggregatable` capability flags. **A CONSUMED `groupCols` entry (#1907) additionally
+satisfies `filterable`**, on top of `groupable`: the not-yet-consumed suffix is bucketed across every
+value, which `groupable` alone already permits, but the consumed prefix becomes a literal drill-down
+predicate (GRP-2, below) — functionally a filter condition over a different wire channel, so it is
+held to the identical flag `filterModel` is, hard-failed in every mode (this is a structural colId,
+not a condition — the same reasoning the paragraph above already gives for `groupCols`/aggregation
+fields). See the BM-3 addendum's own remarks on `filterable` now spanning three surfaces (the
+ordinary filter tree, where Lenient MAY still strip it; `setValuesRequest.colId`; and this one) and
+why only the filter tree keeps Lenient's carve-out.
 **SC-1's Lenient mode does not apply to either.** Lenient may silently drop an unknown *condition*,
 because the result merely widens and a host can knowingly accept that; neither of these is a
 condition. Dropping a `groupCol` changes which level the response describes — and, with its
@@ -1415,16 +1423,20 @@ has no values rather than that the server declined to say. The capability flag i
 `filterable` (a set filter's value list is the filter UI's own data source, so `groupable` and
 `sortable` are the wrong questions even though the compiled query buckets and orders the column) —
 **#1872** enforces the identical flag on the ordinary filter path too, so a host can no longer refuse
-a column's set-filter values while still honouring that same column's `filterModel` entry.
+a column's set-filter values while still honouring that same column's `filterModel` entry. **#1907**
+extends it to a third surface: a CONSUMED `groupCols` entry (GRP-1, above) is likewise held to
+`filterable`, since a `groupKeys` drill-down predicate is functionally a filter condition arriving
+over a different wire channel.
 
-**The two paths are NOT held to the same Lenient-mode rule, deliberately (#1872).** On the filter
-path, a `filterable:false` colId referenced in `filterModel`/`customFilters` is treated exactly like
-an unknown one: Strict rejects it, Lenient silently strips the condition — it is still only a
-*condition*, and dropping one only widens the result set, the trade SC-1's Lenient mode already
-exists to let a host accept. As a `setValuesRequest.colId`, though, no mode may drop it, for the
-identical reason the paragraph above gives for the plain unknown-field case: the `colId` here *is*
-the question, not a condition narrowing it, so there is no narrower answer left to give once it is
-gone.
+**The three paths are NOT all held to the same Lenient-mode rule, deliberately (#1872, #1907).** On
+the ordinary filter path, a `filterable:false` colId referenced in `filterModel`/`customFilters` is
+treated exactly like an unknown one: Strict rejects it, Lenient silently strips the condition — it is
+still only a *condition*, and dropping one only widens the result set, the trade SC-1's Lenient mode
+already exists to let a host accept. As a `setValuesRequest.colId`, or as a CONSUMED `groupCols`
+entry, no mode may drop it, for the identical reason the paragraph above gives for the plain
+unknown-field case: each one *is* the question (or, for a consumed key, changes which bucket's rows
+come back under the label the client asked for), not a condition narrowing it, so there is no
+narrower answer left to give once it is gone.
 
 **Cross-links.** `$defs/groupSpec` (`groupCols`, `groupKeys`), `$defs/aggregation`,
 `$defs/sortItem`, `$defs/setValuesSpec`, AGG-1..AGG-4 (AGG-4 pins the `terms` ordering GRP-6(a)'s

@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "allowlist",
+  "reason": "field-not-filterable",
+  "note": "region is groupable:true (bucketing is allowed) but filterable:false. The request drills into region=West via groupKeys, which DrillDownFilter.Synthesize turns into a literal WHERE region = 'West' predicate -- functionally a filter condition regardless of wire channel, so it is rejected the same way filterModel: {\"region\": ...} would be (#1907)."
+}
