@@ -86,8 +86,9 @@ public class FieldAllowlistValidatorTests
         var ex = Assert.Throws<UnknownFieldException>(
             () => FieldAllowlistValidator.Validate(schema, ["id", "costBasis"]));
 
-        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith("costBasis", StringComparison.Ordinal));
-        Assert.Contains("filterable:false", ex.ColIds.Single(rejected => rejected.StartsWith("costBasis", StringComparison.Ordinal)));
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("costBasis", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
     }
 
     /// <summary>The two rejection reasons stay distinguishable when BOTH occur in one request: a
@@ -102,9 +103,15 @@ public class FieldAllowlistValidatorTests
         var ex = Assert.Throws<UnknownFieldException>(
             () => FieldAllowlistValidator.Validate(schema, ["secretNotes", "id", "costBasis"]));
 
+        // Distinguishable by DisplayText (pre-existing string-based contract, unchanged) AND by the
+        // machine-readable Reason (#1872's own addition) — not just one or the other.
         Assert.Equal(2, ex.ColIds.Count);
         Assert.Contains("secretNotes", ex.ColIds);
         Assert.Contains("costBasis (declared filterable:false)", ex.ColIds);
+
+        Assert.Equal(2, ex.Violations.Count);
+        Assert.Equal("unknown-field", ex.Violations.Single(v => v.ColId == "secretNotes").Reason);
+        Assert.Equal("field-not-filterable", ex.Violations.Single(v => v.ColId == "costBasis").Reason);
     }
 
     /// <summary>Lenient strips a non-filterable colId the SAME way it strips an unknown one --
@@ -196,8 +203,9 @@ public class FieldAllowlistValidatorTests
         var ex = Assert.Throws<UnknownFieldException>(
             () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group: null, aggregations: null, setValues));
 
-        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith("costBasis", StringComparison.Ordinal));
-        Assert.Contains(ex.ColIds, rejected => rejected.Contains("filterable:false"));
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("costBasis", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
     }
 
     /// <summary>The decisive contrast with <see cref="Lenient_StripsNonFilterableColIds_AndKeepsFilterableOnes_WithoutThrowing"/>:
@@ -212,7 +220,9 @@ public class FieldAllowlistValidatorTests
         var ex = Assert.Throws<UnknownFieldException>(
             () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group: null, aggregations: null, setValues));
 
-        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith("costBasis", StringComparison.Ordinal));
+        var violation = Assert.Single(ex.Violations);
+        Assert.Equal("costBasis", violation.ColId);
+        Assert.Equal("field-not-filterable", violation.Reason);
     }
 
     [Fact]

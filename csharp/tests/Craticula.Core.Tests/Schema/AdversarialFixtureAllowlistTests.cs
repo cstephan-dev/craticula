@@ -152,7 +152,7 @@ public class AdversarialFixtureAllowlistTests
         var ex = Assert.Throws<UnknownFieldException>(
             () => FieldAllowlistValidator.Validate(schema, [colId]));
 
-        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith(colId, StringComparison.Ordinal) && rejected.Contains("filterable:false"));
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
         AssertRejectedAsFieldNotFilterable(fixtureDir);
     }
 
@@ -180,7 +180,9 @@ public class AdversarialFixtureAllowlistTests
             schema: schema,
             limits: new ResourceLimits()));
 
-        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith(colId, StringComparison.Ordinal));
+        // Reason, not just colId — the pipeline must reject this AS non-filterable, not merely reject
+        // it (an "unknown-field" verdict on the same colId would pass a colId-only assertion too).
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
         AssertRejectedAsFieldNotFilterable(fixtureDir);
     }
 
@@ -201,7 +203,7 @@ public class AdversarialFixtureAllowlistTests
         var ex = Assert.Throws<UnknownFieldException>(() => FieldAllowlistValidator.ValidateStructuralColumns(
             schema, group: null, aggregations: null, new SetValuesSpec { ColId = colId }));
 
-        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith(colId, StringComparison.Ordinal) && rejected.Contains("filterable:false"));
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
         AssertRejectedAsFieldNotFilterable(fixtureDir);
     }
 
@@ -223,7 +225,7 @@ public class AdversarialFixtureAllowlistTests
             schema: schema,
             limits: new ResourceLimits()));
 
-        Assert.Contains(ex.ColIds, rejected => rejected.StartsWith(colId, StringComparison.Ordinal));
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
         AssertRejectedAsFieldNotFilterable(fixtureDir);
     }
 }

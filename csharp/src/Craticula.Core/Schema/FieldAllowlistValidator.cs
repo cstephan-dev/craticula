@@ -10,12 +10,13 @@ namespace Craticula.Core.Schema;
 ///
 /// <para><b>Two entry points, because two kinds of colId reference exist and they must fail
 /// differently.</b> <see cref="Validate"/>/<see cref="Strip"/> handle a <em>filter</em> colId, which
-/// <see cref="GridSchemaMode.Lenient"/> may silently drop. <see cref="ValidateStructuralColumns"/>
-/// handles the colIds that define what the answer IS — a <c>groupSpec</c>'s columns, an
-/// aggregation's field and a <c>setValuesSpec</c>'s target column — which no mode may drop, and which
-/// additionally have to satisfy SC-2's per-field
-/// <see cref="FieldConfig.Groupable"/>/<see cref="FieldConfig.Aggregatable"/> capability flags. See
-/// that method for the reasoning.</para>
+/// <see cref="GridSchemaMode.Lenient"/> may silently drop — checking both SC-1 membership and (#1872)
+/// SC-2's <see cref="FieldConfig.Filterable"/> flag. <see cref="ValidateStructuralColumns"/> handles
+/// the colIds that define what the answer IS — a <c>groupSpec</c>'s columns, an aggregation's field
+/// and a <c>setValuesSpec</c>'s target column — which no mode may drop, and which additionally have
+/// to satisfy SC-2's per-field <see cref="FieldConfig.Groupable"/>/<see cref="FieldConfig.Aggregatable"/>/
+/// (#1872) <see cref="FieldConfig.Filterable"/> capability flags. See that method for the
+/// reasoning.</para>
 /// </summary>
 public static class FieldAllowlistValidator
 {
@@ -48,19 +49,19 @@ public static class FieldAllowlistValidator
     {
         var allowed = new List<string>();
         var stripped = new List<string>();
-        var rejected = new List<string>();
+        var violations = new List<AllowlistViolation>();
 
         foreach (var colId in colIds)
         {
             if (!schema.Fields.TryGetValue(colId, out var config))
             {
                 stripped.Add(colId);
-                rejected.Add(colId);
+                violations.Add(new AllowlistViolation(colId, colId, "unknown-field"));
             }
             else if (!config.Filterable)
             {
                 stripped.Add(colId);
-                rejected.Add($"{colId} (declared filterable:false)");
+                violations.Add(new AllowlistViolation(colId, $"{colId} (declared filterable:false)", "field-not-filterable"));
             }
             else
             {
@@ -73,9 +74,9 @@ public static class FieldAllowlistValidator
         // neither Strict nor Lenient (unreachable today now that GridSchemaJson.Options rejects
         // out-of-range enum values, but this is the allowlist's own defense-in-depth) must fail
         // closed, not silently strip.
-        if (schema.Mode != GridSchemaMode.Lenient && rejected.Count > 0)
+        if (schema.Mode != GridSchemaMode.Lenient && violations.Count > 0)
         {
-            throw new UnknownFieldException(rejected);
+            throw new UnknownFieldException(violations);
         }
 
         return new AllowlistResult(allowed, stripped);
@@ -134,17 +135,23 @@ public static class FieldAllowlistValidator
     {
         ArgumentNullException.ThrowIfNull(schema);
 
-        var rejected = new List<string>();
+        var violations = new List<AllowlistViolation>();
 
         if (setValues is not null)
         {
             if (!schema.Fields.TryGetValue(setValues.ColId, out var config))
             {
-                rejected.Add($"{setValues.ColId} (setValuesRequest.colId: not present in GridSchema.fields)");
+                violations.Add(new AllowlistViolation(
+                    setValues.ColId,
+                    $"{setValues.ColId} (setValuesRequest.colId: not present in GridSchema.fields)",
+                    "unknown-field"));
             }
             else if (!config.Filterable)
             {
-                rejected.Add($"{setValues.ColId} (setValuesRequest.colId: declared filterable:false)");
+                violations.Add(new AllowlistViolation(
+                    setValues.ColId,
+                    $"{setValues.ColId} (setValuesRequest.colId: declared filterable:false)",
+                    "field-not-filterable"));
             }
         }
 
@@ -152,11 +159,13 @@ public static class FieldAllowlistValidator
         {
             if (!schema.Fields.TryGetValue(colId, out var config))
             {
-                rejected.Add($"{colId} (rowGroupCols: not present in GridSchema.fields)");
+                violations.Add(new AllowlistViolation(
+                    colId, $"{colId} (rowGroupCols: not present in GridSchema.fields)", "unknown-field"));
             }
             else if (!config.Groupable)
             {
-                rejected.Add($"{colId} (rowGroupCols: declared groupable:false)");
+                violations.Add(new AllowlistViolation(
+                    colId, $"{colId} (rowGroupCols: declared groupable:false)", "unknown-field"));
             }
         }
 
@@ -164,19 +173,22 @@ public static class FieldAllowlistValidator
         {
             if (!schema.Fields.TryGetValue(aggregation.Field, out var config))
             {
-                rejected.Add($"{aggregation.Field} (valueCols: not present in GridSchema.fields)");
+                violations.Add(new AllowlistViolation(
+                    aggregation.Field, $"{aggregation.Field} (valueCols: not present in GridSchema.fields)", "unknown-field"));
             }
             else if (!config.Aggregatable.Contains(aggregation.Func))
             {
-                rejected.Add(
+                violations.Add(new AllowlistViolation(
+                    aggregation.Field,
                     $"{aggregation.Field} (valueCols: '{aggregation.Func.ToString().ToLowerInvariant()}' is not in " +
-                    $"its declared aggregatable set)");
+                    $"its declared aggregatable set)",
+                    "unknown-field"));
             }
         }
 
-        if (rejected.Count > 0)
+        if (violations.Count > 0)
         {
-            throw new UnknownFieldException(rejected);
+            throw new UnknownFieldException(violations);
         }
     }
 

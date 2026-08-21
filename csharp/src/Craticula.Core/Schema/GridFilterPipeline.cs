@@ -141,8 +141,9 @@ public static class GridFilterPipeline
     /// letting it flow through the remaining stages is what gives it SEM-5 coercion and its own SEC-3
     /// leaf for free. It cannot be stripped on the way: its field is
     /// <see cref="SetValuesSpec.ColId"/>, which the structural check two lines above has already
-    /// proved present in <see cref="GridSchema.Fields"/>, so
-    /// <see cref="GridSchemaMode.Lenient"/> has nothing to strip it for.</para>
+    /// proved present in <see cref="GridSchema.Fields"/> AND (#1872) declared
+    /// <see cref="FieldConfig.Filterable"/> — the two things <see cref="GridSchemaMode.Lenient"/>
+    /// could otherwise have had an opinion about — so it has nothing left to strip it for.</para>
     ///
     /// <para><b>Order inside the <c>WHERE</c>: the user's filter leads, the prefix trails.</b> No
     /// fixture pins it (none carries both), and it is stated in GRP-6 rather than left open because
