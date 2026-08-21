@@ -756,16 +756,27 @@ public static class SqlQueryBuilder
     /// <c>&lt;field&gt;_&lt;func&gt;</c>. Anything else is rejected rather than rendered — a
     /// plausible-looking statement the engine refuses is worse than a compiler error naming the
     /// reason.</para>
+    ///
+    /// <para><b>More than one match is that same rejection, not a pick.</b> #1886's output-name
+    /// uniqueness does not imply column-id uniqueness (see <see cref="GroupedSortTarget"/>'s own
+    /// remarks): two unaliased functions over one field share a column id while resolving to distinct,
+    /// legal output names. The FIRST match here used to win silently; now every match is required to
+    /// be the only one.</para>
     /// </summary>
     private static (string Column, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
     {
-        foreach (var aggregation in aggregations)
+        var matches = GroupedSortTarget.MatchingByColumnId(sortField, aggregations);
+
+        if (matches.Count > 1)
         {
-            if (aggregation.ColumnId == sortField)
-            {
-                return (AggregateCall(aggregation, context), ResolveField(aggregation.Field, context));
-            }
+            throw new SqlCompilationException(
+                $"Ambiguous ORDER BY target for a grouped level. {GroupedSortTarget.DescribeAmbiguity(sortField, matches)}");
+        }
+
+        if (matches.Count == 1)
+        {
+            return (AggregateCall(matches[0], context), ResolveField(matches[0].Field, context));
         }
 
         if (sortField == groupColumn)

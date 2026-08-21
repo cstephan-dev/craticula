@@ -249,6 +249,30 @@ public class MongoPipelineGroupingTests
         Assert.Contains("the $group stage does not produce", failure.Message);
     }
 
+    /// <summary>
+    /// Sql's copy of this method had the identical gap — first-match on
+    /// <see cref="Aggregation.ColumnId"/> — which is why the matching itself moved to
+    /// <see cref="GroupedSortTarget"/> rather than being fixed twice. <c>sum</c> and <c>avg</c> over
+    /// one unaliased field resolve to distinct output names (#1886) while sharing one column id, so a
+    /// request naming that id in <c>sortModel</c> does not say which of the two it means. Before this
+    /// fix the FIRST aggregation in the request's own array won silently.
+    /// </summary>
+    [Fact]
+    public void Sorting_By_A_Column_Id_Shared_By_Two_Unaliased_Aggregations_Is_Rejected_Not_Guessed()
+    {
+        var failure = Assert.Throws<MongoCompilationException>(() => Compile(
+            Group(["region"]),
+            [
+                new Aggregation { Field = "amount", Func = AggregationFunc.Sum },
+                new Aggregation { Field = "amount", Func = AggregationFunc.Avg }
+            ],
+            sort: [new SortItem { Field = "amount", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }]));
+
+        Assert.Contains("amount", failure.Message);
+        Assert.Contains("Sum", failure.Message);
+        Assert.Contains("Avg", failure.Message);
+    }
+
     [Fact]
     public void An_Aggregation_Alias_Names_The_Accumulator_And_Is_What_A_Sort_Key_Matches()
     {

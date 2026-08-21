@@ -1074,17 +1074,28 @@ public static class MongoPipelineBuilder
     /// IS a real field of the document a later <c>$sort</c> stage reads, not an alias in a
     /// <c>SELECT</c> scope, so GRP-4's "repeat the expression, do not refer back to the output name"
     /// is a SQL rule and explicitly does not reach here.</para>
+    ///
+    /// <para><b>More than one match is rejected, not picked.</b> #1886's output-name uniqueness does
+    /// not imply column-id uniqueness (see <see cref="GroupedSortTarget"/>'s own remarks): two
+    /// unaliased functions over one field share a column id while resolving to distinct, legal output
+    /// names. The FIRST match here used to win silently — Sql's byte-identical copy of this method had
+    /// the same gap, which is why the matching itself is shared now rather than compiler-local.</para>
     /// </summary>
     private static (string Bucket, string Path, FieldConfig Field) ResolveGroupedSortTarget(
         string sortField, string groupColumn, IReadOnlyList<Aggregation> aggregations, Context context)
     {
-        foreach (var aggregation in aggregations)
+        var matches = GroupedSortTarget.MatchingByColumnId(sortField, aggregations);
+
+        if (matches.Count > 1)
         {
-            if (aggregation.ColumnId == sortField)
-            {
-                var output = aggregation.OutputName;
-                return ($"__{output}NullBucket", output, ResolveField(aggregation.Field, context));
-            }
+            throw new MongoCompilationException(
+                $"Ambiguous $sort target for a grouped level. {GroupedSortTarget.DescribeAmbiguity(sortField, matches)}");
+        }
+
+        if (matches.Count == 1)
+        {
+            var output = matches[0].OutputName;
+            return ($"__{output}NullBucket", output, ResolveField(matches[0].Field, context));
         }
 
         if (sortField == groupColumn)

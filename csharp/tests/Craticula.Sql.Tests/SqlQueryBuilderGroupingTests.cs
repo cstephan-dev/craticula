@@ -339,6 +339,32 @@ public class SqlQueryBuilderGroupingTests
     }
 
     /// <summary>
+    /// The gap #1886's review found and #1886 itself left open: output-name uniqueness
+    /// (<c>AggregationValidator</c>) does not imply column-id uniqueness. <c>sum</c> and <c>avg</c>
+    /// over one unaliased field — <c>page-export/011</c>'s own shape — resolve to distinct, legal
+    /// output names (<c>amount_sum</c>, <c>amount_avg</c>) while sharing one column id (<c>amount</c>).
+    /// A request is free to carry both; what it must not do is ask to SORT by that shared id, because
+    /// nothing in the request says which of the two functions is meant.
+    ///
+    /// <para>Before this fix, <c>ResolveGroupedSortTarget</c> silently took the FIRST aggregation
+    /// whose column id matched — so reordering a request's own <c>valueCols</c> array, with nothing
+    /// else different, changed which aggregate a grid page sorted by. That is precisely the
+    /// plausible-looking wrong answer this method's own doc says a compiler error should replace.</para>
+    /// </summary>
+    [Fact]
+    public void Sorting_By_A_Column_Id_Shared_By_Two_Unaliased_Aggregations_Is_Rejected_Not_Guessed()
+    {
+        var exception = Assert.Throws<SqlCompilationException>(() => Compile(
+            Group(["region"]),
+            [SumAmount, new Aggregation { Field = "amount", Func = AggregationFunc.Avg }],
+            sort: [new SortItem { Field = "amount", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }]));
+
+        Assert.Contains("amount", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Sum", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Avg", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// More keys than levels is not a drill-down at all — it is a malformed request, and consuming
     /// only as many as fit would silently return a DIFFERENT bucket's rows.
     ///
