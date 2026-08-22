@@ -40,7 +40,7 @@ internal static class MongoValueReader
     ///
     /// <para><b>Every conversion failure is caught and re-thrown here, not left to whichever framework
     /// method noticed it</b> — mirroring <c>DapperValueReader.Read</c>'s own reasoning: the parsing
-    /// methods this file calls (<see cref="Convert.ToInt64(double, IFormatProvider?)"/> and its
+    /// methods this file calls (<see cref="Convert.ToInt64(object?, IFormatProvider?)"/> and its
     /// siblings, <see cref="DateOnly.ParseExact(string, string, IFormatProvider?)"/>,
     /// <see cref="DateTime.Parse(string, IFormatProvider?, DateTimeStyles)"/>) embed the UNTRUNCATED
     /// value in their own exception message, which <see cref="Truncate"/> exists to bound. Deliberately
@@ -104,7 +104,7 @@ internal static class MongoValueReader
     /// on an out-of-range <see cref="BsonDouble"/> and maps <see cref="double.NaN"/> to <c>0</c>, rather
     /// than throwing, which is exactly the silent-wrong-answer this reader's own doc says it exists to
     /// prevent (measured against MongoDB.Bson 3.11.0 — review found this, not assumed). Routing the
-    /// extracted native value through <see cref="Convert.ToInt64(double, IFormatProvider?)"/> instead
+    /// extracted native value through <see cref="Convert.ToInt64(object?, IFormatProvider?)"/> instead
     /// gives the identical loud-overflow behavior <c>Craticula.Dapper.DapperValueReader.ToInt64</c>
     /// already has for the equivalent ADO.NET shape.
     /// </summary>
@@ -135,12 +135,25 @@ internal static class MongoValueReader
             $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a decimal (FieldType.Decimal).")
     };
 
+    /// <summary>
+    /// The <see cref="BsonDecimal128"/> arm goes through <see cref="Decimal128.ToDouble(Decimal128)"/>
+    /// DIRECTLY rather than <see cref="Decimal128.ToDecimal(Decimal128)"/> then
+    /// <see cref="Convert.ToDouble(decimal)"/> — review found the two-step route re-introduces exactly
+    /// the class of bug this rewrite exists to remove, by narrowing the domain to <see cref="decimal"/>'s
+    /// (~1e±28) before ever reaching <see cref="double"/>'s (~1.8e308): a value like <c>1E-40</c> silently
+    /// underflows to <c>0</c> instead of the double it can represent exactly, and a value like <c>1E30</c>
+    /// throws <see cref="OverflowException"/> from the decimal step even though it fits comfortably in a
+    /// double. `$avg`/`$sum` over a non-decimal source (<c>MongoGridQuery.ResolveAggregationType</c>
+    /// widens those to <see cref="FieldType.Double"/>) genuinely returns a <see cref="BsonDecimal128"/>
+    /// the moment any input document stores a <c>NumberDecimal</c>, so this is reachable in ordinary use,
+    /// not only via a mis-typed document.
+    /// </summary>
     private static double ToDouble(BsonValue raw) => raw switch
     {
         BsonDouble d => d.Value,
         BsonInt64 i => i.Value,
         BsonInt32 i => i.Value,
-        BsonDecimal128 d => Convert.ToDouble(Decimal128.ToDecimal(d.Value), CultureInfo.InvariantCulture),
+        BsonDecimal128 d => Decimal128.ToDouble(d.Value),
         BsonString s => Convert.ToDouble(s.Value, CultureInfo.InvariantCulture),
         _ => throw new MongoDriverCompilationException(
             $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a double (FieldType.Double).")

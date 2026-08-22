@@ -280,7 +280,56 @@ public sealed class MongoGridQueryTests
         Assert.Equal(3, page.RowCount); // AMER, APAC, EMEA -- three buckets, not six seeded documents
     }
 
-    // ---- #1647's own code review: two hazards found and fixed, both proven here -----------------------
+    // ---- #1647's own code review: three hazards found and fixed, all proven here -----------------------
+
+    /// <summary>
+    /// The re-verification pass on this story's own fix found <c>ToDouble</c>'s first
+    /// <c>BsonDecimal128</c> arm routed through <c>decimal</c> before reaching <c>double</c> —
+    /// narrowing the domain to <c>decimal</c>'s (~1e±28) and re-introducing the exact silent-wrong-value
+    /// class the surrounding rewrite exists to remove (a tiny value like <c>1E-40</c> underflowed to
+    /// <c>0</c> instead of the double it can represent exactly). Reachable in ordinary use, not only via
+    /// a mis-typed document: MongoDB promotes an <c>$avg</c>'s result type to Decimal128 the moment ANY
+    /// input to the average is stored as <c>NumberDecimal</c>, even when the schema declares the source
+    /// field <see cref="FieldType.Int64"/> — mixed here deliberately to trigger exactly that promotion.
+    /// </summary>
+    [Fact]
+    public async Task An_Average_Promoted_To_Decimal128_By_MongoDB_Still_Reads_Back_As_Double()
+    {
+        var schema = GridSchema.Parse("""
+            {
+              "mode": "strict", "source": "items", "stableKey": "id",
+              "fields": {
+                "id": { "type": "int64", "filterable": true, "sortable": true },
+                "category": { "type": "string", "filterable": true, "sortable": true, "groupable": true },
+                "quantity": { "type": "int64", "filterable": true, "sortable": true, "aggregatable": ["avg"] }
+              }
+            }
+            """);
+
+        IReadOnlyList<BsonDocument> documents =
+        [
+            // A mismatched-type seed: MongoDB's $avg promotes to Decimal128 once ANY input is
+            // NumberDecimal, even though the schema declares this field Int64. Both share "category" so
+            // they land in the SAME bucket and their quantities (3, 4) genuinely average to 3.5.
+            new BsonDocument { ["id"] = 1L, ["category"] = "all", ["quantity"] = new BsonDecimal128(3m) },
+            new BsonDocument { ["id"] = 2L, ["category"] = "all", ["quantity"] = 4L }
+        ];
+
+        await using var database = await MongoFixtureDatabase.CreateAsync(schema, documents);
+
+        var request = new MongoQueryRequest
+        {
+            Schema = database.Schema,
+            Page = new RangePage { StartRow = 0, EndRow = 100 },
+            Group = new GroupSpec { GroupCols = ["category"], GroupKeys = [] },
+            Aggregations = [new Aggregation { Field = "quantity", Func = AggregationFunc.Avg }]
+        };
+
+        var page = await MongoGridQuery.FetchPageAsync(database.Database, request);
+
+        var value = Assert.IsType<double>(page.Rows[0][1]);
+        Assert.Equal(3.5, value);
+    }
 
     /// <summary>
     /// <c>Craticula.MongoDB.Driver.MongoValueReader</c>'s own review found <c>BsonValue.ToBoolean()</c>
