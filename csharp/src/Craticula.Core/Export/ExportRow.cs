@@ -13,8 +13,22 @@ namespace Craticula.Core.Export;
 /// it build one lookup per row for a mapping that cannot differ. It also removes a whole failure
 /// mode: a name-keyed row can silently disagree with the projection (a missing key becomes an empty
 /// cell), whereas a length mismatch is caught by <c>Craticula.Export.Csv.CsvWriter</c> on the first
-/// row. <see cref="FromCells"/> exists for the adapters whose driver hands back a name-keyed document
-/// (MongoDB, OpenSearch) and makes that mapping the ONE place the two representations meet.</para>
+/// row. <see cref="FromCells"/> exists for an adapter whose driver hands back a name-keyed document
+/// and has no cheaper way to resolve the column list up front, making that mapping the ONE place the
+/// two representations would meet.
+///
+/// <para><b>#1647 found <see cref="FromCells"/> is not actually needed by every name-keyed
+/// driver.</b> `Craticula.MongoDB.Driver` reads raw BSON documents — the shape `FromCells` was
+/// written for — but resolves its own positional column list from the REQUEST's already-settled
+/// shape (which document key each column reads from is known before any document arrives, including
+/// on a zero-row result), then reads each cell by that key directly per
+/// <see cref="Craticula.Core.Schema.FieldType"/>. Going through `FromCells`'s
+/// <c>IReadOnlyDictionary&lt;string, object?&gt;</c> shape would cost a dictionary allocation per
+/// document for a lookup this adapter never actually needs, and would lose the per-`FieldType` typed
+/// read it must do regardless. `FromCells` therefore currently has no production consumer — it
+/// remains here for whichever future adapter's own column-resolution strategy genuinely needs a
+/// name-keyed lookup (a description withdrawn from naming specific future adapters, since MongoDB
+/// was the one this file previously named and it turned out not to need it).</para>
 ///
 /// <para>A <see langword="struct"/> wrapping the caller's own list: constructing one allocates
 /// nothing beyond what the adapter already had, which is what lets a million-row export (EXP-7)

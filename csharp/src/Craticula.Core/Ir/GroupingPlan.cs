@@ -11,19 +11,28 @@ namespace Craticula.Core.Ir;
 /// equal lengths are the <em>drill-down leaf</em>, which buckets by nothing and emits raw rows. Both
 /// are restricted by the already-consumed keys, as real IR (GRP-5).</para>
 ///
-/// <para><b>Why it takes IR pieces rather than a request.</b> Four consumers reach this dispatch
-/// through four unrelated request types — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c>,
-/// <c>SearchQueryRequest</c> and, since #1887, <c>EfCoreQueryRequest</c> (via
+/// <para><b>Why it takes IR pieces rather than a request.</b> Every backend's own compiler reaches
+/// this dispatch through its own request type — <c>SqlQueryRequest</c>, <c>MongoQueryRequest</c>,
+/// <c>SearchQueryRequest</c>, and, since #1887, <c>EfCoreQueryRequest</c> (via
 /// <c>Craticula.EntityFrameworkCore.EfCoreGridQuery.FetchPageAsync</c> — the EF Core adapter
-/// <em>refused</em> grouping before that story, which is what made the fourth consumer the reason this
-/// extraction happened at all). No signature naming any one
-/// of them can serve the other three. Each of those types is the shape of a <em>backend's</em> input
-/// (a dialect, a collation sink, an index name); the dispatch reads none of that, only the two IR
-/// members below, both of which are already <c>Craticula.Core.Ir</c> types. Taking them directly is
-/// therefore not a widening for convenience: it is the honest parameter list, and it is what keeps
-/// this from becoming a fourth copy the moment a fourth request shape appears. Passing
-/// <paramref name="aggregations"/> separately follows the IR itself, where <c>groupSpec</c> and
-/// <c>aggregations</c> are siblings rather than nested (<c>spec/ir.schema.json</c>).</para>
+/// <em>refused</em> grouping before that story, which is what made that fourth consumer the reason
+/// this extraction happened at all) — and, since #1647, an EXECUTION ADAPTER that does NOT own its
+/// own request type at all: <c>Craticula.MongoDB.Driver.MongoGridQuery</c> calls this with the
+/// identical <c>MongoQueryRequest</c> its own compiler (<c>MongoPipelineBuilder</c>) already resolved
+/// a pipeline from, purely to relabel a grouped level's literal <c>_id</c> output key back to its
+/// logical colId — reading back a decision the compiler already made, not making a new one (see
+/// <c>Craticula.MongoDB.Driver.MongoGridPage</c>'s own remarks). Do not hardcode a consumer count in
+/// this paragraph again — it has already rotted twice (#1885 wrote "four" while EF still refused
+/// grouping, #1887 corrected it to match EF, and this note is the fix for the SAME pattern recurring
+/// a third time with #1647): every backend's compiler needs this dispatch, and it will keep growing a
+/// consumer per new backend/adapter, which is precisely why it lives here instead of in any one of
+/// them. No signature naming any one of those types can serve the others — each is the shape of a
+/// <em>backend's</em> own input (a dialect, a collation sink, an index name); the dispatch reads none
+/// of that, only the two IR members below, both of which are already <c>Craticula.Core.Ir</c> types.
+/// Taking them directly is therefore not a widening for convenience: it is the honest parameter list,
+/// and it is what keeps this from becoming a fresh copy every time another request shape appears.
+/// Passing <paramref name="aggregations"/> separately follows the IR itself, where <c>groupSpec</c>
+/// and <c>aggregations</c> are siblings rather than nested (<c>spec/ir.schema.json</c>).</para>
 ///
 /// <para><b>Why it is in Core rather than in each compiler (#1885).</b> Until this ticket the SQL,
 /// Mongo and Search builders each held a private record with this body, and their own comments

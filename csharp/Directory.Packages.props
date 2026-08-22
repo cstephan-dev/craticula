@@ -16,6 +16,12 @@
          the EF Core packages above rather than the bare package's own latest, since this repo already
          targets that release line for net10.0. -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <!-- #1647: Craticula.MongoDB.Driver's one runtime dependency — current stable as of implementation
+         time (verified on nuget.org; 3.11.0 is the newest non-prerelease release). Unlike Dapper's ADO.NET
+         abstraction, MongoDB has exactly one .NET driver, so Craticula.MongoDB.Driver.Tests references
+         the SAME package directly (as the host owning the real connection) rather than a separate
+         test-only provider. -->
+    <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
