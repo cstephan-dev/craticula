@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+
+    <!-- The provider, which the adapter under test deliberately does NOT reference: it is the host's
+         choice, and here the host is this test project. SQLite in-memory is what makes this harness
+         checkable on every commit with no infrastructure — the same reason
+         Craticula.EntityFrameworkCore.Tests references it for the identical purpose. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Craticula.Dapper/Craticula.Dapper.csproj" />
+
+    <!-- Production dependency here, not test-only: unlike the EF adapter (AR-4's exception),
+         Craticula.Dapper depends on Craticula.Sql for real, and this harness compiles the SAME
+         SqlQueryRequest that ships to production. -->
+    <ProjectReference Include="../../src/Craticula.Sql/Craticula.Sql.csproj" />
+
+    <!-- The fixtures are AG Grid wire requests, so the harness drives the real end-to-end host path
+         (AgGridRequestParser -> GridFilterPipeline -> SqlQueryBuilder/Craticula.Dapper), exactly as
+         Craticula.EntityFrameworkCore.Tests does. -->
+    <ProjectReference Include="../../src/Craticula.AgGrid/Craticula.AgGrid.csproj" />
+
+    <ProjectReference Include="../../src/Craticula.Core/Craticula.Core.csproj" />
+  </ItemGroup>
+
+</Project>

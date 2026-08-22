@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Craticula.Dapper</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- This package's one runtime dependency. Version centrally managed in
+         csharp/Directory.Packages.props — this file names only the package. -->
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Craticula.Core AND Craticula.Sql — the one point where this adapter does NOT generalize EF
+         Core's precedent. EfCoreEntityFrameworkCore is a documented AR-4 EXCEPTION (it compiles IR
+         straight to IQueryable<T> expression trees and never produces SQL text, so it references Core
+         only); every other execution adapter compiles its own IR through its own compiler as a normal,
+         intended production edge (docs/architecture/c4-containers.md: `Rel(sqlc, dapper, "{sql,
+         params[]}")`). This package's whole job is executing the {sql, params[]} artifact
+         Craticula.Sql.SqlQueryBuilder.Build already produces — it never re-derives a SEM-*/SQL-*
+         rendering rule of its own. -->
+    <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
+    <ProjectReference Include="../Craticula.Sql/Craticula.Sql.csproj" />
+  </ItemGroup>
+
+</Project>
