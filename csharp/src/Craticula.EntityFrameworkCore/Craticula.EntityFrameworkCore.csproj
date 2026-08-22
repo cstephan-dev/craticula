@@ -30,14 +30,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Craticula.Core ONLY. Not Craticula.Sql: an execution adapter may not depend on a compiler
-         (AR-3 — dependencies point into the core, never sideways), which is why the four rules this
-         adapter shares with the SQL compiler live in Craticula.Core rather than being reachable from
-         here (SqlPatternEscaping, FilterNodeFields, IsoInstant, SemanticsResolver). Not
-         Craticula.AgGrid either: the IR is the contract, and a second grid vendor must be able to
-         drive this adapter. Not Craticula.Export.Csv, though this adapter yields ExportRow — that
-         type moved into Craticula.Core.Export precisely so an adapter is not welded to one file
-         format. -->
+    <!-- Craticula.Core ONLY. Not Craticula.Sql: this is AR-4's own EF-specific exception (#1646 found
+         and corrected the earlier over-generalization here — it is NOT a rule that an execution
+         adapter may never depend on a compiler; Craticula.Dapper depends on Craticula.Sql for real,
+         a normal, intended production edge per docs/architecture/c4-containers.md's
+         `Rel(sqlc, dapper, "{sql, params[]}")`). This adapter specifically compiles IR straight to
+         IQueryable<T> expression trees and never produces SQL text at all, so it has no artifact to
+         consume — which is why the four rules it shares with the SQL compiler live in Craticula.Core
+         rather than being reachable from here (SqlPatternEscaping, FilterNodeFields, IsoInstant,
+         SemanticsResolver). Not Craticula.AgGrid either: the IR is the contract, and a second grid
+         vendor must be able to drive this adapter. Not Craticula.Export.Csv, though this adapter
+         yields ExportRow — that type moved into Craticula.Core.Export precisely so an adapter is not
+         welded to one file format. -->
     <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
   </ItemGroup>
 
