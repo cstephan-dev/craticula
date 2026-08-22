@@ -57,7 +57,7 @@ public static class MongoExportStream
     /// <see langword="null"/>; see the exceptions below.</param>
     /// <param name="cancellationToken">EXP-7's cancellation hook. Observed between documents, so
     /// cancelling stops PULLING rather than only stopping whoever was writing.</param>
-    /// <exception cref="MongoCompilationException">The request carries a <see cref="RangePage"/> (use
+    /// <exception cref="MongoDriverCompilationException">The request carries a <see cref="RangePage"/> (use
     /// <see cref="MongoGridQuery.FetchPageAsync"/>), a <see cref="GroupSpec"/> (out of scope for v1), or
     /// an empty export projection.</exception>
     public static async IAsyncEnumerable<ExportRow> StreamAsync(
@@ -75,7 +75,7 @@ public static class MongoExportStream
         // form of it a structural test can hold (see this package's own test suite).
         if (request.Page is not NonePage)
         {
-            throw new MongoCompilationException(
+            throw new MongoDriverCompilationException(
                 $"An export stream requires EXP-2's NonePage, but this request carries " +
                 $"'{request.Page.GetType().Name}'. A page-scoped export (exportScope: 'page') is one bounded " +
                 "window and is the same aggregation as a grid block: call MongoGridQuery.FetchPageAsync and " +
@@ -89,7 +89,7 @@ public static class MongoExportStream
         // no defined shape here for what a grouped export's document stream would even contain.
         if (request.Group is not null)
         {
-            throw new MongoCompilationException(
+            throw new MongoDriverCompilationException(
                 "An export stream requires an ungrouped request (spec/semantics.md's EXP-1 v1 scoping: " +
                 "group-structured and pivot exports are out of scope). AgGridRequestParser already discards " +
                 "group state on any export it resolves — a caller reaching this method with a GroupSpec has " +
@@ -100,7 +100,7 @@ public static class MongoExportStream
 
         if (columns.Count == 0)
         {
-            throw new MongoCompilationException(
+            throw new MongoDriverCompilationException(
                 "A request carries an empty EXP-1(b) export projection. Leave Projection null for the " +
                 "schema-order default; AgGridRequestParser rejects an empty 'exportColumns' at the wire.");
         }
@@ -143,7 +143,7 @@ public static class MongoExportStream
         {
             types[index] = schema.Fields.TryGetValue(fields[index], out var field)
                 ? field.Type
-                : throw new MongoCompilationException($"Field '{fields[index]}' is not declared in the GridSchema.");
+                : throw new MongoDriverCompilationException($"Field '{fields[index]}' is not declared in the GridSchema.");
         }
 
         return types;

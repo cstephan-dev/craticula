@@ -6,12 +6,19 @@ namespace Craticula.MongoDB.Driver;
 /// <c>Craticula.Dapper.DapperCompilationException</c>/<c>Craticula.EntityFrameworkCore.EfCoreCompilationException</c>,
 /// used for the equivalent populations of failure on THIS package's own execution surface.
 ///
-/// <para><b>Same simple name as <see cref="Craticula.Mongo.MongoCompilationException"/>, deliberately.</b>
-/// The two live in different namespaces and this package's own source never needs to name the
-/// compiler's type at all — every exception <c>Craticula.Mongo.MongoPipelineBuilder.Build</c> throws
-/// propagates unchanged, uncaught, so there is nothing here to disambiguate against in production
-/// code. A caller that references both namespaces unqualified (typically a test) needs to qualify one
-/// of the two, exactly as it would for any other same-named type from two libraries.</para>
+/// <para><b>Named <c>MongoDriverCompilationException</c>, not <c>MongoCompilationException</c> —
+/// review found the obvious name collides with <see cref="Craticula.Mongo.MongoCompilationException"/>,
+/// the COMPILER's own exception type, and that collision is a real hazard rather than a cosmetic one.</b>
+/// This package's own source never needs to name the compiler's type, since every exception
+/// <c>Craticula.Mongo.MongoPipelineBuilder.Build</c> throws propagates unchanged and uncaught — but a
+/// HOST calling <see cref="MongoGridQuery.FetchPageAsync"/>/<see cref="MongoExportStream.StreamAsync"/>
+/// can receive EITHER type from one call (the compiler's on a schema/variant precondition failure, this
+/// one on a column/materialization failure it cannot attribute), so a same-simple-name pair would force
+/// every host to fully qualify both in every <c>catch</c> clause forever, and a host importing only one
+/// namespace would silently catch only half with no diagnostic. Every sibling adapter
+/// (<c>Dapper</c>/<c>EntityFrameworkCore</c>) was spared this because neither one's own compiler
+/// (<c>Craticula.Sql</c>/none) happens to share its exception's simple name — Mongo is the first
+/// adapter to face it, since its compiler and its adapter are both named after "Mongo".</para>
 ///
 /// <list type="number">
 /// <item><description><b>A shape this package refuses on purpose</b> — a
@@ -39,13 +46,13 @@ namespace Craticula.MongoDB.Driver;
 /// needs the two to be different types, and <c>MongoDB.Driver</c>'s own <c>MongoException</c>
 /// hierarchy is what throws the latter.</para>
 /// </summary>
-public sealed class MongoCompilationException : Exception
+public sealed class MongoDriverCompilationException : Exception
 {
-    public MongoCompilationException(string message) : base(message)
+    public MongoDriverCompilationException(string message) : base(message)
     {
     }
 
-    public MongoCompilationException(string message, Exception innerException) : base(message, innerException)
+    public MongoDriverCompilationException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

@@ -39,10 +39,14 @@ internal static class MongoValueReader
     /// cannot tell apart anyway.
     ///
     /// <para><b>Every conversion failure is caught and re-thrown here, not left to whichever framework
-    /// method noticed it</b> — mirroring <c>DapperValueReader.Read</c>'s own reasoning: parsing methods
-    /// and the driver's own <see cref="BsonValue.ToInt64"/>/<c>ToDecimal</c>/<c>ToDouble</c> family embed
-    /// the UNTRUNCATED value in their own exception message, which <see cref="Truncate"/> exists to
-    /// bound.</para>
+    /// method noticed it</b> — mirroring <c>DapperValueReader.Read</c>'s own reasoning: the parsing
+    /// methods this file calls (<see cref="Convert.ToInt64(double, IFormatProvider?)"/> and its
+    /// siblings, <see cref="DateOnly.ParseExact(string, string, IFormatProvider?)"/>,
+    /// <see cref="DateTime.Parse(string, IFormatProvider?, DateTimeStyles)"/>) embed the UNTRUNCATED
+    /// value in their own exception message, which <see cref="Truncate"/> exists to bound. Deliberately
+    /// NOT the driver's own <see cref="BsonValue.ToInt64"/>/<c>ToDecimal</c>/<c>ToDouble</c>/<c>ToBoolean</c>
+    /// family — see <see cref="ToInt64"/>/<see cref="ToBoolean"/>'s own remarks for why those are
+    /// coercions that silently produce a wrong value instead of throwing.</para>
     /// </summary>
     public static object? Read(BsonDocument document, string key, FieldType type)
     {
@@ -56,18 +60,19 @@ internal static class MongoValueReader
             return type switch
             {
                 FieldType.String => ToStringValue(raw),
-                FieldType.Int64 => raw.ToInt64(),
-                FieldType.Decimal => raw.ToDecimal(),
-                FieldType.Double => raw.ToDouble(),
-                FieldType.Boolean => raw.ToBoolean(),
+                FieldType.Int64 => ToInt64(raw),
+                FieldType.Decimal => ToDecimal(raw),
+                FieldType.Double => ToDouble(raw),
+                FieldType.Boolean => ToBoolean(raw),
                 FieldType.Date => ToDateOnly(raw),
                 FieldType.Datetime => ToDateTime(raw),
-                _ => throw new MongoCompilationException($"Unmapped FieldType '{type}'.")
+                _ => throw new MongoDriverCompilationException($"Unmapped FieldType '{type}'.")
             };
         }
-        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException or NotSupportedException)
+        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException
+                                        or NotSupportedException or ArgumentOutOfRangeException)
         {
-            throw new MongoCompilationException(
+            throw new MongoDriverCompilationException(
                 $"Document field '{key}' value '{Truncate(raw)}' ({raw.BsonType}) could not be read as {type} — " +
                 $"{ex.GetType().Name}.",
                 ex);
@@ -89,8 +94,74 @@ internal static class MongoValueReader
     {
         BsonString s => s.Value,
         BsonObjectId oid => oid.Value.ToString(),
-        _ => throw new MongoCompilationException(
+        _ => throw new MongoDriverCompilationException(
             $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a string (FieldType.String).")
+    };
+
+    /// <summary>
+    /// AR-7's integer shape. Deliberately does NOT call <see cref="BsonValue.ToInt64"/>: that method is
+    /// a MongoDB COERCION, not a conversion — it SATURATES to <see cref="long.MaxValue"/>/<see cref="long.MinValue"/>
+    /// on an out-of-range <see cref="BsonDouble"/> and maps <see cref="double.NaN"/> to <c>0</c>, rather
+    /// than throwing, which is exactly the silent-wrong-answer this reader's own doc says it exists to
+    /// prevent (measured against MongoDB.Bson 3.11.0 — review found this, not assumed). Routing the
+    /// extracted native value through <see cref="Convert.ToInt64(double, IFormatProvider?)"/> instead
+    /// gives the identical loud-overflow behavior <c>Craticula.Dapper.DapperValueReader.ToInt64</c>
+    /// already has for the equivalent ADO.NET shape.
+    /// </summary>
+    private static long ToInt64(BsonValue raw) => raw switch
+    {
+        BsonInt64 i => i.Value,
+        BsonInt32 i => i.Value,
+        BsonDouble d => Convert.ToInt64(d.Value, CultureInfo.InvariantCulture),
+        BsonDecimal128 d => Convert.ToInt64(Decimal128.ToDecimal(d.Value), CultureInfo.InvariantCulture),
+        BsonString s => Convert.ToInt64(s.Value, CultureInfo.InvariantCulture),
+        _ => throw new MongoDriverCompilationException(
+            $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as an integer (FieldType.Int64).")
+    };
+
+    /// <summary>
+    /// AR-7's <c>decimal</c> shape — see <see cref="ToInt64"/>'s own remarks on why this does not call
+    /// <see cref="BsonValue.ToDecimal"/> directly: the same coercion-not-conversion risk applies to
+    /// every numeric arm, not only the integer one.
+    /// </summary>
+    private static decimal ToDecimal(BsonValue raw) => raw switch
+    {
+        BsonDecimal128 d => Decimal128.ToDecimal(d.Value),
+        BsonDouble d => Convert.ToDecimal(d.Value, CultureInfo.InvariantCulture),
+        BsonInt64 i => i.Value,
+        BsonInt32 i => i.Value,
+        BsonString s => Convert.ToDecimal(s.Value, CultureInfo.InvariantCulture),
+        _ => throw new MongoDriverCompilationException(
+            $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a decimal (FieldType.Decimal).")
+    };
+
+    private static double ToDouble(BsonValue raw) => raw switch
+    {
+        BsonDouble d => d.Value,
+        BsonInt64 i => i.Value,
+        BsonInt32 i => i.Value,
+        BsonDecimal128 d => Convert.ToDouble(Decimal128.ToDecimal(d.Value), CultureInfo.InvariantCulture),
+        BsonString s => Convert.ToDouble(s.Value, CultureInfo.InvariantCulture),
+        _ => throw new MongoDriverCompilationException(
+            $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a double (FieldType.Double).")
+    };
+
+    /// <summary>
+    /// Deliberately does NOT call <see cref="BsonValue.ToBoolean"/>: that method implements MongoDB
+    /// query-language TRUTHINESS (<c>default: return true</c>) rather than a boolean conversion, so it
+    /// is a TOTAL function that can never throw — a <see cref="FieldType.Boolean"/> field holding the
+    /// STRING <c>"false"</c> (a common shape for a collection seeded from CSV/JSON) reads back as
+    /// <see langword="true"/>, silently, with no exception this method's own <c>catch</c> could ever
+    /// observe. Explicit and narrow instead: a native <see cref="BsonBoolean"/> unchanged, or a string
+    /// that <see cref="bool.TryParse(string?, out bool)"/> itself accepts — everything else throws
+    /// loudly, matching every other arm in this file.
+    /// </summary>
+    private static bool ToBoolean(BsonValue raw) => raw switch
+    {
+        BsonBoolean b => b.Value,
+        BsonString s when bool.TryParse(s.Value, out var parsed) => parsed,
+        _ => throw new MongoDriverCompilationException(
+            $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a boolean (FieldType.Boolean).")
     };
 
     /// <summary>
@@ -105,7 +176,7 @@ internal static class MongoValueReader
     {
         BsonString s => DateOnly.ParseExact(s.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture),
         BsonDateTime dt => DateOnly.FromDateTime(dt.ToUniversalTime()),
-        _ => throw new MongoCompilationException(
+        _ => throw new MongoDriverCompilationException(
             $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a date (FieldType.Date).")
     };
 
@@ -120,7 +191,7 @@ internal static class MongoValueReader
         BsonDateTime dt => DateTime.SpecifyKind(dt.ToUniversalTime(), DateTimeKind.Utc),
         BsonString s => DateTime.Parse(
             s.Value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
-        _ => throw new MongoCompilationException(
+        _ => throw new MongoDriverCompilationException(
             $"Document value '{Truncate(raw)}' ({raw.BsonType}) could not be read as a datetime (FieldType.Datetime).")
     };
 

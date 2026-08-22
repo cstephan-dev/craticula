@@ -1,6 +1,7 @@
 using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 using Craticula.Mongo;
+using MongoDB.Bson;
 
 namespace Craticula.MongoDB.Driver.Tests;
 
@@ -277,5 +278,70 @@ public sealed class MongoGridQueryTests
 
         Assert.Equal(2, page.Rows.Count);
         Assert.Equal(3, page.RowCount); // AMER, APAC, EMEA -- three buckets, not six seeded documents
+    }
+
+    // ---- #1647's own code review: two hazards found and fixed, both proven here -----------------------
+
+    /// <summary>
+    /// <c>Craticula.MongoDB.Driver.MongoValueReader</c>'s own review found <c>BsonValue.ToBoolean()</c>
+    /// implements MongoDB query-language TRUTHINESS, not a boolean conversion — a
+    /// <see cref="FieldType.Boolean"/> field storing the STRING <c>"false"</c> (the common shape for a
+    /// collection seeded from CSV/JSON, since MongoDB is schemaless and nothing prevents it) used to read
+    /// back as <see langword="true"/>, silently. Seeded here as a raw <see cref="BsonDocument"/> rather
+    /// than through the normal dataset path specifically to reach that mismatched-type shape.
+    /// </summary>
+    [Fact]
+    public async Task A_Boolean_Field_Stored_As_The_Text_False_Reads_Back_As_False_Not_True()
+    {
+        var schema = GridSchema.Parse("""
+            {
+              "mode": "strict", "source": "items", "stableKey": "id",
+              "fields": {
+                "id": { "type": "int64", "filterable": true, "sortable": true },
+                "active": { "type": "boolean", "filterable": true, "sortable": true }
+              }
+            }
+            """);
+
+        IReadOnlyList<BsonDocument> documents =
+        [
+            new BsonDocument { ["id"] = 1L, ["active"] = "false" },
+            new BsonDocument { ["id"] = 2L, ["active"] = "true" },
+            new BsonDocument { ["id"] = 3L, ["active"] = true }
+        ];
+
+        await using var database = await MongoFixtureDatabase.CreateAsync(schema, documents);
+
+        var request = new MongoQueryRequest { Schema = database.Schema, Page = new RangePage { StartRow = 0, EndRow = 100 } };
+        var page = await MongoGridQuery.FetchPageAsync(database.Database, request);
+
+        var activeIndex = page.Columns.ToList().IndexOf("active");
+        var byId = page.Rows.ToDictionary(row => (long)row[0]!, row => (bool)row[activeIndex]!);
+
+        Assert.False(byId[1]);
+        Assert.True(byId[2]);
+        Assert.True(byId[3]);
+    }
+
+    /// <summary>
+    /// <c>MongoGridQuery.BuildCountPipeline</c>'s own review found it dropped only
+    /// <c>$skip</c>/<c>$limit</c>/<c>$project</c>, leaving SEM-6's mandatory <c>$sort</c> (plus its two
+    /// SEM-3 bucket-labeling stages) in every count pipeline — turning an order-independent scalar count
+    /// into an unbounded blocking sort of the whole filtered set on every filter change. Structural,
+    /// mirroring <c>Craticula.Dapper.Tests</c>' own "no offset" source-scan guards: the fix is a property
+    /// of the code, not of the datasets this suite happens to try.
+    /// </summary>
+    [Fact]
+    public void The_Count_Pipeline_Drops_Skip_Limit_Project_Sort_AddFields_And_Unset()
+    {
+        var path = RepoPaths.AdapterSource("MongoGridQuery.cs");
+        Assert.True(File.Exists(path), $"Expected the grid entry point's source at '{path}'.");
+
+        var source = File.ReadAllText(path);
+
+        Assert.Contains(
+            "name is \"$skip\" or \"$limit\" or \"$project\" or \"$sort\" or \"$addFields\" or \"$unset\"",
+            source,
+            StringComparison.Ordinal);
     }
 }

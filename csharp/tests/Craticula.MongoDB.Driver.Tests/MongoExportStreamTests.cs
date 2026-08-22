@@ -121,7 +121,7 @@ public sealed class MongoExportStreamTests
 
         var request = fixture.Request with { Schema = database.Schema, Page = new RangePage { StartRow = 0, EndRow = 5 } };
 
-        var exception = await Assert.ThrowsAsync<MongoCompilationException>(async () =>
+        var exception = await Assert.ThrowsAsync<MongoDriverCompilationException>(async () =>
         {
             await foreach (var _ in MongoExportStream.StreamAsync(database.Database, request))
             {
@@ -147,7 +147,7 @@ public sealed class MongoExportStreamTests
             Group = new GroupSpec { GroupCols = ["region"], GroupKeys = [] }
         };
 
-        var exception = await Assert.ThrowsAsync<MongoCompilationException>(async () =>
+        var exception = await Assert.ThrowsAsync<MongoDriverCompilationException>(async () =>
         {
             await foreach (var _ in MongoExportStream.StreamAsync(database.Database, request))
             {
@@ -170,7 +170,7 @@ public sealed class MongoExportStreamTests
             Projection = []
         };
 
-        var exception = await Assert.ThrowsAsync<MongoCompilationException>(async () =>
+        var exception = await Assert.ThrowsAsync<MongoDriverCompilationException>(async () =>
         {
             await foreach (var _ in MongoExportStream.StreamAsync(database.Database, request))
             {
