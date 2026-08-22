@@ -42,7 +42,9 @@ public class AdversarialFixtureAllowlistTests
     }
 
     /// <summary>#1872's own reason value, distinct from <see cref="AssertRejectedAsUnknownField"/>'s
-    /// -- the colId in these two fixtures IS allowlisted, just declared filterable:false.</summary>
+    /// -- the colId in every fixture that uses this helper IS allowlisted, just declared
+    /// filterable:false (via filterModel, setValuesRequest.colId, or, #1907, a consumed groupKeys
+    /// drill-down key).</summary>
     private static void AssertRejectedAsFieldNotFilterable(string fixtureDir)
     {
         var path = RepoPaths.Fixture("adversarial", fixtureDir, "expected", "rejection.json");
@@ -224,6 +226,61 @@ public class AdversarialFixtureAllowlistTests
             setValues: new SetValuesSpec { ColId = colId },
             schema: schema,
             limits: new ResourceLimits()));
+
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
+        AssertRejectedAsFieldNotFilterable(fixtureDir);
+    }
+
+    /// <summary>#1907's drill-down counterpart to <see cref="Fixture024_NonFilterableColId_In_FilterModel_Throws_UnknownFieldException"/>
+    /// -- the same rejection reason, this time the colId never appears in a <c>filterModel</c> at all:
+    /// it is consumed as a <c>groupKeys</c> drill-down key, which
+    /// <see cref="Craticula.Core.Ir.DrillDownFilter.Synthesize"/> turns into a literal filter
+    /// predicate. Found by #1872's own code review as an out-of-scope gap in that story.</summary>
+    [Fact]
+    public void Fixture026_NonFilterableColId_ConsumedAsDrillDownKey_Throws_UnknownFieldException()
+    {
+        const string fixtureDir = "026-filterable-false-as-drilldown-key";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        var colId = request.RootElement.GetProperty("rowGroupCols").EnumerateArray().Single()
+            .GetProperty("id").GetString()!;
+        var keyValue = request.RootElement.GetProperty("groupKeys").EnumerateArray().Single()
+            .GetProperty("value").GetString()!;
+        Assert.False(schema.Fields[colId].Filterable, $"Fixture {fixtureDir}'s own colId '{colId}' must be declared filterable:false for this case to test anything.");
+
+        var group = new GroupSpec { GroupCols = [colId], GroupKeys = [new StringValue { Value = keyValue }] };
+
+        var ex = Assert.Throws<UnknownFieldException>(
+            () => FieldAllowlistValidator.ValidateStructuralColumns(schema, group, aggregations: null));
+
+        Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
+        AssertRejectedAsFieldNotFilterable(fixtureDir);
+    }
+
+    /// <summary>The pipeline itself refuses it, not only a direct validator call -- via
+    /// <see cref="GridFilterPipeline.Process"/>, mirroring <see cref="Fixture003_Is_Rejected_By_The_Pipeline_Itself_Not_Only_By_A_Direct_Validator_Call"/>.</summary>
+    [Fact]
+    public void Fixture026_Is_Rejected_By_The_Pipeline_Itself_Not_Only_By_A_Direct_Validator_Call()
+    {
+        const string fixtureDir = "026-filterable-false-as-drilldown-key";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        var colId = request.RootElement.GetProperty("rowGroupCols").EnumerateArray().Single()
+            .GetProperty("id").GetString()!;
+        var keyValue = request.RootElement.GetProperty("groupKeys").EnumerateArray().Single()
+            .GetProperty("value").GetString()!;
+
+        var group = new GroupSpec { GroupCols = [colId], GroupKeys = [new StringValue { Value = keyValue }] };
+
+        var ex = Assert.Throws<UnknownFieldException>(() => GridFilterPipeline.Process(
+            nativeFilter: null,
+            customFilters: null,
+            page: new RangePage { StartRow = 0, EndRow = 100 },
+            schema: schema,
+            limits: new ResourceLimits(),
+            group: group));
 
         Assert.Equal("field-not-filterable", Assert.Single(ex.Violations).Reason);
         AssertRejectedAsFieldNotFilterable(fixtureDir);
