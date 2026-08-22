@@ -208,16 +208,16 @@ public class DapperExportStreamTests
     }
 
     /// <summary>
-    /// A request whose own sort does not already end in the stable key gets one MINTED
-    /// (<c>SemanticsResolver.AppendStableKeyTiebreaker</c>). For a STRING stable key with no explicit
-    /// <c>"sensitive"</c> declaration, the minted tiebreaker's <c>ORDER BY</c> is forced case-SENSITIVE
-    /// (SEM-6) while <see cref="DapperKeysetPredicate"/>'s boundary comparison on that same field
-    /// resolves case-INSENSITIVE by SEM-1's default — a collation mismatch the review that found it
-    /// measured against 23 of this suite's own fixture schemas, not a hypothetical.
-    /// <see cref="DapperExportStream"/> refuses the shape before the walk starts.
+    /// A STRING stableKey is refused unconditionally, whether or not the tiebreaker was minted — a
+    /// case-INSENSITIVE collation (SEM-1's default) is not a TOTAL order, so two rows tying under it
+    /// silently lose one of the pair rather than throwing (measured, not hypothetical: 23 of this
+    /// suite's own fixture schemas declare a string stableKey). An earlier, narrower version of this
+    /// guard only refused a MINTED tiebreaker with an escape hatch via an explicit
+    /// <c>"sensitive"</c> declaration; review found that escape hatch does not reliably close the gap
+    /// on every dialect, so it was removed.
     /// </summary>
     [Fact]
-    public async Task A_Minted_Tiebreaker_On_An_Insensitive_String_StableKey_Is_Refused()
+    public async Task A_Text_StableKey_Is_Refused_Regardless_Of_Whether_The_Tiebreaker_Was_Minted()
     {
         var schema = GridSchema.Parse("""
             {
@@ -233,7 +233,7 @@ public class DapperExportStreamTests
         {
             Schema = schema,
             // Sorts on "amount" only — does NOT already end in "id", so AppendStableKeyTiebreaker mints
-            // one, and the schema declares no explicit caseSensitivity on the string "id" field.
+            // one. The refusal fires the same way regardless (see the sibling test below).
             Sort = [new SortItem { Field = "amount", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }],
             Page = new NonePage()
         };
@@ -254,7 +254,55 @@ public class DapperExportStreamTests
         });
 
         Assert.Contains("stableKey", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("sensitive", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("text column", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The sibling of the case above: the request's OWN sort already ends in the string
+    /// stableKey (nothing minted), and the refusal fires identically. Proves the guard is NOT scoped to
+    /// only the minted case — the review that replaced the narrower guard found the failure mode (a
+    /// case-insensitive collation is not a total order) applies whether or not a tiebreaker was
+    /// appended.</summary>
+    [Fact]
+    public async Task A_Text_StableKey_Already_Ending_The_Sort_Is_Refused_Too()
+    {
+        var schema = GridSchema.Parse("""
+            {
+              "mode": "strict", "source": "items", "stableKey": "id",
+              "fields": {
+                "id": { "type": "string", "filterable": true, "sortable": true },
+                "amount": { "type": "int64", "filterable": true, "sortable": true }
+              }
+            }
+            """);
+
+        var request = new SqlQueryRequest
+        {
+            Schema = schema,
+            // The sort already ends in "id" -- AppendStableKeyTiebreaker mints nothing.
+            Sort =
+            [
+                new SortItem { Field = "amount", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+                new SortItem { Field = "id", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
+            ],
+            Page = new NonePage()
+        };
+
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> dataset =
+        [
+            new Dictionary<string, object?> { ["id"] = "a", ["amount"] = 1L },
+            new Dictionary<string, object?> { ["id"] = "b", ["amount"] = 2L }
+        ];
+
+        using var database = SqliteFixtureDatabase.Create(schema, dataset);
+
+        var exception = await Assert.ThrowsAsync<DapperCompilationException>(async () =>
+        {
+            await foreach (var _ in DapperExportStream.StreamAsync(database.Connection, request, Sqlite))
+            {
+            }
+        });
+
+        Assert.Contains("stableKey", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

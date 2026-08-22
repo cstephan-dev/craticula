@@ -30,21 +30,30 @@ namespace Craticula.Dapper;
 /// compiler that rendered the <c>ORDER BY</c> is therefore what keeps the two collations in agreement —
 /// not a copied decision, but the same decision made twice from the same field.</para>
 ///
-/// <para><b>The one place that guarantee does not reach: the MINTED SEM-6 tiebreaker — refused
-/// upfront by <see cref="DapperExportStream"/>, not merely documented.</b>
+/// <para><b>Why a STRING stableKey is out of scope entirely, refused upfront by
+/// <see cref="DapperExportStream"/> rather than compiled here at all.</b> Two rounds of review on this
+/// story both found real failure modes on this surface, and the second closed a gap the first's fix
+/// left open — recorded here in full since the fix is a blanket refusal, not a case-by-case one.
 /// <c>ResolveOrderingAndGroupKeyCaseSensitivity</c> forces <c>NotApplicable</c> (no collation mechanism
-/// at all) for an APPENDED tiebreaker regardless of the field's own declared sensitivity, precisely
-/// because it establishes row identity rather than compares text — and an ordinary
-/// <see cref="ComparisonNode"/> against that same field has no way to ask for that same override; only
-/// <c>SqlQueryBuilder</c>'s INTERNAL GRP-2 "group-key match" provenance can, and reaching for that here
-/// would be exactly the grouping-dispatch machinery this package's plan says not to port. An earlier
-/// version of this remark claimed every fixture in the suite gives its <c>stableKey</c> a non-text type
-/// — that was measured wrong (23 of 209 fixture schemas declare a STRING <c>stableKey</c>, every
-/// <c>group-aggregation/001</c>-<c>023</c>) and the review that caught it treated "documented, narrow,
-/// unobserved" as insufficient for a shape the suite already exercises: <see cref="DapperExportStream"/>
-/// now throws <see cref="DapperCompilationException"/> before the walk starts whenever the tiebreaker
-/// was minted onto a string field without an explicit <c>"sensitive"</c> declaration, rather than
-/// walking with a collation this predicate cannot guarantee agrees with the <c>ORDER BY</c>.</para>
+/// at all) for an APPENDED tiebreaker regardless of the field's own declared sensitivity, while an
+/// ordinary <see cref="ComparisonNode"/> against that same field resolves through
+/// <c>ResolveCaseSensitivity</c> instead — case-INSENSITIVE by SEM-1's default. An earlier fix refused
+/// only that MINTED-and-insensitive combination, with an escape hatch: declare the field
+/// <c>"caseSensitivity": "sensitive"</c>. Both the narrowing and the escape hatch were wrong. The
+/// narrowing, because a case-INSENSITIVE collation is not a TOTAL order regardless of which side
+/// resolved it — <c>'aB3'</c> and <c>'Ab3'</c> compare EQUAL under it, so two rows tying under a folded
+/// collation are adjacent in the sorted result but distinct rows, and the boundary's strict "after"
+/// comparison drops the second of the pair silently, WHETHER OR NOT a tiebreaker was minted (a sort
+/// already ending in the stableKey has both sides resolve identically, which is agreement on the wrong
+/// answer, not the right one). The escape hatch, because <c>Sensitive</c>'s <c>(Sensitive, None)</c>
+/// answer is not a proxy for "the two sides now agree": Oracle and SQL Server give <c>Sensitive</c> an
+/// EXPLICIT <c>COLLATE</c> spelling on an ordinary comparison (their typical default column collation
+/// is itself case-insensitive) while a minted tiebreaker's <c>ORDER BY</c> stays unspelled regardless —
+/// so declaring the field sensitive can swap WHICH side disagrees rather than remove the disagreement.
+/// No per-dialect, per-declaration carve-out closes both failure modes at once, so
+/// <see cref="DapperExportStream"/> refuses any STRING stableKey unconditionally instead — measured
+/// against real data, not hypothetical: 23 of 209 fixture schemas in this suite declare one (every
+/// <c>group-aggregation/001</c>-<c>023</c>).</para>
 ///
 /// <para><b>A second, independent hazard on the same "string sort key" surface, also refused
 /// upfront:</b> <see cref="ComparisonOperator.Blank"/>/<see cref="ComparisonOperator.NotBlank"/> below render as

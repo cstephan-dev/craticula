@@ -127,4 +127,33 @@ public class DapperGridQueryTests
         Assert.IsType<DateOnly>(firstRow[orderDateIndex]);
         Assert.Equal(new DateOnly(2024, 1, 1), firstRow[orderDateIndex]);
     }
+
+    /// <summary>
+    /// #1646's own code review: <c>avg</c> over a non-decimal source column must materialize as a
+    /// fractional <see cref="double"/>, not the source field's own <see cref="Craticula.Core.Schema.FieldType.Int64"/>
+    /// — the exact defect this fixture's own two ages (30, 31) discriminate, since their average (30.5)
+    /// is only distinguishable from a rounded/truncated 30 or 31 by actually keeping the fraction.
+    /// dialect-parity/024 is the fixture that shape was measured against.
+    /// </summary>
+    [Fact]
+    public async Task An_Average_Over_An_Integer_Column_Keeps_Its_Fractional_Value()
+    {
+        var fixture = FixtureRequest.Load(
+            "dialect-parity", FixtureRequest.ResolveDirectory("dialect-parity", "024"));
+
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> dataset =
+        [
+            new Dictionary<string, object?> { ["id"] = 1L, ["department"] = "Eng", ["salary"] = 100m, ["age"] = 30L },
+            new Dictionary<string, object?> { ["id"] = 2L, ["department"] = "Eng", ["salary"] = 200m, ["age"] = 31L }
+        ];
+
+        using var database = SqliteFixtureDatabase.Create(fixture.Schema, dataset);
+        var page = await DapperGridQuery.FetchPageAsync(database.Connection, fixture.Sql, Sqlite);
+
+        var ageIndex = page.Columns.ToList().IndexOf("age_avg");
+        Assert.True(ageIndex >= 0, $"Expected an 'age_avg' column, got: {string.Join(", ", page.Columns)}");
+
+        var value = Assert.IsType<double>(page.Rows[0][ageIndex]);
+        Assert.Equal(30.5, value);
+    }
 }

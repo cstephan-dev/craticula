@@ -107,37 +107,48 @@ public static class DapperExportStream
                 "built the request by hand.");
         }
 
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, request.Schema.StableKey, out var tiebreakerMinted);
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, request.Schema.StableKey);
 
-        // SEM-6/SEM-1 collation hazard: SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity
-        // forces (NotApplicable, None) -- no COLLATE, the column's own raw/binary comparison -- for a
-        // MINTED tiebreaker specifically, since SEM-6's uniqueness guarantee is stated in the column's
-        // own collation, not a folded one. DapperKeysetPredicate's boundary, though, builds an ORDINARY
-        // ComparisonNode against that same field, which SqlQueryBuilder resolves through
-        // ResolveCaseSensitivity instead -- case-INSENSITIVE by default for a string field
-        // (FieldConfig.Text.CaseSensitivity absent or not "sensitive"). The two disagreeing means a
-        // boundary can treat two differently-cased values as tied when the ORDER BY does not (or vice
-        // versa), which is the same class of silent skip/duplicate the empty-string check below guards
-        // against, on a different axis. Only the MINTED case is affected -- a sort ending in the stable
-        // key already (tiebreakerMinted == false) keeps the user's own key, which both resolvers treat
-        // identically (SortKeyProvenance.Request).
-        if (tiebreakerMinted)
+        // SEM-6/SEM-1 collation hazard, UNCONDITIONAL on the stableKey's own declared type -- an earlier
+        // version of this guard fired only for a MINTED tiebreaker, on the reasoning that a sort already
+        // ending in the stableKey keeps "the user's own key", which both resolvers were assumed to treat
+        // identically. Measured wrong on two counts, both closing to the same conclusion:
+        //
+        // (a) "Both sides agree" is not sufficient even when they DO agree. A case-INSENSITIVE
+        //     collation is not a TOTAL order -- 'aB3' and 'Ab3' compare EQUAL under it -- and SEM-6's
+        //     whole walk depends on the stableKey producing one. Two rows tying under a folded
+        //     collation are adjacent in the sorted result but distinct rows; the boundary's strict
+        //     "after" comparison treats the second as NOT after the first (since they compare equal)
+        //     and silently drops it -- reproduced on this file's own SQLite harness with ids "aB3"/"Ab3"
+        //     and no exception anywhere, because the duplicate-detector compares CLR strings by
+        //     Equals, which correctly says they're DIFFERENT (masking that the SQL comparison said
+        //     they're the SAME). This applies whether or not a tiebreaker was minted.
+        //
+        // (b) The "declare it caseSensitivity: sensitive" escape hatch this guard used to offer does
+        //     not reliably close the gap either. ResolveCaseSensitivity's Sensitive answer is
+        //     (Sensitive, None) -- no explicit collation mechanism, relying on the column's own default
+        //     comparison -- and on Oracle/SQL Server specifically, SC-3's Sensitive spelling for an
+        //     ORDINARY comparison DOES emit an explicit COLLATE clause (their typical default column
+        //     collation is itself case-insensitive), while a MINTED tiebreaker's ORDER BY stays
+        //     (NotApplicable, None) regardless -- i.e. still no explicit COLLATE. Declaring the field
+        //     sensitive can therefore swap WHICH side disagrees rather than remove the disagreement.
+        //
+        // No per-dialect, per-declaration carve-out is safe today, so the refusal is unconditional:
+        // ANY string stableKey is out of scope for keyset-chunked export until a dedicated design (an
+        // exact, binary comparison this predicate can ask for independent of SEM-1's per-field
+        // classification) closes both (a) and (b) together.
+        if (request.Schema.Fields[request.Schema.StableKey].Type == FieldType.String)
         {
-            var stableKeyField = request.Schema.Fields[request.Schema.StableKey];
-            if (stableKeyField.Type == FieldType.String
-                && SemanticsResolver.ResolveCaseSensitivity(stableKeyField, ComparisonOperator.Eq).Mode != SemanticsResolver.CaseSensitivityMode.Sensitive)
-            {
-                throw new DapperCompilationException(
-                    $"The schema's stableKey '{request.Schema.StableKey}' is a text column with no explicit " +
-                    "\"caseSensitivity\": \"sensitive\" declaration, and this request's own sort does not " +
-                    "already end in it, so SemanticsResolver minted it as the trailing tiebreaker. A minted " +
-                    "tiebreaker's ORDER BY is forced case-SENSITIVE (SEM-6: stated in the column's own " +
-                    "collation, never a folded one), but the keyset boundary's comparison on that same field " +
-                    "resolves case-INSENSITIVE by SEM-1's default -- the two disagree about which rows tie, " +
-                    "so the walk can skip or duplicate rows that differ only in case. Declare the stableKey " +
-                    "\"caseSensitivity\": \"sensitive\" in the schema, or have the request's own sort already " +
-                    "end in the stableKey, to remove the mismatch.");
-            }
+            throw new DapperCompilationException(
+                $"The schema's stableKey '{request.Schema.StableKey}' is a text column. EXP-3's keyset " +
+                "chunking depends on the stableKey producing a TOTAL order (SEM-6), which SEM-1's " +
+                "per-field case-sensitivity classification cannot guarantee agrees between the compiled " +
+                "ORDER BY and this predicate's boundary comparison across every dialect and declaration -- " +
+                "a case-insensitive collation is not total (two differently-cased values can compare " +
+                "equal), which silently drops one of a tied pair rather than throwing. A text stableKey " +
+                "is not supported for keyset-chunked export today; use an int64/decimal/date/datetime " +
+                "stableKey, or fetch this export a page at a time via DapperGridQuery.FetchPageAsync " +
+                "instead.");
         }
 
         // EXP-3/SEM-2 hazard, checked once before the walk starts rather than left latent: a sort key

@@ -131,43 +131,36 @@ internal static class DapperParameterBinder
     }
 
     /// <summary>
-    /// A flat, ordered (name, value) list bound to <paramref name="command"/> verbatim — no cleaning, no
-    /// reflection over parameter NAMES, no property-name matching. This is the whole reason to implement
-    /// <see cref="SqlMapper.IDynamicParameters"/> directly rather than populating a
-    /// <see cref="DynamicParameters"/> bag: this type's <paramref name="names"/> ARE the exact
-    /// <see cref="IDataParameter.ParameterName"/> values that reach the driver.
-    ///
-    /// <para><b>One value shape needs more than a straight assignment: Postgres's set-membership
-    /// array.</b> <c>SqlQuery.Parameters</c>'s own contract names it directly — "a nested
+    /// Rebuilds a set-membership parameter's boxed elements into a strongly-typed <see cref="Array"/>,
+    /// needed because a straight assignment fails for Postgres's set-membership array specifically.
+    /// <c>SqlQuery.Parameters</c>'s own contract names the shape directly — "a nested
     /// <c>IReadOnlyList&lt;object?&gt;</c> for a set membership's single array parameter" — produced by
     /// <c>PostgresDialect.RenderSetMembership</c>'s <c>= ANY($1)</c>/<c>&lt;&gt; ALL($1)</c> (the other
-    /// four dialects bind N scalars instead, so they never reach this branch). Assigning that
+    /// four dialects bind N scalars instead, so they never reach this method). Assigning that
     /// <see cref="IReadOnlyList{T}"/> straight to <see cref="IDataParameter.Value"/> hands Npgsql a
     /// boxed <c>object</c> list with no element type to infer a Postgres array type from — every element
     /// is individually boxed by <c>SqlQueryBuilder.EncodeValue</c> (a <see cref="long"/>, a
     /// <see cref="string"/>, …), so the LIST's own static element type is <c>object</c> regardless of
-    /// what the elements actually are. <see cref="ToTypedArray"/> rebuilds a strongly-typed CLR array
-    /// (<see cref="long"/><c>[]</c>, <see cref="string"/><c>[]</c>, …) from the elements' shared RUNTIME
-    /// type instead, which Npgsql infers a <c>NpgsqlDbType.Array</c> from the same way it would from a
-    /// hand-written <c>long[]</c> — without this package adding an Npgsql package reference merely to
-    /// name a type hint explicitly, which would weld it to one provider the same way a provider package
-    /// would (see <c>Craticula.EntityFrameworkCore.csproj</c>'s identical reasoning for why it carries no
-    /// provider package either).</para>
-    /// </summary>
-    /// <summary>
-    /// Rebuilds <paramref name="values"/> (a set-membership's boxed elements, all sharing one
-    /// <see cref="Craticula.Core.Schema.FieldType"/>'s encoded CLR shape per
-    /// <c>SqlQueryBuilder.EncodeValue</c>) as a strongly-typed <see cref="Array"/> whose element type is
-    /// that shared runtime type — found from the first non-null element, since AR-6's set filter is
-    /// homogeneous by construction (every value coerced against the same declared field). A
-    /// <see cref="Craticula.Core.Ir.ComparisonNode.Values"/> entry MAY itself be AR-7's
+    /// what the elements actually are.
+    ///
+    /// <para><paramref name="values"/>'s elements all share one <see cref="Craticula.Core.Schema.FieldType"/>'s
+    /// encoded CLR shape — found from the first non-null element, since AR-6's set filter is homogeneous
+    /// by construction (every value coerced against the same declared field) — and this method rebuilds a
+    /// strongly-typed CLR array (<see cref="long"/><c>[]</c>, <see cref="string"/><c>[]</c>, …) from that
+    /// shared RUNTIME type instead, which Npgsql infers a <c>NpgsqlDbType.Array</c> from the same way it
+    /// would from a hand-written <c>long[]</c> — without this package adding an Npgsql package reference
+    /// merely to name a type hint explicitly, which would weld it to one provider the same way a
+    /// provider package would (see <c>Craticula.EntityFrameworkCore.csproj</c>'s identical reasoning for
+    /// why it carries no provider package either).</para>
+    ///
+    /// <para>A <see cref="Craticula.Core.Ir.ComparisonNode.Values"/> entry MAY itself be AR-7's
     /// <c>nullValue</c> (an ordinary <c>in</c>/<c>notIn</c> testing "or is this NULL" alongside real
     /// values), so a value-type element (<see cref="long"/>, <see cref="double"/>, <see cref="bool"/>)
     /// widens to its <see cref="Nullable{T}"/> array form when any element is null — a plain
     /// <c>long[]</c> cannot hold one. A reference type (<see cref="string"/>) already can, unchanged.
     /// Internal rather than private specifically so this reflection-based rebuild — the one piece of
     /// this binder with no live Postgres connection to execute against in this repo's test harness — can
-    /// be unit-tested directly.
+    /// be unit-tested directly.</para>
     /// </summary>
     internal static object ToTypedArray(IReadOnlyList<object?> values)
     {
@@ -190,6 +183,15 @@ internal static class DapperParameterBinder
         return typed;
     }
 
+    /// <summary>
+    /// A flat, ordered (name, value) list bound to the command verbatim — no cleaning, no reflection
+    /// over parameter NAMES, no property-name matching. This is the whole reason to implement
+    /// <see cref="SqlMapper.IDynamicParameters"/> directly rather than populating a
+    /// <see cref="DynamicParameters"/> bag: this type's <paramref name="names"/> ARE the exact
+    /// <see cref="IDataParameter.ParameterName"/> values that reach the driver. The one value shape that
+    /// needs more than a straight assignment — Postgres's set-membership array — goes through
+    /// <see cref="ToTypedArray"/>; see that method's own remarks.
+    /// </summary>
     private sealed class NamedParameters(IReadOnlyList<string> names, IReadOnlyList<object?> values)
         : SqlMapper.IDynamicParameters
     {

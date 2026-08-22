@@ -34,6 +34,16 @@ internal static class DapperValueReader
     /// <summary>
     /// Reads the cell at <paramref name="ordinal"/> as <paramref name="type"/>'s declared CLR shape, or
     /// <see langword="null"/> when the column is SQL NULL.
+    ///
+    /// <para><b>Every conversion failure is caught and re-thrown here, not left to whichever framework
+    /// method noticed it.</b> <see cref="Convert.ToInt64(object?, IFormatProvider?)"/>/<c>ToDecimal</c>/
+    /// <c>ToDouble</c>/<c>ToBoolean</c>, <see cref="DateOnly.ParseExact(string, string, IFormatProvider?)"/>
+    /// and <see cref="DateTime.Parse(string, IFormatProvider?, DateTimeStyles)"/> all embed the
+    /// UNTRUNCATED input verbatim in their own <see cref="FormatException"/>/<see cref="OverflowException"/>/
+    /// <see cref="InvalidCastException"/> message — the exact leak this type's own <see cref="Truncate"/>
+    /// exists to bound, reachable through the framework's own exception rather than one of the explicit
+    /// throws below. Catching broadly here, once, is what makes the bound total instead of true only for
+    /// the hand-written messages.</para>
     /// </summary>
     public static object? Read(IDataRecord record, int ordinal, FieldType type)
     {
@@ -44,17 +54,26 @@ internal static class DapperValueReader
 
         var raw = record.GetValue(ordinal);
 
-        return type switch
+        try
         {
-            FieldType.String => ToStringValue(raw),
-            FieldType.Int64 => ToInt64(raw),
-            FieldType.Decimal => ToDecimal(raw),
-            FieldType.Double => ToDouble(raw),
-            FieldType.Boolean => ToBoolean(raw),
-            FieldType.Date => ToDateOnly(raw),
-            FieldType.Datetime => ToDateTime(raw),
-            _ => throw new DapperCompilationException($"Unmapped FieldType '{type}'.")
-        };
+            return type switch
+            {
+                FieldType.String => ToStringValue(raw),
+                FieldType.Int64 => ToInt64(raw),
+                FieldType.Decimal => ToDecimal(raw),
+                FieldType.Double => ToDouble(raw),
+                FieldType.Boolean => ToBoolean(raw),
+                FieldType.Date => ToDateOnly(raw),
+                FieldType.Datetime => ToDateTime(raw),
+                _ => throw new DapperCompilationException($"Unmapped FieldType '{type}'.")
+            };
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException)
+        {
+            throw new DapperCompilationException(
+                $"Column value '{Truncate(raw)}' ({raw.GetType().Name}) could not be read as {type} — {ex.GetType().Name}.",
+                ex);
+        }
     }
 
     private static string ToStringValue(object raw) =>

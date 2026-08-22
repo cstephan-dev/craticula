@@ -193,8 +193,8 @@ public static class DapperGridQuery
     /// <summary>
     /// AGG-1's rule for <see cref="AggregationFunc.Count"/> (always an integer) plus one more this
     /// package's own review found: <see cref="AggregationFunc.Avg"/> does NOT keep the source field's
-    /// declared type the way <c>sum</c>/<c>min</c>/<c>max</c> genuinely do. Every dialect's <c>AVG()</c>
-    /// over an integer or floating column returns a fractional result — reading it back as
+    /// declared type the way <c>sum</c>/<c>min</c>/<c>max</c> genuinely do. Postgres/MySQL/SQLite's
+    /// <c>AVG()</c> over an integer or floating column returns a fractional result — reading it back as
     /// <see cref="FieldType.Int64"/> would run <see cref="DapperValueReader"/>'s
     /// <c>Convert.ToInt64</c> on a real average and silently truncate it (measured:
     /// <c>spec/fixtures/dialect-parity/024</c> is exactly this shape, <c>avg</c> over an
@@ -202,6 +202,15 @@ public static class DapperGridQuery
     /// source type for every non-<see cref="FieldType.Decimal"/> source, since a decimal source's own
     /// precision is worth preserving and every other numeric source already loses no meaningful
     /// precision going through <see cref="double"/>.
+    ///
+    /// <para><b>Residual, NOT closed by this widening: SQL Server truncates <c>AVG(bigint)</c> to
+    /// <c>bigint</c> at the ENGINE itself</b> (T-SQL's own numeric-promotion rule for exact types,
+    /// unlike Postgres/MySQL/SQLite, which all promote to a fractional result). Reading the mssql
+    /// result as <see cref="FieldType.Double"/> changes nothing there — the value handed to Dapper is
+    /// already the truncated one, and this package has no SQL text of its own to add a <c>CAST</c> to;
+    /// that fix belongs in <c>Craticula.Sql</c>'s own aggregation rendering, which is shared by every
+    /// SQL-executing consumer, not this one adapter's read-back step. Recorded rather than hidden: this
+    /// widening closes the defect on 4 of 5 dialects, not silently on all 5.</para>
     /// </summary>
     private static FieldType ResolveAggregationType(Aggregation aggregation, GridSchema schema)
     {
