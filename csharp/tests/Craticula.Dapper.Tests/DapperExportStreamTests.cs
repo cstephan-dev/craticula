@@ -1,5 +1,6 @@
 using Craticula.Core.Export;
 using Craticula.Core.Ir;
+using Craticula.Core.Schema;
 using Craticula.Sql;
 
 namespace Craticula.Dapper.Tests;
@@ -153,6 +154,107 @@ public class DapperExportStreamTests
             async () => await Drain(database, grouped, chunkSize: 5));
 
         Assert.Contains("ungrouped", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- #1646's own code review: two hazards on a STRING sort key, both refused upfront ------------
+
+    /// <summary>
+    /// SqlQueryBuilder.RenderBlank renders SEM-2's <c>blank</c>/<c>notBlank</c> as
+    /// <c>(col IS NULL OR col = '')</c> for a text field on every dialect except Oracle — correct for an
+    /// ordinary "is this blank" filter condition, but <see cref="DapperKeysetPredicate"/> reuses those
+    /// same operators for an EXACT null test the compiled <c>ORDER BY</c> does not share: a genuinely
+    /// empty string in a string sort key would make the boundary re-match a row it already emitted
+    /// (hand-traced by this story's own review to an infinite loop under <c>NullsPosition.Last</c>).
+    /// <see cref="DapperExportStream"/> probes for the hazard before the walk starts and refuses it
+    /// rather than risk that.
+    /// </summary>
+    [Fact]
+    public async Task An_Empty_String_In_A_Text_Sort_Key_Is_Refused_Rather_Than_Risk_A_Hang_Or_Duplicate()
+    {
+        var schema = GridSchema.Parse("""
+            {
+              "mode": "strict", "source": "items", "stableKey": "id",
+              "fields": {
+                "id": { "type": "int64", "filterable": true, "sortable": true },
+                "name": { "type": "string", "filterable": true, "sortable": true }
+              }
+            }
+            """);
+
+        var request = new SqlQueryRequest
+        {
+            Schema = schema,
+            Sort = [new SortItem { Field = "name", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }],
+            Page = new NonePage()
+        };
+
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> dataset =
+        [
+            new Dictionary<string, object?> { ["id"] = 1L, ["name"] = "" },
+            new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "west" }
+        ];
+
+        using var database = SqliteFixtureDatabase.Create(schema, dataset);
+
+        var exception = await Assert.ThrowsAsync<DapperCompilationException>(async () =>
+        {
+            await foreach (var _ in DapperExportStream.StreamAsync(database.Connection, request, Sqlite))
+            {
+            }
+        });
+
+        Assert.Contains("empty string", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("name", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A request whose own sort does not already end in the stable key gets one MINTED
+    /// (<c>SemanticsResolver.AppendStableKeyTiebreaker</c>). For a STRING stable key with no explicit
+    /// <c>"sensitive"</c> declaration, the minted tiebreaker's <c>ORDER BY</c> is forced case-SENSITIVE
+    /// (SEM-6) while <see cref="DapperKeysetPredicate"/>'s boundary comparison on that same field
+    /// resolves case-INSENSITIVE by SEM-1's default — a collation mismatch the review that found it
+    /// measured against 23 of this suite's own fixture schemas, not a hypothetical.
+    /// <see cref="DapperExportStream"/> refuses the shape before the walk starts.
+    /// </summary>
+    [Fact]
+    public async Task A_Minted_Tiebreaker_On_An_Insensitive_String_StableKey_Is_Refused()
+    {
+        var schema = GridSchema.Parse("""
+            {
+              "mode": "strict", "source": "items", "stableKey": "id",
+              "fields": {
+                "id": { "type": "string", "filterable": true, "sortable": true },
+                "amount": { "type": "int64", "filterable": true, "sortable": true }
+              }
+            }
+            """);
+
+        var request = new SqlQueryRequest
+        {
+            Schema = schema,
+            // Sorts on "amount" only — does NOT already end in "id", so AppendStableKeyTiebreaker mints
+            // one, and the schema declares no explicit caseSensitivity on the string "id" field.
+            Sort = [new SortItem { Field = "amount", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }],
+            Page = new NonePage()
+        };
+
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> dataset =
+        [
+            new Dictionary<string, object?> { ["id"] = "a", ["amount"] = 1L },
+            new Dictionary<string, object?> { ["id"] = "b", ["amount"] = 2L }
+        ];
+
+        using var database = SqliteFixtureDatabase.Create(schema, dataset);
+
+        var exception = await Assert.ThrowsAsync<DapperCompilationException>(async () =>
+        {
+            await foreach (var _ in DapperExportStream.StreamAsync(database.Connection, request, Sqlite))
+            {
+            }
+        });
+
+        Assert.Contains("stableKey", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("sensitive", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

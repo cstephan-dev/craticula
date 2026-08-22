@@ -155,9 +155,9 @@ public static class DapperGridQuery
     /// <summary>
     /// Which <see cref="FieldType"/> each of <paramref name="columns"/> materializes as: a real schema
     /// field's own declared type, or — for a column that is not one (an aggregate's output name) —
-    /// AGG-1's rule (<see cref="AggregationFunc.Count"/> is always an integer) applied to the
-    /// aggregation at the matching POSITION in <paramref name="aggregations"/>. See this type's own
-    /// remarks for why position, not name, is what resolves it.
+    /// the aggregation at the matching POSITION in <paramref name="aggregations"/>, resolved per
+    /// <see cref="ResolveAggregationType"/>. See this type's own remarks for why position, not name, is
+    /// what resolves it.
     /// </summary>
     private static FieldType[] ResolveColumnTypes(
         IReadOnlyList<string> columns, GridSchema schema, IReadOnlyList<Aggregation>? aggregations)
@@ -184,13 +184,36 @@ public static class DapperGridQuery
                     "request that produced it.");
             }
 
-            var aggregation = aggregations[aggregationIndex];
-            types[index] = aggregation.Func == AggregationFunc.Count
-                ? FieldType.Int64
-                : schema.Fields[aggregation.Field].Type;
+            types[index] = ResolveAggregationType(aggregations[aggregationIndex], schema);
         }
 
         return types;
+    }
+
+    /// <summary>
+    /// AGG-1's rule for <see cref="AggregationFunc.Count"/> (always an integer) plus one more this
+    /// package's own review found: <see cref="AggregationFunc.Avg"/> does NOT keep the source field's
+    /// declared type the way <c>sum</c>/<c>min</c>/<c>max</c> genuinely do. Every dialect's <c>AVG()</c>
+    /// over an integer or floating column returns a fractional result — reading it back as
+    /// <see cref="FieldType.Int64"/> would run <see cref="DapperValueReader"/>'s
+    /// <c>Convert.ToInt64</c> on a real average and silently truncate it (measured:
+    /// <c>spec/fixtures/dialect-parity/024</c> is exactly this shape, <c>avg</c> over an
+    /// <see cref="FieldType.Int64"/> column). Widened to <see cref="FieldType.Double"/> rather than the
+    /// source type for every non-<see cref="FieldType.Decimal"/> source, since a decimal source's own
+    /// precision is worth preserving and every other numeric source already loses no meaningful
+    /// precision going through <see cref="double"/>.
+    /// </summary>
+    private static FieldType ResolveAggregationType(Aggregation aggregation, GridSchema schema)
+    {
+        if (aggregation.Func == AggregationFunc.Count)
+        {
+            return FieldType.Int64;
+        }
+
+        var sourceType = schema.Fields[aggregation.Field].Type;
+        return aggregation.Func == AggregationFunc.Avg && sourceType != FieldType.Decimal
+            ? FieldType.Double
+            : sourceType;
     }
 
     /// <summary>

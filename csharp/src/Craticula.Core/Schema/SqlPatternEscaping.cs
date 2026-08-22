@@ -24,8 +24,12 @@ namespace Craticula.Core.Schema;
 /// <c>EF.Functions.Like(column, pattern, "\\")</c> that <c>PostgresDialect</c> builds for
 /// <c>ILIKE … ESCAPE '\'</c>, from the same client value, and a copy of this loop over there would be
 /// the exact divergence the paragraph above refuses between two dialects — only now across two
-/// packages, where no artifact comparison watches it at all. An execution adapter may not reference a
-/// compiler (AR-3: dependencies point into the core), so the shared rule has exactly one legal home.
+/// packages, where no artifact comparison watches it at all. `Craticula.EntityFrameworkCore`
+/// specifically has no artifact to read regardless — it compiles IR straight to expression trees,
+/// never SQL text — so this rule could not have lived reachable from `Craticula.Sql` for it even if
+/// adapters generally could depend on their compiler, which they can (#1646 corrected this
+/// paragraph's earlier "an execution adapter may not reference a compiler" framing — Craticula.Dapper
+/// depends on this very compiler for real). Core is still the one shared home either way.
 ///
 /// <para>The name keeps its <c>Sql</c> prefix deliberately, though it now sits beside the SC-*/SEC-*
 /// validators. What it escapes IS a SQL <c>LIKE</c> pattern — EF's <c>EF.Functions.Like</c> emits one

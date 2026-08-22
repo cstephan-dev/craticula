@@ -5,6 +5,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- DapperParameterBinder's Postgres array-binding fix (the reflection-based typed-array rebuild in
+         NamedParameters.ToTypedArray) has no live Postgres connection to execute against in this repo's
+         test harness — every other Craticula.Dapper.Tests case runs against SQLite, which never reaches
+         that dialect-specific branch at all. Granting the test project access to this one internal type
+         is what lets the binding LOGIC be unit-tested directly instead of left unverified. -->
+    <InternalsVisibleTo Include="Craticula.Dapper.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- This package's one runtime dependency. Version centrally managed in
          csharp/Directory.Packages.props — this file names only the package. -->
     <PackageReference Include="Dapper" />

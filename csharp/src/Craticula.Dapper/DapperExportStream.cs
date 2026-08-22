@@ -107,7 +107,76 @@ public static class DapperExportStream
                 "built the request by hand.");
         }
 
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, request.Schema.StableKey);
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, request.Schema.StableKey, out var tiebreakerMinted);
+
+        // SEM-6/SEM-1 collation hazard: SemanticsResolver.ResolveOrderingAndGroupKeyCaseSensitivity
+        // forces (NotApplicable, None) -- no COLLATE, the column's own raw/binary comparison -- for a
+        // MINTED tiebreaker specifically, since SEM-6's uniqueness guarantee is stated in the column's
+        // own collation, not a folded one. DapperKeysetPredicate's boundary, though, builds an ORDINARY
+        // ComparisonNode against that same field, which SqlQueryBuilder resolves through
+        // ResolveCaseSensitivity instead -- case-INSENSITIVE by default for a string field
+        // (FieldConfig.Text.CaseSensitivity absent or not "sensitive"). The two disagreeing means a
+        // boundary can treat two differently-cased values as tied when the ORDER BY does not (or vice
+        // versa), which is the same class of silent skip/duplicate the empty-string check below guards
+        // against, on a different axis. Only the MINTED case is affected -- a sort ending in the stable
+        // key already (tiebreakerMinted == false) keeps the user's own key, which both resolvers treat
+        // identically (SortKeyProvenance.Request).
+        if (tiebreakerMinted)
+        {
+            var stableKeyField = request.Schema.Fields[request.Schema.StableKey];
+            if (stableKeyField.Type == FieldType.String
+                && SemanticsResolver.ResolveCaseSensitivity(stableKeyField, ComparisonOperator.Eq).Mode != SemanticsResolver.CaseSensitivityMode.Sensitive)
+            {
+                throw new DapperCompilationException(
+                    $"The schema's stableKey '{request.Schema.StableKey}' is a text column with no explicit " +
+                    "\"caseSensitivity\": \"sensitive\" declaration, and this request's own sort does not " +
+                    "already end in it, so SemanticsResolver minted it as the trailing tiebreaker. A minted " +
+                    "tiebreaker's ORDER BY is forced case-SENSITIVE (SEM-6: stated in the column's own " +
+                    "collation, never a folded one), but the keyset boundary's comparison on that same field " +
+                    "resolves case-INSENSITIVE by SEM-1's default -- the two disagree about which rows tie, " +
+                    "so the walk can skip or duplicate rows that differ only in case. Declare the stableKey " +
+                    "\"caseSensitivity\": \"sensitive\" in the schema, or have the request's own sort already " +
+                    "end in the stableKey, to remove the mismatch.");
+            }
+        }
+
+        // EXP-3/SEM-2 hazard, checked once before the walk starts rather than left latent: a sort key
+        // declared FieldType.String is walked via DapperKeysetPredicate's Blank/NotBlank comparisons,
+        // which SqlQueryBuilder.RenderBlank renders as `(col IS NULL OR col = '')` on every dialect
+        // except Oracle (ISqlDialect.EmptyStringIsNull). That is SEM-2's own, deliberate business
+        // semantics for an ordinary "is this blank" filter condition -- but the compiled ORDER BY treats
+        // NULL and '' as distinct sort positions, so a boundary built this way disagrees with the
+        // ordering whenever the column actually holds an empty string: a NULLS LAST boundary's "OR
+        // Blank" disjunct re-matches the '' row itself (duplicate output, or a NULLS LAST walk that
+        // never terminates), and a NULLS FIRST boundary's NotBlank silently drops it. The IR has no
+        // exact IS NULL/IS NOT NULL primitive independent of blank/notBlank's text-aware semantics, so
+        // this shape cannot be walked correctly today -- refused with a named cause rather than left to
+        // fail as a silent short export or a hang. Scoped to the request's own filter, not the whole
+        // table: a filter that already excludes every '' row makes the hazard moot for this export.
+        if (!dialect.EmptyStringIsNull)
+        {
+            foreach (var key in keys)
+            {
+                if (request.Schema.Fields[key.Field].Type != FieldType.String)
+                {
+                    continue;
+                }
+
+                if (await ContainsEmptyString(connection, request, dialect, key.Field, cancellationToken).ConfigureAwait(false))
+                {
+                    throw new DapperCompilationException(
+                        $"Sort key '{key.Field}' is a text column and at least one row (within this export's " +
+                        "own filter scope) holds an empty string (''). EXP-3's keyset boundary tests null-ness " +
+                        "via SEM-2's blank/notBlank operators, which intentionally treat '' the same as NULL " +
+                        $"for an ordinary filter condition on the '{dialect.Name}' dialect -- but the compiled " +
+                        "ORDER BY treats them as distinct sort positions, so the boundary and the ordering " +
+                        "disagree for this column: rows can be dropped, duplicated, or (a NULLS LAST sort) the " +
+                        "walk can fail to terminate. This shape cannot be exported via keyset chunking until " +
+                        "the IR gains an exact IS NULL/IS NOT NULL primitive independent of blank/notBlank.");
+                }
+            }
+        }
+
         var columns = request.Projection ?? request.Schema.FieldOrder;
 
         if (columns.Count == 0)
@@ -234,6 +303,34 @@ public static class DapperExportStream
         }
     }
 
+    /// <summary>
+    /// Whether any row within <paramref name="request"/>'s own filter scope has an empty string in
+    /// <paramref name="field"/> — a single bounded existence probe (<c>LIMIT 1</c>), run once before the
+    /// walk starts, never per chunk. ANDs the check into the request's OWN filter rather than scanning
+    /// the whole table: a filter that already excludes every <c>''</c> row makes the hazard moot.
+    /// </summary>
+    private static async Task<bool> ContainsEmptyString(
+        IDbConnection connection, SqlQueryRequest request, ISqlDialect dialect, string field, CancellationToken cancellationToken)
+    {
+        var probeRequest = request with
+        {
+            Filter = FilterTreeMerge.And(
+                request.Filter, new ComparisonNode { Field = field, Op = ComparisonOperator.Eq, Value = new StringValue { Value = "" } }),
+            // null, not []: ir.schema.json's sort.minItems:1 rejects an empty-but-present array —
+            // omitting it entirely is how "no sort" is expressed, and this existence probe has none.
+            Sort = null,
+            Page = new RangePage { StartRow = 0, EndRow = 1 },
+            Projection = [field]
+        };
+
+        var query = SqlQueryBuilder.Build(probeRequest, dialect);
+        var (sql, parameters) = DapperParameterBinder.Prepare(query);
+        var command = new CommandDefinition(sql, parameters, cancellationToken: cancellationToken);
+
+        using var reader = await connection.ExecuteReaderAsync(command).ConfigureAwait(false);
+        return await DapperGridQuery.ReadRowAsync(reader, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Which <see cref="FieldType"/> each of <paramref name="fields"/> declares — every entry
     /// here is a real schema field (an export column or a sort key), unlike the grid path's column list,
     /// which can also carry an aggregate's output name.</summary>
@@ -258,7 +355,8 @@ public static class DapperExportStream
     /// well formed.
     /// </summary>
     private static DapperCompilationException DuplicateStableKey(string stableKeyField, object? value) =>
-        new($"Two rows share the stable key '{stableKeyField}' (value '{value}'). SC-5 declares that key " +
+        new($"Two rows share the stable key '{stableKeyField}' (value '{(value is null ? "null" : DapperValueReader.Truncate(value))}'). " +
+            "SC-5 declares that key " +
             "unique and EXP-3's keyset chunking relies on it: it is the last key of every ordering this " +
             "adapter emits (SEM-6), and it is what makes the sort a TOTAL order that a boundary predicate " +
             "can split. Without uniqueness the walk does not loop or repeat — it silently omits the " +

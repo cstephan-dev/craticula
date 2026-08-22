@@ -30,22 +30,33 @@ namespace Craticula.Dapper;
 /// compiler that rendered the <c>ORDER BY</c> is therefore what keeps the two collations in agreement —
 /// not a copied decision, but the same decision made twice from the same field.</para>
 ///
-/// <para><b>The one place that guarantee does not reach: the MINTED SEM-6 tiebreaker.</b>
+/// <para><b>The one place that guarantee does not reach: the MINTED SEM-6 tiebreaker — refused
+/// upfront by <see cref="DapperExportStream"/>, not merely documented.</b>
 /// <c>ResolveOrderingAndGroupKeyCaseSensitivity</c> forces <c>NotApplicable</c> (no collation mechanism
 /// at all) for an APPENDED tiebreaker regardless of the field's own declared sensitivity, precisely
 /// because it establishes row identity rather than compares text — and an ordinary
 /// <see cref="ComparisonNode"/> against that same field has no way to ask for that same override; only
 /// <c>SqlQueryBuilder</c>'s INTERNAL GRP-2 "group-key match" provenance can, and reaching for that here
-/// would be exactly the grouping-dispatch machinery this package's plan says not to port. Every fixture
-/// in the suite gives its <c>stableKey</c> a non-text type (SC-5's <c>id</c>), for which this is not
-/// observable at all — <c>ResolveCaseSensitivity</c> already answers <c>NotApplicable</c> for a
-/// non-<see cref="Craticula.Core.Schema.FieldType.String"/> field regardless of provenance — so this is
-/// a known, narrow gap rather than a silent one: a host that declares a STRING
-/// <see cref="Craticula.Core.Schema.GridSchema.StableKey"/> with no explicit
-/// <c>caseSensitivity: "sensitive"</c>, on a sort whose own keys do not already end in it (so a
-/// tiebreaker is actually minted), is the one shape where the boundary's collation could disagree with
-/// the <c>ORDER BY</c>'s. Recorded here rather than hidden, per this story's own reporting
-/// convention.</para>
+/// would be exactly the grouping-dispatch machinery this package's plan says not to port. An earlier
+/// version of this remark claimed every fixture in the suite gives its <c>stableKey</c> a non-text type
+/// — that was measured wrong (23 of 209 fixture schemas declare a STRING <c>stableKey</c>, every
+/// <c>group-aggregation/001</c>-<c>023</c>) and the review that caught it treated "documented, narrow,
+/// unobserved" as insufficient for a shape the suite already exercises: <see cref="DapperExportStream"/>
+/// now throws <see cref="DapperCompilationException"/> before the walk starts whenever the tiebreaker
+/// was minted onto a string field without an explicit <c>"sensitive"</c> declaration, rather than
+/// walking with a collation this predicate cannot guarantee agrees with the <c>ORDER BY</c>.</para>
+///
+/// <para><b>A second, independent hazard on the same "string sort key" surface, also refused
+/// upfront:</b> <see cref="ComparisonOperator.Blank"/>/<see cref="ComparisonOperator.NotBlank"/> below render as
+/// <c>(col IS NULL OR col = '')</c> for a <see cref="Craticula.Core.Schema.FieldType.String"/> field on
+/// every dialect except Oracle, which conflates NULL with an empty string for an ordinary "is this
+/// blank" filter condition — SEM-2's own deliberate business semantics — but disagrees with the
+/// compiled <c>ORDER BY</c>, which treats the two as distinct sort positions. <see cref="DapperExportStream"/>
+/// probes for an actual empty string in the request's own filter scope before the walk starts and
+/// refuses the export if one exists, rather than risk a dropped row, a duplicated one, or (a
+/// <c>NULLS LAST</c> sort) a walk that never terminates. This is a DIFFERENT mechanism from the
+/// collation hazard above — one is about case sensitivity, this one is about null-vs-empty-string —
+/// and applies to ANY string sort key, not only a minted tiebreaker.</para>
 /// </summary>
 internal static class DapperKeysetPredicate
 {

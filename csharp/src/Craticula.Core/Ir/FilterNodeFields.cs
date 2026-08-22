@@ -18,8 +18,11 @@ namespace Craticula.Core.Ir;
 /// the one thing the two must not each own is a decision about <em>what</em> to emit. A second copy
 /// of this walk would diverge silently and in the worst possible direction: a fan-out that missed a
 /// field yields a perfectly valid query returning fewer rows, with no exception and nothing in the
-/// shape of the output to notice. An execution adapter may not reference a compiler (AR-3), so a
-/// rule both need has exactly one legal home.</para>
+/// shape of the output to notice. The EF Core adapter specifically has no artifact to read at all —
+/// it compiles IR straight to expression trees, never to SQL text — so referencing this compiler for
+/// the rule was never an option for it (#1646 corrected this paragraph's earlier framing, which
+/// over-generalized that into "an adapter may not depend on a compiler" — Craticula.Dapper depends on
+/// this very compiler for real). A rule both need still has exactly one legal home regardless: Core.</para>
 ///
 /// <para>Deliberately NOT on <see cref="Craticula.Core.Schema.SemanticsResolver"/>, which is a set of
 /// pure <em>decision</em> functions over one field or one operator. This is a tree traversal, and

@@ -60,7 +60,21 @@ internal static class DapperValueReader
     private static string ToStringValue(object raw) =>
         raw as string ?? Convert.ToString(raw, CultureInfo.InvariantCulture)
             ?? throw new DapperCompilationException(
-                $"Column value '{raw}' ({raw.GetType().Name}) could not be read as a string (FieldType.String).");
+                $"Column value '{Truncate(raw)}' ({raw.GetType().Name}) could not be read as a string (FieldType.String).");
+
+    /// <summary>
+    /// Bounds how much of a raw DATABASE ROW value reaches an exception message a host will typically
+    /// log — mirroring <c>Craticula.Core.Ir.FilterNodeValidator.Truncate</c>'s own 32-character bound
+    /// (not reachable directly: that method is <c>internal</c> to a different assembly), but for a
+    /// different provenance. That helper echoes CLIENT-SUPPLIED request values; every call site here
+    /// echoes a value already IN THE DATABASE, which the caller's own projection may have deliberately
+    /// excluded from what it asked to see (an export can chunk on a stableKey it never selected).
+    /// </summary>
+    internal static string Truncate(object value)
+    {
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        return text.Length <= 32 ? text : text[..32] + "...";
+    }
 
     private static long ToInt64(object raw) =>
         raw is long value ? value : Convert.ToInt64(raw, CultureInfo.InvariantCulture);
@@ -93,7 +107,7 @@ internal static class DapperValueReader
         DateTime value => DateOnly.FromDateTime(value),
         string text => DateOnly.ParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture),
         _ => throw new DapperCompilationException(
-            $"Column value '{raw}' ({raw.GetType().Name}) could not be read as a date (FieldType.Date).")
+            $"Column value '{Truncate(raw)}' ({raw.GetType().Name}) could not be read as a date (FieldType.Date).")
     };
 
     /// <summary>
@@ -109,6 +123,6 @@ internal static class DapperValueReader
         string text => DateTime.Parse(
             text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
         _ => throw new DapperCompilationException(
-            $"Column value '{raw}' ({raw.GetType().Name}) could not be read as a datetime (FieldType.Datetime).")
+            $"Column value '{Truncate(raw)}' ({raw.GetType().Name}) could not be read as a datetime (FieldType.Datetime).")
     };
 }
