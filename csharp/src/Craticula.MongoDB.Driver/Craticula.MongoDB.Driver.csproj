@@ -26,4 +26,10 @@
     <ProjectReference Include="../Craticula.Mongo/Craticula.Mongo.csproj" />
   </ItemGroup>
 
+  <!-- Not Craticula.AgGrid: this adapter's own ToGridPageResult() extension (#1649) names
+       Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a
+       <see cref>) — this solution sets no GenerateDocumentationFile (csharp/Directory.Build.props), so a
+       <see cref> is never compiler-checked here in the first place. This package still only ever
+       executes the pipeline Craticula.Mongo.MongoPipelineBuilder.Build produces. -->
+
 </Project>

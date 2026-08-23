@@ -3,15 +3,14 @@ namespace Craticula.MongoDB.Driver;
 /// <summary>
 /// One page of grid rows, as <see cref="MongoGridQuery.FetchPageAsync"/> returns it.
 ///
-/// <para><b>This is deliberately NOT OQ-8's shared response envelope, and #1647 deliberately does not
-/// design one.</b> #1622's definition of done wants an AG Grid <c>LoadSuccessParams</c>-shaped result
-/// backed by one neutral core type, shared by all four execution adapters. No such type exists, no
-/// story has built it, and inventing it inside this adapter is how a contract gets set in the wrong
-/// package and then has to be undone — the same reasoning <c>Craticula.EntityFrameworkCore.EfCoreGridPage</c>
-/// and <c>Craticula.Dapper.DapperGridPage</c> both carry verbatim, for the identical reason. So this
-/// type is the narrowest thing this package's own two real consumers (a grid page, <c>CsvWriter</c> via
-/// <see cref="MongoExportStream"/>) need, it lives in this package rather than in <c>Craticula.Core</c>,
-/// and the shape it turns out to need is reported to #1622/#1649 rather than promoted.</para>
+/// <para><b>This is deliberately NOT OQ-8's shared response envelope.</b> #1622's definition of done
+/// wants an AG Grid <c>LoadSuccessParams</c>-shaped result backed by one neutral core type, shared by
+/// all four execution adapters. That shared type now exists — <see cref="Craticula.Core.Grid.GridPageResult"/>,
+/// added by #1649 — and this adapter's own <c>MongoGridPageExtensions.ToGridPageResult()</c> converts
+/// this type into it; a host wanting AG Grid's actual wire shape calls that, then
+/// <c>Craticula.AgGrid.LoadSuccessParamsMapper.Map</c>. This type itself stays exactly what #1647 built:
+/// the narrowest thing this package's own two real consumers (a grid page, <c>CsvWriter</c> via
+/// <see cref="MongoExportStream"/>) need.</para>
 ///
 /// <para><b>Why <see cref="Columns"/> can name a grouped level's bucket differently from every SQL
 /// artifact.</b> <c>Craticula.Mongo.MongoPipelineBuilder</c>'s own remarks explain why: a <c>$group</c>

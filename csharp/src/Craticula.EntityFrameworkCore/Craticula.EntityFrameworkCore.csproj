@@ -38,10 +38,14 @@
          IQueryable<T> expression trees and never produces SQL text at all, so it has no artifact to
          consume — which is why the four rules it shares with the SQL compiler live in Craticula.Core
          rather than being reachable from here (SqlPatternEscaping, FilterNodeFields, IsoInstant,
-         SemanticsResolver). Not Craticula.AgGrid either: the IR is the contract, and a second grid
-         vendor must be able to drive this adapter. Not Craticula.Export.Csv, though this adapter
-         yields ExportRow — that type moved into Craticula.Core.Export precisely so an adapter is not
-         welded to one file format. -->
+         SemanticsResolver). Not Craticula.Export.Csv, though this adapter yields ExportRow — that type
+         moved into Craticula.Core.Export precisely so an adapter is not welded to one file format.
+         Not Craticula.AgGrid either: this adapter's own ToGridPageResult() extension (#1649) names
+         Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a
+         <see cref>) — this solution sets no GenerateDocumentationFile (csharp/Directory.Build.props), so
+         a <see cref> is never compiler-checked here in the first place. No AG-Grid type is ever used in
+         this package's own code, so the "second grid vendor drives this adapter through IR alone" claim
+         still holds unmodified. -->
     <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
   </ItemGroup>
 
