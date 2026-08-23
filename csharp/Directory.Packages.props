@@ -22,6 +22,12 @@
          the SAME package directly (as the host owning the real connection) rather than a separate
          test-only provider. -->
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
+    <!-- #1648: Craticula.OpenSearch.Client's one runtime dependency — current stable as of implementation
+         time (verified on nuget.org; 2.1.0 is the newest non-prerelease release). Craticula.OpenSearch.Client.Tests
+         references the SAME package directly (as the host owning the real connection), mirroring
+         Craticula.MongoDB.Driver.Tests' own precedent rather than Craticula.Dapper.Tests' separate-provider one:
+         OpenSearch.Client is both the wire protocol AND the low-level client this package executes through. -->
+    <PackageVersion Include="OpenSearch.Client" Version="2.1.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
