@@ -3,15 +3,13 @@ namespace Craticula.EntityFrameworkCore;
 /// <summary>
 /// One page of grid rows, as <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/> returns it.
 ///
-/// <para><b>This is deliberately NOT OQ-8's shared response envelope, and #1645 deliberately does not
-/// design one.</b> #1622's definition of done wants an AG Grid <c>LoadSuccessParams</c>-shaped result
-/// backed by one neutral core type, shared by all four execution adapters. No such type exists, no
-/// story has built it, and inventing it inside the first adapter is how a contract gets set in the
-/// wrong package and then has to be undone — the same reasoning that put
-/// <see cref="Craticula.Core.Export.ExportColumn"/> in the core rather than beside the grid adapter
-/// that resolves it. So this type is the narrowest thing one real consumer needs, it lives in this
-/// package rather than in <c>Craticula.Core</c>, and the shape it turned out to need is reported to
-/// #1622 rather than promoted.</para>
+/// <para><b>This is deliberately NOT OQ-8's shared response envelope.</b> #1622's definition of done
+/// wants an AG Grid <c>LoadSuccessParams</c>-shaped result backed by one neutral core type, shared by
+/// all four execution adapters. That shared type now exists — <see cref="Craticula.Core.Grid.GridPageResult"/>,
+/// added by #1649 — and this adapter's own <c>EfCoreGridPageExtensions.ToGridPageResult()</c> converts
+/// this type into it; a host wanting AG Grid's actual wire shape calls that, then
+/// <c>Craticula.AgGrid.LoadSuccessParamsMapper.Map</c>. This type itself stays exactly what #1645 built:
+/// the narrowest thing this adapter's own real consumer needs.</para>
 ///
 /// <para><b>Why the rows are positional and come with their column list</b> rather than being a list of
 /// <c>Dictionary&lt;string, object?&gt;</c>. It is <see cref="Craticula.Core.Export.ExportRow"/>'s own

@@ -3,16 +3,14 @@ namespace Craticula.OpenSearch.Client;
 /// <summary>
 /// One page of grid rows, as <see cref="OpenSearchGridQuery.FetchPageAsync"/> returns it.
 ///
-/// <para><b>This is deliberately NOT OQ-8's shared response envelope, and #1648 deliberately does not
-/// design one.</b> #1622's definition of done wants an AG Grid <c>LoadSuccessParams</c>-shaped result
-/// backed by one neutral core type, shared by all four execution adapters. No such type exists, no
-/// story has built it, and inventing it inside this adapter is how a contract gets set in the wrong
-/// package and then has to be undone — the same reasoning <c>Craticula.EntityFrameworkCore.EfCoreGridPage</c>,
-/// <c>Craticula.Dapper.DapperGridPage</c> and <c>Craticula.MongoDB.Driver.MongoGridPage</c> all carry
-/// verbatim, for the identical reason. So this type is the narrowest thing this package's own two real
-/// consumers (a grid page, <c>CsvWriter</c> via <see cref="OpenSearchExportStream"/>) need, it lives in
-/// this package rather than in <c>Craticula.Core</c>, and the shape it turns out to need is reported to
-/// #1622/#1649 rather than promoted.</para>
+/// <para><b>This is deliberately NOT OQ-8's shared response envelope.</b> #1622's definition of done
+/// wants an AG Grid <c>LoadSuccessParams</c>-shaped result backed by one neutral core type, shared by
+/// all four execution adapters. That shared type now exists — <see cref="Craticula.Core.Grid.GridPageResult"/>,
+/// added by #1649 — and this adapter's own <c>OpenSearchGridPageExtensions.ToGridPageResult()</c>
+/// converts this type into it; a host wanting AG Grid's actual wire shape calls that, then
+/// <c>Craticula.AgGrid.LoadSuccessParamsMapper.Map</c>. This type itself stays exactly what #1648 built:
+/// the narrowest thing this package's own two real consumers (a grid page, <c>CsvWriter</c> via
+/// <see cref="OpenSearchExportStream"/>) need.</para>
 ///
 /// <para><b>Columns are always <c>Schema.FieldOrder</c> for an ordinary row query — never a caller-
 /// selected subset.</b> Unlike <c>MongoQueryRequest</c>/<c>SqlQueryRequest</c>,
