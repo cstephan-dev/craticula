@@ -43,8 +43,12 @@ build/
 coverage/
 *.lcov
 
-# --- Claude tooling (local-only) ---
-.claude/
+# --- Claude tooling: tracked in the private Azure Repos repository, stripped from the public one by
+# scripts/publish-github.sh. Machine-local parts stay out of git. ---
+.claude/settings.local.json
+.claude/worktrees/
+.claude/.work-timer.json
+.claude/*.bak-*
 
 # --- Reference clones (local-only) ---
 github/
