@@ -25,8 +25,9 @@ Adding a language means writing a driver. The runner does not change.
 | `rowStream.json` + `expected/export.csv` / `.tsv` (EXP-4) | compares writer output bytes, not a compiled query | the implementation's own tests today; a later tier |
 | `dataset.json` / `expectedRows.json` (reserved, T-1b) | execution equality needs a database | Feature #1624, integration tier |
 
-A fixture directory with none of the graded files is reported as out of tier; `schemas/` is not a category and is
-skipped.
+The listing goes by content, not by directory: a fixture that carries both an expected artifact and writer output has
+its artifact graded and its writer output listed. A fixture directory with none of the graded files is reported as out
+of tier; `schemas/` is not a category and is skipped.
 
 ## 2. The protocol
 
@@ -77,14 +78,18 @@ When every request is answered, the runner closes the driver's stdin. The driver
 
 ### 2.4 Protocol failures
 
-Each of these stops the run with **exit status 2** (§7) and lists the requests left unanswered:
+Each of these stops the run with **exit status 2** (§7) and lists the requests left unanswered (none after a failed
+hello: the graded set depends on the backends the hello declares):
 
 1. no hello, or a first line that is not a valid hello;
 2. a stdout line that is not a single JSON object;
 3. a response whose `id` is not the one the runner is waiting for (unknown, repeated, or out of order);
-4. no hello within **30 seconds** of the driver starting, or no response within **30 seconds** of the request being
-   written;
+4. no hello within the **timeout** of the driver starting, or no response within the timeout of the request being
+   written — **30 seconds** unless the runner is given another (§9);
 5. the driver exiting before the session ends, or with a non-zero status.
+
+When a run stops, the runner ends the driver **and every process the driver started**: a driver command is often a
+launcher (`dotnet run`, `npx`, `go run`, a wrapper script) whose child must not outlive the run.
 
 ## 3. What a driver does with a request
 
@@ -139,6 +144,8 @@ passed, failed, not graded, and the out-of-tier count. `--json <file>` writes th
 - A backend the driver did not declare is reported as **not graded**, with its case count. It is never counted as passed.
 - The runner only sends cases that have an expected artifact, so an implementation cannot be graded on a case the
   suite does not define.
+- A run whose graded set is **empty** never passes: nothing selected (an empty tree, or an `--only` that matches no
+  expected artifact, §9), or no selected case in a backend the driver declared. It exits 2 (§7).
 
 ## 7. Exit status
 
@@ -146,7 +153,7 @@ passed, failed, not graded, and the out-of-tier count. `--json <file>` writes th
 |---|---|
 | 0 | every graded case passed |
 | 1 | at least one graded case failed |
-| 2 | protocol failure (§2.4) or usage error (bad arguments, unreadable fixture tree) |
+| 2 | protocol failure (§2.4), usage error (bad arguments, unreadable fixture tree), or an empty graded set (§6) |
 
 ## 8. Writing a driver
 
@@ -176,4 +183,18 @@ A session, abridged (`→` runner to driver, `←` driver to runner):
   (stdin closed; driver exits 0)
 ```
 
-Flush after every response: a buffered driver looks hung and hits the 30-second limit.
+Flush after every response: a buffered driver looks hung and hits the timeout (§2.4).
+
+## 9. Running the runner
+
+```text
+python3 conformance/run.py --driver "<command>" [--fixtures <dir>] [--only <glob>]… [--json <file>] [--timeout <seconds>]
+```
+
+| Option | Meaning |
+|---|---|
+| `--driver` | Required. The command that starts the driver. No shell is involved: on POSIX the runner splits it like a shell line, on Windows it hands it to the operating system as is (so `C:\…\driver.exe` keeps its backslashes). |
+| `--fixtures` | The fixture tree. Default: `spec/fixtures` of the repository the runner sits in. |
+| `--only` | Narrows the run to the cases whose id matches the glob — `<category>/<NNN-slug>` selects a fixture, `<category>/<NNN-slug>#<backend>` one case. Repeatable. A narrowed run is a debugging aid, not a conformance claim: conformance is the run over the whole tree. |
+| `--json` | Writes the report of §5 as JSON as well. |
+| `--timeout` | The limit of §2.4 item 4, in seconds. Default 30. |
