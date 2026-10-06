@@ -2,7 +2,8 @@
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 *.swp
 *.swo
 
@@ -40,6 +41,11 @@ build/
 *.log
 .env
 .env.*
+!.env.example
+*.pem
+*.pfx
+*.key
+secrets/
 coverage/
 *.lcov
 
@@ -48,6 +54,8 @@ coverage/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/.work-timer.json
+.claude/.fix-in-progress
+.claude/.ai-effort.json
 .claude/*.bak-*
 
 # --- Reference clones (local-only) ---
