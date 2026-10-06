@@ -41,3 +41,6 @@ spec doesn't have, the spec changes first, then the port follows.
   category index. Execution-equality fixtures (`dataset.json`/`expectedRows.json`, T-1b) are
   deferred until integration containers exist (a later Feature #1624 story) — fabricating expected
   rows without a real database to derive them from would invent data, not capture it.
+- **`conformance-runner.md`** — how an implementation is graded against `fixtures/` (T-1 tier (a), ML-3): the
+  driver protocol every language implements, what a driver pins (limits, clock, entry point), the per-backend
+  equality rules by reference, and the runner's report and exit status (#1654).
