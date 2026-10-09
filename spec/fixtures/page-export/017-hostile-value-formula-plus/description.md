@@ -18,8 +18,8 @@ writer fixtures" note for the file shapes.
 A text-`equals` filter on `notes` carries the value `"+1234567890"` — chosen because
 an `equals` filter's value is exactly the value any matching row's `notes` cell would contain,
 so this fixture can derive the exported cell from the request itself without needing a seeded dataset
-(`dataset.json`/`expectedRows.json` are deferred per docs/feat/1630/context.md decision #3 — no
-database exists yet to derive real row content from, and a row stream is not a seed either way).
+(this fixture carries no `dataset.json`/`expectedRows.json` yet: seeds are authored per fixture
+under #1655 (`spec/semantics.md` XEQ-1), and a row stream is not a seed either way).
 
 It is also the most ordinary of the six values: an international phone number written the way people
 write them. A leading `+` is a legacy Lotus 1-2-3 formula introducer that Excel still honours, so the

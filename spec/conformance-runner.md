@@ -23,7 +23,7 @@ Adding a language means writing a driver. The runner does not change.
 |---|---|---|
 | `expected/rejection.json` (SEC-6) | a rejection is not a compiled artifact; it has its own shape and stage | the implementation's own tests today; a later tier |
 | `rowStream.json` + `expected/export.csv` / `.tsv` (EXP-4) | compares writer output bytes, not a compiled query | the implementation's own tests today; a later tier |
-| `dataset.json` / `expectedRows.json` (reserved, T-1b) | execution equality needs a database | Feature #1624, integration tier |
+| `dataset.json` / `expectedRows.json` (T-1b, `semantics.md` XEQ-1..XEQ-4) | execution equality needs a seeded database to run | Feature #1624, integration tier |
 
 The listing goes by content, not by directory: a fixture that carries both an expected artifact and writer output has
 its artifact graded and its writer output listed. A fixture directory with none of the graded files is reported as out

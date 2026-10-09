@@ -31,8 +31,8 @@ the fixtures; that one describes how they are run.
   rowStream.json?           — optional, CSV/TSV writer tier: the rows an adapter yields (added #1651)
   writerConfig.json?        — optional, CSV/TSV writer tier: the HOST's delimiter/BOM/header/decimal
                               separator (EXP-5's PER-FIELD overrides live in schema.json instead)
-  dataset.json?             — optional, execution-equality tier (T-1b) — see "Deferred" below
-  expectedRows.json?        — optional, execution-equality tier (T-1b) — see "Deferred" below
+  dataset.json?             — optional, execution-equality tier (T-1b): the seed — see "Execution equality" below
+  expectedRows.json?        — optional, execution-equality tier (T-1b): the expected result — see "Execution equality" below
 ```
 
 **The writer tier (EXP-4/EXP-8), added by #1651.** A CSV/TSV export has three inputs, only one of
@@ -52,8 +52,8 @@ Note that a **fourth** input reaches the writer and is not a file of its own: EX
 format overrides in *schema config*, so `026`'s two overrides live in its `schema.json` and reach the
 writer through the request adapter, exactly as a `label` does. `writerConfig.json` carries only what
 EXP-4 makes host configuration. **These files are deliberately
-not `dataset.json`/`expectedRows.json`** — see the "Deferred" section below for what those two names are
-reserved for, and the category README for why a row stream is not a database seed.
+not `dataset.json`/`expectedRows.json`** — see the "Execution equality" section below for what those two names are
+for, and the category README for why a row stream is not a database seed.
 
 Every `expected/<backend>.artifact.json` validates against its shape schema in `schemas/`
 (`sql-artifact.schema.json` for every SQL dialect, `mongo-artifact.schema.json`,
@@ -96,18 +96,29 @@ An Oracle artifact disagreeing with a compiler is still a bug in one of the two,
 any other arm; the tier is about *coverage beyond the artifact*, not about how seriously the artifact
 is taken. Do not quietly promote it — nothing here has been executed.
 
-## Deferred: `dataset.json` / `expectedRows.json` (execution-equality tier, T-1b)
+## Execution equality: `dataset.json` / `expectedRows.json` (T-1b)
 
-Not populated in this pass. They require a real seeded database to derive expected row IDs from —
-fabricating them without one would be inventing data, not capturing ground truth, which is worse
-than leaving the field absent. They get added to these same fixture directories once integration
-containers exist (a later Feature #1624 story) — this is additive, not a schema change.
+The second assertion tier. T-1a compares the artifact a compiler writes; T-1b runs the compiled query on a real engine
+over a seeded table and compares the rows it returns. **The rules are normative in `spec/semantics.md`'s
+"Addendum — execution equality" (XEQ-1..XEQ-4)**, not here: what a fixture carries, the value encodings, the
+comparison rule and how an accepted divergence is declared. In short:
 
-**Still reserved after #1651 added the writer tier.** A `rowStream.json` is *not* a small
-`dataset.json`: a seed is what a database holds before the query runs, while a row stream is what an
-adapter yields **after** filtering, sorting, projection and physical-to-logical aliasing. The two can
-sit in the same directory later without either meaning the other — a writer fixture takes no
-position on what was stored, and an execution fixture takes none on how the bytes are formatted.
+- `dataset.json` is the seed (`{"rows": [{"row": {<logical colId>: value}, "why": "…"}]}`); `expectedRows.json` is
+  the ordered result (`{"columns": […], "rows": [[…]]}`, optionally with `allowedDivergence`). Both validate against
+  `schemas/dataset.schema.json` and `schemas/expected-rows.schema.json`.
+- A fixture carries both or neither. The seed belongs to the fixture; nothing is shared across fixtures.
+- The expected rows are **hand-derived from the semantics, never copied from an engine run**. An oracle taken from the
+  implementation it grades only proves the implementation agrees with itself, which is the failure this tier exists to
+  catch. Each category README says which fixtures are in scope and why the others are not.
+- A `rowStream.json` is *not* a small `dataset.json`: a seed is what a database holds before the query runs, a row
+  stream is what an adapter yields **after** filtering, sorting, projection and physical-to-logical aliasing. The two
+  sit in the same directory without either meaning the other.
+
+**Worked example: `operators/001-eq-string`.** Its seed holds seven rows chosen to sit on each side of every boundary
+(`"active"`, `"ACTIVE"`, `"Approved"`, `"pending"`, a null, `""`, `"activex"`), and its expected result is the three rows
+that match case-insensitively, in `id` order: `[[1,"active"],[2,"ACTIVE"],[3,"Approved"]]`. Without the collation only
+id 1 would match; as a `startsWith`, id 7 would join. Only this fixture carries the pair so far; the rest of the suite
+is authored under #2204.
 
 ## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
 

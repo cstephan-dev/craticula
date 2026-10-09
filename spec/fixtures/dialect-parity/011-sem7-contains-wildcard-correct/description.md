@@ -5,7 +5,7 @@ with `012` (the anti-pattern documentation case): `contains`/`notContains` compi
 **substring-matching** query types on OpenSearch/Elasticsearch — here, `wildcard` against the
 `.keyword` sub-field — never a tokenized `match` query.
 
-Illustrative match (not backed by `dataset.json`, deferred per this suite's policy): a row with
+Illustrative match (not backed by a `dataset.json` yet: seeds are authored under #1655, `spec/semantics.md` XEQ-1): a row with
 `lastName = "Bartlett"` contains the literal substring `"art"`. The `wildcard` pattern below matches
 it correctly, exactly mirroring what `LIKE '%art%'` (Postgres) and `$regex` (Mongo) also match —
 this is precisely the `"Smart Watch"`/`"art"` scenario `spec/semantics.md`'s SEM-7 section itself

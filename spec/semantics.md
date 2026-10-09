@@ -2641,3 +2641,87 @@ SEM-2, SEM-3, SEM-4, SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, AGG-4, **AGG-5**,
 satisfied natively here — the `sum` metric returns 0 and the other three return null, so no metric
 aggregation changes), GRP-2..GRP-6, and the SQL addendum's SQL-0 (`source`) and SQL-2 (the composite
 wrap OSE-2 parallels).
+
+---
+
+## Addendum — execution equality (XEQ-1..XEQ-4; not numbered SEM-*, for the same reason as the aggregation addendum above)
+
+T-1's second tier. Where artifact equality (T-1a) compares what a compiler **writes**, execution equality (T-1b)
+compares what the compiled query **returns** when a real engine runs it over a seeded table. It exists because a
+string comparison cannot see a collation that is silently ignored, a null that sorts the wrong way, or a window that
+one engine rejects. Its inputs are two files at a fixture's root, `dataset.json` and `expectedRows.json`, validated by
+[`fixtures/schemas/dataset.schema.json`](fixtures/schemas/dataset.schema.json) and
+[`fixtures/schemas/expected-rows.schema.json`](fixtures/schemas/expected-rows.schema.json). **This addendum is the only
+place the comparison rule is stated**; the fixture README, the conformance-runner spec and the schemas point here.
+
+**XEQ-1. What a fixture carries.** A fixture carries `dataset.json` and `expectedRows.json` together or neither. The
+seed belongs to the fixture: there are no cross-fixture seed references in v1, so one case can be read, changed and
+re-derived without looking at another. The engine loads the seed into the table named by the fixture's `schema.json`
+`source` (SQL-0), then runs the compiled query for that backend with the request's own `startRow`/`endRow`. The tier
+applies to every backend the fixture has an `expected/<backend>.artifact.json` for and the harness can reach, and every
+such backend is held to the **same** `expectedRows.json` unless XEQ-4 says otherwise. A fixture whose query returns no
+rows (a rejection) carries neither file. A writer-tier fixture's compiled query does return rows, so it may carry the
+pair beside its `rowStream.json`, which is a different file: a row stream is what an adapter yields *after* the query, a
+seed is what is stored *before* it.
+
+**XEQ-2. Value encodings.** Seed rows and expected rows are keyed or aligned by **logical** colId, never by a physical
+name, and encode each cell by the field's declared GridSchema type:
+
+| Type | JSON form |
+|---|---|
+| `int64` | a JSON integer; a fixture stays within ±2^53 so every language reads it back exactly |
+| `double` | a JSON number |
+| `decimal` | a JSON **string** carrying the exact digits (`"12.50"`), the same reason a Mongo artifact spells one `{"$numberDecimal": …}` |
+| `boolean` | `true` / `false` |
+| `string` | a JSON string, stored and compared exactly as written (no trimming, no case change) |
+| `date` | `"YYYY-MM-DD"`, a local date with no zone (SEM-4) |
+| `datetime` | `"YYYY-MM-DDTHH:MM:SS[.fff]Z"`, an absolute UTC instant (SEM-4), **at most millisecond precision**: MongoDB's `Date` and Search's `date` keep no more, so a finer seed would be truncated differently per engine and could move across a range bound |
+| absent value | an explicit JSON `null`; **never** an omitted key |
+
+Every field the fixture's `schema.json` declares appears in every seed row, so a reader can tell a null from an
+oversight. A seed row may carry a `why`; an authored fixture always does. Two further rules keep the oracle well-formed:
+
+- the seed's **stableKey column is unique and non-null** in every row: SEM-6's tiebreaker makes a result order total only
+  over such a key, and XEQ-3 depends on that;
+- a fixture that has an `oracle` artifact **avoids `''` in any seeded column**, or declares an XEQ-4 `rows` divergence
+  for `oracle`: Oracle stores the empty string as NULL (SQL-7), so a seeded `''` comes back as null there and, in a sorted
+  column, moves from first among the strings to NULLS LAST.
+
+**XEQ-3. The comparison rule.** The result's column list is compared **exactly**, then the rows **in order**, then each
+cell by its type. The column list is the **logical** one, whatever an engine physically returns: an ordinary row query's
+columns are the schema's fields in declaration order (GRP-3's leaf rule), a grouped level's are GRP-3's group column then
+each aggregation's output name, and a BM-3 values query's or an export's are their own lists. A harness maps each
+engine's rows onto it before comparing (physical to logical, dropping `_id`, hit metadata and any column the compiled
+query never projected), so a harness that keeps MongoDB's `_id` and one that drops it cannot both conform.
+
+- order is part of the contract: with a unique, non-null stableKey (XEQ-2), SEM-6's tiebreaker makes the result order
+  total, so two correct engines cannot legitimately differ in row order. The one accepted difference is AGG-5's composite
+  null bucket on Search, which a fixture declares under XEQ-4;
+- `int64`, `boolean`, `date` and `string` are compared exactly (strings by code point, with no collation, no case
+  folding and no normalization: the point of the tier is to see the engine's own);
+- `decimal` is compared **as a number**, so `"1.50"` equals `"1.5"` (an engine's scale is not semantics);
+- `double` is compared with a relative tolerance of 1e-9, `|a − b| ≤ 1e-9 · max(|a|, |b|)`, and exactly when either side is 0;
+- `datetime` is compared as an **instant**, so `…:00Z` equals `…:00.000Z`;
+- `null` equals only `null`: an empty string is not a null (it is a value on every engine except Oracle, where XEQ-2's
+  seed rule applies) and a missing cell is a failure.
+
+**Aggregate columns are typed by the aggregation, not by the field.** On a grouped level (`rowGroupCols` outnumber
+`groupKeys`) a column named by a `valueCols` entry is an aggregate, and takes its type from the function: `count` is
+`int64`; `sum`, `min` and `max` take the aggregated field's type; `avg` is **always compared as a double** under the
+tolerance above, whatever the field's type, because engines differ in the scale of an average (Postgres `AVG(numeric)`
+keeps about sixteen fractional digits, SQL Server `decimal(38,6)`, Search returns a double). A decimal `sum`, `min` or
+`max` keeps the exact-decimal rule against another decimal; a Search double metric is compared against a decimal under
+the double tolerance. This holds when the aggregate's output name equals the field's own name (`amount` summed as
+`amount`). A drill-down leaf (`rowGroupCols` equal to `groupKeys`) sends `valueCols` too but projects plain fields, so
+none of this applies to it. A column that is neither a schema field nor an aggregate output name is a mistake in the
+fixture, not an unchecked cell.
+
+**XEQ-4. Accepted divergence.** When a real cross-engine difference is known and accepted, the fixture says so in
+`expectedRows.json`'s `allowedDivergence` array rather than silently passing or silently failing. One entry per backend:
+the backend (the `expected/<backend>` stem), an optional `engine` (`opensearch` or `elasticsearch`, valid only with
+backend `search`, because that one artifact (OQ-7) runs on both engines and one can differ alone; an entry without it
+covers both, and the two forms are not mixed), a mandatory `reason` naming the rule or engine fact behind it, and an
+`outcome`: **`rows`** (the backend returns a different result, given in the entry's own `expected`) or **`error`** (the
+backend refuses the query; the harness asserts that it does). A backend with an entry is held to that entry and only
+that entry; a backend without one must match the fixture's main result. An `error` entry is asserted on purpose: a fix
+that makes the error disappear is a change someone should notice and delete the entry for, not a pass nobody sees.

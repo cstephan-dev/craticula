@@ -7,7 +7,7 @@ identical in mechanism to `011`, applied to a different field (`department`) so 
 duplicate of `011`.
 
 **The trap.** Filtering `contains: "art"` against `department`, illustrative stored value
-`"Smart Devices"` (not backed by `dataset.json`, per this suite's deferred policy — described here
+`"Smart Devices"` (not backed by a `dataset.json` yet, seeds are authored under #1655 — described here
 for narrative purposes only): the naive/wrong compilation reaches for `match` because the operator
 is literally named `contains` and `match` reads as "does it contain this":
 

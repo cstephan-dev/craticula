@@ -49,11 +49,12 @@ the category except `021`; see the shape note below.
   | `writerConfig.json` | EXP-4/EXP-5's **host** configuration (`delimiter`, `bom`, `headerRow`, `decimalSeparator`). **Present only when the case overrides a default** — nine of the twelve carry none (only 013, 015 and 026 do), which is what makes them oracles for the defaults, EXP-6's "default on" included. Validates against `../schemas/writer-config.schema.json`. Note what is *not* here: EXP-5's **per-field** overrides, which EXP-5 puts in schema config and which therefore reach the writer from `schema.json` through the request adapter, exactly as a `label` does (026). |
   | `expected/export.csv` / `expected/export.tsv` | The bytes. The extension is the request's own `exportFormat`, which is the only place in the fixture tree that field is visible at all (004/005 prove it reaches no compiled artifact). |
 
-  **Not `dataset.json`/`expectedRows.json`.** Those two names are reserved for the execution-equality
-  tier (T-1b, #1655), where they mean a *seeded database* and the row ids a query returns from it. A
+  **Not `dataset.json`/`expectedRows.json`.** Those two names belong to the execution-equality tier
+  (T-1b, `../../semantics.md` XEQ-1..XEQ-4), where they mean a *seeded database* and the ordered result a
+  query returns from it. A
   writer input is not a seed: it is what an adapter hands back **after** filtering, sorting,
   projection and physical-to-logical aliasing (`order_date` → `orderDate`), which is why it is keyed
-  by logical colId and carries exactly the projected columns. Both can coexist in one directory later
+  by logical colId and carries exactly the projected columns. Both can coexist in one directory
   without either meaning the other.
 
   **How the rows were derived.** One cell of every row is *derived*: the one the request's `equals`
