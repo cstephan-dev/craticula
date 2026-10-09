@@ -5,6 +5,10 @@ language-agnostic contract every backend compiler, in every language port, is gr
 fixture and an implementation disagree, the implementation has a bug — see `spec/semantics.md`'s
 own framing of the same principle for the rules these fixtures enforce.
 
+**How an implementation is graded** — the driver protocol, what a driver pins, the per-backend equality rules and what
+the runner reports — is defined once, in [`../conformance-runner.md`](../conformance-runner.md). This file describes
+the fixtures; that one describes how they are run.
+
 ## Fixture shape
 
 ```

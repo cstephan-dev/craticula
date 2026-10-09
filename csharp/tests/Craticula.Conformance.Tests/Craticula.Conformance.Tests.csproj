@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests start the driver as a separate process (spec/conformance-runner.md §2: the runner
+         talks to a driver command over stdin/stdout), so the driver's dll must sit beside the test
+         assembly; a ProjectReference to the Exe also makes `dotnet test` build it first. -->
+    <ProjectReference Include="../../tools/Craticula.Conformance.Driver/Craticula.Conformance.Driver.csproj" />
+  </ItemGroup>
+
+</Project>
