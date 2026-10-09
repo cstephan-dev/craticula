@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- The execution-equality tier (T-1b, T-2, #1655): this project is the HOST, so it is the one place that
+       may reference every core package and, from #2206/#2207, the DB drivers and Testcontainers (AR-3:
+       core packages never reference a driver; tech-stack.approved.md records the approval). -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/Craticula.Core/Craticula.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -28,6 +28,20 @@
          Craticula.MongoDB.Driver.Tests' own precedent rather than Craticula.Dapper.Tests' separate-provider one:
          OpenSearch.Client is both the wire protocol AND the low-level client this package executes through. -->
     <PackageVersion Include="OpenSearch.Client" Version="2.1.0" />
+    <!-- #1655 (#2205): the execution-equality tier's test-only packages, approved in docs/compliance/tech-stack.approved.md
+         on 2026-10-10 and used by Craticula.Integration.Tests only (AR-3). Each is the newest stable release at least two
+         weeks old on 2026-10-10 (nuget.org): Testcontainers 4.15.0 (2026-09-06), Npgsql 10.0.3, MySqlConnector 2.6.2,
+         Microsoft.Data.SqlClient 7.1.0 (2026-09-18). Elasticsearch needs no client package (raw HttpClient, #2207). -->
+    <PackageVersion Include="Testcontainers" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MongoDb" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.OpenSearch" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.Elasticsearch" Version="4.15.0" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="MySqlConnector" Version="2.6.2" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
