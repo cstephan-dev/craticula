@@ -1,0 +1,53 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "status": "archived"
+      },
+      "why": "double negation of archived: matches"
+    },
+    {
+      "row": {
+        "id": 2,
+        "status": "active"
+      },
+      "why": "inner Not true, outer Not false: excluded"
+    },
+    {
+      "row": {
+        "id": 3,
+        "status": "ARCHIVED"
+      },
+      "why": "case-folded: matches"
+    },
+    {
+      "row": {
+        "id": 4,
+        "status": null
+      },
+      "why": "SEM-2: outermost Not includes null"
+    },
+    {
+      "row": {
+        "id": 5,
+        "status": ""
+      },
+      "why": "empty string is not archived: excluded"
+    },
+    {
+      "row": {
+        "id": 6,
+        "status": "pending"
+      },
+      "why": "excluded"
+    },
+    {
+      "row": {
+        "id": 7,
+        "status": "archived"
+      },
+      "why": "second archived row"
+    }
+  ]
+}

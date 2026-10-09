@@ -1,0 +1,9 @@
+{
+  "columns": ["region", "totalRevenue"],
+  "rows": [
+    ["APAC", "900.50"],
+    ["EMEA", "1750.25"],
+    ["LATAM", "-75.50"],
+    ["NA", "0"]
+  ]
+}

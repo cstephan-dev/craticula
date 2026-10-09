@@ -1,0 +1,10 @@
+{
+  "columns": ["id", "lastName", "department"],
+  "rows": [
+    [1, "VanDyke", "Engineering"],
+    [2, "vanderBilt", "Support"],
+    [3, "Nielsen", "engineering"],
+    [6, "Hansen-Van", "Support"],
+    [10, "SENECA", "SUPPORT"]
+  ]
+}

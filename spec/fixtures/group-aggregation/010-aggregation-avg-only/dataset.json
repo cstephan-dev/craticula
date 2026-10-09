@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "10.00", "quantity": 1 }, "why": "Enterprise bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2024, "amount": "20.00", "quantity": 2 }, "why": "Enterprise bucket" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2023, "amount": "25.00", "quantity": 3 }, "why": "Enterprise bucket: three values average to 18.33..., a repeating fraction" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2023, "amount": null, "quantity": 4 }, "why": "Enterprise bucket: a null is not a zero, so the divisor stays 3" },
+    { "row": { "id": "s05", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "-5.00", "quantity": 5 }, "why": "SMB bucket" },
+    { "row": { "id": "s06", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "5.00", "quantity": 6 }, "why": "SMB bucket: average exactly 0" },
+    { "row": { "id": "s07", "region": "EMEA", "segment": "Consumer", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 7 }, "why": "Consumer bucket: every amount null, AGG-6 avg is null" },
+    { "row": { "id": "s08", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1000.00", "quantity": 8 }, "why": "excluded by the drill-down" }
+  ]
+}

@@ -2690,7 +2690,7 @@ oversight. A seed row may carry a `why`; an authored fixture always does. Two fu
 **XEQ-3. The comparison rule.** The result's column list is compared **exactly**, then the rows **in order**, then each
 cell by its type. The column list is the **logical** one, whatever an engine physically returns: an ordinary row query's
 columns are the schema's fields in declaration order (GRP-3's leaf rule), a grouped level's are GRP-3's group column then
-each aggregation's output name, and a BM-3 values query's or an export's are their own lists. A harness maps each
+each aggregation's output name, and a BM-3 values query's is the one schema field named by `setValuesRequest.colId`, and an export's is its own list. A harness maps each
 engine's rows onto it before comparing (physical to logical, dropping `_id`, hit metadata and any column the compiled
 query never projected), so a harness that keeps MongoDB's `_id` and one that drops it cannot both conform.
 

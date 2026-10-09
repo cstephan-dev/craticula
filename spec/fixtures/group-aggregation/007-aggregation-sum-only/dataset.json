@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "0.10", "quantity": 1 }, "why": "Enterprise bucket: 0.10 + 0.20 is exact only in decimal" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2024, "amount": "0.20", "quantity": 2 }, "why": "Enterprise bucket: second addend" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2023, "amount": "1200.00", "quantity": 3 }, "why": "SMB bucket" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2023, "amount": "-200.50", "quantity": 4 }, "why": "SMB bucket: negative amount, sum 999.50" },
+    { "row": { "id": "s05", "region": "EMEA", "segment": "Consumer", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 5 }, "why": "Consumer bucket: every amount null, AGG-6 sum is 0" },
+    { "row": { "id": "s06", "region": "EMEA", "segment": "Consumer", "product": "Gadget", "fiscalYear": 2024, "amount": null, "quantity": 6 }, "why": "Consumer bucket: second null amount" },
+    { "row": { "id": "s07", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "50.00", "quantity": 7 }, "why": "excluded by the drill-down" },
+    { "row": { "id": "s08", "region": null, "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "5.00", "quantity": 8 }, "why": "excluded: null region" }
+  ]
+}

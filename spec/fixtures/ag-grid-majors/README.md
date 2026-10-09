@@ -221,3 +221,15 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   emit on its own; reaching for the extension would defeat the point. That is also why 008 exists:
   `operators/` reaches `inRange` *through* `customFilters`, so nothing was pinning what the native
   wire form does.
+
+## Execution-equality oracle (T-1b, #2204)
+
+Cases **001-006** carry `dataset.json` + `expectedRows.json` (XEQ-1..XEQ-4 in `../../semantics.md`):
+004 is a grouped level whose columns are `department` and `salary` (the aggregate takes the `valueCols` id, XEQ-3; the compiled `salary_sum` alias is physical and mapped away; an all-null group sums to 0, a null department is its own last group); 001-003 and 006 are small boundary seeds (case folding per SEM-1, null exclusion per SEM-2, the half-open preset
+window of 006); 005 seeds 300 rows so the `startRow: 200` page over a descending, nulls-first sort (SEM-3, SEM-6)
+is a real slice.
+
+Out of scope: **007** and **008** (rejections: no query runs, so they carry neither file).
+
+
+All expected rows were derived by hand from `semantics.md`, not from any engine run.

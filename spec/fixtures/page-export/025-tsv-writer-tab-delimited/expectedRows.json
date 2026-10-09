@@ -1,0 +1,8 @@
+{
+  "columns": ["id", "orderDate", "customerName", "totalAmount", "status", "region", "notes"],
+  "rows": [
+    [3001, "2026-04-01", "Northwind, Ltd.", "10.00", "shipped", "APAC", "Pallet A\tPallet B"],
+    [3002, "2026-04-03", "Piedmont Supply", "42.75", "shipped", "EMEA", "Backorder; ETA 2026-04-10"],
+    [1006, null, "Undated Order", "30.00", "shipped", "APAC", "no order date yet"]
+  ]
+}

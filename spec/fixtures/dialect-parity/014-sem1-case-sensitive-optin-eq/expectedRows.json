@@ -1,0 +1,7 @@
+{
+  "columns": ["id", "employeeCode"],
+  "rows": [
+    [1, "AB-100"],
+    [8, "AB-100"]
+  ]
+}

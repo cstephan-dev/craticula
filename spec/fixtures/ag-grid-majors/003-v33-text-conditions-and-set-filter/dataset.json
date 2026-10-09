@@ -1,0 +1,15 @@
+{
+  "rows": [
+    { "row": {"id": 1, "lastName": "VanDyke", "department": "Engineering"}, "why": "startsWith Van, dept in set: included" },
+    { "row": {"id": 2, "lastName": "vanderBilt", "department": "Support"}, "why": "startsWith is case-insensitive (SEM-1); dept in set: included" },
+    { "row": {"id": 3, "lastName": "Nielsen", "department": "engineering"}, "why": "contains sen, dept case-folds into the set: included" },
+    { "row": {"id": 4, "lastName": "Jensen", "department": "Marketing"}, "why": "contains sen but dept outside the set: excluded (AND across columns)" },
+    { "row": {"id": 5, "lastName": "Svan", "department": "Engineering"}, "why": "contains van but not startsWith, no sen: excluded" },
+    { "row": {"id": 6, "lastName": "Hansen-Van", "department": "Support"}, "why": "contains sen: included even though Van is not a prefix" },
+    { "row": {"id": 7, "lastName": null, "department": "Engineering"}, "why": "null lastName matches neither pattern: excluded" },
+    { "row": {"id": 8, "lastName": "Van Houten", "department": null}, "why": "matches the pattern but null dept is not in the set: excluded" },
+    { "row": {"id": 9, "lastName": "Andersen", "department": "Engineering Support"}, "why": "dept is not an exact set member (in, not startsWith): excluded" },
+    { "row": {"id": 10, "lastName": "SENECA", "department": "SUPPORT"}, "why": "contains sen case-folded, dept case-folded: included" },
+    { "row": {"id": 11, "lastName": "Smith", "department": "Support"}, "why": "matches neither pattern: excluded" }
+  ]
+}

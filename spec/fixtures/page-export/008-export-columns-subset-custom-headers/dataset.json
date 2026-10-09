@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": {"id": 3, "orderDate": "2026-02-14", "customerName": "Zenith Retail", "totalAmount": "0.00", "status": "shipped", "region": "APAC", "notes": null}, "why": "listed out of id order on purpose: no sortModel, so only the id tiebreaker orders the result" },
+    { "row": {"id": 1, "orderDate": "2026-01-05", "customerName": "Acme, Inc.", "totalAmount": "1234.50", "status": "shipped", "region": "EMEA", "notes": "dock 3"}, "why": "row with a comma and a decimal, one of the first ids" },
+    { "row": {"id": 4, "orderDate": null, "customerName": null, "totalAmount": null, "status": "pending", "region": "AMER", "notes": "rush"}, "why": "all optional cells null: every field must still come back, as null" },
+    { "row": {"id": 2, "orderDate": "2026-01-05", "customerName": "Bill \"Big\" Ross Ltd", "totalAmount": "99.00", "status": "cancelled", "region": "EMEA", "notes": null}, "why": "another region EMEA row with a different status" },
+    { "row": {"id": 5, "orderDate": "2026-03-01", "customerName": "Ürün Çiçek", "totalAmount": "12.50", "status": "shipped", "region": "APAC", "notes": "tr"}, "why": "non-ASCII text survives the round trip" },
+    { "row": {"id": 6, "orderDate": "2026-03-02", "customerName": "Delta", "totalAmount": "7.00", "status": null, "region": null, "notes": null}, "why": "status and region null: not filtered here, so the row is exported" }
+  ]
+}

@@ -126,3 +126,8 @@ safe-parameterization behavior, not here.
   the CONSUMED prefix of `GroupCols` (i.e. columns with a corresponding `groupKeys` entry) is checked
   — a `GroupCols` entry with no key chosen yet is untouched, since plain bucketing across every value
   is exactly what `groupable: true` alone already permits.
+
+## Execution-equality oracle (T-1b)
+
+Out of scope: every case here is a rejection (`expected/rejection.json`, no compiled query), so none carries
+`dataset.json` or `expectedRows.json` (XEQ-1).

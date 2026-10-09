@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "10.00", "quantity": 1 }, "why": "Enterprise bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2024, "amount": "20.00", "quantity": 2 }, "why": "Enterprise bucket" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2023, "amount": "25.00", "quantity": 3 }, "why": "Enterprise bucket: sum 55.00, average a repeating fraction" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2023, "amount": null, "quantity": 4 }, "why": "Enterprise bucket: null skipped by both sum and avg" },
+    { "row": { "id": "s05", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "100.50", "quantity": 5 }, "why": "SMB bucket: one value, sum and avg agree" },
+    { "row": { "id": "s06", "region": "EMEA", "segment": "Consumer", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 6 }, "why": "Consumer bucket: all null, sum 0 and avg null (AGG-6) in one row" },
+    { "row": { "id": "s07", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1000.00", "quantity": 7 }, "why": "excluded by the drill-down" }
+  ]
+}

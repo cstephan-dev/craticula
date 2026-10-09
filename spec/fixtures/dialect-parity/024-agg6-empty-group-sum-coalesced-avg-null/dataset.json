@@ -1,0 +1,13 @@
+{
+  "rows": [
+    { "row": { "id": 1, "department": "Engineering", "salary": "120000.00", "age": 30 }, "why": "Engineering: average age 35" },
+    { "row": { "id": 2, "department": "Engineering", "salary": "100000.50", "age": 40 }, "why": "Engineering: sum 220000.50" },
+    { "row": { "id": 3, "department": "Finance", "salary": null, "age": 25 }, "why": "Finance: every salary null, AGG-6 sum is 0" },
+    { "row": { "id": 4, "department": "Finance", "salary": null, "age": 35 }, "why": "Finance: average age 30, so it sorts ahead of Engineering" },
+    { "row": { "id": 5, "department": "Legal", "salary": "90000.00", "age": null }, "why": "Legal: every age null, avg is null, so it sorts last on asc" },
+    { "row": { "id": 6, "department": "Marketing", "salary": "50000.00", "age": null }, "why": "Marketing: also null avg, tie with Legal broken by department ascending" },
+    { "row": { "id": 7, "department": "Operations", "salary": "70000.00", "age": 35 }, "why": "Operations: average age 35, tie with Engineering broken by department ascending" },
+    { "row": { "id": 8, "department": "Operations", "salary": "30000.00", "age": 35 }, "why": "Operations: sum 100000.00" },
+    { "row": { "id": 9, "department": null, "salary": "10.00", "age": 20 }, "why": "null department: its own group, the lowest average so it sorts first" }
+  ]
+}

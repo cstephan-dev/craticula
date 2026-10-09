@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "age": 30 }, "why": "first member" },
+    { "row": { "id": 2, "age": 40 }, "why": "second member" },
+    { "row": { "id": 3, "age": 31 }, "why": "just above the first" },
+    { "row": { "id": 4, "age": 39 }, "why": "just below the second" },
+    { "row": { "id": 5, "age": null }, "why": "SEM-2: in never matches null" },
+    { "row": { "id": 6, "age": 300 }, "why": "contains the digits of a member: rejected" },
+    { "row": { "id": 7, "age": 0 }, "why": "zero is a value, not a member" }
+  ]
+}

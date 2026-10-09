@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "createdAt": "2026-02-01T00:00:00Z" }, "why": "boundary instant: included by lte" },
+    { "row": { "id": 2, "createdAt": "2026-01-31T23:59:59.999Z" }, "why": "one millisecond below" },
+    { "row": { "id": 3, "createdAt": "2026-02-01T00:00:00.001Z" }, "why": "one millisecond above: excluded" },
+    { "row": { "id": 4, "createdAt": null }, "why": "SEM-2: an ordering comparison never matches null" },
+    { "row": { "id": 5, "createdAt": "2025-06-15T12:30:00Z" }, "why": "well below" },
+    { "row": { "id": 6, "createdAt": "2026-02-01T00:00:01Z" }, "why": "one second above" },
+    { "row": { "id": 7, "createdAt": "2026-01-31T23:59:59Z" }, "why": "one second below" }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "createdAt": "2024-05-01T10:00:00Z"
+      },
+      "why": "no fractional seconds"
+    },
+    {
+      "row": {
+        "id": 2,
+        "createdAt": "2024-05-01T10:00:00.000Z"
+      },
+      "why": "same instant as id 1 at ms precision: tiebreaker"
+    },
+    {
+      "row": {
+        "id": 3,
+        "createdAt": null
+      },
+      "why": "null instant sorts first on desc"
+    },
+    {
+      "row": {
+        "id": 4,
+        "createdAt": "2024-05-01T10:00:00.001Z"
+      },
+      "why": "one millisecond later"
+    },
+    {
+      "row": {
+        "id": 5,
+        "createdAt": "2023-12-31T23:59:59.999Z"
+      },
+      "why": "year boundary"
+    },
+    {
+      "row": {
+        "id": 6,
+        "createdAt": "2024-05-02T00:00:00Z"
+      },
+      "why": "latest, next day"
+    },
+    {
+      "row": {
+        "id": 7,
+        "createdAt": null
+      },
+      "why": "second null"
+    },
+    {
+      "row": {
+        "id": 8,
+        "createdAt": "2024-05-01T09:59:59.999Z"
+      },
+      "why": "one ms before id 1"
+    }
+  ]
+}

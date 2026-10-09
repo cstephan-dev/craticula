@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "100.00", "quantity": 1 }, "why": "EMEA bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2023, "amount": "-20.00", "quantity": 2 }, "why": "EMEA bucket: the minimum" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 3 }, "why": "EMEA bucket: null skipped by all three" },
+    { "row": { "id": "s04", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "300.50", "quantity": 4 }, "why": "APAC bucket: a single value, so sum, min and max coincide" },
+    { "row": { "id": "s05", "region": "NA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 5 }, "why": "NA bucket: every amount null, AGG-6 sum 0 and min, max null" },
+    { "row": { "id": "s06", "region": "NA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2023, "amount": null, "quantity": 6 }, "why": "NA bucket: second null amount" },
+    { "row": { "id": "s07", "region": null, "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "40.00", "quantity": 7 }, "why": "null region bucket: ordered last on asc (SEM-3)" },
+    { "row": { "id": "s08", "region": null, "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "60.00", "quantity": 8 }, "why": "null region bucket: second row" }
+  ]
+}

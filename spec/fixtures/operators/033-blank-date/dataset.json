@@ -1,0 +1,9 @@
+{
+  "rows": [
+    { "row": { "id": 1, "birthDate": null }, "why": "null is blank" },
+    { "row": { "id": 2, "birthDate": "1990-01-01" }, "why": "an ordinary date" },
+    { "row": { "id": 3, "birthDate": "1900-01-01" }, "why": "the far past is a value" },
+    { "row": { "id": 4, "birthDate": null }, "why": "second null row" },
+    { "row": { "id": 5, "birthDate": "2024-02-29" }, "why": "leap day" }
+  ]
+}

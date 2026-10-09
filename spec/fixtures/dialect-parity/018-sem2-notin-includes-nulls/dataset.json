@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "department": "SALES" }, "why": "set member: excluded" },
+    { "row": { "id": 2, "department": "SUPPORT" }, "why": "set member: excluded" },
+    { "row": { "id": 3, "department": "Sales" }, "why": "the field is case-sensitive, so this is not a member: included" },
+    { "row": { "id": 4, "department": "support" }, "why": "lower case, not a member: included" },
+    { "row": { "id": 5, "department": "ENGINEERING" }, "why": "not a member: included" },
+    { "row": { "id": 6, "department": null }, "why": "null: included by SEM-2" },
+    { "row": { "id": 7, "department": "HR" }, "why": "not a member: included" },
+    { "row": { "id": 8, "department": "SALES" }, "why": "second member row: excluded" }
+  ]
+}

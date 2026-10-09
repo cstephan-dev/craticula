@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "quantity": 11,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "matches: OR arm 1, status, quantity just above 10"
+    },
+    {
+      "row": {
+        "id": 2,
+        "quantity": 10,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "quantity = 10 on gt boundary: excluded"
+    },
+    {
+      "row": {
+        "id": 3,
+        "quantity": 50,
+        "region": "EAST",
+        "status": "ACTIVE"
+      },
+      "why": "matches: OR arm 2 and status case-folded"
+    },
+    {
+      "row": {
+        "id": 4,
+        "quantity": 50,
+        "region": "north",
+        "status": "active"
+      },
+      "why": "region matches neither OR arm"
+    },
+    {
+      "row": {
+        "id": 5,
+        "quantity": 50,
+        "region": "west",
+        "status": "pending"
+      },
+      "why": "status fails"
+    },
+    {
+      "row": {
+        "id": 6,
+        "quantity": null,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "null quantity excluded"
+    },
+    {
+      "row": {
+        "id": 7,
+        "quantity": 99,
+        "region": null,
+        "status": "active"
+      },
+      "why": "null region fails the OR group"
+    },
+    {
+      "row": {
+        "id": 8,
+        "quantity": 99,
+        "region": "east",
+        "status": null
+      },
+      "why": "null status excluded"
+    },
+    {
+      "row": {
+        "id": 9,
+        "quantity": 500,
+        "region": "East",
+        "status": "active"
+      },
+      "why": "matches: OR arm 2 case variant"
+    }
+  ]
+}

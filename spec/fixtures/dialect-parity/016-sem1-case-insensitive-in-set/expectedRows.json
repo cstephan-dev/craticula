@@ -1,0 +1,9 @@
+{
+  "columns": ["id", "lastName"],
+  "rows": [
+    [1, "Smith"],
+    [2, "JONES"],
+    [3, "jones"],
+    [7, "SMITH"]
+  ]
+}

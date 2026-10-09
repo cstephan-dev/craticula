@@ -1,0 +1,8 @@
+{
+  "columns": ["id", "orderDate", "customerName", "totalAmount", "status", "region", "notes"],
+  "rows": [
+    [1, "2026-01-01", "A Co", "1.00", "shipped", "EMEA", null],
+    [2, "2026-01-02", "B Co", "2.00", "shipped", "APAC", null],
+    [6, "2026-01-06", "F Co", "6.00", "shipped", "EMEA", null]
+  ]
+}

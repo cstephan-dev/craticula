@@ -1,0 +1,94 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "department": "Eng",
+        "age": 30,
+        "hireDate": "2020-01-01"
+      },
+      "why": "Eng 30, earliest hire"
+    },
+    {
+      "row": {
+        "id": 2,
+        "department": "Eng",
+        "age": 30,
+        "hireDate": "2021-06-01"
+      },
+      "why": "ties id 1 on first two keys; hireDate asc decides"
+    },
+    {
+      "row": {
+        "id": 3,
+        "department": "Eng",
+        "age": 45,
+        "hireDate": "2019-05-05"
+      },
+      "why": "oldest Eng, first on age desc"
+    },
+    {
+      "row": {
+        "id": 4,
+        "department": "Eng",
+        "age": null,
+        "hireDate": "2018-01-01"
+      },
+      "why": "null age on desc sorts first within Eng"
+    },
+    {
+      "row": {
+        "id": 5,
+        "department": "Eng",
+        "age": 30,
+        "hireDate": null
+      },
+      "why": "null hireDate sorts last on asc within the tie"
+    },
+    {
+      "row": {
+        "id": 6,
+        "department": "Ops",
+        "age": 22,
+        "hireDate": "2022-02-02"
+      },
+      "why": "Ops"
+    },
+    {
+      "row": {
+        "id": 7,
+        "department": "Ops",
+        "age": 22,
+        "hireDate": "2022-02-02"
+      },
+      "why": "identical on all three keys: tiebreaker"
+    },
+    {
+      "row": {
+        "id": 8,
+        "department": null,
+        "age": 50,
+        "hireDate": "2017-07-07"
+      },
+      "why": "null department last"
+    },
+    {
+      "row": {
+        "id": 9,
+        "department": "Ops",
+        "age": null,
+        "hireDate": null
+      },
+      "why": "nulls on the second and third keys"
+    },
+    {
+      "row": {
+        "id": 10,
+        "department": "eng",
+        "age": 30,
+        "hireDate": "2020-01-01"
+      },
+      "why": "case variant of Eng: ties id 1 on all keys, tiebreaker"
+    }
+  ]
+}

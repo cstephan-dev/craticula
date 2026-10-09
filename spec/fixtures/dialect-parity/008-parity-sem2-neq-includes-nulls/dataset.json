@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "age": 30 }, "why": "equal to the filter value: excluded" },
+    { "row": { "id": 2, "age": 29 }, "why": "just below" },
+    { "row": { "id": 3, "age": 31 }, "why": "just above" },
+    { "row": { "id": 4, "age": null }, "why": "null: included by SEM-2's null-inclusive neq" },
+    { "row": { "id": 5, "age": 0 }, "why": "zero is a value, not a null" },
+    { "row": { "id": 6, "age": -30 }, "why": "negative value" },
+    { "row": { "id": 7, "age": null }, "why": "second null" },
+    { "row": { "id": 8, "age": 30 }, "why": "second equal value" }
+  ]
+}

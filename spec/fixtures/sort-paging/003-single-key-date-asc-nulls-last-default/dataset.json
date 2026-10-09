@@ -1,0 +1,67 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "hireDate": "2020-03-15"
+      },
+      "why": "mid"
+    },
+    {
+      "row": {
+        "id": 2,
+        "hireDate": "2019-12-31"
+      },
+      "why": "year boundary, early"
+    },
+    {
+      "row": {
+        "id": 3,
+        "hireDate": null
+      },
+      "why": "null date"
+    },
+    {
+      "row": {
+        "id": 4,
+        "hireDate": "2020-03-15"
+      },
+      "why": "ties with id 1"
+    },
+    {
+      "row": {
+        "id": 5,
+        "hireDate": "2020-01-01"
+      },
+      "why": "year start"
+    },
+    {
+      "row": {
+        "id": 6,
+        "hireDate": null
+      },
+      "why": "second null"
+    },
+    {
+      "row": {
+        "id": 7,
+        "hireDate": "2021-07-04"
+      },
+      "why": "latest"
+    },
+    {
+      "row": {
+        "id": 8,
+        "hireDate": "2019-12-31"
+      },
+      "why": "ties with id 2"
+    },
+    {
+      "row": {
+        "id": 9,
+        "hireDate": "2020-02-29"
+      },
+      "why": "leap day"
+    }
+  ]
+}

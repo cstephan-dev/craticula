@@ -1,0 +1,8 @@
+{
+  "rows": [
+    { "row": { "id": 1, "isActive": true }, "why": "excluded" },
+    { "row": { "id": 2, "isActive": false }, "why": "different value: returned" },
+    { "row": { "id": 3, "isActive": null }, "why": "SEM-2: neq is null-inclusive for booleans too" },
+    { "row": { "id": 4, "isActive": false }, "why": "second returned row, later id" }
+  ]
+}

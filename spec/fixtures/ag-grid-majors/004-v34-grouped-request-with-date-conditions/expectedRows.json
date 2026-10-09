@@ -1,0 +1,24 @@
+{
+  "columns": [
+    "department",
+    "salary"
+  ],
+  "rows": [
+    [
+      "Engineering",
+      "150000.50"
+    ],
+    [
+      "Sales",
+      "40000.00"
+    ],
+    [
+      "Support",
+      "0"
+    ],
+    [
+      null,
+      "25000.00"
+    ]
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "10.00", "quantity": 1 }, "why": "Enterprise bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2023, "amount": "15.00", "quantity": 2 }, "why": "Enterprise bucket: sum 25.00" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "3.75", "quantity": 3 }, "why": "SMB bucket" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "Consumer", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 4 }, "why": "Consumer bucket: null amount, sum 0" },
+    { "row": { "id": "s05", "region": "APAC", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "99.00", "quantity": 5 }, "why": "excluded by the drill-down" },
+    { "row": { "id": "s06", "region": "emea", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "11.00", "quantity": 6 }, "why": "GRP-2: exact drill-down excludes 'emea'" }
+  ]
+}

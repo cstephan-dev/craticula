@@ -1,0 +1,9 @@
+{
+  "columns": ["id", "region"],
+  "rows": [
+    [2, "west"],
+    [3, null],
+    [5, "east"],
+    [6, ""]
+  ]
+}

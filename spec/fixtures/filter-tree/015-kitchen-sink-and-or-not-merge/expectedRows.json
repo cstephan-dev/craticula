@@ -1,0 +1,9 @@
+{
+  "columns": ["id", "quantity", "region", "status"],
+  "rows": [
+    [1, 50, "west", "active"],
+    [4, 1000, "east", "active"],
+    [5, null, "west", "active"],
+    [7, 99, "EAST", "ACTIVE"]
+  ]
+}

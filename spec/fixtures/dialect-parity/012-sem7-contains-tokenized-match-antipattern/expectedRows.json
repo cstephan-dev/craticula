@@ -1,0 +1,10 @@
+{
+  "columns": ["id", "department"],
+  "rows": [
+    [1, "Smart Devices"],
+    [2, "Art Studio"],
+    [3, "Partners"],
+    [5, "DEPARTMENT"],
+    [7, "Arts"]
+  ]
+}

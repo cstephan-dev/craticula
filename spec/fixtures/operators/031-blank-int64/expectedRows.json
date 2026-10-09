@@ -1,0 +1,7 @@
+{
+  "columns": ["id", "age"],
+  "rows": [
+    [1, null],
+    [6, null]
+  ]
+}

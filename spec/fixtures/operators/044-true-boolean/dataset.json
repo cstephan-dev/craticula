@@ -1,0 +1,8 @@
+{
+  "rows": [
+    { "row": { "id": 1, "isActive": true }, "why": "match" },
+    { "row": { "id": 2, "isActive": false }, "why": "rejected" },
+    { "row": { "id": 3, "isActive": null }, "why": "null is neither true nor false: rejected" },
+    { "row": { "id": 4, "isActive": true }, "why": "second match, later id" }
+  ]
+}

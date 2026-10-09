@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith" }, "why": "a value: not blank" },
+    { "row": { "id": 2, "lastName": "" }, "why": "empty string: blank, so excluded (on Oracle it is stored as NULL, which is blank too)" },
+    { "row": { "id": 3, "lastName": null }, "why": "null: blank, excluded" },
+    { "row": { "id": 4, "lastName": "Jones" }, "why": "a value" },
+    { "row": { "id": 5, "lastName": "" }, "why": "second empty string" },
+    { "row": { "id": 6, "lastName": "Brown" }, "why": "a value" }
+  ]
+}

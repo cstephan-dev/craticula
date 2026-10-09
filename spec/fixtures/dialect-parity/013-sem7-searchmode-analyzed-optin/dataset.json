@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "jobTitle": "Software Engineer" }, "why": "whole token, capitalised" },
+    { "row": { "id": 2, "jobTitle": "ENGINEER" }, "why": "upper case: a tokenized match folds case too" },
+    { "row": { "id": 3, "jobTitle": "Senior engineer II" }, "why": "whole token in the middle" },
+    { "row": { "id": 4, "jobTitle": "Manager" }, "why": "no match" },
+    { "row": { "id": 5, "jobTitle": null }, "why": "null never matches" },
+    { "row": { "id": 6, "jobTitle": "Data Scientist" }, "why": "no match" },
+    { "row": { "id": 7, "jobTitle": "engineer" }, "why": "lower case alone" }
+  ]
+}

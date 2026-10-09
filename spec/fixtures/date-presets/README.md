@@ -199,3 +199,17 @@ for `today` can be a different calendar day entirely (025 shows two such answers
   depend on how the harness was set up. **Zone rejections are the opposite** and *are* fixtured (027,
   028): an id that no host can resolve, or that names a tzdata artifact rather than a zone, is a pure
   wire-shape property with a host-independent outcome that every port can replay.
+
+## Execution-equality oracle (T-1b, #2204)
+
+Cases **001-026** carry `dataset.json` + `expectedRows.json` (XEQ-1..XEQ-4 in `../../semantics.md`). Each seed
+puts a row on every side of both resolved bounds (one day or one millisecond before the lower bound, the
+lower bound itself, inside, the last unit inside, the upper bound itself, one unit after) plus a null date and,
+for 001-022, a far-past and a far-future date, so the half-open `[from, to)` edges (SEM-4) decide the result.
+023, 024 and 026 seed `datetime` instants at millisecond precision; 024 and 026 add rows that only a UTC-only
+or single-offset implementation would include. Rows come back in `id` order (the request's own sort).
+
+Out of scope: **027** and **028** (zone rejections: no query runs, so they carry neither file).
+
+All expected rows were derived by hand from `semantics.md` (SEM-2, SEM-4, SEM-6) and the resolution table
+above, not from any engine run.

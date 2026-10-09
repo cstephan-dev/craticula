@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "remarks": "A[BC]" }, "why": "the whole value, brackets literal" },
+    { "row": { "id": 2, "remarks": "see A[BC] here" }, "why": "literal inside a sentence" },
+    { "row": { "id": 3, "remarks": "AB" }, "why": "a T-SQL character class would match this" },
+    { "row": { "id": 4, "remarks": "AC" }, "why": "a T-SQL character class would match this too" },
+    { "row": { "id": 5, "remarks": "a[bc]" }, "why": "lower case: contains is case-insensitive by default" },
+    { "row": { "id": 6, "remarks": null }, "why": "null never matches" },
+    { "row": { "id": 7, "remarks": "A[B" }, "why": "only part of the needle" },
+    { "row": { "id": 8, "remarks": "xA[BC]x" }, "why": "needle inside" }
+  ]
+}

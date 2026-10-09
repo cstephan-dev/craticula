@@ -1,0 +1,23 @@
+{
+  "columns": ["id", "lastName"],
+  "rows": [
+    [1, "Smith"],
+    [4, "Jones"],
+    [6, "Brown"]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "oracle",
+      "reason": "SQL-7: Oracle stores the empty string as NULL, so the seeded '' rows load as null there; notBlank excludes both blank forms, so the result is the one above, stated as an entry because XEQ-2 requires it for a seeded ''",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["id", "lastName"],
+        "rows": [
+          [1, "Smith"],
+          [4, "Jones"],
+          [6, "Brown"]
+        ]
+      }
+    }
+  ]
+}

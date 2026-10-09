@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "productName": "Gizmo" }, "why": "excluded: contains the substring (case variant)" },
+    { "row": { "id": 2, "productName": "SuperGIZMO" }, "why": "excluded: substring at the end, upper case" },
+    { "row": { "id": 3, "productName": "gizmo pro" }, "why": "excluded: substring at the start" },
+    { "row": { "id": 4, "productName": "Widget" }, "why": "no substring: returned" },
+    { "row": { "id": 5, "productName": null }, "why": "SEM-2: notContains is null-inclusive" },
+    { "row": { "id": 6, "productName": "" }, "why": "the empty string does not contain it: returned" },
+    { "row": { "id": 7, "productName": "Gizm" }, "why": "a prefix of the substring only: returned" }
+  ]
+}

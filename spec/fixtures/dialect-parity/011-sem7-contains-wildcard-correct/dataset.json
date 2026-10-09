@@ -1,0 +1,14 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Hart" }, "why": "needle at the end" },
+    { "row": { "id": 2, "lastName": "Martinez" }, "why": "needle inside" },
+    { "row": { "id": 3, "lastName": "ART" }, "why": "upper case whole value" },
+    { "row": { "id": 4, "lastName": "Bartlett" }, "why": "needle inside" },
+    { "row": { "id": 5, "lastName": "Cartwright" }, "why": "needle inside" },
+    { "row": { "id": 6, "lastName": "Smith" }, "why": "no match" },
+    { "row": { "id": 7, "lastName": "Arturo" }, "why": "needle at the start, capitalised" },
+    { "row": { "id": 8, "lastName": null }, "why": "null never matches contains" },
+    { "row": { "id": 9, "lastName": "Ar t" }, "why": "a space splits the needle" },
+    { "row": { "id": 10, "lastName": "Aart" }, "why": "needle after a repeated letter" }
+  ]
+}

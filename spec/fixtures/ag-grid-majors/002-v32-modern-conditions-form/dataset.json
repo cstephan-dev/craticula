@@ -1,0 +1,14 @@
+{
+  "rows": [
+    { "row": {"id": 1, "salary": "59999.99"}, "why": "just below the inclusive lower bound 60000: excluded" },
+    { "row": {"id": 2, "salary": "60000.00"}, "why": "exactly the lower bound: included (greaterThanOrEqual)" },
+    { "row": {"id": 3, "salary": "60000.01"}, "why": "just above the lower bound" },
+    { "row": {"id": 4, "salary": "75000.50"}, "why": "mid-range, fractional decimal" },
+    { "row": {"id": 5, "salary": "119999.99"}, "why": "just below the exclusive upper bound: included" },
+    { "row": {"id": 6, "salary": "120000.00"}, "why": "exactly the upper bound: excluded (lessThan)" },
+    { "row": {"id": 7, "salary": null}, "why": "null salary: a range comparison never matches null (SEM-2)" },
+    { "row": {"id": 8, "salary": "0.00"}, "why": "zero, far below the range" },
+    { "row": {"id": 9, "salary": "250000.00"}, "why": "far above the range" },
+    { "row": {"id": 10, "salary": "60000"}, "why": "lower bound spelled without scale: decimals compare as numbers, included" }
+  ]
+}

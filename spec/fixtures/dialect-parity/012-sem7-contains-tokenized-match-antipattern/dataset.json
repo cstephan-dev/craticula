@@ -1,0 +1,13 @@
+{
+  "rows": [
+    { "row": { "id": 1, "department": "Smart Devices" }, "why": "the whole token is 'smart': a tokenized match for 'art' would miss it, a substring match must not" },
+    { "row": { "id": 2, "department": "Art Studio" }, "why": "needle is a whole token" },
+    { "row": { "id": 3, "department": "Partners" }, "why": "needle inside a word" },
+    { "row": { "id": 4, "department": "Sales" }, "why": "no match" },
+    { "row": { "id": 5, "department": "DEPARTMENT" }, "why": "upper case, needle inside" },
+    { "row": { "id": 6, "department": null }, "why": "null never matches contains" },
+    { "row": { "id": 7, "department": "Arts" }, "why": "needle at the start of a longer word" },
+    { "row": { "id": 8, "department": "Support" }, "why": "no match" },
+    { "row": { "id": 9, "department": "Ar Ts" }, "why": "characters of the needle split by a space" }
+  ]
+}

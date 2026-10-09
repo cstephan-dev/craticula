@@ -1,0 +1,9 @@
+{
+  "columns": ["id", "remarks"],
+  "rows": [
+    [1, "A[BC]"],
+    [2, "see A[BC] here"],
+    [5, "a[bc]"],
+    [8, "xA[BC]x"]
+  ]
+}

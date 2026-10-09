@@ -1,0 +1,8 @@
+{
+  "columns": ["id", "orderDate", "customerName", "totalAmount", "status", "region", "notes"],
+  "rows": [
+    [2001, "2026-03-02", "Éditions Chêne", "250.00", "shipped", "EMEA", "Livré à Paris — 3e étage"],
+    [2002, "2026-03-09", "Кофе и Ко", "75.25", "shipped", "EMEA", "お届け済み"],
+    [1006, null, "Undated Order", "30.00", "shipped", "APAC", "no order date yet"]
+  ]
+}

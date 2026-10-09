@@ -51,6 +51,28 @@ public class ExecutionTierFixtureShapeTests
         Assert.NotEmpty(TierFixtures());
     }
 
+    /// <summary>Every fixture directory with at least one <c>expected/*.artifact.json</c>: its query returns rows (XEQ-1).</summary>
+    public static IEnumerable<object[]> ExecutableFixtures() =>
+        Directory.EnumerateFiles(RepoPaths.Fixture(), "schema.json", SearchOption.AllDirectories)
+            .Select(Path.GetDirectoryName)
+            .OfType<string>()
+            .Where(d => Directory.Exists(Path.Combine(d, "expected"))
+                && Directory.EnumerateFiles(Path.Combine(d, "expected"), "*.artifact.json").Any())
+            .OrderBy(d => d, StringComparer.Ordinal)
+            .Select(d => new object[] { Path.GetRelativePath(RepoPaths.Fixture(), d).Replace('\\', '/') });
+
+    [Theory]
+    [MemberData(nameof(ExecutableFixtures))]
+    public void An_Executable_Fixture_Carries_The_Pair(string fixture)
+    {
+        // #2204's DoD: a fixture with a compiled artifact returns rows, so it must say which (XEQ-1).
+        var dir = RepoPaths.Fixture(fixture.Split('/'));
+
+        Assert.True(
+            File.Exists(Path.Combine(dir, "dataset.json")) && File.Exists(Path.Combine(dir, "expectedRows.json")),
+            $"{fixture} has an expected/*.artifact.json but lacks dataset.json or expectedRows.json (XEQ-1).");
+    }
+
     [Theory]
     [MemberData(nameof(TierFixtures))]
     public void A_Fixture_Carries_Both_Files_Or_Neither(string fixture)
@@ -224,7 +246,9 @@ public class ExecutionTierFixtureShapeTests
     /// </summary>
     private static FieldType ColumnType(string fixture, string what, GridSchema schema, JsonElement request, string column)
     {
-        var grouped = request.GetProperty("rowGroupCols").GetArrayLength() > request.GetProperty("groupKeys").GetArrayLength();
+        // A BM-3 values query (setValuesRequest) has no rowGroupCols: its one column is the schema field named by colId.
+        var grouped = request.TryGetProperty("rowGroupCols", out var groupCols)
+            && groupCols.GetArrayLength() > request.GetProperty("groupKeys").GetArrayLength();
         if (grouped)
         {
             foreach (var value in request.GetProperty("valueCols").EnumerateArray())

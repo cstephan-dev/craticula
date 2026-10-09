@@ -1,0 +1,68 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "active, not blocked: matches"
+    },
+    {
+      "row": {
+        "id": 2,
+        "region": "blocked",
+        "status": "active"
+      },
+      "why": "Not(eq) excludes blocked"
+    },
+    {
+      "row": {
+        "id": 3,
+        "region": "BLOCKED",
+        "status": "active"
+      },
+      "why": "SEM-1: case-folded eq inside Not; excluded"
+    },
+    {
+      "row": {
+        "id": 4,
+        "region": null,
+        "status": "active"
+      },
+      "why": "SEM-2: Not is null-inclusive, so a null region matches"
+    },
+    {
+      "row": {
+        "id": 5,
+        "region": "west",
+        "status": "pending"
+      },
+      "why": "native status filter fails"
+    },
+    {
+      "row": {
+        "id": 6,
+        "region": "east",
+        "status": null
+      },
+      "why": "null status fails the native eq"
+    },
+    {
+      "row": {
+        "id": 7,
+        "region": "",
+        "status": "Active"
+      },
+      "why": "empty string is not blocked; status case-folded; matches"
+    },
+    {
+      "row": {
+        "id": 8,
+        "region": "blockedx",
+        "status": "active"
+      },
+      "why": "eq not contains; matches"
+    }
+  ]
+}

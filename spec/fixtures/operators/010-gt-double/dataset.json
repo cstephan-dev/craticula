@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "price": 9.99 }, "why": "boundary: excluded by gt" },
+    { "row": { "id": 2, "price": 10.0 }, "why": "above" },
+    { "row": { "id": 3, "price": 9.98 }, "why": "just below" },
+    { "row": { "id": 4, "price": 9.991 }, "why": "just above the boundary" },
+    { "row": { "id": 5, "price": null }, "why": "SEM-2: an ordering comparison never matches null" },
+    { "row": { "id": 6, "price": 0.0 }, "why": "zero is a value" },
+    { "row": { "id": 7, "price": -9.99 }, "why": "negative of the boundary" },
+    { "row": { "id": 8, "price": 1000.5 }, "why": "far above" }
+  ]
+}

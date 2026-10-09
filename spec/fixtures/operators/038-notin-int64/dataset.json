@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "age": 30 }, "why": "first excluded member" },
+    { "row": { "id": 2, "age": 40 }, "why": "second excluded member" },
+    { "row": { "id": 3, "age": 31 }, "why": "just above the first: returned" },
+    { "row": { "id": 4, "age": 39 }, "why": "just below the second: returned" },
+    { "row": { "id": 5, "age": null }, "why": "SEM-2: notIn is null-inclusive" },
+    { "row": { "id": 6, "age": 300 }, "why": "contains the digits of a member: returned" },
+    { "row": { "id": 7, "age": 0 }, "why": "zero is a value, returned" }
+  ]
+}

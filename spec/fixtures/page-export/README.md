@@ -220,3 +220,20 @@ addendum — and four of them had drifted while nothing could compile them:
 time found four *Mongo* drifts of exactly the kind the Search pass had found (an implicit `eq`, a
 bare-number `decimal` bound twice, and eight `_id: 0` placements). The stand-in test that compiled
 004-007 with only the `PageSpec` supplied is gone, superseded by the real end-to-end runner.
+
+## Execution-equality oracle (T-1b, #2204)
+
+Cases **001-026** carry `dataset.json` + `expectedRows.json` (XEQ-1..XEQ-4 in `../../semantics.md`); none is a
+rejection. The pair describes the compiled query's rows, never the writer's input: for the writer-tier cases
+(012-020, 022, 025, 026) the seed contains the `rowStream.json` rows plus decoys (case variant, null, near-miss,
+null `orderDate`), so the seed is what is stored *before* the query and `rowStream.json` stays what an adapter
+yields *after* it. `expectedRows.json` `columns` is the export projection (EXP-1(b)): every exportable field in
+declaration order (023 omits `notes`), or `exportColumns` in request order (008). 001-003 and 006-007 seed
+enough rows (50-604) that their `startRow`/`endRow` page is a real slice; 006 (`exportScope: all`) returns every
+match while 007 (`page`) returns rows 200-249 of the same match set (EXP-2). 010, 011 and 024 return flat leaf
+rows, the group state being discarded (EXP-1(a)).
+
+Out of scope: none by rejection. **021** carries the pair for its query only; EXP-7's row limit has no
+execution-equality meaning.
+
+All expected rows were derived by hand from `semantics.md` and the TRD export rules, not from any engine run.

@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smithfield" }, "why": "contains at the start" },
+    { "row": { "id": 2, "lastName": "BLACKSMITH" }, "why": "upper case in the middle: ILIKE folds it" },
+    { "row": { "id": 3, "lastName": "smith" }, "why": "lower case exact" },
+    { "row": { "id": 4, "lastName": null }, "why": "null never matches contains" },
+    { "row": { "id": 5, "lastName": "Smi th" }, "why": "a space splits the needle: no match" },
+    { "row": { "id": 6, "lastName": "Jones" }, "why": "no match" },
+    { "row": { "id": 7, "lastName": "Wordsmith" }, "why": "contains at the end" }
+  ]
+}

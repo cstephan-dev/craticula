@@ -1,0 +1,27 @@
+{
+  "columns": ["region", "amount"],
+  "rows": [
+    ["APAC", "200.25"],
+    ["EMEA", "150.00"],
+    ["LATAM", "0"],
+    ["NA", "250.50"],
+    [null, "15.50"]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "search",
+      "reason": "AGG-5: ES/OpenSearch's composite aggregation has no missing_order control, so the null group bucket sorts first regardless of the requested direction, where the SQL dialects and MongoDB honour SEM-3 (nulls last on asc); the buckets and their aggregates are otherwise identical",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["region", "amount"],
+        "rows": [
+          [null, "15.50"],
+          ["APAC", "200.25"],
+          ["EMEA", "150.00"],
+          ["LATAM", "0"],
+          ["NA", "250.50"]
+        ]
+      }
+    }
+  ]
+}

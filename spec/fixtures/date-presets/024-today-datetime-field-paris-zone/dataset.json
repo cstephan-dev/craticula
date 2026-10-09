@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": {"id": 1, "createdAt": "2026-08-12T00:00:00.000Z"}, "why": "UTC midnight of the 12th: included only by an implementation that ignores the zone, so excluded" },
+    { "row": {"id": 2, "createdAt": "2026-08-12T21:59:59.999Z"}, "why": "1 ms before the Paris-day start: excluded" },
+    { "row": {"id": 3, "createdAt": "2026-08-12T22:00:00.000Z"}, "why": "Paris midnight of the 13th: included" },
+    { "row": {"id": 4, "createdAt": "2026-08-12T23:30:00.000Z"}, "why": "the pinned now: included" },
+    { "row": {"id": 5, "createdAt": "2026-08-13T21:59:59.999Z"}, "why": "last millisecond of the Paris day: included" },
+    { "row": {"id": 6, "createdAt": "2026-08-13T22:00:00.000Z"}, "why": "exactly the upper instant: excluded" },
+    { "row": {"id": 7, "createdAt": "2026-08-13T12:00:00.000Z"}, "why": "UTC noon of the 13th: inside the Paris day, included" },
+    { "row": {"id": 8, "createdAt": null}, "why": "null instant: excluded (SEM-2)" }
+  ]
+}

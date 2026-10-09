@@ -75,3 +75,11 @@ inventing a new domain per case.
   exercise `filterModel`. Case 012's export gives this arm **nothing** the other eleven do not have:
   there is no projection member on this backend at all (OSE-13), which is why it is the one arm of
   012 that a reader cannot tell apart from an ordinary unpaginated row query.
+
+## Execution equality (T-1b)
+
+In scope: all 12 fixtures (`001`-`012`) carry `dataset.json` and `expectedRows.json` (XEQ-1..XEQ-4 in `spec/semantics.md`). Seeds hold 7-26 rows with null keys, ties on the sort key that only the SEM-6 tiebreaker resolves, and case variants on string keys, which SEM-1 folds so they tie. `011` seeds 26 rows so that its `startRow: 20, endRow: 40` window returns the last six; `012` is `page: none`, so every seeded row is expected. No seed uses `''`, so Oracle's empty-string rule (XEQ-2) never applies.
+
+Out of scope: nothing; this category has no rejection-only fixture.
+
+All expected rows were derived by hand from `spec/semantics.md`, not from any engine run.

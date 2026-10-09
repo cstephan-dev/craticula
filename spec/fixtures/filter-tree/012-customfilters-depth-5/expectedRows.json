@@ -1,0 +1,9 @@
+{
+  "columns": ["id", "status"],
+  "rows": [
+    [1, "archived"],
+    [3, "ARCHIVED"],
+    [4, null],
+    [7, "archived"]
+  ]
+}

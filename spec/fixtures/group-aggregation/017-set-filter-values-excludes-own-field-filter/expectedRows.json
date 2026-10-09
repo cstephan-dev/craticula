@@ -1,0 +1,22 @@
+{
+  "columns": ["region"],
+  "rows": [
+    ["APAC"],
+    ["EMEA"],
+    ["NA"]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "mongo",
+      "reason": "accepted divergence #3 (GRP-2, GRP-6): MongoDB's collation is query-level and would fold the $group buckets, so a BM-3 pipeline carries none and the user's segment filter compares case-sensitively; 'enterprise' does not match 'Enterprise'",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["region"],
+        "rows": [
+          ["APAC"],
+          ["EMEA"]
+        ]
+      }
+    }
+  ]
+}

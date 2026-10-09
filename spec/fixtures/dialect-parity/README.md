@@ -404,3 +404,20 @@ this suite by construction. Recorded rather than fixed:
   rendering is a behavioural decision that needs the execution tier to grade it, and any of the three
   would change artifacts this tier cannot evaluate. No fixture exercises it (every fixture pages
   `0..100`).
+
+## Execution-equality oracle (T-1b, #2204)
+
+All 24 cases carry `dataset.json` + `expectedRows.json` (XEQ-1). An ordinary row query returns every schema field in
+declaration order, ordered by the request's sort and then SEM-6's `id` tiebreaker; `024` is a grouped level
+(`department`, then the `salary` sum and the `age` average, the average compared as a double). The single-backend
+mechanics cases `001`-`005` are held on their one artifact. `003` seeds 26 rows so its `startRow: 20` page is not
+empty; every other seed stays small. String sorts use capitalised ASCII names only, so no result depends on a
+collation's case ordering.
+
+Out of scope: none.
+
+Accepted divergences declared (XEQ-4): `019` carries an `oracle` entry, because a seeded `''` is stored as NULL there
+(SQL-7); `notBlank` excludes both forms, so the entry restates the main result. No other case seeds `''`.
+
+All expected rows were derived by hand from `spec/semantics.md` (SEM-1, SEM-2, SEM-3, SEM-6, SEM-7, AGG-6), not from
+any engine run or compiler output.

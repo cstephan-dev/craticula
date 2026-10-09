@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "100.00", "quantity": 1 }, "why": "drilled region, Enterprise bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2023, "amount": "25.50", "quantity": 2 }, "why": "drilled region, Enterprise bucket: sums with s01 to 125.50" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "40.00", "quantity": 3 }, "why": "drilled region, SMB bucket" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "Consumer", "product": "Gadget", "fiscalYear": 2024, "amount": null, "quantity": 4 }, "why": "drilled region, a bucket whose only amount is null: AGG-6 sum is 0" },
+    { "row": { "id": "s05", "region": "emea", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1000.00", "quantity": 5 }, "why": "GRP-2: the drill-down is exact, so 'emea' is not 'EMEA' and this row must not reach any child bucket" },
+    { "row": { "id": "s06", "region": "APAC", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "70.00", "quantity": 6 }, "why": "other region: excluded by the drill-down" },
+    { "row": { "id": "s07", "region": null, "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "9.00", "quantity": 7 }, "why": "null region: an equality on 'EMEA' never matches null" },
+    { "row": { "id": "s08", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2022, "amount": "-10.00", "quantity": 8 }, "why": "drilled region, SMB bucket: a negative amount, sum 30.00" }
+  ]
+}

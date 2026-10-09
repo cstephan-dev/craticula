@@ -1,0 +1,104 @@
+{
+  "rows": [
+    {
+      "row": {
+        "customerName": "Acme",
+        "id": 1,
+        "quantity": 11,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "matches everything"
+    },
+    {
+      "row": {
+        "customerName": "Acme Test",
+        "id": 2,
+        "quantity": 11,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "Not(contains test) excludes"
+    },
+    {
+      "row": {
+        "customerName": "TEST corp",
+        "id": 3,
+        "quantity": 50,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "case-folded contains: excluded"
+    },
+    {
+      "row": {
+        "customerName": null,
+        "id": 4,
+        "quantity": 50,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "SEM-2: null name included by Not"
+    },
+    {
+      "row": {
+        "customerName": "Acme",
+        "id": 5,
+        "quantity": 10,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "quantity = 10 on gt boundary: excluded"
+    },
+    {
+      "row": {
+        "customerName": "Acme",
+        "id": 6,
+        "quantity": 50,
+        "region": "east",
+        "status": "active"
+      },
+      "why": "region fails"
+    },
+    {
+      "row": {
+        "customerName": "Beta",
+        "id": 7,
+        "quantity": 50,
+        "region": "WEST",
+        "status": "ACTIVE"
+      },
+      "why": "case variants match"
+    },
+    {
+      "row": {
+        "customerName": "Beta",
+        "id": 8,
+        "quantity": null,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "null quantity excluded"
+    },
+    {
+      "row": {
+        "customerName": "Beta",
+        "id": 9,
+        "quantity": 50,
+        "region": "west",
+        "status": "pending"
+      },
+      "why": "status fails"
+    },
+    {
+      "row": {
+        "customerName": "Beta",
+        "id": 10,
+        "quantity": 51,
+        "region": null,
+        "status": "active"
+      },
+      "why": "null region excluded"
+    }
+  ]
+}

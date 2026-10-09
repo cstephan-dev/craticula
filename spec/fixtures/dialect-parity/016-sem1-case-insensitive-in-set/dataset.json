@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith" }, "why": "first set member, capitalised" },
+    { "row": { "id": 2, "lastName": "JONES" }, "why": "second set member, upper case" },
+    { "row": { "id": 3, "lastName": "jones" }, "why": "second set member as typed" },
+    { "row": { "id": 4, "lastName": "Smithy" }, "why": "longer than a member" },
+    { "row": { "id": 5, "lastName": "Brown" }, "why": "not a member" },
+    { "row": { "id": 6, "lastName": null }, "why": "null is not in the set" },
+    { "row": { "id": 7, "lastName": "SMITH" }, "why": "first set member, upper case" },
+    { "row": { "id": 8, "lastName": "Jonesy" }, "why": "longer than a member" }
+  ]
+}

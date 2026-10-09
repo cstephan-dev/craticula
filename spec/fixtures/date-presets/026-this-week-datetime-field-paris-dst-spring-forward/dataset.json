@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": {"id": 1, "createdAt": "2026-03-22T22:59:59.999Z"}, "why": "1 ms before Monday 00:00 CET: excluded" },
+    { "row": {"id": 2, "createdAt": "2026-03-22T23:00:00.000Z"}, "why": "Monday 00:00 CET (+01:00): included" },
+    { "row": {"id": 3, "createdAt": "2026-03-25T12:00:00.000Z"}, "why": "the pinned now: included" },
+    { "row": {"id": 4, "createdAt": "2026-03-29T21:59:59.999Z"}, "why": "last ms before Monday 00:00 CEST: included" },
+    { "row": {"id": 5, "createdAt": "2026-03-29T22:00:00.000Z"}, "why": "Monday 00:00 CEST (+02:00): excluded, upper bound" },
+    { "row": {"id": 6, "createdAt": "2026-03-29T22:30:00.000Z"}, "why": "30 min after: excluded; a single-offset (+01:00) upper bound at 23:00Z would wrongly include it" },
+    { "row": {"id": 7, "createdAt": null}, "why": "null instant: excluded (SEM-2)" }
+  ]
+}

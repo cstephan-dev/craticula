@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "unitCost": "49.95" }, "why": "boundary: excluded by gt" },
+    { "row": { "id": 2, "unitCost": "49.96" }, "why": "one cent above: returned" },
+    { "row": { "id": 3, "unitCost": "49.950" }, "why": "boundary at another scale: excluded" },
+    { "row": { "id": 4, "unitCost": "49.94" }, "why": "one cent below" },
+    { "row": { "id": 5, "unitCost": "100.00" }, "why": "far above" },
+    { "row": { "id": 6, "unitCost": "50.00" }, "why": "just above, round value" },
+    { "row": { "id": 7, "unitCost": null }, "why": "SEM-2: gt never matches null" },
+    { "row": { "id": 8, "unitCost": "-60.00" }, "why": "negative with a larger magnitude" }
+  ]
+}

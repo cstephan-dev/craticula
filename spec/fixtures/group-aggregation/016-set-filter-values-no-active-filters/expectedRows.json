@@ -1,0 +1,10 @@
+{
+  "columns": ["region"],
+  "rows": [
+    ["APAC"],
+    ["EMEA"],
+    ["EMEA2"],
+    ["LATAM"],
+    ["NA"]
+  ]
+}
