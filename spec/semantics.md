@@ -1769,10 +1769,25 @@ contrast with the previous rule: an outer `NOT (...)` is correct and required fo
 `notNode`**, because there the negation applies to an arbitrary subtree, not to one comparison. The
 distinction is the IR shape, never the surface similarity of the two.
 
-**SQL-4. Set membership is one array parameter on Postgres — `= ANY($1)` / `<> ALL($1)` — and that is
-a dialect rendering, not a universal one.** The set's values are bound as a **single** array
-parameter, so the placeholder count never depends on the value count: `"status" = ANY($1)` with
-`params: [["active", "pending"]]`, never `IN ($1, $2)` with two scalars.
+**SQL-4. Set membership is one array parameter on Postgres — `= ANY($1)` / `<> ALL($1)`, cast to the column
+type for the three string-encoded types — and that is a dialect rendering, not a universal one.** The set's
+values are bound as a **single** array parameter, so the placeholder count never depends on the value count:
+`"status" = ANY($1)` with `params: [["active", "pending"]]`, never `IN ($1, $2)` with two scalars.
+
+*The array is cast for `decimal`, `date` and `datetime` (Bug #2304).* Those values are strings (AR-7), so a host
+binds the array as `text[]`, and PostgreSQL has no `numeric = text`, `date = text` or `timestamptz = text`
+operator. On Postgres the placeholder is therefore cast to the field's column type, and only for these three
+types: `"price" = ANY($1::numeric[])`, `"day" = ANY($1::date[])`, `"at" = ANY($1::timestamptz[])`, and
+`<> ALL($1::numeric[])` (`::date[]`, `::timestamptz[]`) likewise. `string`, `int64`, `double` and `boolean` stay
+uncast (`= ANY($1)`), and the parameter list is unchanged (`params: [[...]]`). SQL Server, MySQL, SQLite and
+Oracle render exactly as before (N scalars). The cast is an explicit cast from the `text[]` a host binds for a
+string array. Consequences:
+(a) the host's `datetime` column is `timestamptz`, an absolute instant (SEM-4). A `timestamp` column without a
+zone makes Postgres compare through the session time zone and can shift rows silently; that is a host
+obligation, like SQLite's fixed-width datetime text.
+(b) A `null` element in the list (AR-7 `nullValue` beside real values) is allowed and stays NULL inside the
+array. An empty list is already refused by SEC-6.
+(c) `Craticula.EntityFrameworkCore` hands typed values to the provider and is out of scope.
 
 *Why it is behind the dialect interface.* `ANY(array)` does not exist in SQL Server, MySQL or SQLite.
 #1639 renders those three as `IN (...)` with N scalar parameters. The query builder therefore MUST
@@ -2879,7 +2894,7 @@ is open.
 
 | Excluded construct | Rule | Status | Removal condition | Covering fixture |
 |---|---|---|---|---|
-| Set membership (`in`, `notIn`) on a `decimal`, `date` or `datetime` field | SQL-4 (one array parameter for the set) and AR-7 (those values are strings): on PostgreSQL the array is `text[]`, so `numeric = text`, `date = text` and `timestamptz = text` are refused | **KNOWN DEFECT**, Bug #2304 (Feature #1624) | When #2304 is fixed the generator produces these operators again and this row is deleted | none yet (the Bug's criterion 2 adds fixtures) |
+| Set membership (`in`, `notIn`) on a `decimal`, `date` or `datetime` field | SQL-4 (one array parameter for the set) and AR-7 (those values are strings): on PostgreSQL the array is `text[]`, so `numeric = text`, `date = text` and `timestamptz = text` are refused | **KNOWN DEFECT**, Bug #2304 (Feature #1624); the fix is specified in SQL-4 (tasks #2312-#2316) but the exclusion stays until #2316 | When #2316 removes the generator exclusion the generator produces these operators again and this row is deleted | none yet (task #2314 adds fixtures) |
 
 The first row is a generator rule rather than an XEQ-4 entry: no fixture declares an `allowedDivergence` for string
 order, because `sort-paging/001` agrees on every engine for the letters it seeds. The fixture is named as the evidence
