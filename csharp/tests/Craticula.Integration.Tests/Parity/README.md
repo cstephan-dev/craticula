@@ -29,7 +29,7 @@ reason (`CRATICULA_INTEGRATION_DOCKER=off` forces it). The offline filter in `CL
 |---|---|---|
 | `CRATICULA_PARITY_SEED` | `20261010` | seed of the dataset and of every request |
 | `CRATICULA_PARITY_CASES` | `200` | number of generated requests |
-| `CRATICULA_PARITY_ROWS` | `150` | rows in the seeded dataset (ids are unique, drawn below `rows * 20`) |
+| `CRATICULA_PARITY_ROWS` | `300` | rows in the seeded dataset (ids are unique, drawn below `rows * 20`) |
 
 A malformed value fails the run; it is never replaced by a default.
 
@@ -37,7 +37,7 @@ A malformed value fails the run; it is never replaced by a default.
 
 1. All seven engines start concurrently and are seeded **once** with the parity schema (`ParitySchema`) and dataset
    (`ParityDataset`): one table, collection or index per engine. Nothing is recreated per case. Start + seed is timed
-   apart from the case loop (a default run on the maker's machine: about 20 s start + seed, about 2 s of cases).
+   apart from the case loop (a default run on the maker's machine: about 20 s start + seed, about 2.5 s of cases; 1000 cases take about 7 s).
 2. Each engine runs all cases in order (the engines concurrently): the case is parsed and validated by the real adapter
    and filter pipeline with SEC-3's default limits, compiled by the engine's own compiler, executed, and its `id` column read.
 3. The id sequences are compared for every pair. A request an engine or its compiler refuses is a failure (PAR-1).
@@ -52,5 +52,39 @@ Each printed case carries: the seed and the case index, the disagreeing pairs, e
 the request to `agGridRequest.json`, the dataset to `dataset.json`, `ParitySchema.Json` to `schema.json` and the expected
 ids to `expectedRows.json` (PAR-4).
 
-A mutation check that the harness can fail: `CRATICULA_XEQ_MUTATION=drop-collate` (the tier's fault injection) makes the
-SQL engines compare strings case-sensitively, and the run fails with the cases that filter `label`.
+Replay one case: set `CRATICULA_PARITY_SEED` and `CRATICULA_PARITY_ROWS` to the printed values and read the request with
+`ParityRequestGenerator.Generate(seed, index)`; the run for a wider look is `CRATICULA_PARITY_CASES=1000` with any seed.
+Defaults: seed `20261010`, 200 cases, 300 rows. The report's `N of M cases returned rows` line says how much was compared.
+
+## How strong the property is
+
+A run that compared only empty windows would pass for nothing, so `ParityStrength` measures what the generated requests
+do on in-process SQLite (no Docker), and `ParityStrengthTests` fails when the numbers fall. Measured for 1000 cases,
+300 rows, five seeds, after tuning (before tuning, at 150 rows: 62.9 % of cases returned rows on the default seed):
+
+| Measure | Default seed | Range over five seeds |
+|---|---|---|
+| Cases that return rows (guard: at least 85 %) | 91.4 % | 88.8 to 91.4 % |
+| Mean ids per non-empty case (guard: at least 10) | 21.1 | 20.2 to 21.1 |
+| Multi-key sorts with a first-key tie in the result (guard: at least 70 %) | 93.0 % | 89.3 to 93.0 % |
+| Results whose first sort key holds NULLs next to values | 616 of 1000 | 603 to 626 |
+| Windows that start inside the result (guard: at least 30 % of cases) | 44.8 % | 41.9 to 46.8 % |
+| Windows that stop short of the result's end | 769 of 1000 | 737 to 786 |
+
+What was tuned, all inside PAR-3 (no register row changed): window starts are mostly small (one in 50 starts at 200 on
+purpose); equality operands rarely sit next to a pooled value; an AND of conditions on one column carries no blank test and
+has two conditions; trees are mostly ORs with fewer leaves; the pools gained earlier dates and instants so `lt` and `lte`
+have rows below them; the dataset has 300 rows.
+
+## Mutations the property catches
+
+`CRATICULA_XEQ_MUTATION` damages the SQL the SQL engines are sent (`Sql/SqlEngine.cs`, `SqlMutation`, test code only), and
+the run fails. Default seed, 200 cases:
+
+| Value | Damage | Failing cases |
+|---|---|---|
+| `drop-collate` | every `COLLATE` removed (MySQL: binary string columns) | 25 |
+| `drop-nulls` | every `NULLS FIRST` / `NULLS LAST` removed (PostgreSQL, SQLite) | 136 (SQLite against the other six) |
+| `drop-tiebreaker` | the trailing stableKey sort key removed | 127 |
+
+Never set one outside a check like this.

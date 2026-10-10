@@ -63,9 +63,15 @@ internal static class ParityRequestGenerator
     // Sort keys: every field except the string one (register row 1). id is added by hand as a final tiebreaker key.
     private static readonly string[] SortFields = ["qty", "score", "price", "active", "born", "seen"];
 
-    private static readonly int[] WindowStarts = [0, 0, 0, 3, 10, 25, 60, 200];
+    // Mostly small starts: the datasets are a few hundred rows and a filter keeps a fraction of them, so a start of 60
+    // or more lands past the end of most results and compares two empty windows. One window in FarWindowEvery starts
+    // far past any result (SEC-3's offsets), which keeps the empty-window path, and only that, deliberately.
+    private static readonly int[] WindowStarts = [0, 0, 0, 0, 0, 0, 1, 2, 3, 5, 8, 12];
 
-    private static readonly int[] WindowSizes = [1, 5, 10, 25, 50, 100];
+    private const int FarWindowEvery = 50;
+    private const int FarWindowStart = 200;
+
+    private static readonly int[] WindowSizes = [1, 3, 5, 10, 10, 25, 25, 50, 100];
 
     /// <summary>One filter leaf: a field of a type with an IR operator.</summary>
     private readonly record struct Leaf(string Field, FieldType Type, string Op);
@@ -140,7 +146,7 @@ internal static class ParityRequestGenerator
             case 4:
             {
                 var model = IsNative(first) ? MultiColumn(rng, first) : MultiColumn(rng, RandomNative(rng));
-                var tree = IsNative(first) ? Tree(rng, RandomLeaves(rng, 1, 3)) : Tree(rng, [first, .. RandomLeaves(rng, 0, 2)]);
+                var tree = IsNative(first) ? Tree(rng, RandomLeaves(rng, 1, 2)) : Tree(rng, [first, .. RandomLeaves(rng, 0, 1)]);
                 return (model, tree);
             }
 
@@ -148,7 +154,7 @@ internal static class ParityRequestGenerator
                 return (null, CustomLeaf(rng, first));
 
             default:
-                return (null, Tree(rng, [first, .. RandomLeaves(rng, 1, 5)]));
+                return (null, Tree(rng, [first, .. RandomLeaves(rng, 1, rng.Next(4) == 0 ? 5 : 2)]));
         }
     }
 
@@ -156,7 +162,7 @@ internal static class ParityRequestGenerator
     private static JsonObject MultiColumn(Random rng, Leaf first)
     {
         var model = new JsonObject { [first.Field] = NativeCondition(rng, first) };
-        for (var extra = rng.Next(1, 3); extra > 0; extra--)
+        for (var extra = rng.Next(6) == 0 ? 2 : 1; extra > 0; extra--)
         {
             var leaf = RandomNative(rng);
             if (!model.ContainsKey(leaf.Field))
@@ -171,8 +177,11 @@ internal static class ParityRequestGenerator
     /// <summary>Two or three conditions on one column joined by AND or OR, in either of AG Grid's two shapes.</summary>
     private static JsonObject CombinedNative(Random rng, Leaf column)
     {
-        var ops = NativeOps(column.Type).Where(op => op is not ("in" or "true" or "false")).ToArray();
-        var count = rng.Next(2, 4);
+        // A conjunction of conditions on one column is the usual way to ask for nothing (blank AND x, equals 3 AND equals 5),
+        // so most combinations are ORs, an AND has two conditions, and no AND carries a blank test.
+        var and = column.Op is not ("blank" or "notBlank") && rng.Next(5) < 2;
+        var ops = NativeOps(column.Type).Where(op => op is not ("in" or "true" or "false") && !(and && op is "blank" or "notBlank")).ToArray();
+        var count = and ? 2 : rng.Next(2, 4);
         var conditions = Enumerable.Range(0, count)
             .Select(i => NativeCondition(rng, column with { Op = i == 0 && IsCombinable(column) ? column.Op : ops[rng.Next(ops.Length)] }))
             .ToList();
@@ -180,7 +189,7 @@ internal static class ParityRequestGenerator
         var combined = new JsonObject
         {
             ["filterType"] = conditions[0]!["filterType"]!.GetValue<string>(),
-            ["operator"] = rng.Next(2) == 0 ? "AND" : "OR"
+            ["operator"] = and ? "AND" : "OR"
         };
 
         if (count == 2 && rng.Next(2) == 0)
@@ -285,7 +294,7 @@ internal static class ParityRequestGenerator
                 taken += size;
             }
 
-            node = new JsonObject { ["type"] = rng.Next(2) == 0 ? "and" : "or", ["nodes"] = new JsonArray(children.ToArray()) };
+            node = new JsonObject { ["type"] = rng.Next(3) == 0 ? "and" : "or", ["nodes"] = new JsonArray(children.ToArray()) };
         }
 
         return allowNot && depth < 4 && rng.Next(4) == 0
@@ -313,8 +322,10 @@ internal static class ParityRequestGenerator
                 var (from, to) = Comparer<object>.Create(CompareScalars).Compare(a.Value, b.Value) <= 0 ? (a, b) : (b, a);
                 node["from"] = Typed(from);
                 node["to"] = Typed(to);
-                node["fromInclusive"] = rng.Next(2) == 0;
-                node["toInclusive"] = rng.Next(2) == 0;
+                // A range whose bounds coincide is empty unless both ends are inclusive.
+                var coincide = Comparer<object>.Create(CompareScalars).Compare(from.Value, to.Value) == 0;
+                node["fromInclusive"] = coincide || rng.Next(4) != 0;
+                node["toInclusive"] = coincide || rng.Next(4) != 0;
                 break;
             }
 
@@ -349,7 +360,9 @@ internal static class ParityRequestGenerator
     /// </summary>
     private static Scalar Draw(Random rng, FieldType type, string op, bool wholeSecond)
     {
-        var near = rng.Next(4) == 0;
+        // A neighbour of a pooled value is stored by nobody: it is a boundary probe for the ordering operators, but an
+        // empty result for an equality, so equality takes one only now and then.
+        var near = rng.Next(op is "eq" or "neq" ? 12 : 4) == 0;
         switch (type)
         {
             case FieldType.String:
@@ -400,7 +413,7 @@ internal static class ParityRequestGenerator
     /// </summary>
     private static string StringOperand(Random rng, string op)
     {
-        var label = rng.Next(8) == 0 ? "zulu" : ParityPools.Labels[rng.Next(ParityPools.Labels.Length)];
+        var label = rng.Next(30) == 0 ? "zulu" : ParityPools.Labels[rng.Next(ParityPools.Labels.Length)];
         var length = rng.Next(1, Math.Min(4, label.Length) + 1);
         var text = op switch
         {
@@ -504,5 +517,5 @@ internal static class ParityRequestGenerator
 
     /// <summary>A window with <c>startRow &lt; endRow</c>, at most <see cref="MaxWindow"/> rows, starting far below SEC-3's offsets.</summary>
     private static (int Start, int Size) Window(Random rng) =>
-        (WindowStarts[rng.Next(WindowStarts.Length)], WindowSizes[rng.Next(WindowSizes.Length)]);
+        (rng.Next(FarWindowEvery) == 0 ? FarWindowStart : WindowStarts[rng.Next(WindowStarts.Length)], WindowSizes[rng.Next(WindowSizes.Length)]);
 }

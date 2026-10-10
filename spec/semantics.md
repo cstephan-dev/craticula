@@ -2866,7 +2866,9 @@ neither is not excluded and the generator must produce it.
 
 The first row is a generator rule rather than an XEQ-4 entry: no fixture declares an `allowedDivergence` for string
 order, because `sort-paging/001` agrees on every engine for the letters it seeds. The fixture is named as the evidence
-of what is pinned, and PAR-4 applies the moment a broader string sort is shown to differ.
+of what is pinned, and PAR-4 applies the moment a broader string sort is shown to differ. As of the first runs (2026-10-10: the default seed at 200 cases and ten other seeds at 1000 cases each, seven
+engines, all 21 pairs), the property found no cross-engine difference, so the register lists only generator exclusions
+and no accepted divergence has been recorded by the property yet.
 
 **PAR-4. A found divergence becomes a fixture.** When the property finds a difference between engines, the outcome is
 one of: a defect fixed (a compiler or a spec correction), or a divergence the Tech Lead accepts. An accepted divergence

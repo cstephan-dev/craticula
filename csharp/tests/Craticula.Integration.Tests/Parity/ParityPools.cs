@@ -24,12 +24,14 @@ internal static class ParityPools
 
     public static readonly DateOnly[] Dates =
     [
-        new(1990, 5, 12), new(1991, 7, 4), new(1999, 12, 31), new(2000, 1, 1), new(2000, 2, 29), new(2010, 10, 10)
+        new(1980, 3, 1), new(1990, 5, 12), new(1991, 7, 4), new(1999, 12, 31), new(2000, 1, 1), new(2000, 2, 29), new(2010, 10, 10), new(2020, 8, 20)
     ];
 
     /// <summary>Whole seconds and the millisecond either side of a boundary (the SQLite text-compare trap of SEM-4).</summary>
     public static readonly DateTime[] Instants =
     [
+        Utc(2025, 6, 30, 18, 0, 0, 500),
+        Utc(2025, 12, 31, 23, 0, 0, 0),
         Utc(2025, 12, 31, 23, 59, 59, 999),
         Utc(2026, 1, 1, 0, 0, 0, 0),
         Utc(2026, 1, 1, 0, 0, 0, 1),

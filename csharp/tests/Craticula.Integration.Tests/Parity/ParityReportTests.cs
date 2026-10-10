@@ -116,7 +116,7 @@ public sealed class ParityReportTests
     public void The_configuration_defaults_and_rejects_garbage()
     {
         var defaults = ParityConfig.FromEnvironment(_ => null);
-        Assert.Equal(new ParityConfig(20261010, 200, 150), defaults);
+        Assert.Equal(new ParityConfig(20261010, 200, 300), defaults);
 
         var set = ParityConfig.FromEnvironment(name => name switch
         {

@@ -141,7 +141,7 @@ internal sealed record ParityConfig(long Seed, int Cases, int Rows)
 
     public const long DefaultSeed = 20261010;
     public const int DefaultCases = 200;
-    public const int DefaultRows = 150;
+    public const int DefaultRows = 300;
 
     public static ParityConfig FromEnvironment(Func<string, string?>? read = null)
     {
