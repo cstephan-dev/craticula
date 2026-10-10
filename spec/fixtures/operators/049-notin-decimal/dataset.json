@@ -6,7 +6,7 @@
     { "row": { "id": 4, "unitCost": "5.5" }, "why": "second member, exact" },
     { "row": { "id": 5, "unitCost": "19.98" }, "why": "one cent below a member" },
     { "row": { "id": 6, "unitCost": "5.51" }, "why": "one hundredth above a member" },
-    { "row": { "id": 7, "unitCost": null }, "why": "SEM-2: in never matches null" },
+    { "row": { "id": 7, "unitCost": null }, "why": "SEM-2: notIn is null-inclusive" },
     { "row": { "id": 8, "unitCost": "19.99" }, "why": "duplicate of a member value: both rows are returned" },
     { "row": { "id": 9, "unitCost": "-5.5" }, "why": "sign differs: not a member" }
   ]

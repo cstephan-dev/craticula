@@ -164,8 +164,8 @@ internal static class DapperParameterBinder
     /// widens to its <see cref="Nullable{T}"/> array form when any element is null — a plain
     /// <c>long[]</c> cannot hold one. A reference type (<see cref="string"/>) already can, unchanged.
     /// Internal rather than private specifically so this reflection-based rebuild — the one piece of
-    /// this binder with no live Postgres connection to execute against in this repo's test harness — can
-    /// be unit-tested directly.</para>
+    /// this binder that needs no live Postgres connection to unit-test (the live run is
+    /// <c>DapperPostgresExecutionTests</c> in the execution-equality tier, #1655) — can be unit-tested directly.</para>
     /// </summary>
     internal static object ToTypedArray(IReadOnlyList<object?> values)
     {

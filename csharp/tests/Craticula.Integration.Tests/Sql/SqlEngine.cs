@@ -370,9 +370,9 @@ public sealed class PostgresEngine : SqlEngine
         command.Parameters.Add(parameter);
     }
 
-    // Typed arrays for string, int64, double and boolean only. decimal, date and datetime arrays are intentionally NOT
-    // typed here: the compiler binds those values as strings (SQL-4, AR-7), and Bug #2304 (PostgreSQL refuses
-    // numeric/date/timestamptz = text) must stay visible; the parity generator excludes those sets until it is fixed.
+    // Typed arrays for string, int64, double and boolean only. decimal, date and datetime arrays are left as text[] here:
+    // the compiler binds those values as strings (SQL-4, AR-7) and the dialect's cast (`::numeric[]`, `::date[]`,
+    // `::timestamptz[]`, Bug #2304) converts them on the server.
     private static NpgsqlParameter ArrayParameter(IReadOnlyList<object?> list) =>
         list.All(item => item is string)
             ? new NpgsqlParameter { Value = list.Select(item => (string)item!).ToArray(), NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text }

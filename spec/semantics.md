@@ -2891,7 +2891,7 @@ The first row is a generator rule rather than an XEQ-4 entry: no fixture declare
 order, because `sort-paging/001` agrees on every engine for the letters it seeds. The fixture is named as the evidence
 of what is pinned, and PAR-4 applies the moment a broader string sort is shown to differ. As of the first runs (2026-10-10: the default seed and several other seeds, seven engines, all 21 pairs), the property
 found one true gap: set membership on decimal, date and datetime fields was refused by PostgreSQL. That was a **defect**
-(Bug #2304), not a divergence; it was fixed (SQL-4's array cast, and the Dapper adapter's unnamed Postgres parameters) and the
+(Bug #2304), not a divergence; it was fixed (SQL-4's array cast; the Dapper adapter also binds Postgres parameters unnamed, which set membership through it needed, while its scalar comparisons on those types remain Bug #2320) and the
 generator produces those operators again. **No accepted divergence has been recorded by the property**; the register lists
 only generator exclusions.
 

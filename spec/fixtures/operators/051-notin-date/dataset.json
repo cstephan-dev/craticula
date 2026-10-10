@@ -5,7 +5,7 @@
     { "row": { "id": 3, "birthDate": "1990-05-11" }, "why": "one day before the first member" },
     { "row": { "id": 4, "birthDate": "1990-05-13" }, "why": "one day after the first member" },
     { "row": { "id": 5, "birthDate": "1991-07-03" }, "why": "one day before the second member" },
-    { "row": { "id": 6, "birthDate": null }, "why": "SEM-2: in never matches null" },
+    { "row": { "id": 6, "birthDate": null }, "why": "SEM-2: notIn is null-inclusive" },
     { "row": { "id": 7, "birthDate": "1990-05-12" }, "why": "duplicate of a member value: both rows are returned" },
     { "row": { "id": 8, "birthDate": "1990-12-05" }, "why": "month and day swapped from the first member" },
     { "row": { "id": 9, "birthDate": "1991-07-05" }, "why": "one day after the second member" }

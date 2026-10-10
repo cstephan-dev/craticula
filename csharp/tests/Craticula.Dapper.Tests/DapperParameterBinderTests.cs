@@ -6,10 +6,10 @@ namespace Craticula.Dapper.Tests;
 /// story (#1646): a Postgres set-membership parameter is <c>SqlQuery.Parameters</c>'s one nested-list
 /// shape (<c>PostgresDialect.RenderSetMembership</c>'s single <c>= ANY($1)</c> array parameter), and
 /// binding that <see cref="IReadOnlyList{T}"/> straight to <c>IDataParameter.Value</c> hands Npgsql a
-/// boxed <c>object</c> list with no element type to infer a Postgres array type from. No live Postgres
-/// connection exists in this repo's test harness (every other case here runs against SQLite, which
-/// never reaches this branch — see <c>Craticula.Dapper.csproj</c>'s <c>InternalsVisibleTo</c> comment),
-/// so this is a pure unit test of the rebuild logic rather than an execution-equality case.
+/// boxed <c>object</c> list with no element type to infer a Postgres array type from. This is an offline
+/// unit test of the rebuild logic (every other case here runs against SQLite, which never reaches this
+/// branch — see <c>Craticula.Dapper.csproj</c>'s <c>InternalsVisibleTo</c> comment); the live Postgres run
+/// of the same binder is <c>DapperPostgresExecutionTests</c> in the execution-equality tier (#1655).
 /// </summary>
 public class DapperParameterBinderTests
 {

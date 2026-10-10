@@ -6,10 +6,10 @@
 
   <ItemGroup>
     <!-- DapperParameterBinder's Postgres array-binding fix (the reflection-based typed-array rebuild in
-         NamedParameters.ToTypedArray) has no live Postgres connection to execute against in this repo's
-         test harness — every other Craticula.Dapper.Tests case runs against SQLite, which never reaches
-         that dialect-specific branch at all. Granting the test project access to this one internal type
-         is what lets the binding LOGIC be unit-tested directly instead of left unverified. -->
+         NamedParameters.ToTypedArray) is unit-tested offline here, because every other Craticula.Dapper.Tests
+         case runs against SQLite, which never reaches that dialect-specific branch (the live Postgres run
+         is DapperPostgresExecutionTests in the execution-equality tier, #1655). Granting the test project
+         access to this one internal type is what lets the binding LOGIC be unit-tested directly. -->
     <InternalsVisibleTo Include="Craticula.Dapper.Tests" />
   </ItemGroup>
 
