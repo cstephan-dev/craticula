@@ -17,6 +17,10 @@ seed). The namespace is `Craticula.Integration.Tests.Containers.Sql`, so the off
 
 Run: `dotnet test tests/Craticula.Integration.Tests --filter "FullyQualifiedName~Containers.Sql"`.
 
+`DapperPostgresExecutionTests` (#2315) runs the set-membership fixtures `operators/035..038` and `048..053` through the
+`Craticula.Dapper` adapter (this project references it as a test host) on the same Postgres container: the adapter binds the
+array as `text[]`, so it proves the dialect's `::numeric[]` / `::date[]` / `::timestamptz[]` cast (SQL-4) for a host port.
+
 ## What the harness does
 
 1. `SqlFixtureCompiler` runs the fixture's own `agGridRequest.json` through `AgGridRequestParser` -> `GridFilterPipeline`

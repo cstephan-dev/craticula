@@ -109,6 +109,17 @@ public abstract class SqlEngine : IAsyncLifetime
     }
 
     /// <summary>
+    /// Starts the engine if needed, creates and seeds the fixture's table, and hands back the OPEN connection for a
+    /// host-port test that runs the query through an adapter (Dapper) instead of <see cref="RunAsync"/>. The caller disposes it.
+    /// </summary>
+    public async Task<DbConnection> OpenSeededConnectionAsync(ExecutionFixture fixture)
+    {
+        var connection = await ConnectAsync();
+        await CreateAndSeedAsync(connection, fixture);
+        return connection;
+    }
+
+    /// <summary>
     /// Starts the engine if needed and creates and seeds the fixture's table once, leaving it for any number of
     /// <see cref="QueryAsync"/> calls (the parity property seeds once per run and runs every generated case against it).
     /// </summary>

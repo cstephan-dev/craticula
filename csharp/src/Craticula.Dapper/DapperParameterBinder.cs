@@ -8,7 +8,9 @@ namespace Craticula.Dapper;
 /// <summary>
 /// Binds a compiled <see cref="SqlQuery"/>'s flat, ordered <see cref="SqlQuery.Parameters"/> to whatever
 /// placeholder syntax the dialect that produced it actually rendered into <see cref="SqlQuery.Sql"/> —
-/// <c>$1</c> (Postgres), <c>@p1</c> (SQL Server), <c>:p1</c> (Oracle, bound without its leading colon —
+/// <c>$1</c> (Postgres, bound as UNNAMED parameters in order: Npgsql treats a parameter named <c>$1</c> as a named one,
+/// matches none of the statement's positional markers and fails with "bind message supplies 0 parameters" — measured
+/// against a real PostgreSQL 16 in #2315), <c>@p1</c> (SQL Server), <c>:p1</c> (Oracle, bound without its leading colon —
 /// ODP.NET's own convention), or bare <c>?</c> (MySQL, SQLite; see
 /// <see cref="ISqlDialect.ParameterPlaceholder"/> for the source of each convention).
 ///
@@ -55,7 +57,7 @@ internal static class DapperParameterBinder
         {
             "sqlite" => PrepareNumbered(query),
             "mysql" => PreparePositional(query),
-            "postgres" => PrepareNamed(query, ordinal => $"${ordinal + 1}"),
+            "postgres" => PrepareNamed(query, _ => string.Empty),
             "mssql" => PrepareNamed(query, ordinal => $"@p{ordinal + 1}"),
             "oracle" => PrepareNamed(query, ordinal => $"p{ordinal + 1}"),
             _ => throw new DapperCompilationException(
@@ -135,7 +137,10 @@ internal static class DapperParameterBinder
     /// needed because a straight assignment fails for Postgres's set-membership array specifically.
     /// <c>SqlQuery.Parameters</c>'s own contract names the shape directly — "a nested
     /// <c>IReadOnlyList&lt;object?&gt;</c> for a set membership's single array parameter" — produced by
-    /// <c>PostgresDialect.RenderSetMembership</c>'s <c>= ANY($1)</c>/<c>&lt;&gt; ALL($1)</c> (the other
+    /// <c>PostgresDialect.RenderSetMembership</c>'s <c>= ANY($1)</c>/<c>&lt;&gt; ALL($1)</c>, which for a decimal, date or
+    /// datetime field casts the array to the column's type (<c>= ANY($1::numeric[])</c>, <c>$1::date[]</c>,
+    /// <c>$1::timestamptz[]</c>, SQL-4), so the <c>string[]</c> (<c>text[]</c>) this method builds from those fields'
+    /// string-encoded values is converted server-side; without the cast PostgreSQL has no <c>numeric = text</c> operator (the other
     /// four dialects bind N scalars instead, so they never reach this method). Assigning that
     /// <see cref="IReadOnlyList{T}"/> straight to <see cref="IDataParameter.Value"/> hands Npgsql a
     /// boxed <c>object</c> list with no element type to infer a Postgres array type from — every element

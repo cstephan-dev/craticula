@@ -1,3 +1,4 @@
+using Craticula.Sql;
 namespace Craticula.Dapper.Tests;
 
 /// <summary>
@@ -58,5 +59,33 @@ public class DapperParameterBinderTests
     {
         Assert.Throws<DapperCompilationException>(
             () => DapperParameterBinder.ToTypedArray([null, null]));
+    }
+
+    /// <summary>
+    /// #2315: Npgsql treats a parameter NAMED <c>$1</c> as a named parameter, matches none of the statement's
+    /// positional <c>$n</c> markers and fails with "bind message supplies 0 parameters"; the binder therefore binds
+    /// Postgres parameters unnamed, in order. Found only by running Dapper against a live PostgreSQL (every other case
+    /// here is SQLite), so this pins the shape offline.
+    /// </summary>
+    [Fact]
+    public void Postgres_Parameters_Are_Bound_Unnamed_And_In_Order()
+    {
+        var query = new SqlQuery
+        {
+            Dialect = "postgres",
+            Sql = "SELECT 1 WHERE a = $1 AND b = $2",
+            Parameters = ["x", 7L]
+        };
+
+        var (sql, parameters) = DapperParameterBinder.Prepare(query);
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection("DataSource=:memory:");
+        using var command = connection.CreateCommand();
+        parameters.AddParameters(command, null!);
+
+        Assert.Equal(query.Sql, sql);
+        Assert.Equal(2, command.Parameters.Count);
+        Assert.All(command.Parameters.Cast<System.Data.Common.DbParameter>(), p => Assert.Equal(string.Empty, p.ParameterName));
+        Assert.Equal("x", command.Parameters[0].Value);
+        Assert.Equal(7L, command.Parameters[1].Value);
     }
 }
