@@ -149,7 +149,8 @@ public interface ISqlDialect
     /// <c>yyyy-MM-ddTHH:mm:ss.fffZ</c> (exactly three fractional digits) and whose <c>.</c> sorts before
     /// <c>Z</c>: a bound spelled <c>...:00Z</c> would sort after a stored <c>...:00.001Z</c> and drop it.
     /// When true the builder binds a whole-millisecond instant with all three digits; a bound with a
-    /// sub-millisecond part keeps its full precision. Every other dialect compares a typed instant and
+    /// sub-millisecond part is first rounded to the millisecond by its operator (gt/lte floor, gte/lt ceil; eq, neq
+    /// and set membership keep the full value). Every other dialect compares a typed instant and
     /// keeps the whole-second form. A fact about the engine; the formatting stays in the builder.
     /// </summary>
     bool DatetimeBoundsAreFixedWidth => false;

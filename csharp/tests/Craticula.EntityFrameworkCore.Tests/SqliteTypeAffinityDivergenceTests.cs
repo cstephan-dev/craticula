@@ -20,10 +20,11 @@ namespace Craticula.EntityFrameworkCore.Tests;
 /// <c>ef_compare("unit_cost", @p) &gt; 0</c>, which compares NUMERICALLY. EF's answer is the one a user
 /// means; the compiler's is the one that is right on every engine where <c>NUMERIC</c> is a real
 /// type.</description></item>
-/// <item><description><b><c>datetime</c>.</b> SEM-4 pins the compiled parameter to canonical ISO-8601 UTC
-/// (<c>2026-02-01T00:00:00Z</c>) and the artifacts compare it byte-for-byte. EF hands the provider a
-/// <see cref="DateTime"/>, which <c>Microsoft.Data.Sqlite</c> renders in ITS storage format
-/// (<c>2026-02-01 00:00:00</c> — a space, no <c>Z</c>). Against a TEXT column those two strings order
+/// <item><description><b><c>datetime</c>.</b> SEM-4 pins the compiled SQLite parameter to the fixed-width UTC form the
+/// host stores (<c>2026-02-01T00:00:00.000Z</c>, #2243) and the artifacts compare it byte-for-byte. EF hands the
+/// provider a <see cref="DateTime"/> (AR-4's EF Core exception), which <c>Microsoft.Data.Sqlite</c> renders in ITS
+/// storage format (<c>2026-02-01 00:00:00</c> — a space, no <c>Z</c>), which breaks SEM-4's host obligation for a
+/// SQLite <c>datetime</c> column and is why the divergence exists. Against a TEXT column those two strings order
 /// differently: <c>' '</c> sorts before <c>'T'</c>, so at an exact boundary an <c>lte</c> excludes the row
 /// the compiled statement includes.</description></item>
 /// <item><description><b>Grouped <c>min</c>/<c>max</c> over a <c>decimal</c>-as-TEXT column (#1888).</b>
@@ -139,7 +140,7 @@ public class SqliteTypeAffinityDivergenceTests
         // The cause, isolated from either compiler: the two encodings of ONE instant do not compare the
         // same way against the stored text. Both statements are correct about the value they were given.
         Assert.Equal(1, CountRowsMatching(database, "SELECT COUNT(*) FROM items WHERE created_at = ?1", "2026-02-01 00:00:00"));
-        Assert.Equal(0, CountRowsMatching(database, "SELECT COUNT(*) FROM items WHERE created_at = ?1", "2026-02-01T00:00:00Z"));
+        Assert.Equal(0, CountRowsMatching(database, "SELECT COUNT(*) FROM items WHERE created_at = ?1", "2026-02-01T00:00:00.000Z"));
     }
 
     /// <summary>

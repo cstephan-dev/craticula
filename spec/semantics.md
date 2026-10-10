@@ -473,12 +473,21 @@ often diverge from what the grid itself shows the user.
   enough alone. **Host obligation:** a SQLite `datetime` column stores exactly three fractional digits,
   `yyyy-MM-ddTHH:mm:ss.fffZ`, UTC (the millisecond precision XEQ-2 already caps a seed at). **Compiler
   rule:** the SQLite arm binds a `datetimeValue` in the same form, so a whole-second instant is bound as
-  `2026-01-01T00:00:00.000Z`, never `...:00Z`. A bound with a sub-millisecond part keeps its full
-  precision (`...:00.0005Z` is bound as written, never truncated to the millisecond). Postgres,
+  `2026-01-01T00:00:00.000Z`, never `...:00Z`. A bound with a sub-millisecond part (a
+  fraction finer than three digits that is not all zeros after the third) is **rounded to the millisecond by
+  its operator**, because the text of `...:00.0005Z` sorts before the stored `...:00.000Z` although it is
+  later. Stored values `s` are always millisecond-aligned, so for a bound `b` and its floor / ceiling to the
+  millisecond: `x > b` is `s > floor(b)`, `x <= b` is `s <= floor(b)`, `x >= b` is `s >= ceil(b)` and
+  `x < b` is `s < ceil(b)`. The SQLite arm therefore binds `floor(b)` for `gt` and `lte`, and `ceil(b)` for `gte`
+  and `lt`; an `inRange` follows its two bounds' own operators (an exclusive from-bound is `gt`, an inclusive one
+  `gte`; an inclusive to-bound is `lte`, an exclusive one `lt`). `eq`, `neq`, `in` and `notIn` keep the full
+  value: a finer-than-millisecond value never equals a stored one, which is the correct answer. A bound that is
+  already millisecond-aligned is unchanged. Postgres,
   SQL Server, MySQL and Oracle compare a typed instant, not text, and keep the form of SEM-4 above
   (`...:00Z` for a whole second). The obligation covers the path that sends the bound as text
   (`Craticula.Sql` and the Dapper adapter on top of it); the EF Core adapter hands its provider a
-  `DateTime` and the provider's own text mapping applies, under AR-4's unchanged same-instant rule.
+  `DateTime` and the provider's own text mapping applies (AR-4's EF Core exception; the divergence is
+  recorded in `SqliteTypeAffinityDivergenceTests`).
 - **MongoDB** — an instant field (`datetimeValue`) compares against BSON `Date` values built from
   the full instant string (see the pinned representation above); a local-date field (`dateValue`)
   compares against the plain ISO date string instead, never a `Date`:

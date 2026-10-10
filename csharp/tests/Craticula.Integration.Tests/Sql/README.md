@@ -42,7 +42,7 @@ an expectation or loosens the comparer.
 | boolean | `BOOLEAN` | `BIT` | `BOOLEAN` | `INTEGER` |
 | string | `TEXT` | `NVARCHAR(450)` | `VARCHAR(1000)` | `TEXT` |
 | date | `DATE` | `DATE` | `DATE` | `TEXT` `yyyy-MM-dd` |
-| datetime | `TIMESTAMPTZ` | `DATETIME2(3)` | `DATETIME(3)` | `TEXT` `yyyy-MM-ddTHH:mm:ss[.fff]Z` |
+| datetime | `TIMESTAMPTZ` | `DATETIME2(3)` | `DATETIME(3)` | `TEXT` `yyyy-MM-ddTHH:mm:ss.fffZ` (exactly three fractional digits; SEM-4) |
 
 Every column is nullable. Collation, per SEM-1 / SQL-6 / GRP-2:
 

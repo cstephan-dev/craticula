@@ -5,7 +5,7 @@ namespace Craticula.Conformance.Tests;
 /// <summary>
 /// Runs the language-neutral conformance runner (<c>conformance/run.py</c>, spec/conformance-runner.md)
 /// against the C# driver on every <c>dotnet test</c>, so a compiler change that moves any expected
-/// artifact fails here (story #1654 AC-5), and pins the driver's two failure paths that the 668
+/// artifact fails here (story #1654 AC-5), and pins the driver's two failure paths that the
 /// graded cases never reach (§2.1, §2.2, §2.3, §8; the exit 1 for an unanswerable line is the driver's
 /// own design, whose spec consequence is §2.4 item 5).
 /// </summary>
