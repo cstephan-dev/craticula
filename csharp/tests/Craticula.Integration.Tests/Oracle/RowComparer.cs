@@ -17,12 +17,16 @@ public static class RowComparer
     /// <summary>Relative tolerance for doubles (XEQ-3).</summary>
     public const double DoubleTolerance = 1e-9;
 
+    /// <summary>Relative tolerance for an <c>avg</c> aggregate column (XEQ-3): engines differ in an average's scale.</summary>
+    public const double AverageTolerance = 1e-6;
+
     /// <summary>The mismatches between <paramref name="expected"/> and an engine's <paramref name="actual"/> rows; empty means equal.</summary>
     public static IReadOnlyList<string> Compare(
         ExpectedResult expected,
         IReadOnlyList<FieldType> columnTypes,
         IReadOnlyList<string> actualColumns,
-        IReadOnlyList<IReadOnlyList<object?>> actualRows)
+        IReadOnlyList<IReadOnlyList<object?>> actualRows,
+        IReadOnlySet<string>? averageColumns = null)
     {
         var problems = new List<string>();
         if (!expected.Columns.SequenceEqual(actualColumns, StringComparer.Ordinal))
@@ -46,7 +50,11 @@ public static class RowComparer
 
             for (var column = 0; column < expected.Columns.Count; column++)
             {
-                var problem = CellProblem(columnTypes[column], expected.Rows[row][column], actualRows[row][column]);
+                var problem = CellProblem(
+                    columnTypes[column],
+                    expected.Rows[row][column],
+                    actualRows[row][column],
+                    averageColumns is not null && averageColumns.Contains(expected.Columns[column]) ? AverageTolerance : DoubleTolerance);
                 if (problem is not null)
                 {
                     problems.Add($"row {row}, column '{expected.Columns[column]}': {problem}");
@@ -58,7 +66,7 @@ public static class RowComparer
     }
 
     /// <summary>Why <paramref name="actual"/> is not <paramref name="expected"/> under XEQ-3 for <paramref name="type"/>, or null when equal.</summary>
-    public static string? CellProblem(FieldType type, JsonElement expected, object? actual)
+    public static string? CellProblem(FieldType type, JsonElement expected, object? actual, double tolerance = DoubleTolerance)
     {
         var expectedNull = expected.ValueKind == JsonValueKind.Null;
         var actualNull = actual is null or DBNull;
@@ -75,7 +83,7 @@ public static class RowComparer
             FieldType.Boolean => ToBoolean(actual!) == expected.GetBoolean(),
             FieldType.String => string.Equals(Convert.ToString(actual, CultureInfo.InvariantCulture), expected.GetString(), StringComparison.Ordinal),
             FieldType.Decimal => ToDecimal(actual!) == ToDecimal(expected),
-            FieldType.Double => WithinTolerance(ToDouble(actual!), ToDouble(expected)),
+            FieldType.Double => WithinTolerance(ToDouble(actual!), ToDouble(expected), tolerance),
             FieldType.Date => ToDate(actual!) == DateOnly.ParseExact(expected.GetString()!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
             FieldType.Datetime => ToInstant(actual!) == ToInstant(expected.GetString()!),
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown FieldType.")
@@ -84,9 +92,9 @@ public static class RowComparer
         return equal ? null : $"expected {Describe(expected)}, got {Convert.ToString(actual, CultureInfo.InvariantCulture)}";
     }
 
-    /// <summary>|a − b| ≤ 1e-9 · max(|a|, |b|), and exact when either side is 0 (XEQ-3).</summary>
-    public static bool WithinTolerance(double a, double b) =>
-        a == b || (a != 0 && b != 0 && Math.Abs(a - b) <= DoubleTolerance * Math.Max(Math.Abs(a), Math.Abs(b)));
+    /// <summary>|a − b| ≤ tolerance · max(|a|, |b|) (1e-9 by default), and exact when either side is 0 (XEQ-3).</summary>
+    public static bool WithinTolerance(double a, double b, double tolerance = DoubleTolerance) =>
+        a == b || (a != 0 && b != 0 && Math.Abs(a - b) <= tolerance * Math.Max(Math.Abs(a), Math.Abs(b)));
 
     private static string Describe(JsonElement element) => element.ValueKind == JsonValueKind.Null ? "null" : element.GetRawText();
 

@@ -44,7 +44,7 @@ internal static class ExecutionAssertions
 
         var expected = ((ExpectRows)expectation).Result;
         var types = ColumnTypes.Resolve(fixture.Schema, fixture.Request, expected.Columns);
-        var problems = RowComparer.Compare(expected, types, actual.Columns, actual.Rows);
+        var problems = RowComparer.Compare(expected, types, actual.Columns, actual.Rows, ColumnTypes.AverageColumns(fixture.Request, expected.Columns));
         if (problems.Count > 0)
         {
             Assert.Fail(

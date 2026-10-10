@@ -126,6 +126,22 @@ public class AgGridRequestParserSortPagingTests
     }
 
     [Fact]
+    public void Zero_Width_Window_Throws_PageSpecValidationException()
+    {
+        var request = string.Format(Envelope, "100", "100", "[]");
+
+        Assert.Throws<PageSpecValidationException>(() => Parse(request));
+    }
+
+    [Fact]
+    public void Adversarial_027_Zero_Width_Window_Is_Refused_Before_Compilation()
+    {
+        var path = RepoPaths.Fixture("adversarial", "027-zero-width-page-window", "agGridRequest.json");
+
+        Assert.Throws<PageSpecValidationException>(() => AgGridRequestParser.Parse(File.ReadAllText(path)));
+    }
+
+    [Fact]
     public void EndRow_Beyond_Int32_Range_Throws_MalformedRequest_Not_An_Unhandled_FormatException()
     {
         var request = string.Format(Envelope, "0", "99999999999", "[]");

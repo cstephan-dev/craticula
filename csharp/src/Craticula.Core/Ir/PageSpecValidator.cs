@@ -24,4 +24,22 @@ public static class PageSpecValidator
                 "(ir.schema.json requires startRow >= 0 and endRow >= startRow).");
         }
     }
+
+    /// <summary>
+    /// The wire-request rule (<c>semantics.md</c>, "The page window is non-empty"): <see cref="Validate"/> plus
+    /// <c>endRow &gt; startRow</c>. A zero-width window (<c>startRow == endRow</c>) is refused before any compilation,
+    /// the same on every backend, instead of reaching an engine that rejects it (T-SQL error 10744) or answering
+    /// an empty page on the others. <see cref="Validate"/> stays the IR-level check, which keeps allowing a
+    /// zero-size <see cref="RangePage"/> because an adapter's count-only query is one.
+    /// </summary>
+    public static void ValidateRequestWindow(PageSpec page)
+    {
+        Validate(page);
+        if (page is RangePage { } rangePage && rangePage.EndRow == rangePage.StartRow)
+        {
+            throw new PageSpecValidationException(
+                $"The page window is empty: startRow={rangePage.StartRow}, endRow={rangePage.EndRow} " +
+                "(a request needs endRow > startRow; endRow is exclusive).");
+        }
+    }
 }

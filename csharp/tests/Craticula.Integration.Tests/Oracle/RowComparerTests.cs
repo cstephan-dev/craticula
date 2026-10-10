@@ -50,6 +50,30 @@ public class RowComparerTests
     }
 
     [Fact]
+    public void An_Average_Column_Uses_The_Looser_1e6_Tolerance()
+    {
+        // SQL Server's decimal(38,6) average of 10.00, 10.00, 10.01 against the exact 10.00333333...
+        Assert.NotNull(Problem(FieldType.Double, "10.003333333333", 10.003333));
+        Assert.Null(RowComparer.CellProblem(FieldType.Double, Json("10.003333333333"), 10.003333, RowComparer.AverageTolerance));
+        Assert.NotNull(RowComparer.CellProblem(FieldType.Double, Json("10.0"), 10.001, RowComparer.AverageTolerance));
+        Assert.NotNull(RowComparer.CellProblem(FieldType.Double, Json("0"), 1e-12, RowComparer.AverageTolerance));
+    }
+
+    [Fact]
+    public void Compare_Applies_The_Average_Tolerance_Only_To_The_Named_Columns()
+    {
+        var expected = new ExpectedResult(["avg", "ratio"], [[Json("10.003333333333"), Json("10.003333333333")]]);
+        var types = new[] { FieldType.Double, FieldType.Double };
+        object?[] row = [10.003333, 10.003333];
+        var averages = new HashSet<string> { "avg" };
+
+        var problems = RowComparer.Compare(expected, types, ["avg", "ratio"], [row], averages);
+
+        Assert.Single(problems);
+        Assert.Contains("'ratio'", problems[0]);
+    }
+
+    [Fact]
     public void Int64_And_Boolean_Accept_Engine_Spellings()
     {
         Assert.Null(Problem(FieldType.Int64, "42", 42));

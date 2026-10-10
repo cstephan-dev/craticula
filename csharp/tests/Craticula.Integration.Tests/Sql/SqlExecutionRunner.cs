@@ -59,7 +59,7 @@ internal static class SqlExecutionRunner
         IReadOnlyList<string> problems;
         try
         {
-            problems = RowComparer.Compare(expected, types, logical, result.Rows);
+            problems = RowComparer.Compare(expected, types, logical, result.Rows, ColumnTypes.AverageColumns(fixture.Request, expected.Columns));
         }
         catch (Exception exception) when (exception is InvalidCastException or FormatException or InvalidOperationException)
         {
