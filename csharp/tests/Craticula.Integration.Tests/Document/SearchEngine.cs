@@ -146,33 +146,8 @@ internal static class SearchEngine
         var index = "xeq_" + Guid.NewGuid().ToString("N");
         try
         {
-            var schema = fixture.Schema with { Source = index };
-            await Send(http, HttpMethod.Put, index, BuildMapping(schema).ToJsonString(), "application/json", "create index").ConfigureAwait(false);
-            await Seed(http, index, schema, fixture).ConfigureAwait(false);
-
-            var request = PreparedRequest.For(fixture, schema);
-            var compiled = Compile(request);
-            var body = compiled.ToArtifact();
-
-            // EXP-2's `page: none` compiles to a hit query with NO `size`, which the engine answers with its default
-            // of 10 hits; the adapter streams such an export (PIT + search_after). The harness reads the whole result
-            // in one request instead, and asserts it fits, so a truncated export can never pass as a short one.
-            var unpaged = body["size"] is null && body["aggs"] is null;
-            if (unpaged)
-            {
-                body["size"] = ExportWindow;
-                body["track_total_hits"] = true;
-            }
-
-            var response = await Send(http, HttpMethod.Post, $"{index}/_search", body.ToJsonString(), "application/json", "search", refuse: true).ConfigureAwait(false);
-            using var document = JsonDocument.Parse(response);
-            if (unpaged)
-            {
-                var total = document.RootElement.GetProperty("hits").GetProperty("total").GetProperty("value").GetInt64();
-                Assert.True(total <= ExportWindow, $"the unpaginated result has {total} hits, more than the harness's single-request window of {ExportWindow}");
-            }
-
-            return Map(document.RootElement, request, compiled);
+            await SeedAsync(http, index, fixture).ConfigureAwait(false);
+            return await QueryAsync(http, index, fixture).ConfigureAwait(false);
         }
         finally
         {
@@ -185,6 +160,43 @@ internal static class SearchEngine
                 // Best-effort: a leaked index costs the container's memory, never another fixture's result.
             }
         }
+    }
+
+    /// <summary>Creates the index named <paramref name="index"/> mapped from the fixture's schema and bulk-seeds it; the caller owns (and deletes) it.</summary>
+    public static async Task SeedAsync(HttpClient http, string index, ExecutionFixture fixture)
+    {
+        var schema = fixture.Schema with { Source = index };
+        await Send(http, HttpMethod.Put, index, BuildMapping(schema).ToJsonString(), "application/json", "create index").ConfigureAwait(false);
+        await Seed(http, index, schema, fixture).ConfigureAwait(false);
+    }
+
+    /// <summary>Compiles the fixture's request against <paramref name="index"/>, runs it and maps the hits or buckets onto the logical columns.</summary>
+    public static async Task<EngineRows> QueryAsync(HttpClient http, string index, ExecutionFixture fixture)
+    {
+        var schema = fixture.Schema with { Source = index };
+        var request = PreparedRequest.For(fixture, schema);
+        var compiled = Compile(request);
+        var body = compiled.ToArtifact();
+
+        // EXP-2's `page: none` compiles to a hit query with NO `size`, which the engine answers with its default
+        // of 10 hits; the adapter streams such an export (PIT + search_after). The harness reads the whole result
+        // in one request instead, and asserts it fits, so a truncated export can never pass as a short one.
+        var unpaged = body["size"] is null && body["aggs"] is null;
+        if (unpaged)
+        {
+            body["size"] = ExportWindow;
+            body["track_total_hits"] = true;
+        }
+
+        var response = await Send(http, HttpMethod.Post, $"{index}/_search", body.ToJsonString(), "application/json", "search", refuse: true).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(response);
+        if (unpaged)
+        {
+            var total = document.RootElement.GetProperty("hits").GetProperty("total").GetProperty("value").GetInt64();
+            Assert.True(total <= ExportWindow, $"the unpaginated result has {total} hits, more than the harness's single-request window of {ExportWindow}");
+        }
+
+        return Map(document.RootElement, request, compiled);
     }
 
     private static SearchQuery Compile(PreparedRequest request)

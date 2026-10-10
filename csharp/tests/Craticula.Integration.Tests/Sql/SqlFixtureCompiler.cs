@@ -16,14 +16,17 @@ namespace Craticula.Integration.Tests.Containers.Sql;
 /// </summary>
 internal static class SqlFixtureCompiler
 {
-    public static SqlQuery Compile(ExecutionFixture fixture, ISqlDialect dialect)
+    public static SqlQuery Compile(ExecutionFixture fixture, ISqlDialect dialect) =>
+        Compile(File.ReadAllText(Path.Combine(fixture.Directory, "agGridRequest.json")), fixture.Schema, dialect);
+
+    /// <summary>The same pipeline for a request that is text rather than a fixture file (the parity property's generated cases).</summary>
+    public static SqlQuery Compile(string requestJson, GridSchema schema, ISqlDialect dialect)
     {
-        var requestJson = File.ReadAllText(Path.Combine(fixture.Directory, "agGridRequest.json"));
-        var options = new AgGridParseOptions { Schema = fixture.Schema, Clock = ClockFor(requestJson) };
+        var options = new AgGridParseOptions { Schema = schema, Clock = ClockFor(requestJson) };
 
         return IsSetValuesRequest(requestJson)
-            ? CompileSetValues(requestJson, options, fixture.Schema, dialect)
-            : CompileRowFetch(requestJson, options, fixture.Schema, dialect);
+            ? CompileSetValues(requestJson, options, schema, dialect)
+            : CompileRowFetch(requestJson, options, schema, dialect);
     }
 
     private static SqlQuery CompileRowFetch(string requestJson, AgGridParseOptions options, GridSchema schema, ISqlDialect dialect)

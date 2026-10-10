@@ -105,7 +105,28 @@ public abstract class SqlEngine : IAsyncLifetime
     {
         await using var connection = await ConnectAsync();
         await CreateAndSeedAsync(connection, fixture);
+        return await ExecuteQueryAsync(connection, query);
+    }
 
+    /// <summary>
+    /// Starts the engine if needed and creates and seeds the fixture's table once, leaving it for any number of
+    /// <see cref="QueryAsync"/> calls (the parity property seeds once per run and runs every generated case against it).
+    /// </summary>
+    public async Task SeedAsync(ExecutionFixture fixture)
+    {
+        await using var connection = await ConnectAsync();
+        await CreateAndSeedAsync(connection, fixture);
+    }
+
+    /// <summary>Runs a compiled query against what <see cref="SeedAsync"/> left behind.</summary>
+    public async Task<EngineResult> QueryAsync(SqlQuery query)
+    {
+        await using var connection = await ConnectAsync();
+        return await ExecuteQueryAsync(connection, query);
+    }
+
+    private async Task<EngineResult> ExecuteQueryAsync(DbConnection connection, SqlQuery query)
+    {
         var sql = SqlMutation.Apply(query.Sql);
         await using var command = CreateCommand(connection);
         command.CommandText = PrepareSql(sql, query.Parameters.Count);
@@ -217,20 +238,52 @@ public abstract class SqlEngine : IAsyncLifetime
 public sealed record EngineResult(IReadOnlyList<string> Columns, IReadOnlyList<IReadOnlyList<object?>> Rows, string SentSql);
 
 /// <summary>
-/// A test-only fault injection, switched by <c>CRATICULA_XEQ_MUTATION=drop-collate</c>, for the mutation Definition of
-/// Done (#1655): it removes every <c>COLLATE &lt;name&gt;</c> from the compiled SQL before it is sent (and, on MySQL,
-/// which spells no collation in SQL, declares the string columns <c>utf8mb4_bin</c> instead, the DDL equivalent), so a
-/// tier that cannot see a silently ignored collation shows up as passing under it. Never set in a normal run.
+/// A test-only fault injection, switched by <c>CRATICULA_XEQ_MUTATION=&lt;name&gt;</c>, for the mutation Definition of
+/// Done (#1655, #1656): each name damages the compiled SQL the way a real compiler defect would, so a tier or a property
+/// that cannot see the damage shows up as passing under it. Never set in a normal run. The names:
+/// <list type="bullet">
+/// <item><c>drop-collate</c>: removes every <c>COLLATE &lt;name&gt;</c> from the compiled SQL before it is sent (and, on MySQL,
+/// which spells no collation in SQL, declares the string columns <c>utf8mb4_bin</c> instead, the DDL equivalent);</item>
+/// <item><c>drop-nulls</c>: removes every <c>NULLS FIRST</c> / <c>NULLS LAST</c> (SEM-3's null placement) from the SQL of the engines that
+/// spell it that way, PostgreSQL and SQLite, leaving each engine's own default;</item>
+/// <item><c>drop-tiebreaker</c>: removes the final stableKey key SEM-6 appends to an ORDER BY that has other keys, on every SQL engine.</item>
+/// </list>
 /// </summary>
 public static class SqlMutation
 {
     public const string Variable = "CRATICULA_XEQ_MUTATION";
 
-    public static bool DropCollate =>
-        string.Equals(Environment.GetEnvironmentVariable(Variable), "drop-collate", StringComparison.OrdinalIgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex Nulls =
+        new(@"\s+NULLS\s+(FIRST|LAST)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
-    public static string Apply(string sql) =>
-        DropCollate ? System.Text.RegularExpressions.Regex.Replace(sql, @"\s+COLLATE\s+[A-Za-z0-9_\.]+", string.Empty) : sql;
+    // The id key of each dialect's spelling (PostgreSQL/SQLite, MySQL, SQL Server), as the last key before the page clause.
+    private static readonly System.Text.RegularExpressions.Regex Tiebreaker = new(
+        @",\s*(?:""id""\s+ASC\s+NULLS\s+LAST|ISNULL\(`id`\)\s+ASC,\s*`id`\s+ASC|CASE\s+WHEN\s+\[id\]\s+IS\s+NULL\s+THEN\s+1\s+ELSE\s+0\s+END\s+ASC,\s*\[id\]\s+ASC)(?=\s+(?:LIMIT|OFFSET)\b)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static string? Name => Environment.GetEnvironmentVariable(Variable);
+
+    private static bool Is(string name) => string.Equals(Name, name, StringComparison.OrdinalIgnoreCase);
+
+    public static bool DropCollate => Is("drop-collate");
+
+    public static string Apply(string sql) => Apply(sql, Name);
+
+    /// <summary>The same rewrite for a named mutation (or none), without reading the environment, so it can be tested.</summary>
+    public static string Apply(string sql, string? mutation)
+    {
+        if (string.Equals(mutation, "drop-collate", StringComparison.OrdinalIgnoreCase))
+        {
+            return System.Text.RegularExpressions.Regex.Replace(sql, @"\s+COLLATE\s+[A-Za-z0-9_\.]+", string.Empty);
+        }
+
+        if (string.Equals(mutation, "drop-nulls", StringComparison.OrdinalIgnoreCase))
+        {
+            return Nulls.Replace(sql, string.Empty);
+        }
+
+        return string.Equals(mutation, "drop-tiebreaker", StringComparison.OrdinalIgnoreCase) ? Tiebreaker.Replace(sql, string.Empty) : sql;
+    }
 }
 
 /// <summary>
@@ -306,12 +359,19 @@ public sealed class PostgresEngine : SqlEngine
         command.Parameters.Add(parameter);
     }
 
+    // Typed arrays for string, int64, double and boolean only. decimal, date and datetime arrays are intentionally NOT
+    // typed here: the compiler binds those values as strings (SQL-4, AR-7), and Bug #2304 (PostgreSQL refuses
+    // numeric/date/timestamptz = text) must stay visible; the parity generator excludes those sets until it is fixed.
     private static NpgsqlParameter ArrayParameter(IReadOnlyList<object?> list) =>
         list.All(item => item is string)
             ? new NpgsqlParameter { Value = list.Select(item => (string)item!).ToArray(), NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text }
             : list.All(item => item is long)
                 ? new NpgsqlParameter { Value = list.Select(item => (long)item!).ToArray() }
-                : throw new NotSupportedException("The harness binds a set-membership array of strings or int64 only.");
+                : list.All(item => item is double)
+                    ? new NpgsqlParameter { Value = list.Select(item => (double)item!).ToArray() }
+                    : list.All(item => item is bool)
+                        ? new NpgsqlParameter { Value = list.Select(item => (bool)item!).ToArray() }
+                        : throw new NotSupportedException("The harness binds a set-membership array of strings, int64, doubles or booleans only.");
 }
 
 /// <summary>

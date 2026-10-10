@@ -2821,3 +2821,77 @@ covers both, and the two forms are not mixed), a mandatory `reason` naming the r
 backend refuses the query; the harness asserts that it does). A backend with an entry is held to that entry and only
 that entry; a backend without one must match the fixture's main result. An `error` entry is asserted on purpose: a fix
 that makes the error disappear is a change someone should notice and delete the entry for, not a pass nobody sees.
+
+## Addendum — cross-backend parity property (PAR-1..PAR-4; not numbered SEM-*, for the same reason as the XEQ addendum above)
+
+T-3 (TRD §11) asks that one request, run over one seeded dataset on more than one backend, return the same rows. XEQ
+grades that for requests an author wrote by hand; this addendum states it as a **property** over generated requests, so
+a combination nobody thought to write down is still checked. It adds no query semantics: every rule it relies on is
+stated where it is cited, and **this addendum is the only place the property and its register are stated**; the test
+code and the fixture README point here.
+
+**PAR-1. The property.** For a seeded dataset (XEQ-2's encodings: unique non-null stableKey, no `''`, datetimes at
+millisecond precision) and a request that is an **ordinary row request** (no `rowGroupCols`, `valueCols`,
+`setValuesRequest` or `exportFormat`), every backend that can run the request returns the **same sequence of stableKey
+values, in order, window included**: the rows `startRow` up to `endRow` of the ordered result, not merely the same set.
+Order is total over such a key (SEM-6's tiebreaker, SEM-3's null placement), so two correct engines cannot differ in it
+(XEQ-3). **All engine pairs are compared**, not one reference engine against the rest: each engine runs the case once and
+every pair of its id sequences must be equal, so a failure names the two engines that disagree. **The engines are the
+seven of T-2** (TRD §11): PostgreSQL, SQL Server, MySQL, SQLite, MongoDB, OpenSearch and Elasticsearch, so 21 pairs;
+Oracle is not part of the property (OQ-6). A backend that refuses
+a request the generator produced (an error, or a compile rejection) fails the property, because the generator only
+produces requests inside SEC-3's limits and the profile of PAR-3. The property is stated at the **IR level**: the case
+is an AG Grid wire request, parsed and validated by the real adapter and filter pipeline into the IR every compiler
+receives, with SEC-3's default limits and nothing stubbed. A generated case is a pure function of `(seed, index)`, so
+a failure is replayed by those two values alone.
+
+**PAR-2. What the property does not cover.** It compares id sequences, so it covers only requests that have one.
+Grouped levels (GRP-1, including AGG-5's null bucket on Search and GRP-2's accepted divergences #3 and #4), drill-down
+leaves, BM-3 distinct-values queries and exports (EXP-1) have no stableKey sequence comparable across engines, or have
+a documented different one. They stay with their fixtures under XEQ-1..XEQ-4 (for example `group-aggregation/001`,
+`group-aggregation/017`, `page-export/010`). Column values other than the key are XEQ-3's concern, not PAR-1's.
+
+**PAR-3. The divergence register.** The generator **excludes** each construct below because a cross-engine difference
+is recorded for it, or because the rule it depends on is pinned by a fixture that the property would only restate. A
+construct is on the register only with the rule that explains it and the one fixture that covers it; a construct with
+neither is not excluded and the generator must produce it.
+
+| Excluded construct | Rule | Covering fixture |
+|---|---|---|
+| A string field in a sort key (`sortModel` on a text column); the string field itself stays filterable | SEM-1: a string sorts under the field's one collation, and the order of case variants and of non-letter characters is each engine's own (XEQ-3 compares by code point, not by collation) | `sort-paging/001-single-key-string-asc-nulls-last-default` |
+| A `caseSensitivity: "sensitive"` string field, therefore also a request mixing case-sensitive and case-insensitive comparisons | SEM-1 and MDB-9's accepted divergence #5 (it sits beside GRP-2's #3 and #4): MongoDB has one query-level collation | `dialect-parity/023-sem1-mixed-case-sensitivity-one-request` |
+| An empty string `''` as a seeded value or a filter bound | SQL-7 and XEQ-2: Oracle stores `''` as NULL | `dialect-parity/019-sem2-blank-notblank-exact-negation` |
+| `searchMode: "analyzed"` on a text field | SEM-7: tokenized matching is an explicit opt-in whose result differs from substring semantics by design | `dialect-parity/013-sem7-searchmode-analyzed-optin` |
+| Pattern metacharacters in a `contains`, `startsWith` or `endsWith` operand (the operands are plain letters and digits) | SEM-7, MDB-11 and SEC-4: the escape alphabet differs per engine and is graded as artifact text | `dialect-parity/020-sem7-mongo-regex-full-metacharacter-escaping` |
+| A `datetime` seed or bound finer than a millisecond, or a SQLite seed written without three fractional digits | SEM-4's SQLite fixed-width host obligation and its bound-rounding rule; XEQ-2's millisecond cap | `dialect-parity/025-sqlite-datetime-fixed-width` |
+| A `groupable` string field | GRP-2's accepted divergence #4 (MySQL's binary column for exact buckets makes comparisons case-sensitive) and #3 | `group-aggregation/017-set-filter-values-excludes-own-field-filter` |
+| The ordering operators (`gt`, `gte`, `lt`, `lte`) and `inRange` on a string field; `eq`, `neq`, the substring family, `in`, `notIn` and the blank tests on it stay | OSE-6 (its `range` / `sort` row: a case-insensitive `string` is ordered on `search.normalizedSubField`, and a schema without one is a compiler error, so the Search engines refuse) and SEM-1 (case folding: `range` has no `case_insensitive` parameter, so the fold is an index-time obligation the parity schema does not pay) | `dialect-parity/015-sem1-case-insensitive-ordering-gt` pins the ordering semantics on a schema that declares the normalizer; **no fixture pins the refusal itself**, which is pinned by the Search compiler unit test `Craticula.Search.Tests` `SearchQueryOperatorTests.A_Case_Insensitive_String_Range_On_A_Field_With_No_Normalizer_Sub_Field_Is_Refused` |
+
+A set-membership operator (`in`, `notIn`) is **not** on the register, except for the known defect below: the generator
+produces it on string, int64, double and boolean fields. The last row is the one row whose covering fixture does not pin the
+exclusion's cause (the refusal); it is kept because ordering strings is meaningful only where the schema pays SEM-1's
+index-time cost, and the fixture shows the result on such a schema.
+
+**Known defects (temporary generator exclusions; not accepted divergences).** A row here is a true gap the property
+found, tracked by a Bug. It is not a divergence the Tech Lead accepts, so it has no `allowedDivergence` fixture and PAR-4's
+fixture rule does not apply to it; the exclusion is temporary and exists only so the default run stays green while the Bug
+is open.
+
+| Excluded construct | Rule | Status | Removal condition | Covering fixture |
+|---|---|---|---|---|
+| Set membership (`in`, `notIn`) on a `decimal`, `date` or `datetime` field | SQL-4 (one array parameter for the set) and AR-7 (those values are strings): on PostgreSQL the array is `text[]`, so `numeric = text`, `date = text` and `timestamptz = text` are refused | **KNOWN DEFECT**, Bug #2304 (Feature #1624) | When #2304 is fixed the generator produces these operators again and this row is deleted | none yet (the Bug's criterion 2 adds fixtures) |
+
+The first row is a generator rule rather than an XEQ-4 entry: no fixture declares an `allowedDivergence` for string
+order, because `sort-paging/001` agrees on every engine for the letters it seeds. The fixture is named as the evidence
+of what is pinned, and PAR-4 applies the moment a broader string sort is shown to differ. As of the first runs (2026-10-10: the default seed and several other seeds, seven engines, all 21 pairs), the property
+found one true gap: set membership on decimal, date and datetime fields is refused by PostgreSQL. That is a **defect**
+(Bug #2304, registered above as a known defect), not a divergence, and **no accepted divergence has been recorded by the
+property yet**; apart from the known defect the register lists only generator exclusions.
+
+**PAR-4. A found divergence becomes a fixture.** When the property finds a difference between engines, the outcome is
+one of: a defect fixed (a compiler or a spec correction), or a divergence the Tech Lead accepts. An accepted divergence
+is **promoted to a fixture** whose `expectedRows.json` carries an `allowedDivergence` entry (XEQ-4) with its mandatory
+`reason`, and a row is added to the register in PAR-3 naming that fixture. A divergence is never excused by a generator
+rule alone: excluding a construct from the generator without a register row and a covering fixture is not allowed.
+A known defect is not an accepted divergence and the generator alone does not excuse it: its exclusion is temporary, is
+tracked by its Bug, and ends when the Bug is fixed (the row in the known-defects table is then deleted).
