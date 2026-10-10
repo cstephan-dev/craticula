@@ -105,7 +105,28 @@ public abstract class SqlEngine : IAsyncLifetime
     {
         await using var connection = await ConnectAsync();
         await CreateAndSeedAsync(connection, fixture);
+        return await ExecuteQueryAsync(connection, query);
+    }
 
+    /// <summary>
+    /// Starts the engine if needed and creates and seeds the fixture's table once, leaving it for any number of
+    /// <see cref="QueryAsync"/> calls (the parity property seeds once per run and runs every generated case against it).
+    /// </summary>
+    public async Task SeedAsync(ExecutionFixture fixture)
+    {
+        await using var connection = await ConnectAsync();
+        await CreateAndSeedAsync(connection, fixture);
+    }
+
+    /// <summary>Runs a compiled query against what <see cref="SeedAsync"/> left behind.</summary>
+    public async Task<EngineResult> QueryAsync(SqlQuery query)
+    {
+        await using var connection = await ConnectAsync();
+        return await ExecuteQueryAsync(connection, query);
+    }
+
+    private async Task<EngineResult> ExecuteQueryAsync(DbConnection connection, SqlQuery query)
+    {
         var sql = SqlMutation.Apply(query.Sql);
         await using var command = CreateCommand(connection);
         command.CommandText = PrepareSql(sql, query.Parameters.Count);

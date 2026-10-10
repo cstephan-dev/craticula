@@ -64,51 +64,64 @@ internal static class MongoEngine
     public static async Task<EngineRows> RunAsync(IMongoClient client, ExecutionFixture fixture)
     {
         var databaseName = "xeq_" + Guid.NewGuid().ToString("N");
-        var database = client.GetDatabase(databaseName);
         try
         {
-            var schema = fixture.Schema;
-            var collection = database.GetCollection<BsonDocument>(schema.Source);
-            var documents = fixture.Seed.Select(row => ToDocument(schema, row)).ToList();
-            if (documents.Count > 0)
-            {
-                await collection.InsertManyAsync(documents).ConfigureAwait(false);
-            }
-
-            var request = PreparedRequest.For(fixture, schema);
-            var (query, columns) = Compile(request);
-
-            var stages = query.Pipeline.Select(stage => BsonDocument.Parse(stage.ToJsonString())).ToList();
-            var options = query.Collation is null
-                ? null
-                : new AggregateOptions { Collation = Collation.FromBsonDocument(BsonDocument.Parse(query.Collation.ToJsonString())) };
-
-            List<BsonDocument> results;
-            try
-            {
-                results = await collection.Aggregate<BsonDocument>(stages, options).ToListAsync().ConfigureAwait(false);
-            }
-            catch (MongoException exception)
-            {
-                throw new EngineRefusedException($"MongoDB rejected the pipeline: {exception.Message}", exception);
-            }
-
-            // XEQ-3: map onto the LOGICAL columns, dropping _id (kept only where it IS the group key / BM-3 value).
-            var plan = request.Plan;
-            var keys = request.IsSetValues
-                ? ["_id"]
-                : plan is { GroupColumn: not null } ? ["_id", .. plan.Aggregations.Select(a => a.OutputName)] : columns;
-            var rows = results
-                .Select(document => (IReadOnlyList<object?>)keys
-                    .Select(key => ToClr(document.TryGetValue(key, out var value) ? value : BsonNull.Value))
-                    .ToList())
-                .ToList();
-            return new EngineRows(columns, rows);
+            var collection = await SeedAsync(client, databaseName, fixture).ConfigureAwait(false);
+            return await QueryAsync(collection, fixture).ConfigureAwait(false);
         }
         finally
         {
             await client.DropDatabaseAsync(databaseName).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>Seeds a collection from the fixture's schema and seed rows; the caller owns (and drops) the database.</summary>
+    public static async Task<IMongoCollection<BsonDocument>> SeedAsync(IMongoClient client, string databaseName, ExecutionFixture fixture)
+    {
+        var schema = fixture.Schema;
+        var collection = client.GetDatabase(databaseName).GetCollection<BsonDocument>(schema.Source);
+        var documents = fixture.Seed.Select(row => ToDocument(schema, row)).ToList();
+        if (documents.Count > 0)
+        {
+            await collection.InsertManyAsync(documents).ConfigureAwait(false);
+        }
+
+        return collection;
+    }
+
+    /// <summary>Compiles the fixture's request, runs it against an already seeded collection and maps the documents onto the logical columns.</summary>
+    public static async Task<EngineRows> QueryAsync(IMongoCollection<BsonDocument> collection, ExecutionFixture fixture)
+    {
+        var schema = fixture.Schema;
+        var request = PreparedRequest.For(fixture, schema);
+        var (query, columns) = Compile(request);
+
+        var stages = query.Pipeline.Select(stage => BsonDocument.Parse(stage.ToJsonString())).ToList();
+        var options = query.Collation is null
+            ? null
+            : new AggregateOptions { Collation = Collation.FromBsonDocument(BsonDocument.Parse(query.Collation.ToJsonString())) };
+
+        List<BsonDocument> results;
+        try
+        {
+            results = await collection.Aggregate<BsonDocument>(stages, options).ToListAsync().ConfigureAwait(false);
+        }
+        catch (MongoException exception)
+        {
+            throw new EngineRefusedException($"MongoDB rejected the pipeline: {exception.Message}", exception);
+        }
+
+        // XEQ-3: map onto the LOGICAL columns, dropping _id (kept only where it IS the group key / BM-3 value).
+        var plan = request.Plan;
+        var keys = request.IsSetValues
+            ? ["_id"]
+            : plan is { GroupColumn: not null } ? ["_id", .. plan.Aggregations.Select(a => a.OutputName)] : columns;
+        var rows = results
+            .Select(document => (IReadOnlyList<object?>)keys
+                .Select(key => ToClr(document.TryGetValue(key, out var value) ? value : BsonNull.Value))
+                .ToList())
+            .ToList();
+        return new EngineRows(columns, rows);
     }
 
     private static (MongoQuery Query, IReadOnlyList<string> Columns) Compile(PreparedRequest request)

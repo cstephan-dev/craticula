@@ -58,11 +58,7 @@ public sealed class ExecutionFixture
         var schema = GridSchema.Parse(File.ReadAllText(Path.Combine(dir, "schema.json")));
         var request = Parse(Path.Combine(dir, "agGridRequest.json")).RootElement.Clone();
 
-        var seed = Parse(Path.Combine(dir, "dataset.json")).RootElement.GetProperty("rows").EnumerateArray()
-            .Select(entry => new SeedRow(
-                entry.GetProperty("row").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone(), StringComparer.Ordinal),
-                entry.TryGetProperty("why", out var why) ? why.GetString() : null))
-            .ToList();
+        var seed = ReadSeed(Parse(Path.Combine(dir, "dataset.json")).RootElement);
 
         var expectedRoot = Parse(Path.Combine(dir, "expectedRows.json")).RootElement;
         var divergences = expectedRoot.TryGetProperty("allowedDivergence", out var list)
@@ -89,6 +85,32 @@ public sealed class ExecutionFixture
             Backends = backends
         };
     }
+
+    /// <summary>The seed rows of a <c>dataset.json</c> document (the shape of <c>fixtures/schemas/dataset.schema.json</c>).</summary>
+    public static IReadOnlyList<SeedRow> ReadSeed(JsonElement dataset) =>
+        dataset.GetProperty("rows").EnumerateArray()
+            .Select(entry => new SeedRow(
+                entry.GetProperty("row").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone(), StringComparer.Ordinal),
+                entry.TryGetProperty("why", out var why) ? why.GetString() : null))
+            .ToList();
+
+    /// <summary>
+    /// A fixture built in memory (the parity property's generated cases, T-3, PAR-1): a schema, a request and a seed with no
+    /// directory behind them and no expectation, because the property compares engines with each other, not with an oracle.
+    /// <see cref="Load"/> is the only way a fixture reads files; nothing here touches the disk.
+    /// </summary>
+    public static ExecutionFixture FromMemory(string name, GridSchema schema, string requestJson, IReadOnlyList<SeedRow> seed) =>
+        new()
+        {
+            Name = name,
+            Directory = string.Empty,
+            Schema = schema,
+            Request = Parse(requestJson, isText: true).RootElement.Clone(),
+            Seed = seed,
+            Expected = new ExpectedResult([], []),
+            Divergences = [],
+            Backends = []
+        };
 
     /// <summary>
     /// What <paramref name="backend"/> (and, on search, <paramref name="engine"/>) must do: the fixture's own
@@ -126,5 +148,6 @@ public sealed class ExecutionFixture
                 .Select(row => (IReadOnlyList<JsonElement>)row.EnumerateArray().Select(c => c.Clone()).ToList())
                 .ToList());
 
-    private static JsonDocument Parse(string path) => JsonDocument.Parse(File.ReadAllText(path));
+    private static JsonDocument Parse(string pathOrText, bool isText = false) =>
+        JsonDocument.Parse(isText ? pathOrText : File.ReadAllText(pathOrText));
 }
