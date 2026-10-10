@@ -11,8 +11,8 @@ using Xunit.Abstractions;
 namespace Craticula.Integration.Tests.Parity;
 
 /// <summary>
-/// Offline guards for two PAR-3 facts of the generator: set membership (<c>in</c>, <c>notIn</c>) is produced on string, int64, double
-/// and boolean fields (decimal, date and datetime are the known defect of Bug #2304), and every request it produces is compiled by all seven compilers (the four SQL dialects,
+/// Offline guards for two PAR-3 facts of the generator: set membership (<c>in</c>, <c>notIn</c>) is produced on all seven field types
+/// (decimal, date and datetime since Bug #2304 was fixed), and every request it produces is compiled by all seven compilers (the four SQL dialects,
 /// MongoDB, and the one Search compiler both Search engines share) and by the real parser and pipeline without a refusal.
 /// It also holds the SEC-3 depth guarantee (<c>FilterDepth</c> of a generated tree is at most 8) over a 100,000-case sweep.
 /// </summary>
@@ -25,12 +25,8 @@ public sealed class ParitySetOperatorTests(ITestOutputHelper output)
     private static readonly ISqlDialect[] Dialects =
         [PostgresDialect.Instance, MssqlDialect.Instance, MySqlDialect.Instance, SqliteDialect.Instance];
 
-    // PAR-3: set membership is produced on string, int64, double and boolean fields; on decimal, date and datetime it is a
-    // KNOWN DEFECT (Bug #2304) and is excluded while ParityRequestGenerator.ExcludesKnownDefectSets is true.
-    private static readonly FieldType[] KnownDefectTypes = [FieldType.Decimal, FieldType.Date, FieldType.Datetime];
-
     [Fact]
-    public void In_and_notIn_are_generated_per_field_type_as_the_register_says()
+    public void In_and_notIn_are_generated_per_field_type_on_all_seven_types()
     {
         var seen = new HashSet<(FieldType Type, ComparisonOperator Op)>();
         foreach (var index in Enumerable.Range(0, 200))
@@ -43,37 +39,24 @@ public sealed class ParitySetOperatorTests(ITestOutputHelper output)
 
         foreach (var type in Enum.GetValues<FieldType>())
         {
-            // Removing the #2304 exclusion is one line plus this flip: the known-defect types then expect the operators too.
-            var expected = !(ParityRequestGenerator.ExcludesKnownDefectSets && KnownDefectTypes.Contains(type));
-            Assert.Equal(expected, seen.Contains((type, ComparisonOperator.In)));
-            Assert.Equal(expected, seen.Contains((type, ComparisonOperator.NotIn)));
-        }
-
-        foreach (var type in new[] { FieldType.String, FieldType.Int64, FieldType.Double, FieldType.Boolean })
-        {
             Assert.Contains((type, ComparisonOperator.In), seen);
             Assert.Contains((type, ComparisonOperator.NotIn), seen);
         }
     }
 
-    // Documents the root cause of Bug #2304 (PAR-3 known defect): the Postgres artifact binds the set of a decimal, date or
-    // datetime field as one array parameter whose elements are strings, so PostgreSQL types it text[] and refuses
-    // numeric/date/timestamptz = text. FLIP WHEN #2304 IS FIXED (the elements will be typed, or the SQL will cast).
+    // SQL-4 (Bug #2304): the Postgres artifact casts the array of a decimal, date or datetime set to the column type.
     [Theory]
-    [InlineData("price", "decimal", "12.50", "")]
-    [InlineData("born", "date", "2020-01-02", "")]
-    [InlineData("seen", "datetime", "2020-01-02T03:04:05.000Z", ",\"zone\":\"UTC\"")]
-    public void Known_defect_2304_a_postgres_set_on_decimal_date_datetime_binds_a_string_array(string field, string type, string value, string extra)
+    [InlineData("price", "decimal", "12.50", "", "::numeric[]")]
+    [InlineData("born", "date", "2020-01-02", "", "::date[]")]
+    [InlineData("seen", "datetime", "2020-01-02T03:04:05.000Z", ",\"zone\":\"UTC\"", "::timestamptz[]")]
+    public void A_postgres_set_on_decimal_date_datetime_carries_the_array_cast(string field, string type, string value, string extra, string cast)
     {
         var json = "{\"startRow\":0,\"endRow\":10,\"rowGroupCols\":[],\"valueCols\":[],\"pivotCols\":[],\"pivotMode\":false,"
             + "\"groupKeys\":[],\"sortModel\":[],\"customFilters\":{\"type\":\"comparison\",\"field\":\"" + field
             + "\",\"op\":\"in\",\"values\":[{\"type\":\"" + type + "\",\"value\":\"" + value + "\"" + extra + "}]}}";
         var query = SqlFixtureCompiler.Compile(json, Schema, PostgresDialect.Instance);
 
-        var array = Assert.Single(query.Parameters, p => p is System.Collections.IEnumerable and not string);
-        var elements = ((System.Collections.IEnumerable)array!).Cast<object?>().ToList();
-        Assert.NotEmpty(elements);
-        Assert.All(elements, element => Assert.IsType<string>(element));
+        Assert.Contains(cast, query.Sql);
     }
 
     [Fact]
@@ -115,12 +98,6 @@ public sealed class ParitySetOperatorTests(ITestOutputHelper output)
         Assert.True(compiled >= 300);
         foreach (var type in Enum.GetValues<FieldType>())
         {
-            if (ParityRequestGenerator.ExcludesKnownDefectSets && KnownDefectTypes.Contains(type))
-            {
-                Assert.Equal(0, perType.GetValueOrDefault(type)); // Bug #2304: excluded while the constant is on
-                continue;
-            }
-
             Assert.True(perType.GetValueOrDefault(type) >= 10, $"too few {type} set-operator requests compiled");
         }
     }

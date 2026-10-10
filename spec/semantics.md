@@ -2882,31 +2882,23 @@ neither is not excluded and the generator must produce it.
 | A `groupable` string field | GRP-2's accepted divergence #4 (MySQL's binary column for exact buckets makes comparisons case-sensitive) and #3 | `group-aggregation/017-set-filter-values-excludes-own-field-filter` |
 | The ordering operators (`gt`, `gte`, `lt`, `lte`) and `inRange` on a string field; `eq`, `neq`, the substring family, `in`, `notIn` and the blank tests on it stay | OSE-6 (its `range` / `sort` row: a case-insensitive `string` is ordered on `search.normalizedSubField`, and a schema without one is a compiler error, so the Search engines refuse) and SEM-1 (case folding: `range` has no `case_insensitive` parameter, so the fold is an index-time obligation the parity schema does not pay) | `dialect-parity/015-sem1-case-insensitive-ordering-gt` pins the ordering semantics on a schema that declares the normalizer; **no fixture pins the refusal itself**, which is pinned by the Search compiler unit test `Craticula.Search.Tests` `SearchQueryOperatorTests.A_Case_Insensitive_String_Range_On_A_Field_With_No_Normalizer_Sub_Field_Is_Refused` |
 
-A set-membership operator (`in`, `notIn`) is **not** on the register, except for the known defect below: the generator
-produces it on string, int64, double and boolean fields. The last row is the one row whose covering fixture does not pin the
+A set-membership operator (`in`, `notIn`) is **not** on the register: the generator produces it on all seven field types
+(string, int64, double, decimal, boolean, date and datetime). The last row is the one row whose covering fixture does not pin the
 exclusion's cause (the refusal); it is kept because ordering strings is meaningful only where the schema pays SEM-1's
 index-time cost, and the fixture shows the result on such a schema.
-
-**Known defects (temporary generator exclusions; not accepted divergences).** A row here is a true gap the property
-found, tracked by a Bug. It is not a divergence the Tech Lead accepts, so it has no `allowedDivergence` fixture and PAR-4's
-fixture rule does not apply to it; the exclusion is temporary and exists only so the default run stays green while the Bug
-is open.
-
-| Excluded construct | Rule | Status | Removal condition | Covering fixture |
-|---|---|---|---|---|
-| Set membership (`in`, `notIn`) on a `decimal`, `date` or `datetime` field | SQL-4 (one array parameter for the set) and AR-7 (those values are strings): on PostgreSQL the array is `text[]`, so `numeric = text`, `date = text` and `timestamptz = text` are refused | **KNOWN DEFECT**, Bug #2304 (Feature #1624); the fix is specified in SQL-4 (tasks #2312-#2316) but the exclusion stays until #2316 | When #2316 removes the generator exclusion the generator produces these operators again and this row is deleted | none yet (task #2314 adds fixtures) |
 
 The first row is a generator rule rather than an XEQ-4 entry: no fixture declares an `allowedDivergence` for string
 order, because `sort-paging/001` agrees on every engine for the letters it seeds. The fixture is named as the evidence
 of what is pinned, and PAR-4 applies the moment a broader string sort is shown to differ. As of the first runs (2026-10-10: the default seed and several other seeds, seven engines, all 21 pairs), the property
-found one true gap: set membership on decimal, date and datetime fields is refused by PostgreSQL. That is a **defect**
-(Bug #2304, registered above as a known defect), not a divergence, and **no accepted divergence has been recorded by the
-property yet**; apart from the known defect the register lists only generator exclusions.
+found one true gap: set membership on decimal, date and datetime fields was refused by PostgreSQL. That was a **defect**
+(Bug #2304), not a divergence; it was fixed (SQL-4's array cast, and the Dapper adapter's unnamed Postgres parameters) and the
+generator produces those operators again. **No accepted divergence has been recorded by the property**; the register lists
+only generator exclusions.
 
 **PAR-4. A found divergence becomes a fixture.** When the property finds a difference between engines, the outcome is
 one of: a defect fixed (a compiler or a spec correction), or a divergence the Tech Lead accepts. An accepted divergence
 is **promoted to a fixture** whose `expectedRows.json` carries an `allowedDivergence` entry (XEQ-4) with its mandatory
 `reason`, and a row is added to the register in PAR-3 naming that fixture. A divergence is never excused by a generator
 rule alone: excluding a construct from the generator without a register row and a covering fixture is not allowed.
-A known defect is not an accepted divergence and the generator alone does not excuse it: its exclusion is temporary, is
-tracked by its Bug, and ends when the Bug is fixed (the row in the known-defects table is then deleted).
+A true defect the property finds is not an accepted divergence and the generator alone does not excuse it: it is tracked by a
+Bug and fixed in the compiler or the spec, and any exclusion made while it is open is removed when the Bug is fixed.
