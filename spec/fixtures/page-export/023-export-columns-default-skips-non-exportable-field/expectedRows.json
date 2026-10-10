@@ -1,0 +1,7 @@
+{
+  "columns": ["id", "orderDate", "customerName", "totalAmount", "status", "region"],
+  "rows": [
+    [1, "2026-01-05", "Acme", "10.00", "shipped", "EMEA"],
+    [5, "2026-01-09", "Eps", "50.00", "pending", "EMEA"]
+  ]
+}

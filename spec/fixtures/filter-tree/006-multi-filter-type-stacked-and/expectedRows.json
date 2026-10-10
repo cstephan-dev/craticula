@@ -1,0 +1,8 @@
+{
+  "columns": ["customerName", "id"],
+  "rows": [
+    ["Acme", 1],
+    ["Acme Corp", 6],
+    ["acme", 8]
+  ]
+}

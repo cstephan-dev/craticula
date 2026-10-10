@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "status": "inactive" }, "why": "excluded member" },
+    { "row": { "id": 2, "status": "ARCHIVED" }, "why": "SEM-1: excluded only if folded" },
+    { "row": { "id": 3, "status": "active" }, "why": "not a member: returned" },
+    { "row": { "id": 4, "status": null }, "why": "SEM-2: notIn is null-inclusive" },
+    { "row": { "id": 5, "status": "" }, "why": "the empty string is not a member: returned" },
+    { "row": { "id": 6, "status": "archive" }, "why": "prefix of a member: returned" },
+    { "row": { "id": 7, "status": "Inactive" }, "why": "SEM-1: mixed-case member, excluded" }
+  ]
+}

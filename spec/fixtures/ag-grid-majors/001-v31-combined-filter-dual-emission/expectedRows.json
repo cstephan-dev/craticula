@@ -1,0 +1,10 @@
+{
+  "columns": ["id", "department"],
+  "rows": [
+    [1, "Engineering"],
+    [2, "ENGINEERING"],
+    [3, "Design"],
+    [4, "research"],
+    [5, "Research"]
+  ]
+}

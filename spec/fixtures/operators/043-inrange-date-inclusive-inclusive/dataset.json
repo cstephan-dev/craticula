@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "birthDate": "1990-01-01" }, "why": "lower bound: included" },
+    { "row": { "id": 2, "birthDate": "1999-12-31" }, "why": "upper bound: included" },
+    { "row": { "id": 3, "birthDate": "1989-12-31" }, "why": "just before the range" },
+    { "row": { "id": 4, "birthDate": "2000-01-01" }, "why": "just after the range" },
+    { "row": { "id": 5, "birthDate": "1990-01-02" }, "why": "just inside the lower bound" },
+    { "row": { "id": 6, "birthDate": "1999-12-30" }, "why": "just inside the upper bound" },
+    { "row": { "id": 7, "birthDate": null }, "why": "SEM-2: inRange never matches null" }
+  ]
+}

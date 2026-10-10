@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "createdAt": "2026-01-01T00:00:00Z" }, "why": "lower bound instant: excluded" },
+    { "row": { "id": 2, "createdAt": "2026-01-01T00:00:00.001Z" }, "why": "one millisecond inside the lower bound" },
+    { "row": { "id": 3, "createdAt": "2026-02-01T00:00:00Z" }, "why": "upper bound instant: included" },
+    { "row": { "id": 4, "createdAt": "2026-02-01T00:00:00.001Z" }, "why": "one millisecond past the upper bound" },
+    { "row": { "id": 5, "createdAt": null }, "why": "SEM-2: inRange never matches null" },
+    { "row": { "id": 6, "createdAt": "2026-01-15T12:00:00Z" }, "why": "inside" },
+    { "row": { "id": 7, "createdAt": "2025-12-31T23:59:59.999Z" }, "why": "one millisecond before the range" }
+  ]
+}

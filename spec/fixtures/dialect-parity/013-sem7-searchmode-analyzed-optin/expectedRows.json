@@ -1,0 +1,9 @@
+{
+  "columns": ["id", "jobTitle"],
+  "rows": [
+    [1, "Software Engineer"],
+    [2, "ENGINEER"],
+    [3, "Senior engineer II"],
+    [7, "engineer"]
+  ]
+}

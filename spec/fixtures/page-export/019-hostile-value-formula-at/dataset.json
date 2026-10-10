@@ -1,0 +1,9 @@
+{
+  "rows": [
+    { "row": {"id": 1901, "orderDate": "2026-03-23", "customerName": "Glenmark Foods", "totalAmount": "88.10", "status": "shipped", "region": "APAC", "notes": "@SUM(A1:A10)"}, "why": "stream row: notes carries the hostile value, matches eq" },
+    { "row": {"id": 1902, "orderDate": "2026-03-25", "customerName": "Halvern Group", "totalAmount": "1200.00", "status": "shipped", "region": "EMEA", "notes": "@SUM(A1:A10)"}, "why": "stream row: notes carries the hostile value, matches eq" },
+    { "row": {"id": 9001, "orderDate": "2026-05-01", "customerName": "Decoy One", "totalAmount": "5.00", "status": "shipped", "region": "EMEA", "notes": null}, "why": "null notes: eq is not null-inclusive (SEM-2), excluded" },
+    { "row": {"id": 9002, "orderDate": "2026-05-02", "customerName": "Decoy Two", "totalAmount": "6.00", "status": "shipped", "region": "APAC", "notes": "@SUM(A1:A10)!"}, "why": "notes is the hostile value plus a trailing \"!\": eq is exact, excluded" },
+    { "row": {"id": 9003, "orderDate": "2026-05-03", "customerName": "Decoy Three", "totalAmount": "7.00", "status": "pending", "region": "AMER", "notes": "plain note"}, "why": "ordinary note: excluded" }
+  ]
+}

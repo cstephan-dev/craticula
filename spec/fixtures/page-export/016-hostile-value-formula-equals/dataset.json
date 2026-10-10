@@ -1,0 +1,9 @@
+{
+  "rows": [
+    { "row": {"id": 1601, "orderDate": "2026-03-02", "customerName": "Acme Industrial", "totalAmount": "250.00", "status": "shipped", "region": "EMEA", "notes": "=1+2"}, "why": "stream row: notes carries the hostile value, matches eq" },
+    { "row": {"id": 1602, "orderDate": "2026-03-04", "customerName": "Bering Foods", "totalAmount": "18.40", "status": "pending", "region": "APAC", "notes": "=1+2"}, "why": "stream row: notes carries the hostile value, matches eq" },
+    { "row": {"id": 9001, "orderDate": "2026-05-01", "customerName": "Decoy One", "totalAmount": "5.00", "status": "shipped", "region": "EMEA", "notes": null}, "why": "null notes: eq is not null-inclusive (SEM-2), excluded" },
+    { "row": {"id": 9002, "orderDate": "2026-05-02", "customerName": "Decoy Two", "totalAmount": "6.00", "status": "shipped", "region": "APAC", "notes": "=1+2!"}, "why": "notes is the hostile value plus a trailing \"!\": eq is exact, excluded" },
+    { "row": {"id": 9003, "orderDate": "2026-05-03", "customerName": "Decoy Three", "totalAmount": "7.00", "status": "pending", "region": "AMER", "notes": "plain note"}, "why": "ordinary note: excluded" }
+  ]
+}

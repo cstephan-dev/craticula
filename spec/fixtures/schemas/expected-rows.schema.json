@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/expected-rows.schema.json",
+  "title": "Execution-equality expected result (fixture expectedRows.json shape)",
+  "description": "T-1b's oracle: the rows the fixture's compiled query MUST return over the fixture's dataset.json, on every backend that can run it, compared under XEQ-3 in spec/semantics.md. Hand-derived from the semantics, never copied from an engine run: an oracle taken from the implementation it grades only proves the implementation agrees with itself. One shape serves an ungrouped page, a grouped level and a drill-down leaf alike: `columns` is the LOGICAL column list in result order (an ordinary row query: every schema field in declaration order, GRP-3's leaf rule; a grouped level: GRP-3's group column then each aggregation's `valueCols` entry `id`, never the compiled key; an export is never a grouped level, EXP-1(a); a BM-3 values query or an export: its own list), with each engine's rows mapped onto it by the harness (XEQ-3) and `rows` are ordered cell lists aligned to it. Order is part of the contract: SEM-6's stableKey tiebreaker makes every result order total. Rows are the page the request's startRow/endRow selects, not the whole match set. Cell encodings follow XEQ-2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "columns",
+    "rows"
+  ],
+  "$defs": {
+    "cell": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "One cell. A decimal is a JSON string carrying its exact digits; a date or datetime is a string; a missing value is an explicit null (XEQ-2)."
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "properties": {
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The logical column names the result carries, in result order."
+        },
+        "rows": {
+          "type": "array",
+          "description": "The result rows in result order. May be empty: an empty page is a legitimate, discriminating answer (a filter that must match nothing).",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/cell"
+            },
+            "description": "One row, one cell per entry of `columns`, in the same order. A runner rejects a row whose length differs from `columns`."
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "columns": {
+      "$ref": "#/$defs/result/properties/columns"
+    },
+    "rows": {
+      "$ref": "#/$defs/result/properties/rows"
+    },
+    "allowedDivergence": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Backends that are ACCEPTED to differ from the result above, each one named and justified (XEQ-4). The point is to make a real, known cross-engine difference visible in the fixture instead of silently passing or silently failing: a backend absent from this list must match `columns`/`rows`, a backend present is held to its own entry instead. At most one entry per backend, or per backend and engine for `search` (XEQ-4).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "reason",
+          "outcome"
+        ],
+        "properties": {
+          "backend": {
+            "enum": [
+              "postgres",
+              "mssql",
+              "mysql",
+              "oracle",
+              "sqlite",
+              "mongo",
+              "search"
+            ],
+            "description": "The expected/<backend>.artifact.json stem this entry applies to ('search' is the shared OpenSearch/Elasticsearch artifact, OQ-7)."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why the divergence is accepted, citing the rule or the engine fact that causes it (e.g. 'T-SQL rejects a zero-width OFFSET/FETCH window, msg 10744'). A divergence nobody can explain is a bug, not an allowance."
+          },
+          "outcome": {
+            "enum": [
+              "rows",
+              "error"
+            ],
+            "description": "'rows': the backend returns a different result, given in `expected`. 'error': the backend refuses to execute the query; the harness asserts that it does, so a fix that makes the error disappear is noticed rather than ignored."
+          },
+          "expected": {
+            "$ref": "#/$defs/result",
+            "description": "The result this backend is held to. Required when outcome is 'rows', forbidden when it is 'error'."
+          },
+          "engine": {
+            "enum": [
+              "opensearch",
+              "elasticsearch"
+            ],
+            "description": "Only with backend 'search': the shared OpenSearch/Elasticsearch artifact (OQ-7) runs on both engines, and this entry applies to one. Without it, a 'search' entry covers both."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "const": "rows"
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "required": [
+                "expected"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "expected"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "engine"
+              ]
+            },
+            "then": {
+              "properties": {
+                "backend": {
+                  "const": "search"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "postgres"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "mssql"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "mysql"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "oracle"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "sqlite"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "mongo"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "search"
+              }
+            },
+            "required": [
+              "backend"
+            ],
+            "not": {
+              "required": [
+                "engine"
+              ]
+            }
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "search"
+              },
+              "engine": {
+                "const": "opensearch"
+              }
+            },
+            "required": [
+              "backend",
+              "engine"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "backend": {
+                "const": "search"
+              },
+              "engine": {
+                "const": "elasticsearch"
+              }
+            },
+            "required": [
+              "backend",
+              "engine"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "if": {
+            "contains": {
+              "properties": {
+                "backend": {
+                  "const": "search"
+                }
+              },
+              "required": [
+                "backend"
+              ],
+              "not": {
+                "required": [
+                  "engine"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "backend": {
+                    "const": "search"
+                  }
+                },
+                "required": [
+                  "backend",
+                  "engine"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

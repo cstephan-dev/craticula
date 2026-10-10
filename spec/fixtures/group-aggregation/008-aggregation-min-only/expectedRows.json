@@ -1,0 +1,8 @@
+{
+  "columns": ["segment", "amount"],
+  "rows": [
+    ["Consumer", null],
+    ["Enterprise", "25.50"],
+    ["SMB", "-10.00"]
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith" }, "why": "tie with id 5" },
+    { "row": { "id": 2, "lastName": null }, "why": "null: first on desc" },
+    { "row": { "id": 3, "lastName": "Jones" }, "why": "middle value" },
+    { "row": { "id": 4, "lastName": "Adams" }, "why": "smallest: last on desc" },
+    { "row": { "id": 5, "lastName": "Smith" }, "why": "tie with id 1: tiebreaker id ascending" },
+    { "row": { "id": 6, "lastName": null }, "why": "second null: ties with id 2" },
+    { "row": { "id": 7, "lastName": "Brown" }, "why": "between Adams and Jones" }
+  ]
+}

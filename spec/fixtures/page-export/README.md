@@ -49,11 +49,12 @@ the category except `021`; see the shape note below.
   | `writerConfig.json` | EXP-4/EXP-5's **host** configuration (`delimiter`, `bom`, `headerRow`, `decimalSeparator`). **Present only when the case overrides a default** — nine of the twelve carry none (only 013, 015 and 026 do), which is what makes them oracles for the defaults, EXP-6's "default on" included. Validates against `../schemas/writer-config.schema.json`. Note what is *not* here: EXP-5's **per-field** overrides, which EXP-5 puts in schema config and which therefore reach the writer from `schema.json` through the request adapter, exactly as a `label` does (026). |
   | `expected/export.csv` / `expected/export.tsv` | The bytes. The extension is the request's own `exportFormat`, which is the only place in the fixture tree that field is visible at all (004/005 prove it reaches no compiled artifact). |
 
-  **Not `dataset.json`/`expectedRows.json`.** Those two names are reserved for the execution-equality
-  tier (T-1b, #1655), where they mean a *seeded database* and the row ids a query returns from it. A
+  **Not `dataset.json`/`expectedRows.json`.** Those two names belong to the execution-equality tier
+  (T-1b, `../../semantics.md` XEQ-1..XEQ-4), where they mean a *seeded database* and the ordered result a
+  query returns from it. A
   writer input is not a seed: it is what an adapter hands back **after** filtering, sorting,
   projection and physical-to-logical aliasing (`order_date` → `orderDate`), which is why it is keyed
-  by logical colId and carries exactly the projected columns. Both can coexist in one directory later
+  by logical colId and carries exactly the projected columns. Both can coexist in one directory
   without either meaning the other.
 
   **How the rows were derived.** One cell of every row is *derived*: the one the request's `equals`
@@ -219,3 +220,20 @@ addendum — and four of them had drifted while nothing could compile them:
 time found four *Mongo* drifts of exactly the kind the Search pass had found (an implicit `eq`, a
 bare-number `decimal` bound twice, and eight `_id: 0` placements). The stand-in test that compiled
 004-007 with only the `PageSpec` supplied is gone, superseded by the real end-to-end runner.
+
+## Execution-equality oracle (T-1b, #2204)
+
+Cases **001-026** carry `dataset.json` + `expectedRows.json` (XEQ-1..XEQ-4 in `../../semantics.md`); none is a
+rejection. The pair describes the compiled query's rows, never the writer's input: for the writer-tier cases
+(012-020, 022, 025, 026) the seed contains the `rowStream.json` rows plus decoys (case variant, null, near-miss,
+null `orderDate`), so the seed is what is stored *before* the query and `rowStream.json` stays what an adapter
+yields *after* it. `expectedRows.json` `columns` is the export projection (EXP-1(b)): every exportable field in
+declaration order (023 omits `notes`), or `exportColumns` in request order (008). 001-003 and 006-007 seed
+enough rows (50-604) that their `startRow`/`endRow` page is a real slice; 006 (`exportScope: all`) returns every
+match while 007 (`page`) returns rows 200-249 of the same match set (EXP-2). 010, 011 and 024 return flat leaf
+rows, the group state being discarded (EXP-1(a)).
+
+Out of scope: none by rejection. **021** carries the pair for its query only; EXP-7's row limit has no
+execution-equality meaning.
+
+All expected rows were derived by hand from `semantics.md` and the TRD export rules, not from any engine run.

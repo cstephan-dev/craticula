@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith" }, "why": "capitalised: matches because SEM-1 folds case" },
+    { "row": { "id": 2, "lastName": "SMITH" }, "why": "upper case" },
+    { "row": { "id": 3, "lastName": "smith" }, "why": "as typed" },
+    { "row": { "id": 4, "lastName": "Smithy" }, "why": "longer value: eq is not contains" },
+    { "row": { "id": 5, "lastName": "Smit" }, "why": "shorter value" },
+    { "row": { "id": 6, "lastName": null }, "why": "eq is not null-inclusive (SEM-2)" },
+    { "row": { "id": 7, "lastName": "Jones" }, "why": "no match" },
+    { "row": { "id": 8, "lastName": "xsmith" }, "why": "extra leading character" }
+  ]
+}

@@ -1,37 +1,75 @@
 {
   "query": {
     "bool": {
-      "must_not": [
+      "should": [
         {
           "bool": {
-            "should": [
+            "must_not": [
               {
                 "bool": {
-                  "must": [
+                  "should": [
                     {
                       "bool": {
-                        "must_not": [
+                        "must": [
                           {
                             "bool": {
                               "should": [
                                 {
                                   "bool": {
-                                    "must": [
+                                    "must_not": [
                                       {
                                         "bool": {
-                                          "must_not": [
+                                          "should": [
                                             {
-                                              "term": {
-                                                "region.keyword": {
-                                                  "value": "blocked",
-                                                  "case_insensitive": true
-                                                }
+                                              "bool": {
+                                                "must": [
+                                                  {
+                                                    "bool": {
+                                                      "should": [
+                                                        {
+                                                          "bool": {
+                                                            "must_not": [
+                                                              {
+                                                                "term": {
+                                                                  "region.keyword": {
+                                                                    "value": "blocked",
+                                                                    "case_insensitive": true
+                                                                  }
+                                                                }
+                                                              }
+                                                            ]
+                                                          }
+                                                        },
+                                                        {
+                                                          "bool": {
+                                                            "must_not": {
+                                                              "exists": {
+                                                                "field": "region"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      ],
+                                                      "minimum_should_match": 1
+                                                    }
+                                                  }
+                                                ]
                                               }
                                             }
-                                          ]
+                                          ],
+                                          "minimum_should_match": 1
                                         }
                                       }
                                     ]
+                                  }
+                                },
+                                {
+                                  "bool": {
+                                    "must_not": {
+                                      "exists": {
+                                        "field": "region"
+                                      }
+                                    }
                                   }
                                 }
                               ],
@@ -41,14 +79,24 @@
                         ]
                       }
                     }
-                  ]
+                  ],
+                  "minimum_should_match": 1
                 }
               }
-            ],
-            "minimum_should_match": 1
+            ]
+          }
+        },
+        {
+          "bool": {
+            "must_not": {
+              "exists": {
+                "field": "region"
+              }
+            }
           }
         }
-      ]
+      ],
+      "minimum_should_match": 1
     }
   },
   "sort": [

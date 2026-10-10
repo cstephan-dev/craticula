@@ -217,9 +217,15 @@ as a reference point, but its own rationale extends cleanly: a NOT that excludes
 just because SQL's three-valued logic happens to do so is the identical bug this rule exists to
 prevent, one syntax level up. Concretely, `Not(Comparison(field, contains, X))` on SQL compiles as
 `(NOT (col ILIKE '%'||:v||'%') OR col IS NULL)` — the `OR col IS NULL` is mandatory on the *outside*
-of the `NOT`, exactly mirroring `neq`'s own compiled shape — while Mongo's `$nor`/ES's `must_not`
-already include null/missing documents natively for most query types (verify per query type per the
-third "must NOT" below, the same caveat as `neq`'s own worked example).
+of the `NOT`, exactly mirroring `neq`'s own compiled shape — and **the same fan-out is
+emitted by every backend at every `notNode`, at every nesting depth, whatever the child is**: one
+"this field is null/missing" disjunct per distinct field referenced in the negated subtree, in
+first-appearance order, outside the negation. `Not(And(Or(Not(eq status X))))` therefore carries the
+disjunct at *both* `not` nodes. Mongo's `$nor` and ES's `must_not` are *not* a substitute: they
+include a null document only when the child does not match it, and a child such as `neq`, `blank`
+or an inner `not`, or an `or` whose other field matches, does match one — the null row would then
+be dropped by exactly the bug this rule exists to prevent. The disjunct is `{field: null}` on
+MongoDB and `must_not: exists` on the raw field on OpenSearch/Elasticsearch (MDB-2, OSE-2).
 
 **Rationale.** AG Grid's in-memory row model filters with plain JavaScript equality, where a missing
 or `null` cell value is simply "not equal" to any concrete filter value — so `neq` in the client-side
@@ -691,6 +697,17 @@ This is v1's *only* paging mechanism (`$defs/rangePage`'s `startRow`/`endRow`, A
 tiebreaker's job is to make that offset-based paging deterministic, not to enable an alternative
 keyset-paging mode; see the "must NOT" below.
 
+**The page window is non-empty (AG-3, SEC-3).** A request's `startRow`/`endRow` window must satisfy
+`0 <= startRow < endRow` (`endRow` is exclusive, so `endRow - startRow` is the requested size and must be at
+least 1). A request with `endRow <= startRow` (an inverted window, or a zero-width one such as
+`startRow: 100, endRow: 100`) is **refused at the AG Grid request boundary with a defined error before any
+compilation, identically for every backend**; it is never compiled into a statement a backend may reject
+(T-SQL refuses `FETCH NEXT 0 ROWS`, msg 10744) or silently answer with an empty page. The refusal is
+`requestParsing` / `malformed-request` (`adversarial/027`). An IR built by hand may still carry a zero-size
+`RangePage` (an adapter's count-only query), which is why `ir.schema.json` keeps `endRow >= startRow`;
+the strict rule belongs to the wire request. Under EXP-1's `exportScope: "all"` the window is discarded
+(EXP-2) and therefore not checked.
+
 **Must NOT.**
 - Must NOT accept a client-supplied sort model that merely *looks* unique (a field that happens to
   have distinct values in a sample dataset) as sufficient without it being the schema's declared
@@ -1130,6 +1147,14 @@ different compiler states, and only the first is evidence about this rule.
 asserts the set against this sentence. The execution-equality tier (T-1b, #1624) is what can grade
 the divergence itself; T-1a cannot see it.
 
+*Accepted divergence #4 — MySQL cannot serve exact buckets and a case-insensitive filter from one column.*
+MySQL spells no collation in SQL (SQL-6), so one column has one collation: the binary one GRP-2 requires of a
+groupable string column for exact buckets, or the `_ci` one SEM-1's case-insensitive filters and prefixes rely on.
+A host that declares the groupable column binary (as the execution tier does) therefore gets case-**sensitive**
+filters and prefixes on it, on the BM-3 requests that combine a distinct set with a user filter or search
+prefix on a case-insensitive string: `group-aggregation/017`, `018` and `022`, each declaring it as an XEQ-4 `rows`
+divergence for `mysql`.
+
 *How the third shape was found, because the same trap is waiting for every other backend with a
 query-level switch.* `017`'s Mongo arm was authored in #1641 carrying a query-level `collation`
 beside a `$group` on `region` — the exact combination #1640 had already stripped from every grouped
@@ -1307,8 +1332,9 @@ compiler precondition failure on ordinary client input.
 
 **GRP-6. BM-3's distinct-values query is a bucket query, and its cap is a ceiling rather than a
 page.** A set filter asks the server "which values may I offer for this column, given the filters
-currently in effect?". The answer compiles to `SELECT DISTINCT <col> … ORDER BY <col> <cap>` (a
-`terms` aggregation on ES/OpenSearch, a `$group` on `_id` on MongoDB), and five things about it are
+currently in effect?". The answer compiles to `SELECT DISTINCT <col> … ORDER BY <col> <cap>` (DISTINCT is the default spelling; SQL Server uses
+`GROUP BY <col>` instead, GRP-6(f); a
+`terms` aggregation on ES/OpenSearch, a `$group` on `_id` on MongoDB), and six things about it are
 decided here because each of them is a place a port would otherwise guess differently.
 
 *(a) The `DISTINCT` key and its `ORDER BY` are exact — GRP-2's rule, reached by GRP-2's argument.*
@@ -1414,6 +1440,18 @@ schema's `stableKey` is not in the projection at all, so ordering by it would be
 avoids at a grouped level. The single `ORDER BY` key is the distinct column, ascending, nulls last.
 The projection carries **no alias**, unlike GRP-3's: the response is one column of scalars, not rows a
 grid maps by key, so there is no name for a client to look anything up by.
+
+*(f) SQL Server spells the distinct set `GROUP BY`, not `SELECT DISTINCT`.* T-SQL refuses a
+`SELECT DISTINCT` whose `ORDER BY` item is not a select-list item (msg 145), and the nulls-last key
+SEM-3 requires on SQL Server is the expression `CASE WHEN <col> IS NULL THEN 1 ELSE 0 END`. So on SQL
+Server (and only there) the distinct-values statement is
+`SELECT <col> FROM <source> [WHERE <tree>] GROUP BY <col> ORDER BY <SEM-3 key over <col>>
+OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY`; the `ORDER BY` expression is legal because it is a function of
+the grouping column alone. `GROUP BY <col>` computes exactly the set `SELECT DISTINCT <col>` does, so
+(a)–(e) apply unchanged: the key is exact (no collation folded), the `WHERE` tree and search prefix are
+as before, the ordering is ascending nulls last, the cap is the same literal-zero `OFFSET`/`FETCH` with
+one bound parameter, and `params` is unchanged. Every other dialect keeps `SELECT DISTINCT`. The
+mssql arm of a BM-3 fixture is therefore the one place the statement shape differs from the other four.
 
 *The target `colId` is client-controlled, and no mode may drop it.* It passes the SC-1 allowlist in
 **every** schema mode, on GRP-1's reasoning taken one step further: a `groupCol` that Lenient dropped
@@ -1974,16 +2012,19 @@ shape parallel to the SQL and ES forms" and to stay valid in an `$expr` context,
 drill-down implicit), which is why it is pinned rather than left to taste; 21 artifacts were
 re-authored onto this form in #1643.
 
-**MDB-2. The composites, and what a tree-level `NOT` does *not* get.** `andNode` → `$and`,
-`orNode` → `$or`, and a tree-level `notNode` → `$nor` with the child as its single member. A
+**MDB-2. The composites, and what a tree-level `NOT` gets that a bare `$nor` lacks.** `andNode` → `$and`,
+`orNode` → `$or`, and a tree-level `notNode` → `$nor` with the child as its single member, wrapped in
+the null fan-out below. A
 single-child composite is **not** collapsed (`{"$and": [x]}`), mirroring SQL-2's `(x)`: the tree's
 own depth is what `filter-tree/011`-`013` pin against SEC-3's budget, and collapsing it would make a
 boundary fixture indistinguishable from a shallower one.
 
-A tree-level `NOT` gets **no null fan-out**. `$nor` already returns documents whose referenced field
-is null or entirely missing, so the one `OR col IS NULL` disjunct per referenced field that SQL-2's
-third bullet requires has no counterpart here — and adding one anyway is SEM-2's second MongoDB
-Must-NOT, which *excludes* null documents rather than including them.
+A tree-level `NOT` gets the **same null fan-out as SQL-2's third bullet**, at every `notNode` at every
+depth: `{"$or": [{"$nor": [<child>]}, {"<field>": null}, ...]}`, one `{field: null}` clause per distinct
+field referenced in the child subtree, in first-appearance order. `$nor` alone is not enough, because
+it returns a null document only when the child fails to match it, and `neq`, `blank`, an inner `not`
+or an `or` whose other field matches all do match one (SEM-2). The `{field: null}` clause is the
+*inclusion* SEM-2 requires and not the `{field: {$ne: null}}` guard its second MongoDB Must-NOT forbids.
 
 **MDB-3. SEM-2's null inclusion is an explicit `$or` with a `{field: null}` clause.**
 `{"$or": [{"name": {"$ne": "Alice"}}, {"name": null}]}` — emitted for `neq`, `notContains` and
@@ -2047,9 +2088,13 @@ by side, each spelling its own mechanism per SQL-6 — has, naively, no MongoDB 
 both, and the naive rendering silently folds case on the field SC-3 declared sensitive. That is
 SEM-1's third Must-NOT inverted, and it is a *wrong rows* bug rather than an ordering one.
 
-The escape is the aggregation-expression form, which compares by simple binary comparison and does
-not consult the collation — the same property SEM-2's own MongoDB paragraph relies on when it notes
-that a case-**in**sensitive comparison inside an `$expr` has to be spelled with `$strcasecmp`:
+The intended escape is the aggregation-expression form: it compares by simple binary comparison, which
+is why SEM-2's own MongoDB paragraph notes that a case-**in**sensitive comparison inside an `$expr` has
+to be spelled with `$strcasecmp`. **That premise is false on MongoDB 7.0**, which applies the
+aggregate's query-level collation to `$expr` comparisons too (the engine run of `dialect-parity/023`
+showed it); see *Accepted divergence #5* below. The `$expr` form is still what the compiler emits,
+because it is the one spelling that keeps the sensitive comparison out of the query language and is
+what the artifacts pin, but it does not hold the field case-sensitive under a collation.
 
 | Family | Under no collation | Under a collation, on a `sensitive` field |
 |---|---|---|
@@ -2101,6 +2146,17 @@ the only value the query language reinterprets is a BSON regex — so no ordinar
 `$in` array, `$regex` pattern or `blank` sentinel elsewhere in this addendum needs binding. That
 asymmetry is the whole reason the requirement is easy to lose: the escape moves a value that was
 safe into the one place it is not.
+
+*Accepted divergence #5 — MongoDB cannot hold a case-sensitive field in the same request as
+case-insensitive ones.* A pipeline that carries a query-level collation (SEM-1 wants one for the
+case-insensitive field) compares **every** string under it, a `sensitive` field's `$expr` included, and
+no per-stage or per-expression form exists in the pinned subset. A request that mixes the two
+sensitivities therefore returns, on MongoDB, rows that match case-insensitively on the field SC-3
+declared sensitive: SEM-1's third Must-NOT, accepted here in the same register as GRP-2's divergences
+#3 and #4. `dialect-parity/023` records it as an XEQ-4 `allowedDivergence` entry for `mongo`, whose
+`expected` holds the rows the engine returns (`ab-100` and `Ab-100` match `AB-100`); the six other
+backends return the exact rows. A host that needs case-sensitive matching on MongoDB keeps that field
+out of a request that also carries a collation.
 
 *Pinned by* `dialect-parity/023`, the suite's only artifact containing an `$expr`. The `$literal`
 binding of a `$`-prefixed value and the sort refusal are pinned by unit tests alone
@@ -2246,7 +2302,7 @@ rather than left for #1623 to re-adjudicate.
 **OSE-2. The composites, and the one that is spelled differently from the negation a compiler
 composes itself.** `andNode` → `{"bool": {"must": [...]}}`, `orNode` →
 `{"bool": {"should": [...], "minimum_should_match": 1}}`, and a tree-level `notNode` →
-`{"bool": {"must_not": [<child>]}}` — an **array**. A single-child composite is **not** collapsed
+`{"bool": {"must_not": [<child>]}}` — an **array** — wrapped in the null fan-out below. A single-child composite is **not** collapsed
 (`{"bool": {"must": [x]}}`), mirroring SQL-2's `(x)` and MDB-2's `{"$and": [x]}`: the tree's own depth
 is what `filter-tree/011`-`013` pin against SEC-3's budget, and collapsing it would make a boundary
 fixture indistinguishable from a shallower one.
@@ -2257,10 +2313,13 @@ become scoring hints that constrain nothing. Every `or` a compiler emits is a re
 spelling the parameter always means the same subtree renders the same way wherever it lands in the
 tree — SQL-2's "one rule per construct, applied always".
 
-A tree-level `NOT` gets **no null fan-out**. `must_not` already matches documents whose referenced
-field is missing — a document that cannot satisfy the inner clause satisfies its negation — so the one
-`OR col IS NULL` disjunct per referenced field that SQL-2's third bullet requires has no counterpart,
-exactly as MDB-2 records for `$nor`.
+A tree-level `NOT` gets the **same null fan-out as SQL-2's third bullet**, at every `notNode` at every
+depth, exactly as MDB-2 records for `$nor`: `{"bool": {"should": [{"bool": {"must_not": [<child>]}},
+{"bool": {"must_not": {"exists": {"field": "<raw field>"}}}}, ...], "minimum_should_match": 1}}`, one
+`exists` complement per distinct field referenced in the child subtree, in first-appearance order. A
+`must_not` alone matches a document with a missing field only when the child cannot match it, which
+`neq`, `blank`, an inner `not` or an `or` over two fields can (SEM-2). The inner `must_not` keeps its
+array spelling, so a tree `NOT` stays distinguishable from a composed negation (OSE-4).
 
 **OSE-3. The `query` member has two forms, chosen by the request shape.** An ordinary row query
 renders its filter tree directly, and `{"match_all": {}}` when it has none — a hit-returning request
@@ -2421,7 +2480,11 @@ does render as two clauses (`ag-grid-majors/002`).
   `time_zone` shifts only *unqualified* date-math strings, and every boundary reaching a compiler is
   already an absolute instant or a calendar date.
 - A `datetimeValue` is normalised to UTC with a trailing `Z`, so the same instant written `+02:00`
-  and written `Z` produces one artifact.
+  and written `Z` produces one artifact. It is spelled with **exactly three fractional digits**
+  (`2026-01-01T00:00:00.000Z`, never `...:00Z`): in a `range` query this DSL's date math rounds a
+  bound that omits the milliseconds **up** to the end of that second (`.999`) for `gt` and `lte`, so
+  `gt 2026-01-01T00:00:00Z` would wrongly exclude a row at `.001Z`. `operators/012`, `024` and `041`
+  pin it. A `date` (`strict_date`, `yyyy-MM-dd`) has no time-of-day and is unaffected.
 - A `decimalValue` is written as a **JSON number whose text is the IR's own exact decimal literal**.
   This DSL's request body has no arbitrary-precision numeric literal the way Extended JSON's
   `$numberDecimal` does, so the only correct answer is to pass the token through unparsed rather than
@@ -2641,3 +2704,96 @@ SEM-2, SEM-3, SEM-4, SEM-6, SEM-7, SEC-4, SEC-5, AGG-1, AGG-2, AGG-4, **AGG-5**,
 satisfied natively here — the `sum` metric returns 0 and the other three return null, so no metric
 aggregation changes), GRP-2..GRP-6, and the SQL addendum's SQL-0 (`source`) and SQL-2 (the composite
 wrap OSE-2 parallels).
+
+---
+
+## Addendum — execution equality (XEQ-1..XEQ-4; not numbered SEM-*, for the same reason as the aggregation addendum above)
+
+T-1's second tier. Where artifact equality (T-1a) compares what a compiler **writes**, execution equality (T-1b)
+compares what the compiled query **returns** when a real engine runs it over a seeded table. It exists because a
+string comparison cannot see a collation that is silently ignored, a null that sorts the wrong way, or a window that
+one engine rejects. Its inputs are two files at a fixture's root, `dataset.json` and `expectedRows.json`, validated by
+[`fixtures/schemas/dataset.schema.json`](fixtures/schemas/dataset.schema.json) and
+[`fixtures/schemas/expected-rows.schema.json`](fixtures/schemas/expected-rows.schema.json). **This addendum is the only
+place the comparison rule is stated**; the fixture README, the conformance-runner spec and the schemas point here.
+
+**XEQ-1. What a fixture carries.** A fixture carries `dataset.json` and `expectedRows.json` together or neither. The
+seed belongs to the fixture: there are no cross-fixture seed references in v1, so one case can be read, changed and
+re-derived without looking at another. The engine loads the seed into the table named by the fixture's `schema.json`
+`source` (SQL-0), then runs the compiled query for that backend with the request's own `startRow`/`endRow`. The tier
+applies to every backend the fixture has an `expected/<backend>.artifact.json` for and the harness can reach, and every
+such backend is held to the **same** `expectedRows.json` unless XEQ-4 says otherwise. A fixture whose query returns no
+rows (a rejection) carries neither file. A writer-tier fixture's compiled query does return rows, so it may carry the
+pair beside its `rowStream.json`, which is a different file: a row stream is what an adapter yields *after* the query, a
+seed is what is stored *before* it.
+
+**XEQ-2. Value encodings.** Seed rows and expected rows are keyed or aligned by **logical** colId, never by a physical
+name, and encode each cell by the field's declared GridSchema type:
+
+| Type | JSON form |
+|---|---|
+| `int64` | a JSON integer; a fixture stays within ±2^53 so every language reads it back exactly |
+| `double` | a JSON number |
+| `decimal` | a JSON **string** carrying the exact digits (`"12.50"`), the same reason a Mongo artifact spells one `{"$numberDecimal": …}` |
+| `boolean` | `true` / `false` |
+| `string` | a JSON string, stored and compared exactly as written (no trimming, no case change) |
+| `date` | `"YYYY-MM-DD"`, a local date with no zone (SEM-4) |
+| `datetime` | `"YYYY-MM-DDTHH:MM:SS[.fff]Z"`, an absolute UTC instant (SEM-4), **at most millisecond precision**: MongoDB's `Date` and Search's `date` keep no more, so a finer seed would be truncated differently per engine and could move across a range bound |
+| absent value | an explicit JSON `null`; **never** an omitted key |
+
+Every field the fixture's `schema.json` declares appears in every seed row, so a reader can tell a null from an
+oversight. A seed row may carry a `why`; an authored fixture always does. Two further rules keep the oracle well-formed:
+
+- the seed's **stableKey column is unique and non-null** in every row: SEM-6's tiebreaker makes a result order total only
+  over such a key, and XEQ-3 depends on that;
+- a fixture that has an `oracle` artifact **avoids `''` in any seeded column**, or declares an XEQ-4 `rows` divergence
+  for `oracle`: Oracle stores the empty string as NULL (SQL-7), so a seeded `''` comes back as null there and, in a sorted
+  column, moves from first among the strings to NULLS LAST.
+
+**XEQ-3. The comparison rule.** The result's column list is compared **exactly**, then the rows **in order**, then each
+cell by its type. The column list is the **logical** one, whatever an engine physically returns: an ordinary row query's
+columns are the schema's fields in declaration order (GRP-3's leaf rule), a grouped level's are GRP-3's group column then
+each aggregation's `valueCols` entry `id` (not its compiled key), and a BM-3 values query's is the one schema field named by `setValuesRequest.colId`, and an export's is its own list. A harness maps each
+engine's rows onto it before comparing (physical to logical, dropping `_id`, hit metadata and any column the compiled
+query never projected), so a harness that keeps MongoDB's `_id` and one that drops it cannot both conform.
+
+- order is part of the contract: with a unique, non-null stableKey (XEQ-2), SEM-6's tiebreaker makes the result order
+  total, so two correct engines cannot legitimately differ in row order. The one accepted difference is AGG-5's composite
+  null bucket on Search, which a fixture declares under XEQ-4;
+- `int64`, `boolean`, `date` and `string` are compared exactly (strings by code point, with no collation, no case
+  folding and no normalization: the point of the tier is to see the engine's own);
+- `decimal` is compared **as a number**, so `"1.50"` equals `"1.5"` (an engine's scale is not semantics);
+- `double` is compared with a relative tolerance of 1e-9, `|a − b| ≤ 1e-9 · max(|a|, |b|)`, and exactly when either side is 0;
+  the one exception is an **`avg` aggregate column**, compared as a double with a relative tolerance of **1e-6**
+  (same formula, same exactness against 0), because an engine's average carries its own scale and rounding
+  (SQL Server returns `decimal(38,6)`, so its average of `10.00`, `10.00`, `10.01` is `10.003333` where an engine
+  keeping more digits returns `10.0033333…`);
+- `datetime` is compared as an **instant**, so `…:00Z` equals `…:00.000Z`;
+- `null` equals only `null`: an empty string is not a null (it is a value on every engine except Oracle, where XEQ-2's
+  seed rule applies) and a missing cell is a failure.
+
+**Aggregate columns are typed by the aggregation, not by the field.** On a grouped level (`rowGroupCols` outnumber
+`groupKeys`) a column named by a `valueCols` entry is an aggregate, and takes its type from the function: `count` is
+`int64`; `sum`, `min` and `max` take the aggregated field's type; `avg` is **always compared as a double** under the
+tolerance above, whatever the field's type, because engines differ in the scale of an average (Postgres `AVG(numeric)`
+keeps about sixteen fractional digits, SQL Server `decimal(38,6)`, Search returns a double), and under the
+**1e-6** tolerance above, not the 1e-9 of a plain double field. A grouped level's aggregate column in
+`expectedRows.json` is **named by the `valueCols` entry's `id`**; a compiled alias such as `<field>_<func>`
+(AGG-2) is physical, and a harness maps it onto that `id` before comparing. A decimal `sum`, `min` or
+`max` keeps the exact-decimal rule against another decimal; a Search double metric is compared against a decimal under
+the double tolerance. The `id` may equal the aggregated field's own name (`amount` summed with `id` `amount`); the compiled
+alias (`amount_sum`) still differs and is what the harness maps onto the `id`. A drill-down leaf (`rowGroupCols` equal to `groupKeys`) sends `valueCols` too but projects plain fields, so
+none of this applies to it. An **export** (a request carrying `exportFormat`, EXP-1) discards group state
+(EXP-1(a)), so it is never a grouped level: its `valueCols` entries are not aggregates and its columns are plain
+fields or the export's own list (`page-export/010`, `011`, `024`). A column that is neither a schema field nor a `valueCols` `id` of a grouped level is a mistake in the
+fixture, not an unchecked cell.
+
+**XEQ-4. Accepted divergence.** When a real cross-engine difference is known and accepted, the fixture says so in
+`expectedRows.json`'s `allowedDivergence` array rather than silently passing or silently failing. One entry per backend:
+the backend (the `expected/<backend>` stem), an optional `engine` (`opensearch` or `elasticsearch`, valid only with
+backend `search`, because that one artifact (OQ-7) runs on both engines and one can differ alone; an entry without it
+covers both, and the two forms are not mixed), a mandatory `reason` naming the rule or engine fact behind it, and an
+`outcome`: **`rows`** (the backend returns a different result, given in the entry's own `expected`) or **`error`** (the
+backend refuses the query; the harness asserts that it does). A backend with an entry is held to that entry and only
+that entry; a backend without one must match the fixture's main result. An `error` entry is asserted on purpose: a fix
+that makes the error disappear is a change someone should notice and delete the entry for, not a pass nobody sees.

@@ -20,14 +20,14 @@ own published interfaces (`IServerSideGetRowsRequest`, `ICombinedSimpleModel`, `
 than recalled. A claim of the form "v31 emits these keys" is checkable against the same source that
 determines it.
 
-Why that reasoning does **not** extend to everything: this suite deliberately leaves
-`dataset.json`/`expectedRows.json` empty (`../README.md`, "Deferred"), because expected *rows*
-require a real seeded database and are genuinely unknowable from source — "fabricating them without
-one would be inventing data, not capturing ground truth, which is worse than leaving the field
-absent". A shape derived from published interfaces and an outcome derived from an imagined database
-are different kinds of claim with different standards of evidence. Deriving the first is sound;
-deriving the second would be fabrication. The distinction is recorded here rather than left implied,
-so nobody has to reconstruct the reasoning later.
+Why that reasoning does **not** extend to everything: this category carries no
+`dataset.json`/`expectedRows.json` (`../README.md`, "Execution equality"; `../../semantics.md` XEQ-1..XEQ-4). These cases
+are about what a given AG Grid major puts on the wire, and a claim about *rows* would be a claim about what a database
+returns, which no published AG Grid interface determines. A shape derived from published interfaces and an outcome
+derived from an imagined database are different kinds of claim with different standards of evidence. The execution tier
+does hand-derive expected rows, but from this project's own semantics (SEM-1..SEM-7) for fixtures that test a
+compiler, never from a recollection of how AG Grid or an engine behaves. The distinction is recorded here rather than
+left implied, so nobody has to reconstruct the reasoning later.
 
 **What would upgrade these fixtures:** replaying each `agGridRequest.json` against a real grid of
 that major and diffing. That is additive — it would confirm or correct these files without changing
@@ -221,3 +221,15 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   emit on its own; reaching for the extension would defeat the point. That is also why 008 exists:
   `operators/` reaches `inRange` *through* `customFilters`, so nothing was pinning what the native
   wire form does.
+
+## Execution-equality oracle (T-1b, #2204)
+
+Cases **001-006** carry `dataset.json` + `expectedRows.json` (XEQ-1..XEQ-4 in `../../semantics.md`):
+004 is a grouped level whose columns are `department` and `salary` (the aggregate takes the `valueCols` id, XEQ-3; the compiled `salary_sum` alias is physical and mapped away; an all-null group sums to 0, a null department is its own last group); 001-003 and 006 are small boundary seeds (case folding per SEM-1, null exclusion per SEM-2, the half-open preset
+window of 006); 005 seeds 300 rows so the `startRow: 200` page over a descending, nulls-first sort (SEM-3, SEM-6)
+is a real slice.
+
+Out of scope: **007** and **008** (rejections: no query runs, so they carry neither file).
+
+
+All expected rows were derived by hand from `semantics.md`, not from any engine run.

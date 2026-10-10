@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "productName": "Smartphone" }, "why": "exact-case prefix" },
+    { "row": { "id": 2, "productName": "smartwatch" }, "why": "SEM-1: lower-case variant matches only if folded" },
+    { "row": { "id": 3, "productName": "SMART TV" }, "why": "upper-case variant" },
+    { "row": { "id": 4, "productName": "Not Smart" }, "why": "substring but not a prefix: rejected" },
+    { "row": { "id": 5, "productName": "Smar" }, "why": "shorter than the prefix: rejected" },
+    { "row": { "id": 6, "productName": " Smart" }, "why": "leading space: not a prefix, rejected" },
+    { "row": { "id": 7, "productName": null }, "why": "SEM-2: startsWith never matches null" },
+    { "row": { "id": 8, "productName": "" }, "why": "the empty string: rejected" }
+  ]
+}

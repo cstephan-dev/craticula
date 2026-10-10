@@ -139,3 +139,13 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
 | 045 | `045-false-boolean/` | AR-6 unary `false` boolean shorthand, mirror of case 044. |
 | 046 | `046-eq-decimal/` | AR-6 `eq` on `decimal` (AR-7's typed-value matrix) — the numeric-string `decimalValue` representation, previously unexercised in this category. |
 | 047 | `047-gt-decimal/` | AR-6 `gt` (ordering) on `decimal`, mirror of 046 for an ordering comparison. |
+
+## Execution equality (T-1b)
+
+All 47 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
+[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-047 follow it. Every fixture has an oracle-free
+backend set (`postgres`, `mongo`, `search`), so a seeded `''` is allowed and is used where SEM-2 gives it a meaning
+(`blank` / `notBlank`, `neq`, `notIn`). Out of scope: none, because this category has no rejection-only fixture.
+Each seed is 4-9 rows keyed by logical colId, with boundary values just inside and outside, nulls, case variants and
+look-alike rows, and every row states its `why`. All expected rows were derived by hand from `semantics.md`
+(SEM-1 case folding, SEM-2 null handling, SEM-4 inclusivity), not from any engine run.

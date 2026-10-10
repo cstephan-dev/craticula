@@ -1,0 +1,94 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "quantity": 50,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "below 100: range false, Not includes; matches"
+    },
+    {
+      "row": {
+        "id": 2,
+        "quantity": 100,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "quantity = 100 on gte boundary: range true, excluded"
+    },
+    {
+      "row": {
+        "id": 3,
+        "quantity": 999,
+        "region": "east",
+        "status": "active"
+      },
+      "why": "quantity = 999 on lte boundary: excluded"
+    },
+    {
+      "row": {
+        "id": 4,
+        "quantity": 1000,
+        "region": "east",
+        "status": "active"
+      },
+      "why": "above 999: matches"
+    },
+    {
+      "row": {
+        "id": 5,
+        "quantity": null,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "SEM-2: null quantity included by Not"
+    },
+    {
+      "row": {
+        "id": 6,
+        "quantity": 500,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "inside range: excluded"
+    },
+    {
+      "row": {
+        "id": 7,
+        "quantity": 99,
+        "region": "EAST",
+        "status": "ACTIVE"
+      },
+      "why": "case variants, below range: matches"
+    },
+    {
+      "row": {
+        "id": 8,
+        "quantity": 50,
+        "region": "north",
+        "status": "active"
+      },
+      "why": "region fails OR group"
+    },
+    {
+      "row": {
+        "id": 9,
+        "quantity": 50,
+        "region": "west",
+        "status": "pending"
+      },
+      "why": "status fails"
+    },
+    {
+      "row": {
+        "id": 10,
+        "quantity": -3,
+        "region": null,
+        "status": "active"
+      },
+      "why": "null region fails OR group"
+    }
+  ]
+}

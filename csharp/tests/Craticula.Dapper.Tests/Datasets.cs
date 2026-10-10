@@ -9,8 +9,8 @@ namespace Craticula.Dapper.Tests;
 /// oracle" into evidence rather than a coincidence an implementation ignoring the filter would also
 /// satisfy.
 ///
-/// <para>Written inline rather than as <c>dataset.json</c> files: that name is reserved for #1655's
-/// execution tier, and a row whose purpose is "this is the one exactly ON the boundary" is only
+/// <para>Written inline rather than as <c>dataset.json</c> files: that format belongs to the
+/// execution-equality tier (#1655), and a row whose purpose is "this is the one exactly ON the boundary" is only
 /// self-explanatory next to the reasoning that chose it.</para>
 /// </summary>
 internal static class Datasets

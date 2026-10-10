@@ -12,29 +12,54 @@
         },
         {
           "bool": {
-            "must_not": [
+            "should": [
               {
                 "bool": {
-                  "must": [
+                  "must_not": [
                     {
-                      "term": {
-                        "region.keyword": {
-                          "value": "blocked",
-                          "case_insensitive": true
-                        }
-                      }
-                    },
-                    {
-                      "range": {
-                        "quantity": {
-                          "lt": 0
-                        }
+                      "bool": {
+                        "must": [
+                          {
+                            "term": {
+                              "region.keyword": {
+                                "value": "blocked",
+                                "case_insensitive": true
+                              }
+                            }
+                          },
+                          {
+                            "range": {
+                              "quantity": {
+                                "lt": 0
+                              }
+                            }
+                          }
+                        ]
                       }
                     }
                   ]
                 }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "exists": {
+                      "field": "region"
+                    }
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "exists": {
+                      "field": "quantity"
+                    }
+                  }
+                }
               }
-            ]
+            ],
+            "minimum_should_match": 1
           }
         }
       ]

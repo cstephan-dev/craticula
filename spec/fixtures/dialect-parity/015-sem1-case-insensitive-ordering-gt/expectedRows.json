@@ -1,0 +1,11 @@
+{
+  "columns": ["id", "lastName"],
+  "rows": [
+    [3, "Smyth"],
+    [4, "SMYTHE"],
+    [6, "Taylor"],
+    [7, "taylor"],
+    [9, "Smithers"],
+    [10, "Zed"]
+  ]
+}

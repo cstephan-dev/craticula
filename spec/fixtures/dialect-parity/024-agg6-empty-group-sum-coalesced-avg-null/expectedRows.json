@@ -1,0 +1,11 @@
+{
+  "columns": ["department", "salary", "age"],
+  "rows": [
+    [null, "10.00", 20.0],
+    ["Finance", "0", 30.0],
+    ["Engineering", "220000.50", 35.0],
+    ["Operations", "100000.00", 35.0],
+    ["Legal", "90000.00", null],
+    ["Marketing", "50000.00", null]
+  ]
+}

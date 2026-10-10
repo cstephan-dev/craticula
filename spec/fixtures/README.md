@@ -31,8 +31,8 @@ the fixtures; that one describes how they are run.
   rowStream.json?           — optional, CSV/TSV writer tier: the rows an adapter yields (added #1651)
   writerConfig.json?        — optional, CSV/TSV writer tier: the HOST's delimiter/BOM/header/decimal
                               separator (EXP-5's PER-FIELD overrides live in schema.json instead)
-  dataset.json?             — optional, execution-equality tier (T-1b) — see "Deferred" below
-  expectedRows.json?        — optional, execution-equality tier (T-1b) — see "Deferred" below
+  dataset.json?             — optional, execution-equality tier (T-1b): the seed — see "Execution equality" below
+  expectedRows.json?        — optional, execution-equality tier (T-1b): the expected result — see "Execution equality" below
 ```
 
 **The writer tier (EXP-4/EXP-8), added by #1651.** A CSV/TSV export has three inputs, only one of
@@ -52,8 +52,8 @@ Note that a **fourth** input reaches the writer and is not a file of its own: EX
 format overrides in *schema config*, so `026`'s two overrides live in its `schema.json` and reach the
 writer through the request adapter, exactly as a `label` does. `writerConfig.json` carries only what
 EXP-4 makes host configuration. **These files are deliberately
-not `dataset.json`/`expectedRows.json`** — see the "Deferred" section below for what those two names are
-reserved for, and the category README for why a row stream is not a database seed.
+not `dataset.json`/`expectedRows.json`** — see the "Execution equality" section below for what those two names are
+for, and the category README for why a row stream is not a database seed.
 
 Every `expected/<backend>.artifact.json` validates against its shape schema in `schemas/`
 (`sql-artifact.schema.json` for every SQL dialect, `mongo-artifact.schema.json`,
@@ -90,24 +90,35 @@ outside T-1a:
 | Tier | Dialects | What that means |
 |---|---|---|
 | **v1 supported** (§5) | Postgres, SQL Server, MySQL/MariaDB, SQLite | Graded by T-1a; on the release path; execution-equality (T-1b, Feature #1624) will cover them. |
-| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 41 arms across `dialect-parity/006`-`023` (18) and all of `group-aggregation/` (23) — but **no CI job runs it against a real Oracle instance and no release is blocked on it**. OQ-6 stays open. Its host obligations (12.2+, `MAX_STRING_SIZE = EXTENDED`, quoted DDL) are recorded in `dialect-parity/README.md`. |
+| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 41 arms across `dialect-parity/006`-`023` (18) and all of `group-aggregation/` (23) — but **no CI job runs it against a real Oracle instance and no release is blocked on it**. OQ-6 stays open, and the execution tier (T-1b, #1655) does not run it either. Its host obligations (12.2+, `MAX_STRING_SIZE = EXTENDED`, quoted DDL) are recorded in `dialect-parity/README.md`. |
 
 An Oracle artifact disagreeing with a compiler is still a bug in one of the two, on the same terms as
 any other arm; the tier is about *coverage beyond the artifact*, not about how seriously the artifact
 is taken. Do not quietly promote it — nothing here has been executed.
 
-## Deferred: `dataset.json` / `expectedRows.json` (execution-equality tier, T-1b)
+## Execution equality: `dataset.json` / `expectedRows.json` (T-1b)
 
-Not populated in this pass. They require a real seeded database to derive expected row IDs from —
-fabricating them without one would be inventing data, not capturing ground truth, which is worse
-than leaving the field absent. They get added to these same fixture directories once integration
-containers exist (a later Feature #1624 story) — this is additive, not a schema change.
+The second assertion tier. T-1a compares the artifact a compiler writes; T-1b runs the compiled query on a real engine
+over a seeded table and compares the rows it returns. **The rules are normative in `spec/semantics.md`'s
+"Addendum — execution equality" (XEQ-1..XEQ-4)**, not here: what a fixture carries, the value encodings, the
+comparison rule and how an accepted divergence is declared. In short:
 
-**Still reserved after #1651 added the writer tier.** A `rowStream.json` is *not* a small
-`dataset.json`: a seed is what a database holds before the query runs, while a row stream is what an
-adapter yields **after** filtering, sorting, projection and physical-to-logical aliasing. The two can
-sit in the same directory later without either meaning the other — a writer fixture takes no
-position on what was stored, and an execution fixture takes none on how the bytes are formatted.
+- `dataset.json` is the seed (`{"rows": [{"row": {<logical colId>: value}, "why": "…"}]}`); `expectedRows.json` is
+  the ordered result (`{"columns": […], "rows": [[…]]}`, optionally with `allowedDivergence`). Both validate against
+  `schemas/dataset.schema.json` and `schemas/expected-rows.schema.json`.
+- A fixture carries both or neither. The seed belongs to the fixture; nothing is shared across fixtures.
+- The expected rows are **hand-derived from the semantics, never copied from an engine run**. An oracle taken from the
+  implementation it grades only proves the implementation agrees with itself, which is the failure this tier exists to
+  catch. Each category README says which fixtures are in scope and why the others are not.
+- A `rowStream.json` is *not* a small `dataset.json`: a seed is what a database holds before the query runs, a row
+  stream is what an adapter yields **after** filtering, sorting, projection and physical-to-logical aliasing. The two
+  sit in the same directory without either meaning the other.
+
+**Worked example: `operators/001-eq-string`.** Its seed holds seven rows chosen to sit on each side of every boundary
+(`"active"`, `"ACTIVE"`, `"Approved"`, `"pending"`, a null, `""`, `"activex"`), and its expected result is the three rows
+that match case-insensitively, in `id` order: `[[1,"active"],[2,"ACTIVE"],[3,"Approved"]]`. Without the collation only
+id 1 would match; as a `startsWith`, id 7 would join. 179 fixtures carry the pair today, in every category that can
+be executed; the rule lives in `semantics.md` XEQ-1..XEQ-4.
 
 ## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
 
@@ -128,11 +139,10 @@ explicitly, not leave it bare) and **SQL-7** (an engine whose empty string *is* 
 compiles `blank` on a text field to a bare `IS NULL`; emitting the `= ''` disjunct there makes
 `notBlank` return no rows at all). Read that addendum before authoring or reviewing any SQL artifact.
 
-**One cross-dialect divergence is known and deliberately unfixed**, because T-1a compares strings and
-cannot grade it: a zero-width page window (`{"startRow": 100, "endRow": 100}`) yields an empty page on
-Postgres/MySQL/SQLite and a **server error** on SQL Server. Recorded with its reasoning in
-`dialect-parity/README.md`'s "Known divergences deferred to the execution-equality tier"; owned by
-Feature #1624 (T-1b). No fixture exercises it — every fixture pages `0..100`.
+**The one cross-dialect divergence once known here is settled**: a zero-width page window
+(`{"startRow": 100, "endRow": 100}`) returned an empty page on Postgres/MySQL/SQLite and a server error
+on SQL Server (T-SQL msg 10744). The wire request is now rejected at the parser (`semantics.md` SEM-6,
+"The page window is non-empty"), so no backend sees it; pinned by `adversarial/027-zero-width-page-window`.
 
 This was not always so. Fixtures authored in #1630 disagreed with each other on all six of those
 points (the suite was written by seven parallel agents with no compiler to check it). #1638 picked
@@ -145,8 +155,8 @@ Both arms of it have since closed — one in #1639, the other in #1640 and #1641
 recorded where the affected artifacts live rather than only here. **The register is therefore empty:
 `grep -rn "Known open contradiction" spec/` finding nothing is the convention working, not a record
 that went missing.** An artifact that disagrees with a compiler is a bug in one of the two, never an
-expected divergence, with the single exception recorded in the paragraph above (the zero-width page
-window, owned by #1624 at the execution tier).
+expected divergence, with no exception: the zero-width page window that was once one is rejected at the
+parser (SEM-6, `adversarial/027`).
 
 - **CLOSED (#1639): the `mysql`/`mssql`/`sqlite` artifacts in `dialect-parity/` are now quoted too.**
   The *rule* was always universal; only the quote character (`"` vs `[…]` vs backticks) was each
@@ -160,7 +170,7 @@ window, owned by #1624 at the execution tier).
   the per-dialect arm coverage policy, SQLite's `GLOB` for a case-sensitive substring match, SQL
   Server's explicit case-**sensitive** collation, and its `[` escaping) — now normative in
   `spec/semantics.md` as **SQL-5**/**SQL-6** — along with the host DDL obligations and the one known
-  divergence deferred to T-1b (#1624).
+  divergence then deferred to T-1b (the zero-width page window, since settled at the parser, SEM-6).
 - **CLOSED by #1642: the `blank`/`notBlank` composition was scoped to four dialects and Oracle
   falsified it.** `ISqlDialect` had recorded, since #1638, that `IS NULL`/`= ''` were pushed down to
   the query builder because "every v1 dialect spells them identically" — true of four engines and
@@ -495,6 +505,10 @@ third surface: a `groupable: true, filterable: false` colId consumed as a `group
 (`DrillDownFilter.Synthesize` turns it into a literal filter predicate, same as `filterModel` would).
 `adversarial` moves **25 → 26** directories; no other runner or artifact count moves, for the same
 reason as `024`/`025`.
+
+**`adversarial/027` (#2208) pins the zero-width page window** (`startRow: 100, endRow: 100`): refused at the request
+boundary, `requestParsing` / `malformed-request`, before any compilation, so no backend ever sees a `FETCH NEXT 0 ROWS`
+(T-SQL error 10744). `adversarial` moves **26 → 27** directories; no runner or artifact count moves.
 
 ## Case-insensitivity mechanism policy (SEM-1)
 

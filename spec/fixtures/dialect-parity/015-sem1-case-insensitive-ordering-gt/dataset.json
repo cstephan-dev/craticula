@@ -1,0 +1,15 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith" }, "why": "equal: not greater" },
+    { "row": { "id": 2, "lastName": "smith" }, "why": "equal ignoring case: not greater" },
+    { "row": { "id": 3, "lastName": "Smyth" }, "why": "greater at the third letter" },
+    { "row": { "id": 4, "lastName": "SMYTHE" }, "why": "greater, upper case" },
+    { "row": { "id": 5, "lastName": "Jones" }, "why": "less" },
+    { "row": { "id": 6, "lastName": "Taylor" }, "why": "greater" },
+    { "row": { "id": 7, "lastName": "taylor" }, "why": "greater, lower case" },
+    { "row": { "id": 8, "lastName": "Smi" }, "why": "less: a prefix sorts before" },
+    { "row": { "id": 9, "lastName": "Smithers" }, "why": "greater: Smith is a prefix of it" },
+    { "row": { "id": 10, "lastName": "Zed" }, "why": "greater" },
+    { "row": { "id": 11, "lastName": null }, "why": "null never compares greater" }
+  ]
+}

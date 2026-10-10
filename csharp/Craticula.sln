@@ -53,6 +53,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Craticula.Conformance.Drive
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Craticula.Conformance.Tests", "tests\Craticula.Conformance.Tests\Craticula.Conformance.Tests.csproj", "{9DC772EF-33B8-4E8C-B117-4F3BC1680D8D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Craticula.Integration.Tests", "tests\Craticula.Integration.Tests\Craticula.Integration.Tests.csproj", "{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -327,6 +329,18 @@ Global
 		{9DC772EF-33B8-4E8C-B117-4F3BC1680D8D}.Release|x64.Build.0 = Release|Any CPU
 		{9DC772EF-33B8-4E8C-B117-4F3BC1680D8D}.Release|x86.ActiveCfg = Release|Any CPU
 		{9DC772EF-33B8-4E8C-B117-4F3BC1680D8D}.Release|x86.Build.0 = Release|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Debug|x64.Build.0 = Debug|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Debug|x86.Build.0 = Debug|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Release|Any CPU.Build.0 = Release|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Release|x64.ActiveCfg = Release|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Release|x64.Build.0 = Release|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Release|x86.ActiveCfg = Release|Any CPU
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -354,5 +368,6 @@ Global
 		{C08786C6-66B8-4121-91D4-B0A5D26DC85A} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{E9DC6DC6-EF62-45BE-BBAC-475A76C08503} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{9DC772EF-33B8-4E8C-B117-4F3BC1680D8D} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{79BE2B3B-9FDE-4FBA-9241-2E87FF031F12} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

@@ -1,0 +1,8 @@
+{
+  "columns": ["id", "isActive"],
+  "rows": [
+    [2, false],
+    [3, null],
+    [4, false]
+  ]
+}

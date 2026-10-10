@@ -1,0 +1,7 @@
+{
+  "columns": ["id", "orderDate", "customerName", "totalAmount", "status", "region", "notes"],
+  "rows": [
+    [1901, "2026-03-23", "Glenmark Foods", "88.10", "shipped", "APAC", "@SUM(A1:A10)"],
+    [1902, "2026-03-25", "Halvern Group", "1200.00", "shipped", "EMEA", "@SUM(A1:A10)"]
+  ]
+}

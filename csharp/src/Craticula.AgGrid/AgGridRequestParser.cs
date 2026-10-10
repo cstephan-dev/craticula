@@ -142,7 +142,7 @@ public static class AgGridRequestParser
         SortItemValidator.Validate(sort);
         GroupSpecValidator.Validate(group);
         AggregationValidator.Validate(aggregations);
-        PageSpecValidator.Validate(page);
+        PageSpecValidator.ValidateRequestWindow(page);
 
         return new AgGridParsedRequest
         {

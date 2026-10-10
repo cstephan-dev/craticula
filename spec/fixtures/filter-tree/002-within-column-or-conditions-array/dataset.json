@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "region": "west"
+      },
+      "why": "first OR arm"
+    },
+    {
+      "row": {
+        "id": 2,
+        "region": "East"
+      },
+      "why": "SEM-1: second arm matches case-folded"
+    },
+    {
+      "row": {
+        "id": 3,
+        "region": "north"
+      },
+      "why": "neither arm"
+    },
+    {
+      "row": {
+        "id": 4,
+        "region": null
+      },
+      "why": "null never equals; excluded"
+    },
+    {
+      "row": {
+        "id": 5,
+        "region": "WEST"
+      },
+      "why": "first arm, case variant"
+    },
+    {
+      "row": {
+        "id": 6,
+        "region": ""
+      },
+      "why": "empty string is a value, not west or east"
+    },
+    {
+      "row": {
+        "id": 7,
+        "region": "westx"
+      },
+      "why": "eq not startsWith; excluded"
+    },
+    {
+      "row": {
+        "id": 8,
+        "region": "east"
+      },
+      "why": "second arm, exact"
+    }
+  ]
+}

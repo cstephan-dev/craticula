@@ -1,0 +1,11 @@
+{
+  "columns": ["id", "region", "segment", "product", "fiscalYear", "amount", "quantity"],
+  "rows": [
+    ["s05", "EMEA", "Enterprise", "Anvil", 2024, "99.99", 0],
+    ["s02", "EMEA", "Enterprise", "Gadget", 2023, null, 1],
+    ["s09", "EMEA", "Enterprise", "Gadget", 2024, "4.50", 3],
+    ["s01", "EMEA", "Enterprise", "Widget", 2024, "10.50", 2],
+    ["s03", "EMEA", "Enterprise", "Widget", 2022, "7.25", 4],
+    ["s04", "EMEA", "Enterprise", null, 2024, "3.00", 9]
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "age": 30 }, "why": "first excluded value" },
+    { "row": { "id": 2, "age": 40 }, "why": "second excluded value" },
+    { "row": { "id": 3, "age": 35 }, "why": "between the two: returned" },
+    { "row": { "id": 4, "age": null }, "why": "SEM-2: each neq arm is null-inclusive, so the AND keeps null" },
+    { "row": { "id": 5, "age": 31 }, "why": "just above the first: returned" },
+    { "row": { "id": 6, "age": 41 }, "why": "just above the second: returned" },
+    { "row": { "id": 7, "age": 0 }, "why": "zero is a value, returned" }
+  ]
+}

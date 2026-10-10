@@ -1,0 +1,13 @@
+{
+  "rows": [
+    { "row": {"id": 1, "hireDate": "2025-12-31"}, "why": "day before the lower bound: excluded (inclusive from, nothing earlier)" },
+    { "row": {"id": 2, "hireDate": "2026-01-01"}, "why": "exactly the lower bound: included (fromInclusive true)" },
+    { "row": {"id": 3, "hireDate": "2026-01-02"}, "why": "just inside the lower bound" },
+    { "row": {"id": 4, "hireDate": "2026-08-12"}, "why": "last day inside: included" },
+    { "row": {"id": 5, "hireDate": "2026-08-13"}, "why": "exactly the upper bound: excluded (toInclusive false, half-open)" },
+    { "row": {"id": 6, "hireDate": "2026-08-14"}, "why": "day after the upper bound: excluded" },
+    { "row": {"id": 7, "hireDate": "1999-01-01"}, "why": "far past: excluded" },
+    { "row": {"id": 8, "hireDate": "2040-06-15"}, "why": "far future: excluded" },
+    { "row": {"id": 9, "hireDate": null}, "why": "null date: inRange is not null-inclusive (SEM-2), excluded" }
+  ]
+}

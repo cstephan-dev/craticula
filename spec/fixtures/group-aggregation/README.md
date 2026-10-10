@@ -379,3 +379,24 @@ object, not an `IServerSideGetRowsRequest` — called out again in each case's `
 | 021 | `group-column-sort-via-auto-column-colid` | BM-2, AR-9, GRP-4, AG-6 | `sortModel` addresses the group column through `ag-Grid-AutoColumn`, plus the whole coupled row-group set (1 + N entries) |
 | 022 | `set-filter-values-prefix-with-active-filter` | BM-3, GRP-6(b), GRP-6(c) | the **only** case carrying the own-field exclusion and a `searchPrefix` on that same column in one statement — pins GRP-6(c)'s `WHERE` order (user's filter leads, prefix trails), which `params` compares exactly |
 | 023 | `grouped-drill-down-with-active-row-filter` | GRP-5, BM-2, AR-5, AR-8 | the **only** case carrying a consumed `groupKeys` **and** a `filterModel` — pins GRP-5's clause order (drill-down leads, user filter trails) on all seven arms, and each backend's composition of two conjunctions (SQL/Mongo nest, Search flattens into one `bool.filter`). Authored in #1644's review pass; a mutation reversing the order had passed every test in every suite |
+
+## Execution-equality oracle (T-1b, #2204)
+
+Eighteen of the 23 cases carry `dataset.json` + `expectedRows.json` (XEQ-1): `001`-`015`, `020`, `021`, `023`.
+Result columns are GRP-3's group column, then each aggregation's logical output name (the `valueCols` entry's `id`:
+`amount`, `amountSum`, `totalRevenue`, `id` for the count), typed by the function (XEQ-3); the drill-down leaves
+`005` and `006` return every schema field. Seeds carry exact-case twins (`emea` against `EMEA`) only where the
+result order cannot depend on a collation, since SEM-1/GRP-2 leave string ordering to the engine.
+
+The five BM-3 distinct-values fixtures (`016`, `017`, `018`, `019`, `022`) carry the pair too: a `setValuesRequest` has
+no `rowGroupCols`, so its one result column is the schema field named by `colId` (XEQ-3). `017` and `022` declare a
+`mongo` divergence (the user's segment filter compares case-sensitively there, accepted divergence #3), `018` and `022` a
+`search` one (the `include` regex is case-sensitive).
+
+Out of scope: nothing; every fixture in this category returns rows.
+
+Accepted divergences declared (XEQ-4): `001`, `013`, `023` carry a `search` entry for AGG-5's null group bucket, which
+ES/OpenSearch places first on an ascending sort; `017`, `018` and `022` as above.
+
+All expected rows were derived by hand from `spec/semantics.md` (GRP-2..GRP-5, AGG-1..AGG-6, SEM-3, SEM-6), not from
+any engine run or compiler output.

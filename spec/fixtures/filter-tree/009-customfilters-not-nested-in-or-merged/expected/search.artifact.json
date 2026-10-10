@@ -15,16 +15,32 @@
             "should": [
               {
                 "bool": {
-                  "must_not": [
+                  "should": [
                     {
-                      "term": {
-                        "region.keyword": {
-                          "value": "blocked",
-                          "case_insensitive": true
+                      "bool": {
+                        "must_not": [
+                          {
+                            "term": {
+                              "region.keyword": {
+                                "value": "blocked",
+                                "case_insensitive": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must_not": {
+                          "exists": {
+                            "field": "region"
+                          }
                         }
                       }
                     }
-                  ]
+                  ],
+                  "minimum_should_match": 1
                 }
               },
               {

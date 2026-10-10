@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": {"id": 1, "orderDate": "2026-01-01", "customerName": "A Co", "totalAmount": "1.00", "status": "shipped", "region": "EMEA", "notes": null}, "why": "region EMEA: in the set" },
+    { "row": {"id": 2, "orderDate": "2026-01-02", "customerName": "B Co", "totalAmount": "2.00", "status": "shipped", "region": "APAC", "notes": null}, "why": "region APAC: in the set" },
+    { "row": {"id": 3, "orderDate": "2026-01-03", "customerName": "C Co", "totalAmount": "3.00", "status": "shipped", "region": "AMER", "notes": null}, "why": "region AMER: not in the set" },
+    { "row": {"id": 4, "orderDate": "2026-01-04", "customerName": "D Co", "totalAmount": "4.00", "status": "shipped", "region": "emea", "notes": null}, "why": "region \"emea\": region is case-sensitive, so the set excludes it" },
+    { "row": {"id": 5, "orderDate": "2026-01-05", "customerName": "E Co", "totalAmount": "5.00", "status": "shipped", "region": null, "notes": null}, "why": "null region: in is not null-inclusive, excluded" },
+    { "row": {"id": 6, "orderDate": "2026-01-06", "customerName": "F Co", "totalAmount": "6.00", "status": "shipped", "region": "EMEA", "notes": null}, "why": "second EMEA row: in the set; with no sortModel the id tiebreaker orders the result" },
+    { "row": {"id": 7, "orderDate": "2026-01-07", "customerName": "G Co", "totalAmount": "7.00", "status": "shipped", "region": "EMEA-North", "notes": null}, "why": "region \"EMEA-North\": in is exact membership, excluded" }
+  ]
+}

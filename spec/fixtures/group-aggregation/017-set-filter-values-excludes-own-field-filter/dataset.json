@@ -1,0 +1,13 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "10.00", "quantity": 1 }, "why": "offered: Enterprise row; the grid's own region filter (EMEA) is dropped, so other regions stay offered (GRP-6(b))" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "20.00", "quantity": 2 }, "why": "not offered through this row: segment is SMB" },
+    { "row": { "id": "s03", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2023, "amount": "5.00", "quantity": 3 }, "why": "offered: Enterprise row in a region the dropped filter would have hidden" },
+    { "row": { "id": "s04", "region": "NA", "segment": "enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "7.00", "quantity": 4 }, "why": "SEM-1: the segment filter is case-insensitive, so lowercase 'enterprise' matches on the SQL dialects and Search; MongoDB's pipeline carries no collation (accepted divergence #3)" },
+    { "row": { "id": "s05", "region": "LATAM", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "8.00", "quantity": 5 }, "why": "LATAM only has SMB rows: not offered" },
+    { "row": { "id": "s06", "region": "APAC", "segment": "SMB", "product": "Gadget", "fiscalYear": 2022, "amount": "6.00", "quantity": 6 }, "why": "APAC again, SMB: already offered through s03" },
+    { "row": { "id": "s07", "region": "NA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "9.00", "quantity": 7 }, "why": "NA again, SMB: does not qualify NA by itself" },
+    { "row": { "id": "s08", "region": "EMEA", "segment": null, "product": "Widget", "fiscalYear": 2024, "amount": "1.00", "quantity": 8 }, "why": "null segment never equals 'Enterprise'" },
+    { "row": { "id": "s09", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2023, "amount": null, "quantity": 9 }, "why": "EMEA again, Enterprise: a repeat that DISTINCT collapses" }
+  ]
+}

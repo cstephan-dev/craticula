@@ -1,0 +1,14 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "100.50", "quantity": 5 }, "why": "EMEA bucket: two non-null amounts" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2023, "amount": "49.50", "quantity": 3 }, "why": "EMEA bucket: sums with s01 to 150.00 across different segments and years" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2024, "amount": null, "quantity": 2 }, "why": "EMEA bucket: null amount, which SUM skips" },
+    { "row": { "id": "s04", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "200.00", "quantity": 7 }, "why": "APAC bucket" },
+    { "row": { "id": "s05", "region": "APAC", "segment": "SMB", "product": "Widget", "fiscalYear": 2023, "amount": "0.25", "quantity": 1 }, "why": "APAC bucket: a sub-unit decimal that a float sum would blur" },
+    { "row": { "id": "s06", "region": "NA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "300.75", "quantity": 4 }, "why": "NA bucket" },
+    { "row": { "id": "s07", "region": "NA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2022, "amount": "-50.25", "quantity": 6 }, "why": "NA bucket: a negative amount" },
+    { "row": { "id": "s08", "region": null, "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "10.00", "quantity": 1 }, "why": "null group key: its own bucket, ordered last on asc (SEM-3)" },
+    { "row": { "id": "s09", "region": null, "segment": "SMB", "product": "Gadget", "fiscalYear": 2023, "amount": "5.50", "quantity": 1 }, "why": "second null-region row: the null bucket is one bucket, not one per row" },
+    { "row": { "id": "s10", "region": "LATAM", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 1 }, "why": "a bucket whose every amount is null: AGG-6 sum is 0, not null" }
+  ]
+}

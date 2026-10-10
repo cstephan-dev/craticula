@@ -1,0 +1,9 @@
+{
+  "rows": [
+    { "row": { "id": 1, "status": null }, "why": "SEM-2: null is blank" },
+    { "row": { "id": 2, "status": "" }, "why": "SEM-2: the empty string is blank for a text field" },
+    { "row": { "id": 3, "status": " " }, "why": "a single space is a value, not blank" },
+    { "row": { "id": 4, "status": "active" }, "why": "an ordinary value" },
+    { "row": { "id": 5, "status": "NULL" }, "why": "the text \"NULL\" is a value, not a null" }
+  ]
+}

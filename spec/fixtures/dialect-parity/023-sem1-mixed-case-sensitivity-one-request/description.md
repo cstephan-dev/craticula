@@ -41,9 +41,9 @@ Per backend:
 - **MongoDB**: the pipeline carries `collation: {locale: "en", strength: 2}` for `lastName`, and the
   `employeeCode` comparison is therefore rendered as **`{"$expr": {"$eq": ["$employeeCode",
   {"$literal": "AB-100"}]}}`** rather than as an ordinary field document (**MDB-9**).
-  Aggregation-expression comparison uses simple binary comparison and does not consult the
-  query-level collation — the same property SEM-2's own MongoDB paragraph relies on when it notes
-  that a case-insensitive comparison *inside* an `$expr` has to be spelled with `$strcasecmp`. This
+  MongoDB 7.0 applies the aggregate's query-level collation to `$expr` comparisons as well, so the
+  `$expr` form does **not** keep `employeeCode` case-sensitive: the `mongo` `allowedDivergence` entry
+  records the rows the engine returns (MDB-9, accepted divergence #5). This
   is the only artifact in the suite that contains an `$expr`, and it is here rather than in
   `operators/` for the same reason `021`'s GLOB is: the shape exists only because two backends answer
   the same IR differently.

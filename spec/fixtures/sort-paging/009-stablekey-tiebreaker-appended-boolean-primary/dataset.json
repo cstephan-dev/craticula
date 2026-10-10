@@ -1,0 +1,53 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "isActive": false
+      },
+      "why": "false"
+    },
+    {
+      "row": {
+        "id": 2,
+        "isActive": true
+      },
+      "why": "true"
+    },
+    {
+      "row": {
+        "id": 3,
+        "isActive": null
+      },
+      "why": "null sorts first on desc"
+    },
+    {
+      "row": {
+        "id": 4,
+        "isActive": true
+      },
+      "why": "tie with id 2"
+    },
+    {
+      "row": {
+        "id": 5,
+        "isActive": false
+      },
+      "why": "tie with id 1"
+    },
+    {
+      "row": {
+        "id": 6,
+        "isActive": null
+      },
+      "why": "second null"
+    },
+    {
+      "row": {
+        "id": 7,
+        "isActive": true
+      },
+      "why": "true"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "salary": "50000.00" }, "why": "tie with id 4: the stableKey tiebreaker orders equal salaries ascending" },
+    { "row": { "id": 2, "salary": null }, "why": "null salary: first on desc via the ISNULL prefix key" },
+    { "row": { "id": 3, "salary": "75000.50" }, "why": "highest value, tied with id 8" },
+    { "row": { "id": 4, "salary": "50000.00" }, "why": "tie with id 1" },
+    { "row": { "id": 5, "salary": null }, "why": "second null: ties with id 2, so id ascending" },
+    { "row": { "id": 6, "salary": "0.00" }, "why": "zero is a value, not a null" },
+    { "row": { "id": 7, "salary": "-100.25" }, "why": "negative decimal: last among values on desc" },
+    { "row": { "id": 8, "salary": "75000.50" }, "why": "tie with id 3" }
+  ]
+}

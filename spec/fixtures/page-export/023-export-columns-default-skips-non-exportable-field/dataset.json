@@ -1,0 +1,9 @@
+{
+  "rows": [
+    { "row": {"id": 1, "orderDate": "2026-01-05", "customerName": "Acme", "totalAmount": "10.00", "status": "shipped", "region": "EMEA", "notes": "priority"}, "why": "notes \"priority\": matches the filter on a non-exportable field (filterable and exportable are independent)" },
+    { "row": {"id": 2, "orderDate": "2026-01-06", "customerName": "Beta", "totalAmount": "20.00", "status": "shipped", "region": "APAC", "notes": "PRIORITY"}, "why": "notes \"PRIORITY\": notes is case-sensitive, excluded" },
+    { "row": {"id": 3, "orderDate": "2026-01-07", "customerName": "Gamma", "totalAmount": "30.00", "status": "shipped", "region": "AMER", "notes": "high priority"}, "why": "notes \"high priority\": eq, not contains, excluded" },
+    { "row": {"id": 4, "orderDate": "2026-01-08", "customerName": "Delta", "totalAmount": "40.00", "status": "shipped", "region": "EMEA", "notes": null}, "why": "null notes: excluded" },
+    { "row": {"id": 5, "orderDate": "2026-01-09", "customerName": "Eps", "totalAmount": "50.00", "status": "pending", "region": "EMEA", "notes": "priority"}, "why": "notes \"priority\" with another status: included, no other filter applies" }
+  ]
+}

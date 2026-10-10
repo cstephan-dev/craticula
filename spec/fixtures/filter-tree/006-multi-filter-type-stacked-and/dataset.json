@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "row": {
+        "customerName": "Acme",
+        "id": 1
+      },
+      "why": "contains acme, no 'test': matches"
+    },
+    {
+      "row": {
+        "customerName": "Acme Test",
+        "id": 2
+      },
+      "why": "contains the excluded word"
+    },
+    {
+      "row": {
+        "customerName": "ACME TESTING",
+        "id": 3
+      },
+      "why": "SEM-1: notContains folds case; excluded"
+    },
+    {
+      "row": {
+        "customerName": "Globex",
+        "id": 4
+      },
+      "why": "fails the contains arm"
+    },
+    {
+      "row": {
+        "customerName": null,
+        "id": 5
+      },
+      "why": "null: notContains is null-inclusive but contains is not; excluded by AND"
+    },
+    {
+      "row": {
+        "customerName": "Acme Corp",
+        "id": 6
+      },
+      "why": "matches"
+    },
+    {
+      "row": {
+        "customerName": "contest acme",
+        "id": 7
+      },
+      "why": "'contest' contains 'test' as a substring: excluded"
+    },
+    {
+      "row": {
+        "customerName": "acme",
+        "id": 8
+      },
+      "why": "lowercase match"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1500.00", "quantity": 1 }, "why": "EMEA bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "250.25", "quantity": 2 }, "why": "EMEA bucket: sums with s01 to 1750.25" },
+    { "row": { "id": "s03", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2023, "amount": "900.00", "quantity": 3 }, "why": "APAC bucket" },
+    { "row": { "id": "s04", "region": "NA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 4 }, "why": "NA bucket: null amount only, sum 0 under the explicit alias too" },
+    { "row": { "id": "s05", "region": "LATAM", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2022, "amount": "-75.50", "quantity": 5 }, "why": "LATAM bucket: negative total" },
+    { "row": { "id": "s06", "region": "APAC", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "0.50", "quantity": 6 }, "why": "APAC bucket: sums with s03 to 900.50" }
+  ]
+}

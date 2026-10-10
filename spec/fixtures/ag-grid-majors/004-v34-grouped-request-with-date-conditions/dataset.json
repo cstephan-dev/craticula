@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "department": "Engineering",
+        "salary": "100000.00",
+        "hireDate": "2018-01-01"
+      },
+      "why": "hireDate lower bound itself: gte includes it"
+    },
+    {
+      "row": {
+        "id": 2,
+        "department": "Engineering",
+        "salary": "50000.50",
+        "hireDate": "2020-06-15"
+      },
+      "why": "inside the range"
+    },
+    {
+      "row": {
+        "id": 3,
+        "department": "Engineering",
+        "salary": "70000.00",
+        "hireDate": "2024-01-01"
+      },
+      "why": "upper bound itself: lt excludes it"
+    },
+    {
+      "row": {
+        "id": 4,
+        "department": "Sales",
+        "salary": "40000.00",
+        "hireDate": "2019-03-01"
+      },
+      "why": "inside the range"
+    },
+    {
+      "row": {
+        "id": 5,
+        "department": "Sales",
+        "salary": null,
+        "hireDate": "2021-05-05"
+      },
+      "why": "inside, null salary: SUM ignores it"
+    },
+    {
+      "row": {
+        "id": 6,
+        "department": "Support",
+        "salary": null,
+        "hireDate": "2022-02-02"
+      },
+      "why": "only row of its group and null salary: the sum is 0, not null"
+    },
+    {
+      "row": {
+        "id": 7,
+        "department": "Support",
+        "salary": "30000.00",
+        "hireDate": "2017-12-31"
+      },
+      "why": "one day before the lower bound: filtered out"
+    },
+    {
+      "row": {
+        "id": 8,
+        "department": null,
+        "salary": "25000.00",
+        "hireDate": "2020-01-01"
+      },
+      "why": "null department: its own group, ordered last"
+    },
+    {
+      "row": {
+        "id": 9,
+        "department": "Sales",
+        "salary": "99999.00",
+        "hireDate": null
+      },
+      "why": "null hireDate: SEM-3, a range never matches null"
+    }
+  ]
+}

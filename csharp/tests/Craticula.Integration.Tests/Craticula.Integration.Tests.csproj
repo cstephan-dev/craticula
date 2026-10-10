@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+
+    <!-- Test-only engine clients and containers (approved 2026-10-10, tech-stack.approved.md; versions in
+         Directory.Packages.props). Elasticsearch has no client package: the compiled DSL goes over HttpClient. -->
+    <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.MySql" />
+    <PackageReference Include="Testcontainers.MongoDb" />
+    <PackageReference Include="Testcontainers.OpenSearch" />
+    <PackageReference Include="Testcontainers.Elasticsearch" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="MongoDB.Driver" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- The execution-equality tier (T-1b, T-2, #1655): this project is the HOST, so it is the one place that
+       may reference every core package and, from #2206/#2207, the DB drivers and Testcontainers (AR-3:
+       core packages never reference a driver; tech-stack.approved.md records the approval). -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/Craticula.Core/Craticula.Core.csproj" />
+    <ProjectReference Include="../../src/Craticula.AgGrid/Craticula.AgGrid.csproj" />
+    <ProjectReference Include="../../src/Craticula.Sql/Craticula.Sql.csproj" />
+    <ProjectReference Include="../../src/Craticula.Mongo/Craticula.Mongo.csproj" />
+    <ProjectReference Include="../../src/Craticula.Search/Craticula.Search.csproj" />
+  </ItemGroup>
+
+</Project>

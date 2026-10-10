@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.pluries.dev/craticula/v1/fixtures/dataset.schema.json",
+  "title": "Execution-equality seed (fixture dataset.json shape)",
+  "description": "T-1b's input: what a database holds BEFORE the fixture's query runs. The engine loads these rows into the table named by the fixture's schema.json `source`, then the compiled query is executed against them and compared with expectedRows.json (XEQ-1..XEQ-4 in spec/semantics.md). Rows are keyed by LOGICAL colId, never by a physical column, so one seed serves every backend; each backend's harness maps colId to its own physical name through the schema's `physical` block. A fixture carries dataset.json and expectedRows.json together or neither. This file is NOT rowStream.json: a seed is what is stored before the query, a row stream is what an adapter yields after it. Value encodings are decided by each field's declared GridSchema type and are specified in XEQ-2; this schema can only say a cell is a scalar, so a runner (and the C# guard test) checks each cell against the field's own type.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rows"],
+  "properties": {
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The seeded rows. At least one: a seed with no rows cannot tell a correct compiler from one that returns nothing.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["row"],
+        "properties": {
+          "row": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "One stored row, keyed by logical colId. Every field declared in the fixture's schema.json MUST appear; a null is written as an explicit JSON null, never by omitting the key (XEQ-2), so a reader can tell 'null' from 'forgot'.",
+            "additionalProperties": {
+              "anyOf": [
+                { "type": "string" },
+                { "type": "number" },
+                { "type": "boolean" },
+                { "type": "null" }
+              ],
+              "description": "One cell. Never an object or an array: v1 seeds are flat."
+            }
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why this row is in the seed: the boundary it sits on, the case variant it tests, the null it carries, the wrong implementation it catches. Optional in the schema so a tool can emit a bare seed, but every authored fixture states it (a row nobody can justify is a row that stops discriminating when the suite changes)."
+          }
+        }
+      }
+    }
+  }
+}

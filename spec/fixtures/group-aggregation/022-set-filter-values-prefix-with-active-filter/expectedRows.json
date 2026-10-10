@@ -1,0 +1,44 @@
+{
+  "columns": ["region"],
+  "rows": [
+    ["EU"],
+    ["Eurasia"],
+    ["europe"]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "mongo",
+      "reason": "accepted divergence #3 (GRP-2, GRP-6): no query-level collation on MongoDB, so the segment filter is case-sensitive and 'enterprise' does not match; the prefix is a regex with the i option and still folds case",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["region"],
+        "rows": [
+          ["EU"],
+          ["europe"]
+        ]
+      }
+    },
+    {
+      "backend": "mysql",
+      "reason": "accepted divergence #4 (GRP-2, SEM-1, GRP-6(b)): MySQL spells no collation, so on the binary columns GRP-2 needs the segment filter and the prefix 'eu' are case-sensitive: 'enterprise' does not match and only 'europe' is offered",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["region"],
+        "rows": [
+          ["europe"]
+        ]
+      }
+    },
+    {
+      "backend": "search",
+      "reason": "OSE-12 (AGG-5 register): the terms aggregation's include is a Lucene regex with no case-insensitivity option, so the prefix 'eu' is case-sensitive as typed and only 'europe' is offered",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["region"],
+        "rows": [
+          ["europe"]
+        ]
+      }
+    }
+  ]
+}

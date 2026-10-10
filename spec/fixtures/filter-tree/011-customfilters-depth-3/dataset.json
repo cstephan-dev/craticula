@@ -1,0 +1,46 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "region": "west"
+      },
+      "why": "not blocked: matches"
+    },
+    {
+      "row": {
+        "id": 2,
+        "region": "blocked"
+      },
+      "why": "excluded"
+    },
+    {
+      "row": {
+        "id": 3,
+        "region": null
+      },
+      "why": "SEM-2: null included"
+    },
+    {
+      "row": {
+        "id": 4,
+        "region": "Blocked"
+      },
+      "why": "case-folded: excluded"
+    },
+    {
+      "row": {
+        "id": 5,
+        "region": "east"
+      },
+      "why": "matches"
+    },
+    {
+      "row": {
+        "id": 6,
+        "region": ""
+      },
+      "why": "empty string: matches"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "region": "west",
+        "status": "active"
+      },
+      "why": "Not(blocked) true: matches"
+    },
+    {
+      "row": {
+        "id": 2,
+        "region": "blocked",
+        "status": "active"
+      },
+      "why": "Not(blocked) false and not archived: excluded"
+    },
+    {
+      "row": {
+        "id": 3,
+        "region": "archived",
+        "status": "active"
+      },
+      "why": "Not(blocked) already true; archived arm also true"
+    },
+    {
+      "row": {
+        "id": 4,
+        "region": null,
+        "status": "active"
+      },
+      "why": "SEM-2: Not arm includes a null region"
+    },
+    {
+      "row": {
+        "id": 5,
+        "region": "west",
+        "status": "closed"
+      },
+      "why": "native status fails"
+    },
+    {
+      "row": {
+        "id": 6,
+        "region": "BLOCKED",
+        "status": "active"
+      },
+      "why": "case-folded blocked: excluded"
+    },
+    {
+      "row": {
+        "id": 7,
+        "region": "east",
+        "status": null
+      },
+      "why": "null status fails native eq"
+    },
+    {
+      "row": {
+        "id": 8,
+        "region": "ARCHIVED",
+        "status": "Active"
+      },
+      "why": "matches via either arm"
+    }
+  ]
+}

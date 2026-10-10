@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "10.00", "quantity": 1 }, "why": "Enterprise bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "20.00", "quantity": 2 }, "why": "SMB bucket, first non-null on desc" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "Consumer", "product": "Widget", "fiscalYear": 2024, "amount": "5.00", "quantity": 3 }, "why": "Consumer bucket, last on desc" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": null, "product": "Gadget", "fiscalYear": 2024, "amount": "7.00", "quantity": 4 }, "why": "null segment bucket: first on desc (adapter pins nulls first for desc)" },
+    { "row": { "id": "s05", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2023, "amount": null, "quantity": 5 }, "why": "SMB bucket: null amount skipped, sum stays 20.00" },
+    { "row": { "id": "s06", "region": "emea", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1000.00", "quantity": 6 }, "why": "GRP-2: exact drill-down excludes 'emea'" },
+    { "row": { "id": "s07", "region": "APAC", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "3.00", "quantity": 7 }, "why": "excluded by the drill-down" }
+  ]
+}

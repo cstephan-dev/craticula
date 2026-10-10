@@ -1,0 +1,53 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "status": "active"
+      },
+      "why": "not archived: matches"
+    },
+    {
+      "row": {
+        "id": 2,
+        "status": "archived"
+      },
+      "why": "excluded"
+    },
+    {
+      "row": {
+        "id": 3,
+        "status": "ARCHIVED"
+      },
+      "why": "SEM-1 case-folded: excluded"
+    },
+    {
+      "row": {
+        "id": 4,
+        "status": null
+      },
+      "why": "SEM-2: Not includes null"
+    },
+    {
+      "row": {
+        "id": 5,
+        "status": ""
+      },
+      "why": "empty string is a value other than archived: matches"
+    },
+    {
+      "row": {
+        "id": 6,
+        "status": "archivedx"
+      },
+      "why": "eq not contains: matches"
+    },
+    {
+      "row": {
+        "id": 7,
+        "status": "pending"
+      },
+      "why": "matches"
+    }
+  ]
+}

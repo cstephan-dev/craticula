@@ -2,9 +2,8 @@
 
 **Proves:** EXP-7 ("Max export rows (default 1,000,000) and a cancellation/timeout hook exposed
 by every execution adapter"), as a documented expectation — not literally exercised, since
-producing (or even declaring) a dataset with over a million rows requires a seeded database that
-does not exist yet (dataset.json/expectedRows.json are deferred per docs/feat/1630/context.md
-decision #3).
+producing (or even declaring) a dataset with over a million rows is not something a hand-authored
+seed does (`dataset.json`/`expectedRows.json` stay out of this fixture, `spec/semantics.md` XEQ-1).
 
 ## Scenario
 

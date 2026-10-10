@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "employeeCode": "AB-100" }, "why": "exact match" },
+    { "row": { "id": 2, "employeeCode": "ab-100" }, "why": "lower case: a case-sensitive field must not match" },
+    { "row": { "id": 3, "employeeCode": "Ab-100" }, "why": "mixed case" },
+    { "row": { "id": 4, "employeeCode": "AB-1000" }, "why": "longer value: eq is not startsWith" },
+    { "row": { "id": 5, "employeeCode": "AB-10" }, "why": "shorter value" },
+    { "row": { "id": 6, "employeeCode": null }, "why": "null never equals" },
+    { "row": { "id": 7, "employeeCode": "XAB-100" }, "why": "extra leading character" },
+    { "row": { "id": 8, "employeeCode": "AB-100" }, "why": "second exact match" }
+  ]
+}

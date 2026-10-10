@@ -1,0 +1,13 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1500.00", "quantity": 1 }, "why": "passes amount > 1000; EMEA total is 1500.00 + 1000.01" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "1000.00", "quantity": 2 }, "why": "boundary: not greater than 1000, so excluded before aggregation" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "1000.01", "quantity": 3 }, "why": "just above the boundary: included" },
+    { "row": { "id": "s04", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "2500.01", "quantity": 4 }, "why": "APAC total ties EMEA's 2500.01: the group column breaks the tie ascending (GRP-4)" },
+    { "row": { "id": "s05", "region": "NA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2023, "amount": "5000.00", "quantity": 5 }, "why": "largest total: first on desc" },
+    { "row": { "id": "s06", "region": "NA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2023, "amount": "999.99", "quantity": 6 }, "why": "below the boundary: excluded, NA total stays 5000.00" },
+    { "row": { "id": "s07", "region": "LATAM", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 7 }, "why": "null amount fails the comparison: LATAM contributes no row" },
+    { "row": { "id": "s08", "region": null, "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1200.50", "quantity": 8 }, "why": "null region: its own group, ordered by its sum" },
+    { "row": { "id": "s09", "region": "LATAM", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "100.00", "quantity": 9 }, "why": "below the boundary: LATAM has no passing row, so no LATAM group exists" }
+  ]
+}

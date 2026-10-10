@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "productName": "Smartwatch" }, "why": "suffix, lower-case w" },
+    { "row": { "id": 2, "productName": "WATCH" }, "why": "SEM-1: upper-case variant matches only if folded" },
+    { "row": { "id": 3, "productName": "Stopwatch" }, "why": "suffix of a longer word" },
+    { "row": { "id": 4, "productName": "Watch Band" }, "why": "substring but not a suffix: rejected" },
+    { "row": { "id": 5, "productName": "Watc" }, "why": "shorter than the suffix: rejected" },
+    { "row": { "id": 6, "productName": "Watch " }, "why": "trailing space: not a suffix, rejected" },
+    { "row": { "id": 7, "productName": null }, "why": "SEM-2: endsWith never matches null" },
+    { "row": { "id": 8, "productName": "" }, "why": "the empty string: rejected" }
+  ]
+}

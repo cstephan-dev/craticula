@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "employeeCode": "AB*10" }, "why": "the whole value" },
+    { "row": { "id": 2, "employeeCode": "xAB*10y" }, "why": "needle inside" },
+    { "row": { "id": 3, "employeeCode": "ab*10" }, "why": "lower case: the field is case-sensitive" },
+    { "row": { "id": 4, "employeeCode": "AB-10" }, "why": "a hyphen where the literal asterisk is: a wildcard reading would match" },
+    { "row": { "id": 5, "employeeCode": "ABC10" }, "why": "a glob or regex reading of * would match" },
+    { "row": { "id": 6, "employeeCode": "AB*100" }, "why": "needle at the start of a longer value" },
+    { "row": { "id": 7, "employeeCode": null }, "why": "null never matches" }
+  ]
+}

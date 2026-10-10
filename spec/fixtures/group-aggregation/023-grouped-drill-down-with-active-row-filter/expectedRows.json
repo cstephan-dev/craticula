@@ -1,0 +1,25 @@
+{
+  "columns": ["product", "amount"],
+  "rows": [
+    ["Gadget", "25.00"],
+    ["Sprocket", "0"],
+    ["Widget", "150.00"],
+    [null, "11.00"]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "search",
+      "reason": "AGG-5: ES/OpenSearch's composite aggregation has no missing_order control, so the null group bucket sorts first regardless of the requested direction, where the SQL dialects and MongoDB honour SEM-3 (nulls last on asc); the buckets and their aggregates are otherwise identical",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["product", "amount"],
+        "rows": [
+          [null, "11.00"],
+          ["Gadget", "25.00"],
+          ["Sprocket", "0"],
+          ["Widget", "150.00"]
+        ]
+      }
+    }
+  ]
+}

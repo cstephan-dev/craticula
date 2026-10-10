@@ -1,0 +1,53 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "region": "north"
+      },
+      "why": "neither arm"
+    },
+    {
+      "row": {
+        "id": 2,
+        "region": "west"
+      },
+      "why": "condition1 matches"
+    },
+    {
+      "row": {
+        "id": 3,
+        "region": "EAST"
+      },
+      "why": "condition2 matches, case-folded"
+    },
+    {
+      "row": {
+        "id": 4,
+        "region": null
+      },
+      "why": "null excluded"
+    },
+    {
+      "row": {
+        "id": 5,
+        "region": "East"
+      },
+      "why": "condition2 case variant"
+    },
+    {
+      "row": {
+        "id": 6,
+        "region": "wes"
+      },
+      "why": "prefix only; excluded"
+    },
+    {
+      "row": {
+        "id": 7,
+        "region": "WEST"
+      },
+      "why": "condition1 case variant"
+    }
+  ]
+}

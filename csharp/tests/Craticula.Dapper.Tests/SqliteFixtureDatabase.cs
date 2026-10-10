@@ -21,9 +21,7 @@ namespace Craticula.Dapper.Tests;
 /// <see langword="internal"/> to its own assembly rather than a shared assembly for one small
 /// helper).</para>
 ///
-/// <para><b>These are NOT <c>dataset.json</c> fixtures, deliberately</b> — that filename and
-/// <c>expectedRows.json</c> are reserved for #1655's execution-equality tier. The datasets in this suite
-/// are inline in the test that reasons about them.</para>
+/// <para><b>These are NOT <c>dataset.json</c> fixtures, deliberately.</b> The execution-equality tier (#1655, <c>Craticula.Integration.Tests</c>) owns the <c>dataset.json</c> / <c>expectedRows.json</c> format; the datasets in this suite are inline in the test that reasons about them, where the reason each row exists can be read next to it.</para>
 /// </summary>
 internal sealed class SqliteFixtureDatabase : IDisposable
 {

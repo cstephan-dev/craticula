@@ -18,8 +18,8 @@ writer fixtures" note for the file shapes.
 A text-`equals` filter on `notes` carries the value `"@SUM(A1:A10)"` — chosen because
 an `equals` filter's value is exactly the value any matching row's `notes` cell would contain,
 so this fixture can derive the exported cell from the request itself without needing a seeded dataset
-(`dataset.json`/`expectedRows.json` are deferred per docs/feat/1630/context.md decision #3 — no
-database exists yet to derive real row content from, and a row stream is not a seed either way).
+(this fixture carries no `dataset.json`/`expectedRows.json` yet: seeds are authored per fixture
+under #1655 (`spec/semantics.md` XEQ-1), and a row stream is not a seed either way).
 
 `exportFormat: "csv"`, `exportScope: "all"`, **no `writerConfig.json`**: EXP-6 is "default on,
 configurable off", and the absence of any writer configuration is what makes these bytes an oracle

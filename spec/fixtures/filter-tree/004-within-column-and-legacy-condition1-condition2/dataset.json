@@ -1,0 +1,67 @@
+{
+  "rows": [
+    {
+      "row": {
+        "amount": 50,
+        "id": 1
+      },
+      "why": "= 50 on the gt boundary: excluded"
+    },
+    {
+      "row": {
+        "amount": 50.5,
+        "id": 2
+      },
+      "why": "just inside the lower bound"
+    },
+    {
+      "row": {
+        "amount": 499.5,
+        "id": 3
+      },
+      "why": "just inside the upper bound"
+    },
+    {
+      "row": {
+        "amount": 500,
+        "id": 4
+      },
+      "why": "= 500 on the lt boundary: excluded"
+    },
+    {
+      "row": {
+        "amount": 100,
+        "id": 5
+      },
+      "why": "comfortably inside"
+    },
+    {
+      "row": {
+        "amount": null,
+        "id": 6
+      },
+      "why": "null fails both conditions"
+    },
+    {
+      "row": {
+        "amount": 10,
+        "id": 7
+      },
+      "why": "below range"
+    },
+    {
+      "row": {
+        "amount": 1000,
+        "id": 8
+      },
+      "why": "above range"
+    },
+    {
+      "row": {
+        "amount": -20.5,
+        "id": 9
+      },
+      "why": "negative, below range"
+    }
+  ]
+}

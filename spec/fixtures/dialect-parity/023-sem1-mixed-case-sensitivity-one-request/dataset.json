@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith", "employeeCode": "AB-100" }, "why": "matches both" },
+    { "row": { "id": 2, "lastName": "SMITH", "employeeCode": "AB-100" }, "why": "lastName folds case, code exact: matches" },
+    { "row": { "id": 3, "lastName": "smith", "employeeCode": "ab-100" }, "why": "code differs by case: the case-sensitive field rejects it" },
+    { "row": { "id": 4, "lastName": "Smith", "employeeCode": "Ab-100" }, "why": "code differs by case" },
+    { "row": { "id": 5, "lastName": "Jones", "employeeCode": "AB-100" }, "why": "lastName differs" },
+    { "row": { "id": 6, "lastName": "smith", "employeeCode": "AB-100" }, "why": "matches both, lower case name" },
+    { "row": { "id": 7, "lastName": null, "employeeCode": "AB-100" }, "why": "null lastName never equals" },
+    { "row": { "id": 8, "lastName": "Smith", "employeeCode": null }, "why": "null employeeCode never equals" }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "columns": ["id", "lastName", "employeeCode"],
+  "rows": [
+    [1, "Smith", "AB-100"],
+    [2, "SMITH", "AB-100"],
+    [6, "smith", "AB-100"]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "mongo",
+      "reason": "SEM-1 (one query-level collation): MongoDB 7.0 applies the aggregate's collation to $expr comparisons, so the case-sensitive employeeCode equality matches case-insensitively as well; 'ab-100' and 'Ab-100' match 'AB-100' (the fixture description already admits one request cannot hold both sensitivities on Mongo)",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["id", "lastName", "employeeCode"],
+        "rows": [
+          [1, "Smith", "AB-100"],
+          [2, "SMITH", "AB-100"],
+          [3, "smith", "ab-100"],
+          [4, "Smith", "Ab-100"],
+          [6, "smith", "AB-100"]
+        ]
+      }
+    }
+  ]
+}

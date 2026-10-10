@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 5,
+        "lastName": "Lee"
+      },
+      "why": "tie with id 2 and 9"
+    },
+    {
+      "row": {
+        "id": 2,
+        "lastName": "lee"
+      },
+      "why": "case variant, ties under folding; explicit id key orders them"
+    },
+    {
+      "row": {
+        "id": 9,
+        "lastName": "LEE"
+      },
+      "why": "third member of the tie"
+    },
+    {
+      "row": {
+        "id": 1,
+        "lastName": "Kim"
+      },
+      "why": "before Lee"
+    },
+    {
+      "row": {
+        "id": 7,
+        "lastName": null
+      },
+      "why": "null last on asc"
+    },
+    {
+      "row": {
+        "id": 3,
+        "lastName": "Park"
+      },
+      "why": "after Lee"
+    },
+    {
+      "row": {
+        "id": 8,
+        "lastName": "kim"
+      },
+      "why": "ties with Kim"
+    },
+    {
+      "row": {
+        "id": 4,
+        "lastName": null
+      },
+      "why": "second null; id order 4 before 7"
+    }
+  ]
+}

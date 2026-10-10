@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "1.00", "quantity": 1 }, "why": "a value the 10,000 ceiling never reaches with a seed this small" },
+    { "row": { "id": "s02", "region": "APAC", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "2.00", "quantity": 2 }, "why": "second distinct value" },
+    { "row": { "id": "s03", "region": "NA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2023, "amount": "3.00", "quantity": 3 }, "why": "third distinct value" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2022, "amount": null, "quantity": 4 }, "why": "repeat of EMEA" },
+    { "row": { "id": "s05", "region": "LATAM", "segment": "Consumer", "product": "Widget", "fiscalYear": 2024, "amount": "5.00", "quantity": 5 }, "why": "fourth distinct value" },
+    { "row": { "id": "s06", "region": "NA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "6.00", "quantity": 6 }, "why": "repeat of NA" }
+  ]
+}

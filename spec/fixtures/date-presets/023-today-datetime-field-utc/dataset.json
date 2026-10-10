@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": {"id": 1, "createdAt": "2026-08-11T23:59:59.999Z"}, "why": "1 ms before the lower bound: excluded" },
+    { "row": {"id": 2, "createdAt": "2026-08-12T00:00:00.000Z"}, "why": "exactly the lower instant: included" },
+    { "row": {"id": 3, "createdAt": "2026-08-12T14:37:00.000Z"}, "why": "mid-day: included" },
+    { "row": {"id": 4, "createdAt": "2026-08-12T23:59:59.999Z"}, "why": "last millisecond of the day: included" },
+    { "row": {"id": 5, "createdAt": "2026-08-13T00:00:00.000Z"}, "why": "exactly the upper instant: excluded (half-open)" },
+    { "row": {"id": 6, "createdAt": null}, "why": "null instant: excluded (SEM-2)" }
+  ]
+}

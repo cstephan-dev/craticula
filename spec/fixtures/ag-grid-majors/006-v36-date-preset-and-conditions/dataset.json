@@ -1,0 +1,16 @@
+{
+  "rows": [
+    { "row": {"id": 1, "hireDate": "2026-07-12", "status": "active"}, "why": "day before the resolved lower bound 2026-07-13: out" },
+    { "row": {"id": 2, "hireDate": "2026-07-13", "status": "active"}, "why": "exactly the lower bound: in (preset ranges are half-open)" },
+    { "row": {"id": 3, "hireDate": "2026-08-12", "status": "ACTIVE"}, "why": "today, status case-folded: in" },
+    { "row": {"id": 4, "hireDate": "2026-08-12", "status": "onLeave"}, "why": "today, second status arm: in" },
+    { "row": {"id": 5, "hireDate": "2026-08-13", "status": "active"}, "why": "exactly the upper bound (start of tomorrow): out" },
+    { "row": {"id": 6, "hireDate": "2026-07-30", "status": "ONLEAVE"}, "why": "case-folded second arm: in" },
+    { "row": {"id": 7, "hireDate": "2026-07-30", "status": "inactive"}, "why": "in range, but status eq not contains: out" },
+    { "row": {"id": 8, "hireDate": "2026-07-30", "status": null}, "why": "in range, null status: eq is not null-inclusive: out" },
+    { "row": {"id": 9, "hireDate": null, "status": "active"}, "why": "null hireDate: out" },
+    { "row": {"id": 10, "hireDate": "2026-08-01", "status": "pending"}, "why": "in range, wrong status: out" },
+    { "row": {"id": 11, "hireDate": "2026-08-05", "status": "Active"}, "why": "in range, case-folded status: in" },
+    { "row": {"id": 12, "hireDate": "2020-01-01", "status": "active"}, "why": "long before the window: out" }
+  ]
+}

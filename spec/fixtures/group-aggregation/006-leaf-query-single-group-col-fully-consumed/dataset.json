@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": "s03", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2023, "amount": "12.00", "quantity": null }, "why": "leaf row: null quantity comes back as null; seeded out of id order so the tiebreaker has work" },
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "100.50", "quantity": 5 }, "why": "leaf row" },
+    { "row": { "id": "s02", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "20.00", "quantity": 1 }, "why": "excluded: other region" },
+    { "row": { "id": "s05", "region": "emea", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "1.00", "quantity": 1 }, "why": "excluded: GRP-2, the drill-down is exact" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "Consumer", "product": "Gadget", "fiscalYear": 2022, "amount": null, "quantity": 2 }, "why": "leaf row: null amount comes back as null" },
+    { "row": { "id": "s06", "region": null, "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "3.00", "quantity": 3 }, "why": "excluded: null region" },
+    { "row": { "id": "s07", "region": "EMEA", "segment": null, "product": null, "fiscalYear": null, "amount": "0.00", "quantity": 0 }, "why": "leaf row: nulls in segment, product and fiscalYear; a zero amount and quantity are values, not nulls" }
+  ]
+}

@@ -23,12 +23,19 @@
             ]
           },
           {
-            "$nor": [
+            "$or": [
               {
-                "customerName": {
-                  "$regex": "test",
-                  "$options": "i"
-                }
+                "$nor": [
+                  {
+                    "customerName": {
+                      "$regex": "test",
+                      "$options": "i"
+                    }
+                  }
+                ]
+              },
+              {
+                "customerName": null
               }
             ]
           }

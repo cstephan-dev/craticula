@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith" }, "why": "contains the needle: excluded" },
+    { "row": { "id": 2, "lastName": "Jones" }, "why": "does not contain it: included" },
+    { "row": { "id": 3, "lastName": null }, "why": "null: included by SEM-2" },
+    { "row": { "id": 4, "lastName": "BLACKSMITH" }, "why": "contains the needle in upper case: excluded" },
+    { "row": { "id": 5, "lastName": "Brown" }, "why": "included" },
+    { "row": { "id": 6, "lastName": "smithson" }, "why": "contains it: excluded" },
+    { "row": { "id": 7, "lastName": "Smyth" }, "why": "near miss: included" },
+    { "row": { "id": 8, "lastName": null }, "why": "second null: included" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": "s01", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "100.00", "quantity": 1 }, "why": "Enterprise bucket" },
+    { "row": { "id": "s02", "region": "EMEA", "segment": "Enterprise", "product": "Gadget", "fiscalYear": 2024, "amount": "250.50", "quantity": 2 }, "why": "Enterprise bucket: the maximum" },
+    { "row": { "id": "s03", "region": "EMEA", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2023, "amount": null, "quantity": 3 }, "why": "Enterprise bucket: null amount, which MAX skips" },
+    { "row": { "id": "s04", "region": "EMEA", "segment": "SMB", "product": "Widget", "fiscalYear": 2024, "amount": "-10.00", "quantity": 4 }, "why": "SMB bucket: every value negative, the max is the least negative" },
+    { "row": { "id": "s05", "region": "EMEA", "segment": "SMB", "product": "Gadget", "fiscalYear": 2024, "amount": "-30.00", "quantity": 5 }, "why": "SMB bucket: a lower negative" },
+    { "row": { "id": "s06", "region": "EMEA", "segment": "Consumer", "product": "Widget", "fiscalYear": 2024, "amount": null, "quantity": 6 }, "why": "Consumer bucket: every amount null, AGG-6 max is null" },
+    { "row": { "id": "s07", "region": "APAC", "segment": "Enterprise", "product": "Widget", "fiscalYear": 2024, "amount": "9999.00", "quantity": 7 }, "why": "excluded by the drill-down: would be the maximum if it leaked" }
+  ]
+}

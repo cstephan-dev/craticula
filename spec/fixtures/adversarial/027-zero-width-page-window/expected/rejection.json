@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "requestParsing",
+  "reason": "malformed-request",
+  "note": "startRow (100) == endRow (100): an empty window. endRow is exclusive, so the requested size is 0; the request is refused at the boundary before compilation on every backend instead of reaching T-SQL (error 10744) or answering an empty page elsewhere."
+}

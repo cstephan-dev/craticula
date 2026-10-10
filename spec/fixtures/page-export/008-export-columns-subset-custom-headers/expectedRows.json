@@ -1,0 +1,11 @@
+{
+  "columns": ["customerName", "totalAmount", "orderDate"],
+  "rows": [
+    ["Acme, Inc.", "1234.50", "2026-01-05"],
+    ["Bill \"Big\" Ross Ltd", "99.00", "2026-01-05"],
+    ["Zenith Retail", "0.00", "2026-02-14"],
+    [null, null, null],
+    ["Ürün Çiçek", "12.50", "2026-03-01"],
+    ["Delta", "7.00", "2026-03-02"]
+  ]
+}

@@ -2,8 +2,8 @@
   "query": {
     "range": {
       "createdAt": {
-        "gte": "2026-08-12T22:00:00Z",
-        "lt": "2026-08-13T22:00:00Z",
+        "gte": "2026-08-12T22:00:00.000Z",
+        "lt": "2026-08-13T22:00:00.000Z",
         "format": "strict_date_optional_time"
       }
     }

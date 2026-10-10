@@ -9,20 +9,30 @@
             }
           },
           {
-            "$nor": [
+            "$or": [
               {
-                "$and": [
+                "$nor": [
                   {
-                    "region": {
-                      "$eq": "blocked"
-                    }
-                  },
-                  {
-                    "quantity": {
-                      "$lt": 0
-                    }
+                    "$and": [
+                      {
+                        "region": {
+                          "$eq": "blocked"
+                        }
+                      },
+                      {
+                        "quantity": {
+                          "$lt": 0
+                        }
+                      }
+                    ]
                   }
                 ]
+              },
+              {
+                "region": null
+              },
+              {
+                "quantity": null
               }
             ]
           }

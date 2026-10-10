@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "lastName": "Smith" }, "why": "exact case" },
+    { "row": { "id": 2, "lastName": "BLACKSMITH" }, "why": "upper case, needle in the middle" },
+    { "row": { "id": 3, "lastName": "smithson" }, "why": "lower case, needle at the start" },
+    { "row": { "id": 4, "lastName": "Goldsmiths" }, "why": "needle in the middle, trailing letters" },
+    { "row": { "id": 5, "lastName": null }, "why": "null never matches contains" },
+    { "row": { "id": 6, "lastName": "Jones" }, "why": "no match" },
+    { "row": { "id": 7, "lastName": "Smyth" }, "why": "near miss" },
+    { "row": { "id": 8, "lastName": "Smi" }, "why": "prefix of the needle only" }
+  ]
+}

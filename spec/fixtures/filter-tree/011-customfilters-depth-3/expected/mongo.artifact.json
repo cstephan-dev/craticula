@@ -4,11 +4,18 @@
       "$match": {
         "$and": [
           {
-            "$nor": [
+            "$or": [
               {
-                "region": {
-                  "$eq": "blocked"
-                }
+                "$nor": [
+                  {
+                    "region": {
+                      "$eq": "blocked"
+                    }
+                  }
+                ]
+              },
+              {
+                "region": null
               }
             ]
           }

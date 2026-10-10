@@ -38,9 +38,10 @@ spec doesn't have, the spec changes first, then the port follows.
   request + schema config + expected per-backend artifact, per case. This is what makes identical
   semantics across backends *and* across the four language implementations (G3, G4) enforceable
   rather than aspirational. See `fixtures/README.md` for the format, backend-coverage policy, and
-  category index. Execution-equality fixtures (`dataset.json`/`expectedRows.json`, T-1b) are
-  deferred until integration containers exist (a later Feature #1624 story) — fabricating expected
-  rows without a real database to derive them from would invent data, not capture it.
+  category index. Execution-equality fixtures (`dataset.json`/`expectedRows.json`, T-1b) have their format
+  pinned (`semantics.md` XEQ-1..XEQ-4, `fixtures/schemas/dataset.schema.json` and `expected-rows.schema.json`);
+  they are hand-derived from the semantics, never copied from an engine run, and are authored category;
+  179 fixtures carry the pair today (rule: XEQ-1..XEQ-4; worked example `operators/001`).
 - **`conformance-runner.md`** — how an implementation is graded against `fixtures/` (T-1 tier (a), ML-3): the
   driver protocol every language implements, what a driver pins (limits, clock, entry point), the per-backend
   equality rules by reference, and the runner's report and exit status (#1654).

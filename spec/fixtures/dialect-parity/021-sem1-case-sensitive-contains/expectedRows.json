@@ -1,0 +1,8 @@
+{
+  "columns": ["id", "employeeCode"],
+  "rows": [
+    [1, "AB*10"],
+    [2, "xAB*10y"],
+    [6, "AB*100"]
+  ]
+}

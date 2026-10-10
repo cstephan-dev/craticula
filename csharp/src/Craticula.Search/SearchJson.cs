@@ -106,11 +106,16 @@ internal static class SearchJson
                 $"datetimeValue '{value}' is not an ISO-8601 instant (FilterNodeValidator should have rejected it upstream).");
         }
 
-        var format = utc.Ticks % TimeSpan.TicksPerSecond == 0
-            ? "yyyy-MM-dd'T'HH:mm:ss'Z'"
-            : "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'";
+        // A bound is kept exactly as given. When it has no sub-millisecond part it is padded to exactly three
+        // fractional digits (OSE-8): a whole-second bound spelled without them is rounded UP to .999 by the engine's
+        // date math on a gt/lte range, which wrongly excludes a row at .001Z. The engine's `date` type holds
+        // millisecond granularity (XEQ-2), so padding loses nothing; a finer bound keeps its digits, never truncated.
+        if (utc.Ticks % 10_000 == 0)
+        {
+            return utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+        }
 
-        return utc.ToString(format, CultureInfo.InvariantCulture);
+        return utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff", CultureInfo.InvariantCulture).TrimEnd('0') + "Z";
     }
 
     /// <summary>

@@ -1,0 +1,10 @@
+{
+  "columns": ["id", "status"],
+  "rows": [
+    [1, "active"],
+    [4, null],
+    [5, ""],
+    [6, "archivedx"],
+    [7, "pending"]
+  ]
+}

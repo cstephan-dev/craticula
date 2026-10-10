@@ -1,0 +1,8 @@
+{
+  "columns": ["id", "remarks"],
+  "rows": [
+    [1, "Save 50% off (bonus) today"],
+    [2, "50% off (bonus)"],
+    [6, "50% OFF (BONUS)"]
+  ]
+}

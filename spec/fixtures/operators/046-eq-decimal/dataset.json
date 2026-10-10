@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "unitCost": "19.99" }, "why": "exact match" },
+    { "row": { "id": 2, "unitCost": "19.990" }, "why": "same number at a different scale: equal (XEQ-3 compares decimals as numbers)" },
+    { "row": { "id": 3, "unitCost": "19.98" }, "why": "one cent below" },
+    { "row": { "id": 4, "unitCost": "20.00" }, "why": "one cent above" },
+    { "row": { "id": 5, "unitCost": "19.9" }, "why": "prefix of the digits: a different number" },
+    { "row": { "id": 6, "unitCost": "199.90" }, "why": "ten times larger" },
+    { "row": { "id": 7, "unitCost": null }, "why": "SEM-2: eq never matches null" },
+    { "row": { "id": 8, "unitCost": "-19.99" }, "why": "sign differs" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "remarks": "Save 50% off (bonus) today" }, "why": "literal occurrence inside a sentence" },
+    { "row": { "id": 2, "remarks": "50% off (bonus)" }, "why": "the whole value" },
+    { "row": { "id": 3, "remarks": "50X off (bonus)" }, "why": "an unescaped % would let anything stand in for the percent sign" },
+    { "row": { "id": 4, "remarks": "50% off bonus" }, "why": "an unescaped regex group would match without the parentheses" },
+    { "row": { "id": 5, "remarks": "50%  off (bonus)" }, "why": "two spaces: a different literal" },
+    { "row": { "id": 6, "remarks": "50% OFF (BONUS)" }, "why": "upper case: contains is case-insensitive by default (SEM-1)" },
+    { "row": { "id": 7, "remarks": "50 off (bonus)" }, "why": "missing percent sign" },
+    { "row": { "id": 8, "remarks": null }, "why": "null never matches" }
+  ]
+}

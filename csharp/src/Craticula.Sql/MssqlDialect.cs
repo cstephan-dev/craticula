@@ -234,6 +234,9 @@ public sealed class MssqlDialect : ISqlDialect
     public string RenderPaging(int offset, int limit, ISqlParameterSink parameters) =>
         $"OFFSET {parameters.Bind(offset)} ROWS FETCH NEXT {parameters.Bind(limit)} ROWS ONLY";
 
+    /// <summary>GRP-6(f): T-SQL rejects <c>SELECT DISTINCT</c> with an ORDER BY key that is not in the select list (msg 145), so the values query groups instead.</summary>
+    public bool DistinctValuesUseGroupBy => true;
+
     /// <summary>
     /// GRP-6's row cap, and the one dialect where it is not simply <c>RenderPaging</c> minus a clause:
     /// T-SQL has no <c>LIMIT</c>, and its <c>FETCH NEXT</c> is not legal without an <c>OFFSET</c>

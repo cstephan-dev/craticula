@@ -1,0 +1,8 @@
+{
+  "columns": ["product", "amount"],
+  "rows": [
+    ["Gadget", "8.00"],
+    ["Sprocket", "0"],
+    ["Widget", "15.50"]
+  ]
+}

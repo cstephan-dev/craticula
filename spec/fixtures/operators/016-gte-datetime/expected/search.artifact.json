@@ -2,7 +2,7 @@
   "query": {
     "range": {
       "createdAt": {
-        "gte": "2026-01-01T00:00:00Z",
+        "gte": "2026-01-01T00:00:00.000Z",
         "format": "strict_date_optional_time"
       }
     }

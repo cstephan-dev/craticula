@@ -32,7 +32,8 @@ though its SQL is semantically identical.
   the set filter's own search box. A compiler that implements the exclusion by pruning every
   `region`-referencing predicate from the finished tree, rather than by pruning the filter model
   *before* injecting the prefix, loses it and fails every arm here.
-- **GRP-6(a), unchanged by either**: `SELECT DISTINCT "region" … ORDER BY "region"` still renders
+- **GRP-6(a), unchanged by either**: `SELECT DISTINCT "region" … ORDER BY "region"` (`GROUP BY [region]` on
+  SQL Server, GRP-6(f)) still renders
   bare. One statement therefore spells **three** different treatments of case: a collation on
   `segment` (SEM-1's exact-match mechanism), a pattern match on `region` (SEM-1's substring
   mechanism, via the prefix), and nothing at all on `region` again (GRP-6(a)'s bucket identity).
@@ -48,7 +49,8 @@ still binding last:
   '\')`. Note the `||` composition and the bare `"eu"` bound value, per `018`'s correction.
 - **SQL Server** — the same shape with `[…]` quoting, the inline `COLLATE Latin1_General_CI_AS` on
   both text predicates (SEM-1's mechanism table), `+` for concatenation, `@pN` placeholders, the
-  emulated `CASE WHEN … IS NULL` null placement, and `OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY` for
+  distinct set spelled `GROUP BY [region]` rather than `SELECT DISTINCT` (GRP-6(f): T-SQL refuses a
+  `DISTINCT` whose `ORDER BY` is the `CASE WHEN … IS NULL` null-placement expression, msg 145), and `OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY` for
   the cap (GRP-6(e) — T-SQL has no `LIMIT` and its `FETCH` is illegal without an `OFFSET`, whose
   zero is a **literal** so all five dialects still bind exactly one value for the cap — Oracle needs
   no such trick, since its `FETCH FIRST` is legal with no `OFFSET` before it).

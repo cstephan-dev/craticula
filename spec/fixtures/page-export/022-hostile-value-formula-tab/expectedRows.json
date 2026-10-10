@@ -1,0 +1,7 @@
+{
+  "columns": ["id", "orderDate", "customerName", "totalAmount", "status", "region", "notes"],
+  "rows": [
+    [2201, "2026-04-06", "Kelvin Freight", "460.00", "shipped", "APAC", "\tImportant client"],
+    [2202, "2026-04-08", "Larkspur Media", "27.50", "shipped", "EMEA", "\tImportant client"]
+  ]
+}

@@ -87,3 +87,11 @@ Depth is counted from the root node inward, root = depth 1; each `And`/`Or`/`Not
 
 Total: 15 fixtures.
 
+
+## Execution equality (T-1b)
+
+In scope: all 15 fixtures (`001`-`015`) carry `dataset.json` and `expectedRows.json` (XEQ-1..XEQ-4 in `spec/semantics.md`). Each seed has 6-12 rows covering null cells, case variants (SEM-1), numeric boundaries and, for every `Not` case, the null-inclusive rule (SEM-2). None of these fixtures sorts explicitly, so every expected order is the SEM-6 `id` tiebreaker, ascending.
+
+Out of scope: nothing; this category has no rejection-only fixture (depth-limit rejections live in `adversarial/`).
+
+All expected rows were derived by hand from `spec/semantics.md`, not from any engine run.
