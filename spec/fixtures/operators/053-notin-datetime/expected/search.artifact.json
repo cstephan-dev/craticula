@@ -1,0 +1,40 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "bool": {
+            "must_not": {
+              "terms": {
+                "createdAt": [
+                  "2026-01-01T00:00:00.000Z",
+                  "2026-06-15T12:30:00.000Z"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "bool": {
+            "must_not": {
+              "exists": {
+                "field": "createdAt"
+              }
+            }
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

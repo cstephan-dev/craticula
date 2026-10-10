@@ -659,7 +659,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 
 | Directory | Proves | Target count |
 |---|---|---|
-| `operators/` | AR-6's 17-operator closed set, across field types | ~45 |
+| `operators/` | AR-6's 17-operator closed set, across field types | ~53 |
 | `date-presets/` | AG-2 date presets resolved to absolute half-open ranges (SEM-4 type + zone) | ~28 |
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |

@@ -1,0 +1,31 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "customFilters": {
+    "type": "comparison",
+    "field": "birthDate",
+    "op": "notIn",
+    "values": [
+      {
+        "type": "date",
+        "value": "1990-05-12"
+      },
+      {
+        "type": "date",
+        "value": "1991-07-04"
+      }
+    ]
+  }
+}

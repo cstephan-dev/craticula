@@ -55,7 +55,7 @@ public class PostgresConformanceFixtureTests
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
-        ("operators", 47),
+        ("operators", 53),
         ("date-presets", 26),
         ("dialect-parity", 20),
         ("group-aggregation", 23),
@@ -183,7 +183,7 @@ public class PostgresConformanceFixtureTests
     [Fact]
     public void The_End_To_End_Suite_Is_All_175_Fixtures_In_The_Scoped_Categories()
     {
-        // 175 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
+        // 181 with NOTHING subtracted: ExcludedFixtures is empty as of #1650, so every Postgres
         // artifact in a scoped category is compiled and compared. The number last moved when #1886
         // authored dialect-parity/024 (AGG-6's discriminator: a grouped level ordered by an AVG,
         // beside a COALESCE-wrapped SUM in the same projection — the only case whose ORDER BY fails
@@ -196,7 +196,7 @@ public class PostgresConformanceFixtureTests
         // and authored page-export/023, and #1644's review pass added group-aggregation/023 — the one
         // case carrying both a consumed groupKeys and a filterModel, which pins GRP-5's
         // drill-down-leads clause order in `params`.
-        Assert.Equal(175, InScopeFixtures.Count);
+        Assert.Equal(181, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -221,7 +221,7 @@ public class PostgresConformanceFixtureTests
     [Fact]
     public void Every_Postgres_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "175 in scope": every postgres.artifact.json in the repo
+        // The count that closes the loop on "181 in scope": every postgres.artifact.json in the repo
         // is either exercised above, or inside a category/fixture this class excludes BY NAME. The
         // category table plus Every_Fixture_Category_On_Disk_… does not close it — an artifact added
         // under an EXCLUDED category (adversarial/) would leave every count untouched and go silently
@@ -237,7 +237,7 @@ public class PostgresConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "postgres.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(175, onDisk);
+        Assert.Equal(181, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }

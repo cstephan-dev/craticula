@@ -1,0 +1,13 @@
+{
+  "rows": [
+    { "row": { "id": 1, "createdAt": "2026-01-01T00:00:00.000Z" }, "why": "first member instant" },
+    { "row": { "id": 2, "createdAt": "2026-01-01T00:00:00.001Z" }, "why": "one millisecond after the first member" },
+    { "row": { "id": 3, "createdAt": "2025-12-31T23:59:59.999Z" }, "why": "one millisecond before the first member" },
+    { "row": { "id": 4, "createdAt": "2026-06-15T12:30:00.000Z" }, "why": "second member instant" },
+    { "row": { "id": 5, "createdAt": null }, "why": "SEM-2: in never matches null" },
+    { "row": { "id": 6, "createdAt": "2026-06-15T12:30:00.001Z" }, "why": "one millisecond after the second member" },
+    { "row": { "id": 7, "createdAt": "2026-06-15T12:29:59.999Z" }, "why": "one millisecond before the second member" },
+    { "row": { "id": 8, "createdAt": "2026-01-01T00:00:00.000Z" }, "why": "duplicate of a member instant: both rows are returned" },
+    { "row": { "id": 9, "createdAt": "2026-01-01T00:00:01.000Z" }, "why": "one second after the first member" }
+  ]
+}

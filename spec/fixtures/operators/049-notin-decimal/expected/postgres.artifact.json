@@ -1,0 +1,12 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM \"items\" WHERE (\"unit_cost\" <> ALL($1::numeric[]) OR \"unit_cost\" IS NULL) ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    [
+      "19.99",
+      "5.5"
+    ],
+    100,
+    0
+  ]
+}
