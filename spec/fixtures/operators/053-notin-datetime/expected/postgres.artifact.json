@@ -1,0 +1,12 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM \"items\" WHERE (\"created_at\" <> ALL($1::timestamptz[]) OR \"created_at\" IS NULL) ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    [
+      "2026-01-01T00:00:00Z",
+      "2026-06-15T12:30:00Z"
+    ],
+    100,
+    0
+  ]
+}

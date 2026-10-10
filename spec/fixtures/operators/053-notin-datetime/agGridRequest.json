@@ -1,0 +1,33 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "customFilters": {
+    "type": "comparison",
+    "field": "createdAt",
+    "op": "notIn",
+    "values": [
+      {
+        "type": "datetime",
+        "value": "2026-01-01T00:00:00Z",
+        "zone": "UTC"
+      },
+      {
+        "type": "datetime",
+        "value": "2026-06-15T12:30:00Z",
+        "zone": "UTC"
+      }
+    ]
+  }
+}

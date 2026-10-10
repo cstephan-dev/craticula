@@ -47,7 +47,7 @@ public class MongoConformanceFixtureTests
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
-        ("operators", 47),
+        ("operators", 53),
         ("date-presets", 26),
         ("dialect-parity", 18),
         ("group-aggregation", 23),
@@ -143,7 +143,7 @@ public class MongoConformanceFixtureTests
     /// <para>Worth its own test because it is the rule the hand-authored suite got wrong most often:
     /// a leaked bucket is a shape divergence from the Postgres/Search results for the identical IR,
     /// and the artifact comparison above would only catch it in the fixtures that happen to pin the
-    /// stage. Here it is checked on all 161.</para>
+    /// stage. Here it is checked on all 167.</para>
     /// </summary>
     [Theory]
     [MemberData(nameof(InScopeFixtures))]
@@ -203,12 +203,12 @@ public class MongoConformanceFixtureTests
     [Fact]
     public void The_End_To_End_Suite_Is_All_161_Mongo_Artifacts_In_The_Suite()
     {
-        // 161 with NOTHING subtracted, and it is the same number as the count of mongo.artifact.json
+        // 167 with NOTHING subtracted, and it is the same number as the count of mongo.artifact.json
         // files on disk (asserted below): as of #1650 there is no excluded category carrying a Mongo
         // arm and no excluded fixture at all. It last moved when #1650's review pass authored
         // page-export/024; before that #1650 itself released page-export (13, now 14) and
         // sort-paging/012 from exclusion and authored page-export/023.
-        Assert.Equal(161, InScopeFixtures.Count);
+        Assert.Equal(167, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -233,7 +233,7 @@ public class MongoConformanceFixtureTests
     [Fact]
     public void Every_Mongo_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "161 in scope": every mongo.artifact.json in the repo is
+        // The count that closes the loop on "167 in scope": every mongo.artifact.json in the repo is
         // either exercised above, or inside a category/fixture this class excludes BY NAME. Since
         // #1650 nothing is excluded, so the two numbers are equal — the arithmetic is kept rather
         // than simplified away, because it is what would catch a future exclusion being added
@@ -248,7 +248,7 @@ public class MongoConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "mongo.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(161, onDisk);
+        Assert.Equal(167, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }

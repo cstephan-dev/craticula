@@ -1,0 +1,54 @@
+[
+  {
+    "$match": {
+      "$or": [
+        {
+          "createdAt": {
+            "$nin": [
+              {
+                "$date": "2026-01-01T00:00:00Z"
+              },
+              {
+                "$date": "2026-06-15T12:30:00Z"
+              }
+            ]
+          }
+        },
+        {
+          "createdAt": null
+        }
+      ]
+    }
+  },
+  {
+    "$addFields": {
+      "__idNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__idNullBucket": 1,
+      "id": 1
+    }
+  },
+  {
+    "$unset": "__idNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]

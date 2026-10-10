@@ -269,6 +269,8 @@ public class DialectIndependenceTests
     /// select list (msg 145), so <c>DistinctValuesUseGroupBy</c> is the second engine fact the builder reads.</para>
     /// <para>#2243 was the fifth widening: SQLite compares a datetime as TEXT, so
     /// <c>DatetimeBoundsAreFixedWidth</c> is the third engine fact (SEM-4).</para>
+    /// <para>#2304 added no member: <c>RenderSetMembership</c> gained a <c>FieldType</c> argument so Postgres can cast
+    /// its array to the column type. The membership asserted below is therefore unchanged.</para>
     /// </summary>
     [Fact]
     public void The_Seam_Is_Exactly_These_Twelve_Members_So_A_Sixth_Widening_Cannot_Land_Silently()

@@ -1,0 +1,40 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "bool": {
+            "must_not": {
+              "terms": {
+                "birthDate": [
+                  "1990-05-12",
+                  "1991-07-04"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "bool": {
+            "must_not": {
+              "exists": {
+                "field": "birthDate"
+              }
+            }
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

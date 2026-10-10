@@ -57,20 +57,8 @@ internal static class ParityRequestGenerator
         ("seen", FieldType.Datetime, [.. NumberLikeOps, "in", "notIn", "inRange", "blank", "notBlank"])
     ];
 
-    /// <summary>
-    /// KNOWN DEFECT (PAR-3 known-defects table, Bug #2304): PostgreSQL refuses <c>in</c>/<c>notIn</c> on decimal, date and
-    /// datetime fields (SQL-4's array parameter is text[]). While true, the catalog leaves those leaves out. To remove the
-    /// exclusion when #2304 is fixed: delete this constant and the <c>.Where(...)</c> line in <see cref="Catalog"/>, delete
-    /// the PAR-3 row, and flip <c>ParitySetOperatorTests</c>.
-    /// </summary>
-    public const bool ExcludesKnownDefectSets = true;
-
-    private static bool IsKnownDefectSet(FieldType type, string op) =>
-        ExcludesKnownDefectSets && op is "in" or "notIn" && type is FieldType.Decimal or FieldType.Date or FieldType.Datetime;
-
     private static readonly IReadOnlyList<Leaf> Catalog =
-        [.. Kinds.SelectMany(kind => kind.Ops.Select(op => new Leaf(kind.Field, kind.Type, op)))
-            .Where(leaf => !IsKnownDefectSet(leaf.Type, leaf.Op))];
+        [.. Kinds.SelectMany(kind => kind.Ops.Select(op => new Leaf(kind.Field, kind.Type, op)))];
 
     // Sort keys: every field except the string one (register row 1). id is added by hand as a final tiebreaker key.
     private static readonly string[] SortFields = ["qty", "score", "price", "active", "born", "seen"];

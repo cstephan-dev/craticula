@@ -109,6 +109,7 @@ public sealed class PostgresDialect : ISqlDialect
         string quotedColumn,
         bool negated,
         IReadOnlyList<object?> values,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {
@@ -117,7 +118,21 @@ public sealed class PostgresDialect : ISqlDialect
             : quotedColumn;
 
         // SQL-4: ONE array parameter, so the placeholder count never depends on the value count.
+        // #2304: decimal, date and datetime values are strings (AR-7), so the host binds a text[] and
+        // Postgres refuses numeric/date/timestamptz = text; cast the array to the column type.
+        var arrayType = fieldType switch
+        {
+            FieldType.Decimal => "numeric[]",
+            FieldType.Date => "date[]",
+            FieldType.Datetime => "timestamptz[]",
+            _ => null
+        };
         var placeholder = parameters.Bind(values);
+        if (arrayType is not null)
+        {
+            placeholder += "::" + arrayType;
+        }
+
         return negated ? $"{left} <> ALL({placeholder})" : $"{left} = ANY({placeholder})";
     }
 

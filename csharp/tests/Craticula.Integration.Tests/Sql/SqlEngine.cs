@@ -109,6 +109,17 @@ public abstract class SqlEngine : IAsyncLifetime
     }
 
     /// <summary>
+    /// Starts the engine if needed, creates and seeds the fixture's table, and hands back the OPEN connection for a
+    /// host-port test that runs the query through an adapter (Dapper) instead of <see cref="RunAsync"/>. The caller disposes it.
+    /// </summary>
+    public async Task<DbConnection> OpenSeededConnectionAsync(ExecutionFixture fixture)
+    {
+        var connection = await ConnectAsync();
+        await CreateAndSeedAsync(connection, fixture);
+        return connection;
+    }
+
+    /// <summary>
     /// Starts the engine if needed and creates and seeds the fixture's table once, leaving it for any number of
     /// <see cref="QueryAsync"/> calls (the parity property seeds once per run and runs every generated case against it).
     /// </summary>
@@ -359,9 +370,9 @@ public sealed class PostgresEngine : SqlEngine
         command.Parameters.Add(parameter);
     }
 
-    // Typed arrays for string, int64, double and boolean only. decimal, date and datetime arrays are intentionally NOT
-    // typed here: the compiler binds those values as strings (SQL-4, AR-7), and Bug #2304 (PostgreSQL refuses
-    // numeric/date/timestamptz = text) must stay visible; the parity generator excludes those sets until it is fixed.
+    // Typed arrays for string, int64, double and boolean only. decimal, date and datetime arrays are left as text[] here:
+    // the compiler binds those values as strings (SQL-4, AR-7) and the dialect's cast (`::numeric[]`, `::date[]`,
+    // `::timestamptz[]`, Bug #2304) converts them on the server.
     private static NpgsqlParameter ArrayParameter(IReadOnlyList<object?> list) =>
         list.All(item => item is string)
             ? new NpgsqlParameter { Value = list.Select(item => (string)item!).ToArray(), NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text }

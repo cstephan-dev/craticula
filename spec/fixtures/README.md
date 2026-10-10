@@ -130,7 +130,7 @@ FROM "sales_fact"`); a composite `and`/`or` wraps itself and renders its childre
 null-inclusive negative is always wrapped; `notContains` renders `NOT ILIKE`, not `NOT (... ILIKE
 ...)`; `notBlank` is literally `NOT (<blank>)` applied to whatever text that engine's `blank` produced
 (**SQL-7**); and Postgres set membership is `= ANY($1)` /
-`<> ALL($1)` against **one array parameter**. Three rules there are per dialect rather than universal
+`<> ALL($1)` against **one array parameter** (cast to the column type, `$1::numeric[]`, for `decimal`, `date` and `datetime` fields). Three rules there are per dialect rather than universal
 and are the ones a port is most likely to get silently wrong: **SQL-5** (the substring family's
 operator, `ESCAPE` clause and escape alphabet all vary — MySQL spells `ESCAPE '\\'`, SQLite's
 case-sensitive path is `GLOB` with no `ESCAPE` clause at all, SQL Server escapes `[` as well),
@@ -659,7 +659,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 
 | Directory | Proves | Target count |
 |---|---|---|
-| `operators/` | AR-6's 17-operator closed set, across field types | ~45 |
+| `operators/` | AR-6's 17-operator closed set, across field types | ~53 |
 | `date-presets/` | AG-2 date presets resolved to absolute half-open ranges (SEM-4 type + zone) | ~28 |
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |

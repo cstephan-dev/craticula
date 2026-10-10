@@ -76,7 +76,7 @@ internal sealed class ProbeDialect : ISqlDialect
     }
 
     public string RenderSetMembership(
-        string quotedColumn, bool negated, IReadOnlyList<object?> values, SemanticsResolver.CaseSensitivityMode caseSensitivity, ISqlParameterSink parameters)
+        string quotedColumn, bool negated, IReadOnlyList<object?> values, FieldType fieldType, SemanticsResolver.CaseSensitivityMode caseSensitivity, ISqlParameterSink parameters)
     {
         // N scalar parameters, not one array — the SQL-4 axis that makes params.Length itself a
         // dialect decision.

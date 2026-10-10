@@ -46,7 +46,7 @@ A malformed value fails the run; it is never replaced by a default.
 ## What the generator offers
 
 Every operator on every field type it applies to, as a catalog of (field, operator) entries visited in turn, so a default run
-reaches all of them. `in` and `notIn` are offered on string, int64, double and boolean fields; on decimal, date and datetime they are a **known defect** (PostgreSQL refuses them, Bug #2304, PAR-3 known-defects table) and are left out while `ParityRequestGenerator.ExcludesKnownDefectSets` is true (delete it, the `.Where` that uses it and the PAR-3 row when #2304 is fixed); the
+reaches all of them. `in` and `notIn` are offered on all seven field types (decimal, date and datetime since Bug #2304 was fixed by SQL-4's array cast); the
 ordering operators and `inRange` on the string field are excluded (PAR-3: OSE-6, SEM-1). A filter tree counts every level,
 a NOT included, so no generated filter is deeper than 8 (SEC-3); `ParitySetOperatorTests` sweeps 100,000 cases for it and
 compiles the set-operator requests on all compilers offline.
@@ -68,16 +68,16 @@ Defaults: seed `20261010`, 200 cases, 300 rows. The report's `N of M cases retur
 
 A run that compared only empty windows would pass for nothing, so `ParityStrength` measures what the generated requests
 do on in-process SQLite (no Docker), and `ParityStrengthTests` fails when the numbers fall. Measured for 1000 cases,
-300 rows, five seeds, after tuning (before tuning, at 150 rows: 62.9 % of cases returned rows on the default seed):
+300 rows, five seeds (1, 7, 20261010, 424242, -9), after tuning and again on 2026-10-11 with set operators on all seven types (before tuning, at 150 rows: 62.9 % of cases returned rows on the default seed). The Default seed column is the 2026-10-11 measurement; the 91.4 % of 2026-10-10 fell to 88.6 % when `in` / `notIn` on date and datetime returned in the catalog (their operands rarely match):
 
 | Measure | Default seed | Range over five seeds |
 |---|---|---|
-| Cases that return rows (guard: at least 85 %) | 91.4 % | 88.8 to 91.4 % |
-| Mean ids per non-empty case (guard: at least 10) | 21.1 | 20.2 to 21.1 |
-| Multi-key sorts with a first-key tie in the result (guard: at least 70 %) | 93.0 % | 89.3 to 93.0 % |
-| Results whose first sort key holds NULLs next to values | 616 of 1000 | 603 to 626 |
-| Windows that start inside the result (guard: at least 30 % of cases) | 44.8 % | 41.9 to 46.8 % |
-| Windows that stop short of the result's end | 769 of 1000 | 737 to 786 |
+| Cases that return rows (guard: at least 85 %) | 88.6 % | 87.8 to 91.0 % |
+| Mean ids per non-empty case (guard: at least 10) | 22.6 | 19.5 to 22.6 |
+| Multi-key sorts with a first-key tie in the result (guard: at least 70 %) | 90.5 % | 87.9 to 92.6 % |
+| Results whose first sort key holds NULLs next to values | 593 of 1000 | 593 to 626 |
+| Windows that start inside the result (guard: at least 30 % of cases) | 44.5 % | 43.4 to 44.7 % |
+| Windows that stop short of the result's end | 757 of 1000 | 757 to 780 |
 
 What was tuned, all inside PAR-3 (no register row changed): window starts are mostly small (one in 50 starts at 200 on
 purpose); equality operands rarely sit next to a pooled value; an AND of conditions on one column carries no blank test and

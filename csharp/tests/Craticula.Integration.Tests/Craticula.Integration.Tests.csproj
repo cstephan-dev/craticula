@@ -35,6 +35,8 @@
     <ProjectReference Include="../../src/Craticula.Sql/Craticula.Sql.csproj" />
     <ProjectReference Include="../../src/Craticula.Mongo/Craticula.Mongo.csproj" />
     <ProjectReference Include="../../src/Craticula.Search/Craticula.Search.csproj" />
+    <!-- Test host for the Dapper adapter's own binding on a live PostgreSQL (Sql/DapperPostgresExecutionTests, #2315); Dapper itself flows transitively. -->
+    <ProjectReference Include="../../src/Craticula.Dapper/Craticula.Dapper.csproj" />
   </ItemGroup>
 
 </Project>

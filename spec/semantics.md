@@ -1769,10 +1769,25 @@ contrast with the previous rule: an outer `NOT (...)` is correct and required fo
 `notNode`**, because there the negation applies to an arbitrary subtree, not to one comparison. The
 distinction is the IR shape, never the surface similarity of the two.
 
-**SQL-4. Set membership is one array parameter on Postgres — `= ANY($1)` / `<> ALL($1)` — and that is
-a dialect rendering, not a universal one.** The set's values are bound as a **single** array
-parameter, so the placeholder count never depends on the value count: `"status" = ANY($1)` with
-`params: [["active", "pending"]]`, never `IN ($1, $2)` with two scalars.
+**SQL-4. Set membership is one array parameter on Postgres — `= ANY($1)` / `<> ALL($1)`, cast to the column
+type for the three string-encoded types — and that is a dialect rendering, not a universal one.** The set's
+values are bound as a **single** array parameter, so the placeholder count never depends on the value count:
+`"status" = ANY($1)` with `params: [["active", "pending"]]`, never `IN ($1, $2)` with two scalars.
+
+*The array is cast for `decimal`, `date` and `datetime` (Bug #2304).* Those values are strings (AR-7), so a host
+binds the array as `text[]`, and PostgreSQL has no `numeric = text`, `date = text` or `timestamptz = text`
+operator. On Postgres the placeholder is therefore cast to the field's column type, and only for these three
+types: `"price" = ANY($1::numeric[])`, `"day" = ANY($1::date[])`, `"at" = ANY($1::timestamptz[])`, and
+`<> ALL($1::numeric[])` (`::date[]`, `::timestamptz[]`) likewise. `string`, `int64`, `double` and `boolean` stay
+uncast (`= ANY($1)`), and the parameter list is unchanged (`params: [[...]]`). SQL Server, MySQL, SQLite and
+Oracle render exactly as before (N scalars). The cast is an explicit cast from the `text[]` a host binds for a
+string array. Consequences:
+(a) the host's `datetime` column is `timestamptz`, an absolute instant (SEM-4). A `timestamp` column without a
+zone makes Postgres compare through the session time zone and can shift rows silently; that is a host
+obligation, like SQLite's fixed-width datetime text.
+(b) A `null` element in the list (AR-7 `nullValue` beside real values) is allowed and stays NULL inside the
+array. An empty list is already refused by SEC-6.
+(c) `Craticula.EntityFrameworkCore` hands typed values to the provider and is out of scope.
 
 *Why it is behind the dialect interface.* `ANY(array)` does not exist in SQL Server, MySQL or SQLite.
 #1639 renders those three as `IN (...)` with N scalar parameters. The query builder therefore MUST
@@ -2867,31 +2882,23 @@ neither is not excluded and the generator must produce it.
 | A `groupable` string field | GRP-2's accepted divergence #4 (MySQL's binary column for exact buckets makes comparisons case-sensitive) and #3 | `group-aggregation/017-set-filter-values-excludes-own-field-filter` |
 | The ordering operators (`gt`, `gte`, `lt`, `lte`) and `inRange` on a string field; `eq`, `neq`, the substring family, `in`, `notIn` and the blank tests on it stay | OSE-6 (its `range` / `sort` row: a case-insensitive `string` is ordered on `search.normalizedSubField`, and a schema without one is a compiler error, so the Search engines refuse) and SEM-1 (case folding: `range` has no `case_insensitive` parameter, so the fold is an index-time obligation the parity schema does not pay) | `dialect-parity/015-sem1-case-insensitive-ordering-gt` pins the ordering semantics on a schema that declares the normalizer; **no fixture pins the refusal itself**, which is pinned by the Search compiler unit test `Craticula.Search.Tests` `SearchQueryOperatorTests.A_Case_Insensitive_String_Range_On_A_Field_With_No_Normalizer_Sub_Field_Is_Refused` |
 
-A set-membership operator (`in`, `notIn`) is **not** on the register, except for the known defect below: the generator
-produces it on string, int64, double and boolean fields. The last row is the one row whose covering fixture does not pin the
+A set-membership operator (`in`, `notIn`) is **not** on the register: the generator produces it on all seven field types
+(string, int64, double, decimal, boolean, date and datetime). The last row is the one row whose covering fixture does not pin the
 exclusion's cause (the refusal); it is kept because ordering strings is meaningful only where the schema pays SEM-1's
 index-time cost, and the fixture shows the result on such a schema.
-
-**Known defects (temporary generator exclusions; not accepted divergences).** A row here is a true gap the property
-found, tracked by a Bug. It is not a divergence the Tech Lead accepts, so it has no `allowedDivergence` fixture and PAR-4's
-fixture rule does not apply to it; the exclusion is temporary and exists only so the default run stays green while the Bug
-is open.
-
-| Excluded construct | Rule | Status | Removal condition | Covering fixture |
-|---|---|---|---|---|
-| Set membership (`in`, `notIn`) on a `decimal`, `date` or `datetime` field | SQL-4 (one array parameter for the set) and AR-7 (those values are strings): on PostgreSQL the array is `text[]`, so `numeric = text`, `date = text` and `timestamptz = text` are refused | **KNOWN DEFECT**, Bug #2304 (Feature #1624) | When #2304 is fixed the generator produces these operators again and this row is deleted | none yet (the Bug's criterion 2 adds fixtures) |
 
 The first row is a generator rule rather than an XEQ-4 entry: no fixture declares an `allowedDivergence` for string
 order, because `sort-paging/001` agrees on every engine for the letters it seeds. The fixture is named as the evidence
 of what is pinned, and PAR-4 applies the moment a broader string sort is shown to differ. As of the first runs (2026-10-10: the default seed and several other seeds, seven engines, all 21 pairs), the property
-found one true gap: set membership on decimal, date and datetime fields is refused by PostgreSQL. That is a **defect**
-(Bug #2304, registered above as a known defect), not a divergence, and **no accepted divergence has been recorded by the
-property yet**; apart from the known defect the register lists only generator exclusions.
+found one true gap: set membership on decimal, date and datetime fields was refused by PostgreSQL. That was a **defect**
+(Bug #2304), not a divergence; it was fixed (SQL-4's array cast; the Dapper adapter also binds Postgres parameters unnamed, which set membership through it needed, while its scalar comparisons on those types remain Bug #2320) and the
+generator produces those operators again. **No accepted divergence has been recorded by the property**; the register lists
+only generator exclusions.
 
 **PAR-4. A found divergence becomes a fixture.** When the property finds a difference between engines, the outcome is
 one of: a defect fixed (a compiler or a spec correction), or a divergence the Tech Lead accepts. An accepted divergence
 is **promoted to a fixture** whose `expectedRows.json` carries an `allowedDivergence` entry (XEQ-4) with its mandatory
 `reason`, and a row is added to the register in PAR-3 naming that fixture. A divergence is never excused by a generator
 rule alone: excluding a construct from the generator without a register row and a covering fixture is not allowed.
-A known defect is not an accepted divergence and the generator alone does not excuse it: its exclusion is temporary, is
-tracked by its Bug, and ends when the Bug is fixed (the row in the known-defects table is then deleted).
+A true defect the property finds is not an accepted divergence and the generator alone does not excuse it: it is tracked by a
+Bug and fixed in the compiler or the spec, and any exclusion made while it is open is removed when the Bug is fixed.

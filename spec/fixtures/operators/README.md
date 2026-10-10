@@ -23,7 +23,7 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   own "must NOT omit the null-ordering marker on the theory that the field is probably never null"
   rule: every artifact's `id ASC` sort still carries its adapter-default `nullsPosition: "last"`
   marker — `NULLS LAST` in Postgres, an `__idNullBucket` null-bucket `$addFields`/`$sort`/`$unset`
-  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 47 cases,
+  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 53 cases,
   exactly as `filter-tree/` and `sort-paging/` already do for their own bare `id` sort.
 
   *Corrected in #1643, on all 47.* This bullet used to say "`$addFields`/`$sort` **pair**", and the
@@ -139,11 +139,17 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
 | 045 | `045-false-boolean/` | AR-6 unary `false` boolean shorthand, mirror of case 044. |
 | 046 | `046-eq-decimal/` | AR-6 `eq` on `decimal` (AR-7's typed-value matrix) — the numeric-string `decimalValue` representation, previously unexercised in this category. |
 | 047 | `047-gt-decimal/` | AR-6 `gt` (ordering) on `decimal`, mirror of 046 for an ordering comparison. |
+| 048 | `048-in-decimal/` | AR-6 `in` on `decimal` via the Set Filter wire shape; Postgres casts the set array, `= ANY($1::numeric[])` (SQL-4, Bug #2304); members compare as numbers (`19.990` equals `19.99`). |
+| 049 | `049-notin-decimal/` | AR-6 `notIn` on `decimal` via `customFilters`, null-inclusive (SEM-2); `<> ALL($1::numeric[])`. |
+| 050 | `050-in-date/` | AR-6 `in` on `date` via the Set Filter wire shape; `= ANY($1::date[])` (SQL-4); day-neighbours of each member and a duplicate seeded. |
+| 051 | `051-notin-date/` | AR-6 `notIn` on `date` via `customFilters`, null-inclusive (SEM-2); `<> ALL($1::date[])`. |
+| 052 | `052-in-datetime/` | AR-6 `in` on `datetime` via the Set Filter wire shape (ISO instants with `Z`); `= ANY($1::timestamptz[])` (SQL-4); rows at `.000Z` / `.001Z` around each member. |
+| 053 | `053-notin-datetime/` | AR-6 `notIn` on `datetime` via `customFilters` (typed values carry `zone: "UTC"`), null-inclusive (SEM-2); `<> ALL($1::timestamptz[])`. |
 
 ## Execution equality (T-1b)
 
-All 47 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
-[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-047 follow it. Every fixture has an oracle-free
+All 53 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
+[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-053 follow it. Every fixture has an oracle-free
 backend set (`postgres`, `mongo`, `search`), so a seeded `''` is allowed and is used where SEM-2 gives it a meaning
 (`blank` / `notBlank`, `neq`, `notIn`). Out of scope: none, because this category has no rejection-only fixture.
 Each seed is 4-9 rows keyed by logical colId, with boundary values just inside and outside, nulls, case variants and

@@ -1,0 +1,12 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM \"items\" WHERE \"unit_cost\" = ANY($1::numeric[]) ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    [
+      "19.99",
+      "5.5"
+    ],
+    100,
+    0
+  ]
+}

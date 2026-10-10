@@ -78,7 +78,10 @@ change touches neither project.
   `FetchPageAsync` / `CountAsync` row counts and `lastRow`, the export streams, the PERF-2 PIT + `search_after` deep
   paging with a lowered window, the composite `after` splice for grouped blocks past the first, and the cursor cache and
   its cache key. None of that is reachable from a compiled artifact, and a fold would drag adapter internals
-  (`InternalsVisibleTo`, the adapter packages) into a project whose point is that it depends on the compilers only (AR-3).
+  (`InternalsVisibleTo`, the adapter packages) into this project. It does reference one adapter, `Craticula.Dapper`, as a
+  test host (`Sql/DapperPostgresExecutionTests`, #2315: the adapter's parameter binding on a live PostgreSQL); that is the
+  public entry point only, no internals. The reason to keep the live adapter suites separate still holds: they test each
+  adapter's own materialization against a live engine with its own URI, which a compiled artifact cannot reach.
 - Overlap is small: both run a handful of fixtures against a real engine. If the duplication matters later, the
   cheaper change is to let those two suites read their engine from a Testcontainers-started instance of the images
   above instead of a hand-started one (`CRATICULA_MONGO_TEST_URI` / `CRATICULA_OPENSEARCH_TEST_URI`), which keeps them
