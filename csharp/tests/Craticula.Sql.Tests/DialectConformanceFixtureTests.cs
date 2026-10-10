@@ -57,8 +57,8 @@ public class DialectConformanceFixtureTests
     /// Mongo/Search arm, but it DOES carry all five SQL dialects including Oracle's) plus
     /// <c>group-aggregation/</c> in full (23) = <b>42</b>, which is exactly Oracle's count because
     /// Oracle has no single-engine showcase among <c>dialect-parity/001</c>-<c>005</c>. The other
-    /// three each add theirs on top of that same 42: SQLite +1 (<c>004</c>, ASCII-CI <c>LIKE</c>) and
-    /// T-SQL +1 (<c>003</c>, <c>OFFSET/FETCH</c>) reach 43; MySQL +2 (<c>001</c> AND <c>002</c> are
+    /// three each add theirs on top of that same 42: SQLite +2 (<c>004</c>, ASCII-CI <c>LIKE</c>, and
+    /// <c>025</c>, #2243's fixed-width datetime bound) reaches 44; T-SQL +1 (<c>003</c>, <c>OFFSET/FETCH</c>) reaches 43; MySQL +2 (<c>001</c> AND <c>002</c> are
     /// both <c>ISNULL</c> showcases) reaches 44. The asymmetry in this table is therefore the coverage
     /// policy, not a gap. <em>(This paragraph once summed to 41 while claiming 42 — it had not been
     /// updated for <c>024</c>'s contribution, the same drift class #1644's review pass corrected here
@@ -69,7 +69,7 @@ public class DialectConformanceFixtureTests
         ("mssql", MssqlDialect.Instance, 43),
         ("mysql", MySqlDialect.Instance, 44),
         ("oracle", OracleDialect.Instance, 42),
-        ("sqlite", SqliteDialect.Instance, 43)
+        ("sqlite", SqliteDialect.Instance, 44)
     ];
 
     /// <summary>
@@ -194,9 +194,11 @@ public class DialectConformanceFixtureTests
     }
 
     [Fact]
-    public void The_Suite_Is_All_172_Non_Postgres_Arms_In_The_Fixture_Tree()
+    public void The_Suite_Is_All_173_Non_Postgres_Arms_In_The_Fixture_Tree()
     {
-        // #1886 added the most recent 4: dialect-parity/024, AGG-6's discriminator — a grouped level
+        // #2243 added the most recent 1: dialect-parity/025, SQLite's fixed-width datetime bound (SEM-4);
+        // its one arm is the sqlite one, authored from the rule rather than transformed from another arm.
+        // #1886 added the 4 before that: dialect-parity/024, AGG-6's discriminator — a grouped level
         // ordered by an AVG beside a COALESCE-wrapped SUM. All four arms are that fixture's own
         // Postgres arm with each engine's documented tokens substituted, like every arm below.
         // #1644's review pass added the 4 before that: group-aggregation/023, the one case carrying
@@ -220,7 +222,7 @@ public class DialectConformanceFixtureTests
         // which is what makes BM-2's "identical grouping protocol across all four dialects"
         // checkable at all. This number going up without the per-dialect table above changing with
         // it means an arm was added and went unexercised.
-        Assert.Equal(172, Arms.Count);
+        Assert.Equal(173, Arms.Count);
     }
 
     [Fact]

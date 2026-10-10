@@ -4,7 +4,7 @@ Per `spec/fixtures/README.md`'s category index, this directory proves three dist
 structurally separate by coverage tier (see each case's own `description.md` for its tier and the
 specific SEM rule/mechanism it pins):
 
-1. **Dialect-specific mechanics** (`001`-`005`): a single backend's own native rendering of a
+1. **Dialect-specific mechanics** (`001`-`005`, and `025`): a single backend's own native rendering of a
    semantics rule — MySQL's `ISNULL` null-ordering emulation, SQL Server's `OFFSET`/`FETCH NEXT`
    paging syntax, SQLite's default ASCII-case-insensitive `LIKE`, Postgres's `pg_trgm`-index-eligible
    `ILIKE`. One artifact per fixture, targeting only the dialect under test.
@@ -25,8 +25,12 @@ specific SEM rule/mechanism it pins):
    grade nothing. It is the only grouped request in this category, and the only case whose subject is
    an aggregate rather than a filter or a sort.
 
-The category therefore holds **24 directories**: five single-artifact mechanics showcases, 18
-all-seven parity showcases, and this one.
+A **second single-backend mechanics case** (`025`, added #2243) sits beside `001`-`005`: SQLite stores a
+datetime as text, so its bound must carry the stored width (SEM-4). Only its `sqlite` arm exists, because
+no other engine compares a datetime as text.
+
+The category therefore holds **25 directories**: six single-artifact mechanics showcases (`001`-`005`,
+`025`), 18 all-seven parity showcases, and the SQL-only `024`.
 
 `011`-`020` cover the SEM-7 `contains`-vs-tokenized-`match` trap (correct artifact + anti-pattern
 documentation), the `searchMode: "analyzed"` escape hatch, and further SEM-1/2/7 mechanics not
@@ -81,6 +85,7 @@ schemas that no earlier case had a reason to set.
 | 022 | `sec4-tsql-bracket-wildcard-escaping` | parity showcase (all 7) | `[` is a **fourth** `LIKE` wildcard on SQL Server and on no other v1 dialect — `020`'s schema verbatim with only the filter value changed, so the mssql arm is the only one whose bound value is escaped (D5) | SEM-7, SEC-4 |
 | 023 | `sem1-mixed-case-sensitivity-one-request` | parity showcase (all 7) | An insensitive **and** a sensitive string compared in one request — `006`'s and `014`'s schemas merged. The five SQL dialects attach `COLLATE` per operand and need nothing new; MongoDB's collation is query-level, so the sensitive comparison escapes into `{"$expr": …}` (**MDB-9**). The suite's only `$expr` artifact | SEM-1, SC-3, SQL-6, **MDB-9** |
 | 024 | `agg6-empty-group-sum-coalesced-avg-null` | five SQL dialects (no document store) | **AGG-6**: `SUM` wrapped as `COALESCE(SUM(x), 0)` and `AVG`/`MIN`/`MAX` left bare, in one statement — a grouped level ordered by the **`avg`**, which is the only shape whose `ORDER BY` catches over-applying the wrap as well as omitting it (the projection case is covered separately by `group-aggregation/008`-`010`, `012`, `013`). `COALESCE` is ANSI, so all five arms differ in quoting and paging tokens alone | **AGG-6**, GRP-4, SEM-3, SEM-6, AR-8, AR-9 |
+| 025 | `sqlite-datetime-fixed-width` | dialect-specific (SQLite) | A datetime is TEXT on SQLite and `.` sorts before `Z`, so a stored `...:00.001Z` sorts before a bound `...:00Z`. The host stores exactly three fractional digits and the SQLite arm binds `...:00.000Z`; `lte`, `inRange` and `gt` around whole-second bounds keep the `.000Z` and `.001Z` rows the old form lost or kept wrongly | SEM-4, SEM-2, XEQ-2 |
 
 ## Notes on artifact construction
 
@@ -375,6 +380,7 @@ when it does.
 | MySQL / MariaDB | A field declared `caseSensitivity: "sensitive"` needs a `_bin`/`_as_cs` **column** collation. | The declaration is silently ignored — the compiler's output says nothing either way, so comparisons run case-**in**sensitively under the server's `_ci` default. |
 | SQL Server | **None.** Handled inline as of D4 (`COLLATE Latin1_General_CS_AS` / `Latin1_General_CI_AS`), so neither direction depends on the database's own collation. | — |
 | SQLite | Library **≥ 3.30.0**, for the native `NULLS FIRST`/`NULLS LAST` every `sqlite` arm pins. | The statement is rejected outright — a loud failure, unlike MySQL's. |
+| SQLite | A `datetime` column stores **exactly** `yyyy-MM-ddTHH:mm:ss.fffZ`, UTC (SEM-4; `025`). The SQLite arm binds its bound in that width and rounds a sub-millisecond bound to the millisecond by operator; the comparison is text. | A host storing another width (`...:00Z`, `yyyy-MM-dd HH:mm:ss`) gets silently wrong rows at the boundaries, with no error. |
 | Oracle | Server **≥ 12.2** with `COMPATIBLE >= 12.2` and `MAX_STRING_SIZE = EXTENDED`, for the `COLLATE` operator every `oracle` arm's SEM-1 mechanism uses (SQL-6). | The statement is rejected outright (ORA-43929) — loud, like SQLite's. |
 | Oracle | The table and every column must be **created with quoted identifiers** matching the fixture's `source`/`column` spelling exactly. Oracle folds an unquoted-`CREATE`d name to UPPERCASE, and every identifier in this suite is lowercase or camelCase. | `ORA-00942: table or view does not exist` — loud, but it names the table rather than the cause. |
 | Oracle | Every **groupable** column and the `stableKey` need `COLLATE BINARY` in DDL, or the session must run `NLS_COMP = BINARY`. GRP-2's bucket-identity keys (the `GROUP BY`, the drill-down `WHERE`, a grouped level's `ORDER BY`, and BM-3's `SELECT DISTINCT`) spell **no** collation at all, and on Oracle bare means the session's `NLS_COMP`/`NLS_SORT` — the same fact that makes `COLLATE BINARY` mandatory in the *filter* direction (SQL-6/D4). | Grouped buckets fold case with **no error**: `"EMEA"` and `"emea"` land in one bucket and expanding it returns both, so child rows stop summing to the parent's aggregate. Same class as the MySQL row above, and invisible to T-1a. |
@@ -398,10 +404,10 @@ this suite by construction. One was recorded here and is now settled:
 
 ## Execution-equality oracle (T-1b, #2204)
 
-All 24 cases carry `dataset.json` + `expectedRows.json` (XEQ-1). An ordinary row query returns every schema field in
+All 25 cases carry `dataset.json` + `expectedRows.json` (XEQ-1). An ordinary row query returns every schema field in
 declaration order, ordered by the request's sort and then SEM-6's `id` tiebreaker; `024` is a grouped level
 (`department`, then the `salary` sum and the `age` average, the average compared as a double). The single-backend
-mechanics cases `001`-`005` are held on their one artifact. `003` seeds 26 rows so its `startRow: 20` page is not
+mechanics cases `001`-`005` and `025` are held on their one artifact. `003` seeds 26 rows so its `startRow: 20` page is not
 empty; every other seed stays small. String sorts use capitalised ASCII names only, so no result depends on a
 collation's case ordering.
 
@@ -410,5 +416,5 @@ Out of scope: none.
 Accepted divergences declared (XEQ-4): `019` carries an `oracle` entry, because a seeded `''` is stored as NULL there
 (SQL-7); `notBlank` excludes both forms, so the entry restates the main result. No other case seeds `''`.
 
-All expected rows were derived by hand from `spec/semantics.md` (SEM-1, SEM-2, SEM-3, SEM-6, SEM-7, AGG-6), not from
+All expected rows were derived by hand from `spec/semantics.md` (SEM-1, SEM-2, SEM-3, SEM-4, SEM-6, SEM-7, AGG-6), not from
 any engine run or compiler output.

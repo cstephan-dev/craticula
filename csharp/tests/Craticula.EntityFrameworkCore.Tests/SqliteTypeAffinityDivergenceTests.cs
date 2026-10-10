@@ -20,10 +20,11 @@ namespace Craticula.EntityFrameworkCore.Tests;
 /// <c>ef_compare("unit_cost", @p) &gt; 0</c>, which compares NUMERICALLY. EF's answer is the one a user
 /// means; the compiler's is the one that is right on every engine where <c>NUMERIC</c> is a real
 /// type.</description></item>
-/// <item><description><b><c>datetime</c>.</b> SEM-4 pins the compiled parameter to canonical ISO-8601 UTC
-/// (<c>2026-02-01T00:00:00Z</c>) and the artifacts compare it byte-for-byte. EF hands the provider a
-/// <see cref="DateTime"/>, which <c>Microsoft.Data.Sqlite</c> renders in ITS storage format
-/// (<c>2026-02-01 00:00:00</c> — a space, no <c>Z</c>). Against a TEXT column those two strings order
+/// <item><description><b><c>datetime</c>.</b> SEM-4 pins the compiled SQLite parameter to the fixed-width UTC form the
+/// host stores (<c>2026-02-01T00:00:00.000Z</c>, #2243) and the artifacts compare it byte-for-byte. EF hands the
+/// provider a <see cref="DateTime"/> (AR-4's EF Core exception), which <c>Microsoft.Data.Sqlite</c> renders in ITS
+/// storage format (<c>2026-02-01 00:00:00</c> — a space, no <c>Z</c>), which breaks SEM-4's host obligation for a
+/// SQLite <c>datetime</c> column and is why the divergence exists. Against a TEXT column those two strings order
 /// differently: <c>' '</c> sorts before <c>'T'</c>, so at an exact boundary an <c>lte</c> excludes the row
 /// the compiled statement includes.</description></item>
 /// <item><description><b>Grouped <c>min</c>/<c>max</c> over a <c>decimal</c>-as-TEXT column (#1888).</b>
@@ -128,18 +129,18 @@ public class SqliteTypeAffinityDivergenceTests
         // This is the correct answer.
         Assert.Equal([1L, 2L], efIds);
 
-        // The compiled parameter is SEM-4's canonical '2026-02-01T00:00:00Z'. Against a TEXT column that is
+        // The compiled parameter is SEM-4's SQLite form '2026-02-01T00:00:00.000Z' (#2243; the EF adapter is outside that rule). Against a TEXT column that is
         // a TEXT comparison, and ' ' (0x20) precedes 'T' (0x54) — so EVERY stored timestamp on
         // 2026-02-01 compares less than the bound, whatever its time of day, and id 3 is admitted.
         Assert.Equal([1L, 2L, 3L], sqlIds);
 
         Assert.NotEqual(sqlIds, efIds);
-        Assert.Contains("2026-02-01T00:00:00Z", (string)compiled.Parameters[0]!, StringComparison.Ordinal);
+        Assert.Contains("2026-02-01T00:00:00.000Z", (string)compiled.Parameters[0]!, StringComparison.Ordinal);
 
         // The cause, isolated from either compiler: the two encodings of ONE instant do not compare the
         // same way against the stored text. Both statements are correct about the value they were given.
         Assert.Equal(1, CountRowsMatching(database, "SELECT COUNT(*) FROM items WHERE created_at = ?1", "2026-02-01 00:00:00"));
-        Assert.Equal(0, CountRowsMatching(database, "SELECT COUNT(*) FROM items WHERE created_at = ?1", "2026-02-01T00:00:00Z"));
+        Assert.Equal(0, CountRowsMatching(database, "SELECT COUNT(*) FROM items WHERE created_at = ?1", "2026-02-01T00:00:00.000Z"));
     }
 
     /// <summary>

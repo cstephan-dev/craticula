@@ -464,6 +464,30 @@ often diverge from what the grid itself shows the user.
   ```sql
   WHERE created_at >= :from AND created_at < :to
   ```
+- **SQLite — a fixed-width text instant, on both sides of the comparison (pinned).** SQLite has no
+  timestamp type: a `datetime` column holds TEXT and `>`, `<`, `=` compare it character by character.
+  Text is only chronological when every value has the same width, and the two spellings of one second,
+  `...:00Z` and `...:00.001Z`, are not the same width: `.` (0x2E) sorts before `Z` (0x5A), so a stored
+  `2026-01-01T00:00:00.001Z` sorts *before* a bound spelled `2026-01-01T00:00:00Z`, and `gt` on that
+  bound silently drops a row that is later than it. The rule therefore has two halves, and neither is
+  enough alone. **Host obligation:** a SQLite `datetime` column stores exactly three fractional digits,
+  `yyyy-MM-ddTHH:mm:ss.fffZ`, UTC (the millisecond precision XEQ-2 already caps a seed at). **Compiler
+  rule:** the SQLite arm binds a `datetimeValue` in the same form, so a whole-second instant is bound as
+  `2026-01-01T00:00:00.000Z`, never `...:00Z`. A bound with a sub-millisecond part (a
+  fraction finer than three digits that is not all zeros after the third) is **rounded to the millisecond by
+  its operator**, because the text of `...:00.0005Z` sorts before the stored `...:00.000Z` although it is
+  later. Stored values `s` are always millisecond-aligned, so for a bound `b` and its floor / ceiling to the
+  millisecond: `x > b` is `s > floor(b)`, `x <= b` is `s <= floor(b)`, `x >= b` is `s >= ceil(b)` and
+  `x < b` is `s < ceil(b)`. The SQLite arm therefore binds `floor(b)` for `gt` and `lte`, and `ceil(b)` for `gte`
+  and `lt`; an `inRange` follows its two bounds' own operators (an exclusive from-bound is `gt`, an inclusive one
+  `gte`; an inclusive to-bound is `lte`, an exclusive one `lt`). `eq`, `neq`, `in` and `notIn` keep the full
+  value: a finer-than-millisecond value never equals a stored one, which is the correct answer. A bound that is
+  already millisecond-aligned is unchanged. Postgres,
+  SQL Server, MySQL and Oracle compare a typed instant, not text, and keep the form of SEM-4 above
+  (`...:00Z` for a whole second). The obligation covers the path that sends the bound as text
+  (`Craticula.Sql` and the Dapper adapter on top of it); the EF Core adapter hands its provider a
+  `DateTime` and the provider's own text mapping applies (AR-4's EF Core exception; the divergence is
+  recorded in `SqliteTypeAffinityDivergenceTests`).
 - **MongoDB** — an instant field (`datetimeValue`) compares against BSON `Date` values built from
   the full instant string (see the pinned representation above); a local-date field (`dateValue`)
   compares against the plain ISO date string instead, never a `Date`:
@@ -2738,7 +2762,7 @@ name, and encode each cell by the field's declared GridSchema type:
 | `boolean` | `true` / `false` |
 | `string` | a JSON string, stored and compared exactly as written (no trimming, no case change) |
 | `date` | `"YYYY-MM-DD"`, a local date with no zone (SEM-4) |
-| `datetime` | `"YYYY-MM-DDTHH:MM:SS[.fff]Z"`, an absolute UTC instant (SEM-4), **at most millisecond precision**: MongoDB's `Date` and Search's `date` keep no more, so a finer seed would be truncated differently per engine and could move across a range bound |
+| `datetime` | `"YYYY-MM-DDTHH:MM:SS[.fff]Z"`, an absolute UTC instant (SEM-4), **at most millisecond precision**: MongoDB's `Date` and Search's `date` keep no more, so a finer seed would be truncated differently per engine and could move across a range bound. A SQLite seed is written with all three fractional digits, `...:00.000Z` for a whole second (SEM-4's host obligation) |
 | absent value | an explicit JSON `null`; **never** an omitted key |
 
 Every field the fixture's `schema.json` declares appears in every seed row, so a reader can tell a null from an

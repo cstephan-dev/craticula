@@ -589,8 +589,23 @@ public static class SqlQueryBuilder
         var caseSensitivity = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation, context);
 
         return context.Dialect.RenderScalarComparison(
-            column, ScalarComparison(op), EncodeValue(value, field), caseSensitivity, context.Parameters);
+            column, ScalarComparison(op), EncodeValue(value, field, context.Dialect, BoundRounding(op)), caseSensitivity, context.Parameters);
     }
+
+    /// <summary>
+    /// SEM-4 (SQLite): how a sub-millisecond datetime bound is rounded to the stored millisecond, by the operator
+    /// that compares it. <c>gt</c>/<c>lte</c> floor, <c>gte</c>/<c>lt</c> ceil, everything else keeps the full value.
+    /// <c>inRange</c> reaches here through its two bounds' own operators, so inclusivity decides each side.
+    /// Only a dialect with <see cref="ISqlDialect.DatetimeBoundsAreFixedWidth"/> acts on it.
+    /// </summary>
+    private static BoundRoundingMode BoundRounding(ComparisonOperator op) => op switch
+    {
+        ComparisonOperator.Gt or ComparisonOperator.Lte => BoundRoundingMode.Floor,
+        ComparisonOperator.Gte or ComparisonOperator.Lt => BoundRoundingMode.Ceiling,
+        _ => BoundRoundingMode.None
+    };
+
+    private enum BoundRoundingMode { None, Floor, Ceiling }
 
     private static string RenderSubstring(string column, FieldConfig field, ComparisonNode node, Context context)
     {
@@ -633,7 +648,7 @@ public static class SqlQueryBuilder
         var encoded = new List<object?>(values.Count);
         foreach (var value in values)
         {
-            encoded.Add(EncodeValue(value, field));
+            encoded.Add(EncodeValue(value, field, context.Dialect));
         }
 
         return context.Dialect.RenderSetMembership(column, negated: node.Op == ComparisonOperator.NotIn, encoded, caseSensitivity, context.Parameters);
@@ -908,7 +923,7 @@ public static class SqlQueryBuilder
     /// the value's surface shape, is the authority — and is asserted against the value here rather
     /// than trusted, since a caller may have skipped <see cref="TypeCoercionValidator"/>.
     /// </summary>
-    private static object? EncodeValue(TypedValue value, FieldConfig field)
+    private static object? EncodeValue(TypedValue value, FieldConfig field, ISqlDialect dialect, BoundRoundingMode rounding = BoundRoundingMode.None)
     {
         RequireDeclaredType(value, field);
 
@@ -920,7 +935,7 @@ public static class SqlQueryBuilder
             DoubleValue d => d.Value,
             BooleanValue b => b.Value,
             DateValue d => d.Value,
-            DatetimeValue dt => NormalizeInstant(dt.Value),
+            DatetimeValue dt => NormalizeInstant(dt.Value, dialect.DatetimeBoundsAreFixedWidth, rounding),
 
             // AR-7's nullValue. No fixture pins a comparison against it (SEM-2's null handling goes
             // through blank/notBlank, which never carry a value), so it is bound as a NULL parameter
@@ -939,7 +954,10 @@ public static class SqlQueryBuilder
     /// to the database. Normalising rather than emitting the value verbatim is what stops the same
     /// instant written <c>+02:00</c> and written <c>Z</c> from producing two different artifacts.
     /// Sub-second precision is preserved when present, and dropped from the text when absent, so the
-    /// common whole-second case round-trips to exactly the form the fixtures pin.
+    /// common whole-second case round-trips to exactly the form the fixtures pin. On a dialect whose
+    /// <see cref="ISqlDialect.DatetimeBoundsAreFixedWidth"/> is true (SQLite, which compares the column
+    /// as text) a whole-millisecond instant is spelled with exactly three fractional digits instead, and a sub-millisecond one is
+    /// first rounded to the millisecond by the comparing operator (<paramref name="rounding"/>).
     ///
     /// <para><b>Load-bearing dependency:</b> this is safe from local-time drift only because
     /// <see cref="Build"/> runs <see cref="FilterNodeValidator"/> first, and its
@@ -951,7 +969,7 @@ public static class SqlQueryBuilder
     /// this?" a question the two paths may not answer separately. Only the TEXT below is this
     /// compiler's, because only its artifacts pin one.</para>
     /// </summary>
-    private static string NormalizeInstant(string value)
+    private static string NormalizeInstant(string value, bool fixedWidth, BoundRoundingMode rounding)
     {
         // Zone-less input cannot reach here — FilterNodeValidator (run by Build) rejects it — which
         // is what makes the local-time assumption inside TryParseUtc unreachable rather than merely
@@ -963,7 +981,19 @@ public static class SqlQueryBuilder
                 $"datetimeValue '{value}' is not an ISO-8601 instant (FilterNodeValidator should have rejected it upstream).");
         }
 
-        var format = utc.Ticks % TimeSpan.TicksPerSecond == 0 ? "yyyy-MM-dd'T'HH:mm:ss'Z'" : "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'";
+        // SEM-4 (SQLite): a text-comparing engine needs the stored width, three fractional digits. Stored values are
+        // millisecond-aligned, so a sub-millisecond bound is rounded by its operator (x > b <=> s > floor(b),
+        // x <= b <=> s <= floor(b), x >= b <=> s >= ceil(b), x < b <=> s < ceil(b)); eq / neq / set membership keep
+        // the full value, which can never equal a stored one.
+        if (fixedWidth && rounding != BoundRoundingMode.None && utc.Ticks % TimeSpan.TicksPerMillisecond != 0)
+        {
+            var floorTicks = utc.Ticks - utc.Ticks % TimeSpan.TicksPerMillisecond;
+            utc = new DateTime(rounding == BoundRoundingMode.Floor ? floorTicks : floorTicks + TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
+        }
+
+        var format = fixedWidth && utc.Ticks % TimeSpan.TicksPerMillisecond == 0 ? "yyyy-MM-dd'T'HH:mm:ss.fff'Z'"
+            : utc.Ticks % TimeSpan.TicksPerSecond == 0 ? "yyyy-MM-dd'T'HH:mm:ss'Z'"
+            : "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'";
         return utc.ToString(format, CultureInfo.InvariantCulture);
     }
 

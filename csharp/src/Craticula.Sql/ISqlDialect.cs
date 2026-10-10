@@ -61,28 +61,31 @@ public enum SqlSubstringAnchor
 /// ANSI SQL every dialect spells identically, so pushing them down would add an override point no
 /// dialect would ever use differently.</para>
 ///
-/// <para><b>Eight rendering methods and TWO engine facts — a distinction worth keeping.</b>
+/// <para><b>Eight rendering methods and THREE engine facts — a distinction worth keeping.</b>
 /// Everything above returns SQL text: the dialect is asked "how do you spell this?" and the builder
-/// splices the answer in. <see cref="EmptyStringIsNull"/> and <see cref="DistinctValuesUseGroupBy"/> are a
-/// different kind of member, the only two of their kind: each answers a question <em>about the engine</em>, and the builder then composes
+/// splices the answer in. <see cref="EmptyStringIsNull"/>, <see cref="DistinctValuesUseGroupBy"/> and
+/// <see cref="DatetimeBoundsAreFixedWidth"/> are a
+/// different kind of member, the only three of their kind: each answers a question <em>about the engine</em>, and the builder then composes
 /// the predicate itself. Reach for that shape when the composition must stay in one place (because
 /// two operators are defined as each other's negation, say) and only a single engine fact varies
 /// inside it; reach for a rendering method when the whole construct's shape, token order or
 /// parameter count is the dialect's own. Getting that backwards is how four dialects end up carrying
 /// byte-identical implementations of the same method.</para>
 ///
-/// <para><b>This interface has now been widened four times, and none of them was free</b> — #1639
+/// <para><b>This interface has now been widened five times, and none of them was free</b> — #1639
 /// turned <c>RenderScalarComparison</c>'s case-sensitivity argument from a <c>bool</c> into the
 /// three-valued <see cref="SemanticsResolver.CaseSensitivityMode"/>, #1641 added
-/// <see cref="RenderRowLimit"/>, #1642 added <see cref="EmptyStringIsNull"/>, and #2206 added
-/// <see cref="DistinctValuesUseGroupBy"/>. Each cost every existing implementation a change and every
+/// <see cref="RenderRowLimit"/>, #1642 added <see cref="EmptyStringIsNull"/>, #2206 added
+/// <see cref="DistinctValuesUseGroupBy"/>, and #2243 added <see cref="DatetimeBoundsAreFixedWidth"/>. Each cost every existing implementation a change and every
 /// language port a re-read. BM-1's claim is that adding a dialect needs no change to
-/// <see cref="SqlQueryBuilder"/>, not that this file never moves; but a fifth widening should have to
+/// <see cref="SqlQueryBuilder"/>, not that this file never moves; but a sixth widening should have to
 /// argue that the seam, and not the candidate dialect, is what is wrong. The fourth did: T-SQL msg 145
 /// refuses <c>SELECT DISTINCT</c> whose ORDER BY key is not in the select list, a fact about one engine
 /// the builder cannot know. A rendering method would have put a second statement shape for the whole
 /// values query behind the seam; a capability fact keeps the one shape and lets the builder pick
-/// <c>GROUP BY</c> for the one engine that needs it (GRP-6(f)).</para>
+/// <c>GROUP BY</c> for the one engine that needs it (GRP-6(f)). The fifth did too: SQLite compares a datetime as TEXT, so
+/// the bound's width is part of the answer, and only that engine's builder-side normalisation changes
+/// (SEM-4); a rendering method would have moved the instant parsing behind the seam for every dialect.</para>
 ///
 /// <para>Every method that binds a value takes the <see cref="ISqlParameterSink"/> rather than a
 /// pre-rendered placeholder, because how many parameters a construct binds is itself
@@ -139,6 +142,18 @@ public interface ISqlDialect
     /// The two spellings compute the same set; this is a spelling fact, not a semantic one.
     /// </summary>
     bool DistinctValuesUseGroupBy => false;
+
+    /// <summary>
+    /// SEM-4 (SQLite): whether the engine compares a <c>datetime</c> as TEXT, so the bound must be
+    /// spelled with the width the host stores. True only on SQLite, whose column holds
+    /// <c>yyyy-MM-ddTHH:mm:ss.fffZ</c> (exactly three fractional digits) and whose <c>.</c> sorts before
+    /// <c>Z</c>: a bound spelled <c>...:00Z</c> would sort after a stored <c>...:00.001Z</c> and drop it.
+    /// When true the builder binds a whole-millisecond instant with all three digits; a bound with a
+    /// sub-millisecond part is first rounded to the millisecond by its operator (gt/lte floor, gte/lt ceil; eq, neq
+    /// and set membership keep the full value). Every other dialect compares a typed instant and
+    /// keeps the whole-second form. A fact about the engine; the formatting stays in the builder.
+    /// </summary>
+    bool DatetimeBoundsAreFixedWidth => false;
 
     /// <summary>
     /// SQL-1: quotes one identifier — applied to <em>every</em> column and to the table, never

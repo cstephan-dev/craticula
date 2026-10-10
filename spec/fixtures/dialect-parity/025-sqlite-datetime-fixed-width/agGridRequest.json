@@ -1,0 +1,38 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [{ "colId": "id", "sort": "asc" }],
+  "requestContext": { "zone": "UTC" },
+  "customFilters": {
+    "type": "or",
+    "nodes": [
+      {
+        "type": "comparison",
+        "field": "createdAt",
+        "op": "lte",
+        "value": { "type": "datetime", "value": "2026-01-01T00:00:00Z", "zone": "UTC" }
+      },
+      {
+        "type": "comparison",
+        "field": "createdAt",
+        "op": "inRange",
+        "from": { "type": "datetime", "value": "2026-01-01T12:00:00Z", "zone": "UTC" },
+        "to": { "type": "datetime", "value": "2026-01-02T00:00:00Z", "zone": "UTC" },
+        "fromInclusive": false,
+        "toInclusive": true
+      },
+      {
+        "type": "comparison",
+        "field": "createdAt",
+        "op": "gt",
+        "value": { "type": "datetime", "value": "2026-01-03T00:00:00Z", "zone": "UTC" }
+      }
+    ]
+  }
+}
