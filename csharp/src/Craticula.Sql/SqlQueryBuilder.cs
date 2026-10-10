@@ -181,7 +181,8 @@ public static class SqlQueryBuilder
         var column = ResolveColumn(request.ColId, context);
         var field = ResolveField(request.ColId, context);
 
-        var sql = new StringBuilder("SELECT DISTINCT ")
+        // GRP-6(f): the same set, spelled GROUP BY where the engine cannot ORDER a DISTINCT by an expression.
+        var sql = new StringBuilder(dialect.DistinctValuesUseGroupBy ? "SELECT " : "SELECT DISTINCT ")
             .Append(column)
             .Append(" FROM ")
             .Append(dialect.QuoteIdentifier(request.Schema.Source));
@@ -189,6 +190,11 @@ public static class SqlQueryBuilder
         if (RenderWhere(request.Filter, drillDown: null, context) is { } predicate)
         {
             sql.Append(" WHERE ").Append(predicate);
+        }
+
+        if (dialect.DistinctValuesUseGroupBy)
+        {
+            sql.Append(" GROUP BY ").Append(column);
         }
 
         // GRP-6, through GRP-2's own resolver: the distinct key decides bucket identity exactly as a

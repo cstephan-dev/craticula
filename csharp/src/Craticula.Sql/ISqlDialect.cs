@@ -129,6 +129,14 @@ public interface ISqlDialect
     bool EmptyStringIsNull { get; }
 
     /// <summary>
+    /// GRP-6(f): whether the BM-3 distinct set is spelled <c>GROUP BY &lt;col&gt;</c> instead of
+    /// <c>SELECT DISTINCT &lt;col&gt;</c>. True only where the engine refuses a <c>DISTINCT</c> query
+    /// whose <c>ORDER BY</c> is an expression rather than a select-list item (SQL Server, msg 145).
+    /// The two spellings compute the same set; this is a spelling fact, not a semantic one.
+    /// </summary>
+    bool DistinctValuesUseGroupBy => false;
+
+    /// <summary>
     /// SQL-1: quotes one identifier — applied to <em>every</em> column and to the table, never
     /// conditionally. Unquoted identifiers are not the same identifier: PostgreSQL case-folds them to
     /// lowercase, which silently breaks the camelCase physical columns real schemas declare.

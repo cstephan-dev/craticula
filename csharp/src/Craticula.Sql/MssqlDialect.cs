@@ -253,6 +253,9 @@ public sealed class MssqlDialect : ISqlDialect
     /// need a second statement shape for one engine — the structural coupling
     /// <see cref="ISqlDialect"/> exists to prevent.</para>
     /// </summary>
+    /// <summary>GRP-6(f): T-SQL rejects <c>SELECT DISTINCT</c> with a <c>CASE</c> ORDER BY key (msg 145).</summary>
+    public bool DistinctValuesUseGroupBy => true;
+
     public string RenderRowLimit(int limit, ISqlParameterSink parameters) =>
         $"OFFSET 0 ROWS FETCH NEXT {parameters.Bind(limit)} ROWS ONLY";
 }

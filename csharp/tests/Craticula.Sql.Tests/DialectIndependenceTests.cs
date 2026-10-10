@@ -265,12 +265,14 @@ public class DialectIndependenceTests
     /// the thing being asserted rather than an accident of arithmetic. Failing this test is not a
     /// reason to update the list: it is the prompt to write down why the seam, and not the new
     /// dialect, is what needed to change.</para>
+    /// <para>GRP-6(f) widened the property list to three: SQL Server cannot ORDER a DISTINCT by its
+    /// nulls-last CASE key, so <c>DistinctValuesUseGroupBy</c> is the one spelling fact the builder reads.</para>
     /// </summary>
     [Fact]
     public void The_Seam_Is_Exactly_These_Ten_Members_So_A_Fourth_Widening_Cannot_Land_Silently()
     {
         Assert.Equal(
-            ["EmptyStringIsNull", "Name"],
+            ["DistinctValuesUseGroupBy", "EmptyStringIsNull", "Name"],
             typeof(ISqlDialect).GetProperties().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal));
 
         Assert.Equal(
