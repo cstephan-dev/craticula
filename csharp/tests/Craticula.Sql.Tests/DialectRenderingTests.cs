@@ -345,7 +345,7 @@ public class DialectRenderingTests
             target.RenderScalarComparison("[c]", SqlScalarComparison.Equal, "a", mode, sink));
         Assert.Equal(
             $"[c] COLLATE {collation} IN (@p2, @p3)",
-            target.RenderSetMembership("[c]", negated: false, ["a", "b"], mode, sink));
+            target.RenderSetMembership("[c]", negated: false, ["a", "b"], FieldType.String, mode, sink));
         Assert.Equal(
             $"CASE WHEN [c] IS NULL THEN 1 ELSE 0 END ASC, [c] COLLATE {collation} ASC",
             target.RenderSortKey("[c]", SortDirection.Asc, NullsPosition.Last, mode));
@@ -379,7 +379,7 @@ public class DialectRenderingTests
             target.RenderScalarComparison("\"c\"", SqlScalarComparison.Equal, "a", mode, sink));
         Assert.Equal(
             $"\"c\" COLLATE {collation} IN (:p2, :p3)",
-            target.RenderSetMembership("\"c\"", negated: false, ["a", "b"], mode, sink));
+            target.RenderSetMembership("\"c\"", negated: false, ["a", "b"], FieldType.String, mode, sink));
         Assert.Equal(
             $"\"c\" COLLATE {collation} ASC NULLS LAST",
             target.RenderSortKey("\"c\"", SortDirection.Asc, NullsPosition.Last, mode));
@@ -525,7 +525,7 @@ public class DialectRenderingTests
         var sink = new RecordingSink(target);
 
         var sql = target.RenderSetMembership(
-            target.QuoteIdentifier("c"), negated: false, ["a", "b"],
+            target.QuoteIdentifier("c"), negated: false, ["a", "b"], FieldType.String,
             SemanticsResolver.CaseSensitivityMode.Insensitive, sink);
 
         Assert.Equal(expected, sql);
@@ -735,7 +735,7 @@ public class DialectRenderingTests
             // The empty member is deliberately not first: a guard that checked only values[0], or that
             // bound as it went, would pass the scalar case and still leave this one half-bound.
             "set" => target.RenderSetMembership(
-                target.QuoteIdentifier("c"), negated: true, ["x", ""],
+                target.QuoteIdentifier("c"), negated: true, ["x", ""], FieldType.String,
                 SemanticsResolver.CaseSensitivityMode.Insensitive, sink),
 
             "substring" => target.RenderSubstringMatch(

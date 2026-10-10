@@ -124,6 +124,7 @@ public sealed class MySqlDialect : ISqlDialect
         string quotedColumn,
         bool negated,
         IReadOnlyList<object?> values,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {

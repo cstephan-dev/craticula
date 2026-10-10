@@ -85,7 +85,10 @@ public enum SqlSubstringAnchor
 /// values query behind the seam; a capability fact keeps the one shape and lets the builder pick
 /// <c>GROUP BY</c> for the one engine that needs it (GRP-6(f)). The fifth did too: SQLite compares a datetime as TEXT, so
 /// the bound's width is part of the answer, and only that engine's builder-side normalisation changes
-/// (SEM-4); a rendering method would have moved the instant parsing behind the seam for every dialect.</para>
+/// (SEM-4); a rendering method would have moved the instant parsing behind the seam for every dialect.
+/// A sixth change, #2304, is a different kind: it adds no member, it gives <see cref="RenderSetMembership"/> the
+/// field's <see cref="FieldType"/> as an argument, because the Postgres array cast depends on the column type
+/// and nothing else the dialect can see.</para>
 ///
 /// <para>Every method that binds a value takes the <see cref="ISqlParameterSink"/> rather than a
 /// pre-rendered placeholder, because how many parameters a construct binds is itself
@@ -215,11 +218,18 @@ public interface ISqlDialect
     /// than pre-bound placeholders: Postgres binds one array parameter (<c>= ANY($1)</c>) while
     /// SQL Server/MySQL/SQLite bind N scalars (<c>IN (...)</c>), so the parameter count itself is a
     /// dialect decision.
+    ///
+    /// <para><paramref name="fieldType"/> (#2304) is the field's type, there for one engine's sake:
+    /// <c>decimal</c>, <c>date</c> and <c>datetime</c> values are strings (AR-7), so the array a host binds
+    /// is <c>text[]</c> and PostgreSQL has no <c>numeric = text</c> operator; the Postgres dialect casts the
+    /// placeholder to the column type (<c>$1::numeric[]</c>). The other four dialects ignore it. This is a
+    /// signature change on an existing member, NOT a new member, so the seam's membership is unchanged.</para>
     /// </summary>
     string RenderSetMembership(
         string quotedColumn,
         bool negated,
         IReadOnlyList<object?> values,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters);
 

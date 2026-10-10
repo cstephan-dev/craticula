@@ -651,7 +651,7 @@ public static class SqlQueryBuilder
             encoded.Add(EncodeValue(value, field, context.Dialect));
         }
 
-        return context.Dialect.RenderSetMembership(column, negated: node.Op == ComparisonOperator.NotIn, encoded, caseSensitivity, context.Parameters);
+        return context.Dialect.RenderSetMembership(column, negated: node.Op == ComparisonOperator.NotIn, encoded, field.Type, caseSensitivity, context.Parameters);
     }
 
     /// <summary>

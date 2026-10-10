@@ -263,6 +263,107 @@ public class SqlQueryBuilderOperatorTests
         Assert.Equal("(\"code\" <> ALL($1) OR \"code\" IS NULL)", where);
     }
 
+    // ---- set membership: the array is cast to the column type for the three string-encoded types (#2304)
+
+    private static TypedValue Sample(string field) => field switch
+    {
+        "unitCost" => new DecimalValue { Value = "19.99" },
+        "birthDate" => new DateValue { Value = "2024-03-01" },
+        "createdAt" => new DatetimeValue { Value = "2024-03-01T10:00:00Z", Zone = "UTC" },
+        "age" => new Int64Value { Value = 30 },
+        "price" => new DoubleValue { Value = 1.5 },
+        "isActive" => new BooleanValue { Value = true },
+        _ => new StringValue { Value = "a" }
+    };
+
+    [Theory]
+    [InlineData("unitCost", "numeric[]")]
+    [InlineData("birthDate", "date[]")]
+    [InlineData("createdAt", "timestamptz[]")]
+    public void In_And_NotIn_Cast_The_Array_To_The_Column_Type_For_Decimal_Date_And_Datetime(string field, string arrayType)
+    {
+        var column = Schema.Fields[field].Physical!.Sql!.Column;
+
+        var (inWhere, inParameters) = Where(new ComparisonNode
+        {
+            Field = field, Op = ComparisonOperator.In, Values = [Sample(field), Sample(field)]
+        });
+        Assert.Equal($"\"{column}\" = ANY($1::{arrayType})", inWhere);
+
+        var (notInWhere, _) = Where(new ComparisonNode
+        {
+            Field = field, Op = ComparisonOperator.NotIn, Values = [Sample(field)]
+        });
+        Assert.Equal($"(\"{column}\" <> ALL($1::{arrayType}) OR \"{column}\" IS NULL)", notInWhere);
+
+        // Still ONE array parameter, still the string encoding (AR-7): the cast is in the SQL text only.
+        var array = Assert.IsAssignableFrom<IReadOnlyList<object?>>(Assert.Single(inParameters));
+        Assert.Equal(2, array.Count);
+        Assert.All(array, element => Assert.IsType<string>(element));
+    }
+
+    [Theory]
+    [InlineData("status", "\"status\" COLLATE craticula_ci")]
+    [InlineData("code", "\"code\"")]
+    [InlineData("age", "\"age\"")]
+    [InlineData("price", "\"price\"")]
+    [InlineData("isActive", "\"is_active\"")]
+    public void In_And_NotIn_Leave_The_Array_Uncast_For_String_Int64_Double_And_Boolean(string field, string left)
+    {
+        var (inWhere, _) = Where(new ComparisonNode { Field = field, Op = ComparisonOperator.In, Values = [Sample(field)] });
+        Assert.Equal($"{left} = ANY($1)", inWhere);
+
+        var (notInWhere, _) = Where(new ComparisonNode { Field = field, Op = ComparisonOperator.NotIn, Values = [Sample(field)] });
+        Assert.DoesNotContain("::", notInWhere, StringComparison.Ordinal);
+        Assert.Contains($"{left} <> ALL($1)", notInWhere, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_Null_Element_Stays_Null_In_The_Cast_Array()
+    {
+        var (where, parameters) = Where(new ComparisonNode
+        {
+            Field = "unitCost",
+            Op = ComparisonOperator.In,
+            Values = [new DecimalValue { Value = "1.50" }, new NullValue()]
+        });
+
+        Assert.Equal("\"unit_cost\" = ANY($1::numeric[])", where);
+        var array = Assert.IsAssignableFrom<IReadOnlyList<object?>>(Assert.Single(parameters));
+        Assert.Equal(["1.50", null], array);
+    }
+
+    [Theory]
+    [InlineData("mssql")]
+    [InlineData("mysql")]
+    [InlineData("sqlite")]
+    [InlineData("oracle")]
+    public void The_Other_Four_Dialects_Render_A_Decimal_Set_Exactly_As_Before(string name)
+    {
+        ISqlDialect dialect = name switch
+        {
+            "mssql" => MssqlDialect.Instance,
+            "mysql" => MySqlDialect.Instance,
+            "sqlite" => SqliteDialect.Instance,
+            _ => OracleDialect.Instance
+        };
+        var filter = new ComparisonNode
+        {
+            Field = "unitCost",
+            Op = ComparisonOperator.In,
+            Values = [new DecimalValue { Value = "1.50" }, new DecimalValue { Value = "2.00" }]
+        };
+
+        var query = SqlQueryBuilder.Build(
+            new SqlQueryRequest { Schema = Schema, Filter = filter, Page = new RangePage { StartRow = 0, EndRow = 10 } },
+            dialect);
+
+        Assert.DoesNotContain("::", query.Sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("ANY", query.Sql, StringComparison.Ordinal);
+        Assert.Contains(" IN (", query.Sql, StringComparison.Ordinal);
+        Assert.Contains("1.50", query.Parameters.Select(p => p?.ToString()));
+    }
+
     // ---- inRange -------------------------------------------------------------------------------------
 
     [Theory]
