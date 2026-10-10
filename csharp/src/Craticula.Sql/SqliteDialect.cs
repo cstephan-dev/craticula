@@ -63,6 +63,10 @@ public sealed class SqliteDialect : ISqlDialect
     // SQL-7: SQLite distinguishes '' from NULL, so SEM-2's text arm keeps both disjuncts.
     public bool EmptyStringIsNull => false;
 
+    // SEM-4: a datetime is TEXT here, compared character by character, so the bound is bound with the
+    // same fixed three-digit fraction the host stores.
+    public bool DatetimeBoundsAreFixedWidth => true;
+
     public string QuoteIdentifier(string identifier) =>
         // A literal '"' inside an identifier is doubled — the standard SQL escape, which SQLite
         // implements. (SQLite also accepts [..] and backticks for compatibility; the standard form is

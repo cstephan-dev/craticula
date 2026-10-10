@@ -464,6 +464,21 @@ often diverge from what the grid itself shows the user.
   ```sql
   WHERE created_at >= :from AND created_at < :to
   ```
+- **SQLite — a fixed-width text instant, on both sides of the comparison (pinned).** SQLite has no
+  timestamp type: a `datetime` column holds TEXT and `>`, `<`, `=` compare it character by character.
+  Text is only chronological when every value has the same width, and the two spellings of one second,
+  `...:00Z` and `...:00.001Z`, are not the same width: `.` (0x2E) sorts before `Z` (0x5A), so a stored
+  `2026-01-01T00:00:00.001Z` sorts *before* a bound spelled `2026-01-01T00:00:00Z`, and `gt` on that
+  bound silently drops a row that is later than it. The rule therefore has two halves, and neither is
+  enough alone. **Host obligation:** a SQLite `datetime` column stores exactly three fractional digits,
+  `yyyy-MM-ddTHH:mm:ss.fffZ`, UTC (the millisecond precision XEQ-2 already caps a seed at). **Compiler
+  rule:** the SQLite arm binds a `datetimeValue` in the same form, so a whole-second instant is bound as
+  `2026-01-01T00:00:00.000Z`, never `...:00Z`. A bound with a sub-millisecond part keeps its full
+  precision (`...:00.0005Z` is bound as written, never truncated to the millisecond). Postgres,
+  SQL Server, MySQL and Oracle compare a typed instant, not text, and keep the form of SEM-4 above
+  (`...:00Z` for a whole second). The obligation covers the path that sends the bound as text
+  (`Craticula.Sql` and the Dapper adapter on top of it); the EF Core adapter hands its provider a
+  `DateTime` and the provider's own text mapping applies, under AR-4's unchanged same-instant rule.
 - **MongoDB** — an instant field (`datetimeValue`) compares against BSON `Date` values built from
   the full instant string (see the pinned representation above); a local-date field (`dateValue`)
   compares against the plain ISO date string instead, never a `Date`:
@@ -2738,7 +2753,7 @@ name, and encode each cell by the field's declared GridSchema type:
 | `boolean` | `true` / `false` |
 | `string` | a JSON string, stored and compared exactly as written (no trimming, no case change) |
 | `date` | `"YYYY-MM-DD"`, a local date with no zone (SEM-4) |
-| `datetime` | `"YYYY-MM-DDTHH:MM:SS[.fff]Z"`, an absolute UTC instant (SEM-4), **at most millisecond precision**: MongoDB's `Date` and Search's `date` keep no more, so a finer seed would be truncated differently per engine and could move across a range bound |
+| `datetime` | `"YYYY-MM-DDTHH:MM:SS[.fff]Z"`, an absolute UTC instant (SEM-4), **at most millisecond precision**: MongoDB's `Date` and Search's `date` keep no more, so a finer seed would be truncated differently per engine and could move across a range bound. A SQLite seed is written with all three fractional digits, `...:00.000Z` for a whole second (SEM-4's host obligation) |
 | absent value | an explicit JSON `null`; **never** an omitted key |
 
 Every field the fixture's `schema.json` declares appears in every seed row, so a reader can tell a null from an

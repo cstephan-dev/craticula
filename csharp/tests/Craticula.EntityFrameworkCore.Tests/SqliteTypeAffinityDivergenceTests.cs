@@ -128,13 +128,13 @@ public class SqliteTypeAffinityDivergenceTests
         // This is the correct answer.
         Assert.Equal([1L, 2L], efIds);
 
-        // The compiled parameter is SEM-4's canonical '2026-02-01T00:00:00Z'. Against a TEXT column that is
+        // The compiled parameter is SEM-4's SQLite form '2026-02-01T00:00:00.000Z' (#2243; the EF adapter is outside that rule). Against a TEXT column that is
         // a TEXT comparison, and ' ' (0x20) precedes 'T' (0x54) — so EVERY stored timestamp on
         // 2026-02-01 compares less than the bound, whatever its time of day, and id 3 is admitted.
         Assert.Equal([1L, 2L, 3L], sqlIds);
 
         Assert.NotEqual(sqlIds, efIds);
-        Assert.Contains("2026-02-01T00:00:00Z", (string)compiled.Parameters[0]!, StringComparison.Ordinal);
+        Assert.Contains("2026-02-01T00:00:00.000Z", (string)compiled.Parameters[0]!, StringComparison.Ordinal);
 
         // The cause, isolated from either compiler: the two encodings of ONE instant do not compare the
         // same way against the stored text. Both statements are correct about the value they were given.
