@@ -27,7 +27,7 @@ public class SearchConformanceFixtureTests
     /// <see cref="Each_In_Scope_Category_Contributes_Exactly_The_Fixture_Count_It_Declares"/> rather
     /// than being silently unexercised.
     ///
-    /// <para><c>dialect-parity</c> contributes 18 rather than its 24 directories:
+    /// <para><c>dialect-parity</c> contributes 18 rather than its 25 directories:
     /// <c>001</c>-<c>004</c> are #1639's single-dialect MySQL/SQL Server/SQLite showcases and
     /// <c>005</c> is #1642's Oracle one, none of which carries a Search arm at all. Discovery filters
     /// on the artifact's presence, so they need no exclusion entry — there is nothing to compare

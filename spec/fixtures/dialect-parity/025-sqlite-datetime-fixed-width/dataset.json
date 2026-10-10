@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "createdAt": "2025-12-31T23:59:59.999Z" }, "why": "one millisecond below the lte bound: in" },
+    { "row": { "id": 2, "createdAt": "2026-01-01T00:00:00.000Z" }, "why": "exactly on the lte bound, stored with its .000: in (lte is inclusive)" },
+    { "row": { "id": 3, "createdAt": "2026-01-01T00:00:00.001Z" }, "why": "one millisecond past the lte bound: out. A bound spelled ...:00Z sorts after this text, so the old form kept it" },
+    { "row": { "id": 4, "createdAt": "2026-01-01T12:00:00.000Z" }, "why": "a whole-second instant on the exclusive lower bound of the inRange: out" },
+    { "row": { "id": 5, "createdAt": null }, "why": "SEM-2: no range or ordering comparison matches null" },
+    { "row": { "id": 6, "createdAt": "2026-01-02T00:00:00.000Z" }, "why": "exactly on the inclusive upper bound of the inRange: in; not past the gt bound" },
+    { "row": { "id": 7, "createdAt": "2026-01-02T00:00:00.001Z" }, "why": "one millisecond past the gt bound: in. Its own gt bound ...:00Z sorts after it as text, so only the correct form keeps it for gt" },
+    { "row": { "id": 8, "createdAt": "2026-01-01T12:00:00.001Z" }, "why": "one millisecond past the exclusive lower bound of the inRange: in. The old form dropped it" }
+  ]
+}

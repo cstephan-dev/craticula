@@ -478,7 +478,7 @@ public sealed class MySqlEngine : SqlEngine
 /// SQLite, in-process (no container). SQL-6: the insensitive mechanism is <c>COLLATE NOCASE</c> in the statement; the
 /// default sequence stays <c>BINARY</c>. SQLite has no decimal, date or datetime type: decimal is a NUMERIC-affinity
 /// column (a bound text decimal is converted by the column's affinity), date and datetime are TEXT in the canonical
-/// forms the compiler binds (<c>yyyy-MM-dd</c>, <c>yyyy-MM-ddTHH:mm:ss[.fff]Z</c>).
+/// forms the host stores and the compiler binds (<c>yyyy-MM-dd</c>, <c>yyyy-MM-ddTHH:mm:ss.fffZ</c>, SEM-4).
 /// </summary>
 public sealed class SqliteEngine : SqlEngine
 {
@@ -551,7 +551,7 @@ public sealed class SqliteEngine : SqlEngine
         {
             null => DBNull.Value,
             DateOnly date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            DateTime instant => instant.ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'", CultureInfo.InvariantCulture).Replace(".Z", "Z", StringComparison.Ordinal),
+            DateTime instant => instant.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture), // SEM-4's host obligation: exactly three digits
             IReadOnlyList<object?> => throw new NotSupportedException("SQLite's compiled text flattens a set membership; a list parameter is a compiler change."),
             _ => value
         };
