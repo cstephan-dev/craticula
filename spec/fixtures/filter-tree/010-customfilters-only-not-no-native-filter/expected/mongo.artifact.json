@@ -2,11 +2,18 @@
   "pipeline": [
     {
       "$match": {
-        "$nor": [
+        "$or": [
           {
-            "status": {
-              "$eq": "archived"
-            }
+            "$nor": [
+              {
+                "status": {
+                  "$eq": "archived"
+                }
+              }
+            ]
+          },
+          {
+            "status": null
           }
         ]
       }

@@ -521,15 +521,22 @@ public class MongoPipelineOperatorTests
     // ---- composites (AR-5 / SEM-2) ----------------------------------------------------------------
 
     [Fact]
-    public void A_Tree_Level_Not_Is_Nor_With_No_Null_Fan_Out()
+    public void A_Tree_Level_Not_Is_Nor_With_The_Null_Fan_Out_At_Every_Depth()
     {
-        // SEM-2: $nor already returns documents whose referenced field is null or missing, so the
-        // per-field `OR col IS NULL` disjuncts the SQL rendering must add have no counterpart — and
-        // adding a `{field: {$ne: null}}` guard "for parity" would EXCLUDE them, the exact
-        // SQL-shaped regression SEM-2's second Must-NOT names.
+        // SEM-2/MDB-2: $nor alone drops a null document whenever the child matches it (neq, blank, an
+        // inner not), so each notNode carries one {field: null} clause per distinct referenced field,
+        // OUTSIDE the $nor. That is the inclusion SEM-2 requires, not the {field: {$ne: null}} guard
+        // its second Must-NOT forbids.
         Assert.Equal(
-            """{"$nor":[{"age":{"$eq":30}}]}""",
+            """{"$or":[{"$nor":[{"age":{"$eq":30}}]},{"age":null}]}""",
             Match(new NotNode { Node = Leaf("age", ComparisonOperator.Eq, new Int64Value { Value = 30 }) }));
+
+        Assert.Equal(
+            """{"$or":[{"$nor":[{"$or":[{"$nor":[{"age":{"$eq":30}}]},{"age":null}]}]},{"age":null}]}""",
+            Match(new NotNode
+            {
+                Node = new NotNode { Node = Leaf("age", ComparisonOperator.Eq, new Int64Value { Value = 30 }) }
+            }));
     }
 
     [Fact]

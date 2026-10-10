@@ -2,27 +2,45 @@
   "pipeline": [
     {
       "$match": {
-        "$nor": [
+        "$or": [
           {
-            "$or": [
+            "$nor": [
               {
-                "$and": [
+                "$or": [
                   {
-                    "$nor": [
+                    "$and": [
                       {
                         "$or": [
                           {
-                            "$and": [
+                            "$nor": [
                               {
-                                "$nor": [
+                                "$or": [
                                   {
-                                    "region": {
-                                      "$eq": "blocked"
-                                    }
+                                    "$and": [
+                                      {
+                                        "$or": [
+                                          {
+                                            "$nor": [
+                                              {
+                                                "region": {
+                                                  "$eq": "blocked"
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "region": null
+                                          }
+                                        ]
+                                      }
+                                    ]
                                   }
                                 ]
                               }
                             ]
+                          },
+                          {
+                            "region": null
                           }
                         ]
                       }
@@ -31,6 +49,9 @@
                 ]
               }
             ]
+          },
+          {
+            "region": null
           }
         ]
       }

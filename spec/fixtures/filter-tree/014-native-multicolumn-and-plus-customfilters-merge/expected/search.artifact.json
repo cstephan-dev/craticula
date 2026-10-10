@@ -33,16 +33,32 @@
         },
         {
           "bool": {
-            "must_not": [
+            "should": [
               {
-                "wildcard": {
-                  "customerName.keyword": {
-                    "value": "*test*",
-                    "case_insensitive": true
+                "bool": {
+                  "must_not": [
+                    {
+                      "wildcard": {
+                        "customerName.keyword": {
+                          "value": "*test*",
+                          "case_insensitive": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "exists": {
+                      "field": "customerName"
+                    }
                   }
                 }
               }
-            ]
+            ],
+            "minimum_should_match": 1
           }
         }
       ]

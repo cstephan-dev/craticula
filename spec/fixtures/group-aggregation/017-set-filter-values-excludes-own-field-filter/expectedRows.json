@@ -17,6 +17,18 @@
           ["EMEA"]
         ]
       }
+    },
+    {
+      "backend": "mysql",
+      "reason": "accepted divergence #4 (GRP-2, SEM-1): MySQL spells no collation, so the binary column GRP-2 needs for exact buckets also makes the user's segment filter case-sensitive; 'enterprise' does not match 'Enterprise'",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["region"],
+        "rows": [
+          ["APAC"],
+          ["EMEA"]
+        ]
+      }
     }
   ]
 }

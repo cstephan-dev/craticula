@@ -1,35 +1,67 @@
 {
   "query": {
     "bool": {
-      "must_not": [
+      "should": [
         {
           "bool": {
-            "must": [
+            "must_not": [
               {
                 "bool": {
-                  "should": [
+                  "must": [
                     {
                       "bool": {
-                        "must_not": [
+                        "should": [
                           {
-                            "term": {
-                              "status.keyword": {
-                                "value": "archived",
-                                "case_insensitive": true
-                              }
+                            "bool": {
+                              "should": [
+                                {
+                                  "bool": {
+                                    "must_not": [
+                                      {
+                                        "term": {
+                                          "status.keyword": {
+                                            "value": "archived",
+                                            "case_insensitive": true
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "bool": {
+                                    "must_not": {
+                                      "exists": {
+                                        "field": "status"
+                                      }
+                                    }
+                                  }
+                                }
+                              ],
+                              "minimum_should_match": 1
                             }
                           }
-                        ]
+                        ],
+                        "minimum_should_match": 1
                       }
                     }
-                  ],
-                  "minimum_should_match": 1
+                  ]
                 }
               }
             ]
           }
+        },
+        {
+          "bool": {
+            "must_not": {
+              "exists": {
+                "field": "status"
+              }
+            }
+          }
         }
-      ]
+      ],
+      "minimum_should_match": 1
     }
   },
   "sort": [

@@ -507,6 +507,10 @@ third surface: a `groupable: true, filterable: false` colId consumed as a `group
 `adversarial` moves **25 → 26** directories; no other runner or artifact count moves, for the same
 reason as `024`/`025`.
 
+**`adversarial/027` (#2208) pins the zero-width page window** (`startRow: 100, endRow: 100`): refused at the request
+boundary, `requestParsing` / `malformed-request`, before any compilation, so no backend ever sees a `FETCH NEXT 0 ROWS`
+(T-SQL error 10744). `adversarial` moves **26 → 27** directories; no runner or artifact count moves.
+
 ## Case-insensitivity mechanism policy (SEM-1)
 
 Two distinct mechanisms, never mixed: **`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`notIn`, plus sort,

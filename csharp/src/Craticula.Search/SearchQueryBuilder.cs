@@ -342,26 +342,34 @@ public static class SearchQueryBuilder
     };
 
     /// <summary>
-    /// SEM-2/OSE-4: a tree-level <c>NOT</c> is <c>must_not</c> with the child in an ARRAY, and it
-    /// takes <b>no null fan-out</b>.
+    /// SEM-2/OSE-2/OSE-4: a tree-level <c>NOT</c>, at every nesting depth, is <c>must_not</c> with the
+    /// child in an ARRAY, plus the null fan-out of SQL-2's third bullet: one <c>exists</c> complement
+    /// on the RAW field per distinct field referenced in the child subtree, in first-appearance
+    /// order, as sibling <c>should</c> clauses. A bare <c>must_not</c> matches a document with a
+    /// missing field only when the child cannot match it, which <c>neq</c>, <c>blank</c>, an inner
+    /// <c>not</c> or an <c>or</c> over two fields can.
     ///
-    /// <para>The array is what distinguishes it, in the artifact, from the negations this compiler
-    /// composes itself (<see cref="NullInclusive"/>'s inner clause, <c>notBlank</c>, and the
-    /// <c>exists</c> complement), all of which take a single clause object. That is MDB-2/MDB-4's
-    /// <c>$nor</c>-versus-<c>$not</c> distinction and SQL-3's outer-<c>NOT</c>-versus-negated-operator
-    /// distinction reached on a DSL that has only one negation keyword: a one-child tree
-    /// <c>NOT</c> and a single negated comparison must not be indistinguishable on the wire.</para>
-    ///
-    /// <para>No fan-out because <c>must_not</c> already matches documents where the referenced field
-    /// is missing — a document that cannot satisfy the inner clause satisfies its negation — so the
-    /// one <c>OR col IS NULL</c> disjunct per referenced field that SQL-2's third bullet requires has
-    /// no counterpart, exactly as MDB-2 records for <c>$nor</c>. Adding one anyway would be the
-    /// SQL-shaped intuition SEM-2's second Must-NOT warns about.</para>
+    /// <para>The array is what distinguishes the inner negation, in the artifact, from the negations
+    /// this compiler composes itself (<see cref="NullInclusive"/>'s inner clause, <c>notBlank</c>, and
+    /// the <c>exists</c> complement), all of which take a single clause object — MDB-2/MDB-4's
+    /// <c>$nor</c>-versus-<c>$not</c> distinction on a DSL that has only one negation keyword.</para>
     /// </summary>
-    private static JsonObject RenderNot(NotNode not, Context context) => new()
+    private static JsonObject RenderNot(NotNode not, Context context)
     {
-        ["bool"] = new JsonObject { ["must_not"] = new JsonArray(RenderNode(not.Node, context)) }
-    };
+        var clauses = new JsonArray
+        {
+            new JsonObject
+            {
+                ["bool"] = new JsonObject { ["must_not"] = new JsonArray(RenderNode(not.Node, context)) }
+            }
+        };
+        foreach (var field in FilterNodeFields.DistinctInOrder(not.Node))
+        {
+            clauses.Add(MustNot(Exists(Resolve(field, context).Raw)));
+        }
+
+        return Should(clauses);
+    }
 
     /// <summary>A negation this compiler composed itself, spelled with a single clause rather than an
     /// array — see <see cref="RenderNot"/> for why the two differ.</summary>

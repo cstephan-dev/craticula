@@ -41,28 +41,44 @@
         },
         {
           "bool": {
-            "must_not": [
+            "should": [
               {
                 "bool": {
-                  "must": [
+                  "must_not": [
                     {
-                      "range": {
-                        "quantity": {
-                          "gte": 100
-                        }
-                      }
-                    },
-                    {
-                      "range": {
-                        "quantity": {
-                          "lte": 999
-                        }
+                      "bool": {
+                        "must": [
+                          {
+                            "range": {
+                              "quantity": {
+                                "gte": 100
+                              }
+                            }
+                          },
+                          {
+                            "range": {
+                              "quantity": {
+                                "lte": 999
+                              }
+                            }
+                          }
+                        ]
                       }
                     }
                   ]
                 }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "exists": {
+                      "field": "quantity"
+                    }
+                  }
+                }
               }
-            ]
+            ],
+            "minimum_should_match": 1
           }
         }
       ]

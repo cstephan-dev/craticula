@@ -5,5 +5,21 @@
     ["SMB", "20.00"],
     ["Enterprise", "10.00"],
     ["Consumer", "5.00"]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "search",
+      "reason": "AGG-5: ES/OpenSearch's composite aggregation has no missing_order control, so the null group bucket sorts last on a descending request regardless of SEM-3, where the SQL dialects and MongoDB put it first; the buckets and their aggregates are otherwise identical",
+      "outcome": "rows",
+      "expected": {
+        "columns": ["segment", "amount"],
+        "rows": [
+          ["SMB", "20.00"],
+          ["Enterprise", "10.00"],
+          ["Consumer", "5.00"],
+          [null, "7.00"]
+        ]
+      }
+    }
   ]
 }

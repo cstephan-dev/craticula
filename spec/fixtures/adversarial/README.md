@@ -69,15 +69,16 @@ safe-parameterization behavior, not here.
 | 024 | `024-filterable-false-in-filter-model` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1 |
 | 025 | `025-filterable-false-as-set-values-target` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1, GRP-6 |
 | 026 | `026-filterable-false-as-drilldown-key` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1, GRP-1, GRP-2, GRP-5 |
+| 027 | `027-zero-width-page-window` | `requestParsing` | `malformed-request` | AG-3, SEC-3, SEC-6 |
 
 ## Breakdown by validation stage
 
 - `allowlist`: 7 (001–003, 019, 024–026)
 - `resourceLimits`: 8 (004–011)
 - `typeCoercion`: 4 (012–015)
-- `requestParsing`: 7 (016–018, 020–023)
+- `requestParsing`: 8 (016–018, 020–023, 027)
 
-**Total: 26 fixtures.**
+**Total: 27 fixtures.**
 
 ## Notes on construction
 

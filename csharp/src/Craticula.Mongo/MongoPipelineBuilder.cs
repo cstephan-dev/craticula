@@ -509,16 +509,24 @@ public static class MongoPipelineBuilder
     }
 
     /// <summary>
-    /// SEM-2: a tree-level <c>NOT</c> is null-inclusive, and on MongoDB that costs nothing to
-    /// arrange: <c>$nor</c> returns documents that fail every clause, which INCLUDES documents where
-    /// the referenced field is null or entirely missing. So the explicit "or the field is null"
-    /// fan-out the SQL rendering must add around its <c>NOT (...)</c> — one disjunct per field in the
-    /// subtree — has no counterpart here, and adding one would be the SQL-shaped intuition SEM-2's
-    /// second Must-NOT warns about, which <em>excludes</em> null documents rather than including
-    /// them.
+    /// SEM-2/MDB-2: a tree-level <c>NOT</c>, at every nesting depth, is null-inclusive exactly as
+    /// SQL-2's third bullet — one <c>{field: null}</c> clause per distinct field referenced in the
+    /// child subtree, in first-appearance order, OUTSIDE the <c>$nor</c>. <c>$nor</c> alone returns a
+    /// null document only when the child fails to match it, and <c>neq</c>, <c>blank</c>, an inner
+    /// <c>not</c> or an <c>or</c> whose other field matches all match one. The clause is the
+    /// <em>inclusion</em> SEM-2 requires, not the <c>{field: {$ne: null}}</c> guard its second
+    /// MongoDB Must-NOT forbids.
     /// </summary>
-    private static JsonObject RenderNot(NotNode not, Context context) =>
-        new() { ["$nor"] = new JsonArray(RenderNode(not.Node, context)) };
+    private static JsonObject RenderNot(NotNode not, Context context)
+    {
+        var clauses = new JsonArray(new JsonObject { ["$nor"] = new JsonArray(RenderNode(not.Node, context)) });
+        foreach (var field in FilterNodeFields.DistinctInOrder(not.Node))
+        {
+            clauses.Add(new JsonObject { [ResolvePath(field, context)] = null });
+        }
+
+        return new JsonObject { ["$or"] = clauses };
+    }
 
     private static JsonObject RenderComparison(ComparisonNode node, Context context)
     {

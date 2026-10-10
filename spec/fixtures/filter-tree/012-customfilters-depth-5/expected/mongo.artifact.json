@@ -2,23 +2,37 @@
   "pipeline": [
     {
       "$match": {
-        "$nor": [
+        "$or": [
           {
-            "$and": [
+            "$nor": [
               {
-                "$or": [
+                "$and": [
                   {
-                    "$nor": [
+                    "$or": [
                       {
-                        "status": {
-                          "$eq": "archived"
-                        }
+                        "$or": [
+                          {
+                            "$nor": [
+                              {
+                                "status": {
+                                  "$eq": "archived"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "status": null
+                          }
+                        ]
                       }
                     ]
                   }
                 ]
               }
             ]
+          },
+          {
+            "status": null
           }
         ]
       }

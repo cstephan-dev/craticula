@@ -331,7 +331,7 @@ public class SearchQueryOperatorTests
             new DatetimeValue { Value = "2026-01-01T02:00:00+02:00", Zone = "Europe/Paris" }));
 
         Assert.Equal(
-            """{"range":{"createdAt":{"format":"strict_date_optional_time","gte":"2026-01-01T00:00:00Z"}}}""",
+            """{"range":{"createdAt":{"format":"strict_date_optional_time","gte":"2026-01-01T00:00:00.000Z"}}}""",
             compiled);
         Assert.DoesNotContain("time_zone", compiled);
         Assert.DoesNotContain("Paris", compiled);

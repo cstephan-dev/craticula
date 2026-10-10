@@ -27,20 +27,27 @@
             ]
           },
           {
-            "$nor": [
+            "$or": [
               {
-                "$and": [
+                "$nor": [
                   {
-                    "quantity": {
-                      "$gte": 100
-                    }
-                  },
-                  {
-                    "quantity": {
-                      "$lte": 999
-                    }
+                    "$and": [
+                      {
+                        "quantity": {
+                          "$gte": 100
+                        }
+                      },
+                      {
+                        "quantity": {
+                          "$lte": 999
+                        }
+                      }
+                    ]
                   }
                 ]
+              },
+              {
+                "quantity": null
               }
             ]
           }
