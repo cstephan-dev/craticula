@@ -34,7 +34,9 @@ substring/prefix mechanism applies, and the artifacts are the same shapes `opera
   with `+`, and needs the inline collation SEM-1's mechanism table gives it, exactly as
   `dialect-parity/007` spells it for `contains`), `` LIKE CONCAT(?, '%') ESCAPE '\\' `` (MySQL's `||` is
   logical OR, and its `ESCAPE` literal needs the doubled backslash),
-  `LIKE ? || '%' ESCAPE '\'` (SQLite, whose `LIKE` is ASCII-case-insensitive already).
+  `LIKE ? || '%' ESCAPE '\'` (SQLite, whose `LIKE` is ASCII-case-insensitive already). The SQL Server
+  arm also spells the distinct set `GROUP BY [region]`, not `SELECT DISTINCT` (GRP-6(f)); the other
+  dialects keep `SELECT DISTINCT`.
 
 - **Mongo** -- an anchored, case-insensitive regex: `{"$regex": "^eu", "$options": "i"}`, built
   from the same escaped literal (regex metacharacters are a wider class than `LIKE`'s `%`/`_`/`\`,
@@ -52,7 +54,7 @@ substring/prefix mechanism applies, and the artifacts are the same shapes `opera
   Search would need to declare `search.normalizedSubField` and target it instead.
 
 **The prefix folds case; the values it returns do not.** The `WHERE` clause matches `region`
-case-insensitively (SEM-1) while `SELECT DISTINCT "region" … ORDER BY "region"` stays exact (GRP-6).
+case-insensitively (SEM-1) while `SELECT DISTINCT "region" … ORDER BY "region"` (`GROUP BY` on SQL Server, GRP-6(f)) stays exact (GRP-6).
 That is the intended behaviour and not the SEM-1 mix it resembles: typing `eu` must find `"EU"`,
 `"Europe"` and `"europe"` alike, and then offer each of them as its own entry, because those are the
 values the data actually holds and the grid will send one of them straight back as an `in` value.

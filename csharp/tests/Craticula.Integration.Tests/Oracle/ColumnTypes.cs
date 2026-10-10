@@ -5,7 +5,7 @@ namespace Craticula.Integration.Tests.Oracle;
 
 /// <summary>
 /// The type XEQ-3 compares each result column by. A column is a schema field, or on a grouped level
-/// (<c>rowGroupCols</c> outnumber <c>groupKeys</c>) a <c>valueCols</c> output name typed by its aggregation:
+/// (<c>rowGroupCols</c> outnumber <c>groupKeys</c>, and the request is not an export) a <c>valueCols</c> output name typed by its aggregation:
 /// <c>count</c> int64, <c>avg</c> always double, anything else the aggregated field's type. A BM-3 values
 /// query's one column is the field named by <c>setValuesRequest.colId</c>. Anything else is a mistake in the
 /// fixture, never an unchecked cell.
@@ -39,8 +39,20 @@ public static class ColumnTypes
         return averages;
     }
 
-    private static bool IsGrouped(JsonElement request) =>
-        request.TryGetProperty("rowGroupCols", out var groupCols)
+    /// <summary>
+    /// True when the request is an export (it carries a non-null <c>exportFormat</c>, as <c>AgGridRequestParser</c> reads it).
+    /// An export discards group state (EXP-1(a)), so its <c>valueCols</c> entries are not aggregates.
+    /// </summary>
+    public static bool IsExport(JsonElement request) =>
+        request.TryGetProperty("exportFormat", out var format) && format.ValueKind != JsonValueKind.Null;
+
+    /// <summary>
+    /// True when the request is a grouped level: <c>rowGroupCols</c> outnumber <c>groupKeys</c> and the request is
+    /// not an export (XEQ-3). The one place this rule lives for the integration assembly.
+    /// </summary>
+    public static bool IsGrouped(JsonElement request) =>
+        !IsExport(request)
+        && request.TryGetProperty("rowGroupCols", out var groupCols)
         && groupCols.GetArrayLength() > request.GetProperty("groupKeys").GetArrayLength();
 
     private static FieldType Resolve(GridSchema schema, JsonElement request, string column)

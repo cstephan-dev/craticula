@@ -29,7 +29,7 @@ public sealed class SqliteCollection : ICollectionFixture<SqliteEngine>
     public const string Name = "xeq-sqlite";
 }
 
-/// <summary>T-1b on PostgreSQL 16 (<c>postgres:16</c>): every fixture with an <c>expected/postgres.artifact.json</c>.</summary>
+/// <summary>T-1b on PostgreSQL 16 (<c>postgres:16.15</c>): every fixture with an <c>expected/postgres.artifact.json</c>.</summary>
 [Collection(PostgresCollection.Name)]
 public class PostgresExecutionEqualityTests(PostgresEngine engine)
 {
@@ -51,7 +51,7 @@ public class MssqlExecutionEqualityTests(MssqlEngine engine)
     public Task Fixture_Returns_The_Expected_Rows_On_Mssql(string name) => SqlExecutionRunner.AssertMatchesOracleAsync(engine, name);
 }
 
-/// <summary>T-1b on MySQL 8.4 (<c>mysql:8.4</c>): every fixture with an <c>expected/mysql.artifact.json</c>.</summary>
+/// <summary>T-1b on MySQL 8.4 (<c>mysql:8.4.11</c>): every fixture with an <c>expected/mysql.artifact.json</c>.</summary>
 [Collection(MySqlCollection.Name)]
 public class MySqlExecutionEqualityTests(MySqlEngine engine)
 {

@@ -106,9 +106,7 @@ internal static class SqlExecutionRunner
     private static Dictionary<string, string> AggregateOutputNames(System.Text.Json.JsonElement request)
     {
         var names = new Dictionary<string, string>(StringComparer.Ordinal);
-        var grouped = request.TryGetProperty("rowGroupCols", out var groupCols)
-            && groupCols.GetArrayLength() > request.GetProperty("groupKeys").GetArrayLength();
-        if (!grouped)
+        if (!Oracle.ColumnTypes.IsGrouped(request))
         {
             return names;
         }

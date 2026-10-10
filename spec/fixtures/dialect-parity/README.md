@@ -383,27 +383,18 @@ when it does.
 | OpenSearch / Elasticsearch | Every field declaring `physical.search.normalizedSubField` needs that sub-field mapped `keyword` **with a folding `normalizer`** (SEM-1's ICU-folding one). This is SEM-1's genuine index-time cost, and the compiler refuses to compile a case-insensitive `range`/`sort` on a field that declares no such name at all (OSE-6) — the declaration existing and the mapping not is the case it cannot see. | Case-insensitive ordering silently orders by raw bytes: `"Zebra"` before `"apple"`. Silent, and invisible to T-1a. |
 | OpenSearch / Elasticsearch | A `decimal` field needs a mapping that preserves the precision the IR carries (`scaled_float` with a sufficient `scaling_factor`, or `keyword` for exact-match-only use). OSE-8 writes the IR's exact decimal token as a JSON number; a `double`/`float` mapping is what loses it. | Silent rounding at index and query time — the same class of defect AR-7's `decimal`/`double` split exists to prevent, moved one layer down. |
 
-## Known divergences deferred to the execution-equality tier (T-1b, Feature #1624)
+## Divergences once deferred to the execution-equality tier (T-1b, Feature #1624)
 
 T-1a compares strings, so a difference that only appears when the statement *runs* is invisible to
-this suite by construction. Recorded rather than fixed:
+this suite by construction. One was recorded here and is now settled:
 
-- **A zero-width page window is an error on SQL Server and an empty page on Postgres, MySQL and
-  SQLite** (Oracle unmeasured — see below).
-  `{"startRow": 100, "endRow": 100}` is a structurally valid `RangePage` — `PageSpecValidator` rejects
-  only `endRow < startRow` — and compiles to `LIMIT 0 OFFSET 100` on Postgres/MySQL/SQLite, which
-  returns zero rows, but to `OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY` with a limit of `0` on SQL
-  Server, where `FETCH NEXT 0 ROWS ONLY` raises **msg 10744** ("The number of rows provided for a
-  FETCH clause must be greater than zero"). Same request, empty result on three engines and a server
-  error on the fourth. **Oracle's behaviour here is not stated, deliberately**: its row-limiting
-  clause is spelled like T-SQL's but is not T-SQL's, nothing in this repo has ever executed against an
-  Oracle instance, and guessing which side of the divergence it falls on would put an unverified claim
-  into a register whose whole point is recording what T-1a cannot grade. **Owner: Feature #1624
-  (T-1b).** Deliberately not fixed here: whether the
-  right answer is a validator rejection, a builder short-circuit to a no-row query, or a per-dialect
-  rendering is a behavioural decision that needs the execution tier to grade it, and any of the three
-  would change artifacts this tier cannot evaluate. No fixture exercises it (every fixture pages
-  `0..100`).
+- **A zero-width page window** (`{"startRow": 100, "endRow": 100}`) compiled to `LIMIT 0 OFFSET 100` on
+  Postgres/MySQL/SQLite (an empty page) but to `FETCH NEXT 0 ROWS ONLY` on SQL Server, which raises
+  **msg 10744**. Settled in #2208 by rejecting the window at the request boundary: SEM-6, "The page
+  window is non-empty", enforced by `ValidateRequestWindow` on the wire request and pinned by
+  `adversarial/027-zero-width-page-window`. The IR's `PageSpecValidator` still accepts an equal pair,
+  because a count-only request legitimately has a zero-size page; only the wire path refuses it, so no
+  backend ever sees a zero-width window from a client. Oracle was never measured and is not claimed.
 
 ## Execution-equality oracle (T-1b, #2204)
 

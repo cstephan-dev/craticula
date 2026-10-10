@@ -240,7 +240,7 @@ public static class SqlMutation
 /// </summary>
 public sealed class PostgresEngine : SqlEngine
 {
-    public const string Image = "postgres:16";
+    public const string Image = "postgres:16.15";
 
     private PostgreSqlContainer? _container;
 
@@ -317,7 +317,8 @@ public sealed class PostgresEngine : SqlEngine
 /// <summary>
 /// SQL Server 2022. SQL-6: the insensitive and the sensitive direction are both spelled in the statement
 /// (<c>COLLATE Latin1_General_CI_AS</c> / <c>_CS_AS</c>); a bucket-identity key spells nothing, so it takes the column's
-/// collation, which the DDL declares as the stock <c>SQL_Latin1_General_CP1_CI_AS</c> (GRP-2's accepted divergence).
+/// collation: the DDL declares a groupable column <c>Latin1_General_100_BIN2</c> (GRP-2's host obligation, so buckets and
+/// drill-down matches are exact) and every other string column the stock <c>SQL_Latin1_General_CP1_CI_AS</c>.
 /// </summary>
 public sealed class MssqlEngine : SqlEngine
 {
@@ -396,11 +397,12 @@ public sealed class MssqlEngine : SqlEngine
 /// <summary>
 /// MySQL 8.4. SEM-1's insensitive mechanism is the column's own collation (SQL-6: nothing in the statement), so the DDL
 /// declares the table <c>utf8mb4_0900_ai_ci</c>, the example semantics.md SEM-1 names. The case-sensitive direction
-/// has no portable spelling and is a host DDL obligation, which this harness does not meet for any column.
+/// has no portable spelling and is a host DDL obligation, which this harness meets in the DDL: a groupable or case-sensitive
+/// field's column is declared <c>utf8mb4_bin</c>.
 /// </summary>
 public sealed class MySqlEngine : SqlEngine
 {
-    public const string Image = "mysql:8.4";
+    public const string Image = "mysql:8.4.11";
 
     private MySqlContainer? _container;
 

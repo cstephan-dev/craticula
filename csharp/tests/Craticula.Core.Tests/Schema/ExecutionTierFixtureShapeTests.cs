@@ -247,7 +247,11 @@ public class ExecutionTierFixtureShapeTests
     private static FieldType ColumnType(string fixture, string what, GridSchema schema, JsonElement request, string column)
     {
         // A BM-3 values query (setValuesRequest) has no rowGroupCols: its one column is the schema field named by colId.
-        var grouped = request.TryGetProperty("rowGroupCols", out var groupCols)
+        // An export discards group state (EXP-1(a)), so it is never a grouped level. Own copy of the rule in
+        // Craticula.Integration.Tests' ColumnTypes.IsGrouped: a different assembly (XEQ-3).
+        var exportFormat = request.TryGetProperty("exportFormat", out var format) && format.ValueKind != JsonValueKind.Null;
+        var grouped = !exportFormat
+            && request.TryGetProperty("rowGroupCols", out var groupCols)
             && groupCols.GetArrayLength() > request.GetProperty("groupKeys").GetArrayLength();
         if (grouped)
         {

@@ -69,4 +69,41 @@ public class ExecutionFixtureTests
             [Craticula.Core.Schema.FieldType.String, Craticula.Core.Schema.FieldType.Decimal],
             ColumnTypes.Resolve(fixture.Schema, fixture.Request, fixture.Expected.Columns));
     }
+
+    [Fact]
+    public void An_Export_Discards_Group_State_So_Its_Value_Columns_Are_Plain_Fields()
+    {
+        var fixture = ExecutionFixture.Load("page-export/011-export-all-ignores-multi-level-group-and-multiple-aggs");
+
+        var index = fixture.Expected.Columns.ToList().IndexOf("totalAmount");
+        Assert.True(index >= 0);
+        Assert.Equal(
+            Craticula.Core.Schema.FieldType.Decimal,
+            ColumnTypes.Resolve(fixture.Schema, fixture.Request, fixture.Expected.Columns)[index]);
+        Assert.DoesNotContain("totalAmount", ColumnTypes.AverageColumns(fixture.Request, fixture.Expected.Columns));
+    }
+
+    [Fact]
+    public void An_Export_Stays_Non_Grouped_Whatever_The_Order_Of_Its_Value_Columns()
+    {
+        var schema = ExecutionFixture.Load("page-export/011-export-all-ignores-multi-level-group-and-multiple-aggs").Schema;
+        using var request = System.Text.Json.JsonDocument.Parse("""
+            {
+              "rowGroupCols": [ { "id": "region" } ],
+              "groupKeys": [],
+              "valueCols": [
+                { "id": "totalAmount", "field": "totalAmount", "aggFunc": "avg" },
+                { "id": "totalAmount2", "field": "totalAmount", "aggFunc": "sum" }
+              ],
+              "exportFormat": "csv"
+            }
+            """);
+
+        Assert.True(ColumnTypes.IsExport(request.RootElement));
+        Assert.False(ColumnTypes.IsGrouped(request.RootElement));
+        Assert.Empty(ColumnTypes.AverageColumns(request.RootElement, ["totalAmount", "totalAmount2"]));
+        Assert.Equal(
+            Craticula.Core.Schema.FieldType.Decimal,
+            ColumnTypes.Resolve(schema, request.RootElement, ["totalAmount"])[0]);
+    }
 }

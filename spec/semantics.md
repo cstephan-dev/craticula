@@ -1332,8 +1332,9 @@ compiler precondition failure on ordinary client input.
 
 **GRP-6. BM-3's distinct-values query is a bucket query, and its cap is a ceiling rather than a
 page.** A set filter asks the server "which values may I offer for this column, given the filters
-currently in effect?". The answer compiles to `SELECT DISTINCT <col> … ORDER BY <col> <cap>` (a
-`terms` aggregation on ES/OpenSearch, a `$group` on `_id` on MongoDB), and five things about it are
+currently in effect?". The answer compiles to `SELECT DISTINCT <col> … ORDER BY <col> <cap>` (DISTINCT is the default spelling; SQL Server uses
+`GROUP BY <col>` instead, GRP-6(f); a
+`terms` aggregation on ES/OpenSearch, a `$group` on `_id` on MongoDB), and six things about it are
 decided here because each of them is a place a port would otherwise guess differently.
 
 *(a) The `DISTINCT` key and its `ORDER BY` are exact — GRP-2's rule, reached by GRP-2's argument.*
@@ -2011,8 +2012,9 @@ shape parallel to the SQL and ES forms" and to stay valid in an `$expr` context,
 drill-down implicit), which is why it is pinned rather than left to taste; 21 artifacts were
 re-authored onto this form in #1643.
 
-**MDB-2. The composites, and what a tree-level `NOT` does *not* get.** `andNode` → `$and`,
-`orNode` → `$or`, and a tree-level `notNode` → `$nor` with the child as its single member. A
+**MDB-2. The composites, and what a tree-level `NOT` gets that a bare `$nor` lacks.** `andNode` → `$and`,
+`orNode` → `$or`, and a tree-level `notNode` → `$nor` with the child as its single member, wrapped in
+the null fan-out below. A
 single-child composite is **not** collapsed (`{"$and": [x]}`), mirroring SQL-2's `(x)`: the tree's
 own depth is what `filter-tree/011`-`013` pin against SEC-3's budget, and collapsing it would make a
 boundary fixture indistinguishable from a shallower one.
@@ -2086,9 +2088,13 @@ by side, each spelling its own mechanism per SQL-6 — has, naively, no MongoDB 
 both, and the naive rendering silently folds case on the field SC-3 declared sensitive. That is
 SEM-1's third Must-NOT inverted, and it is a *wrong rows* bug rather than an ordering one.
 
-The escape is the aggregation-expression form, which compares by simple binary comparison and does
-not consult the collation — the same property SEM-2's own MongoDB paragraph relies on when it notes
-that a case-**in**sensitive comparison inside an `$expr` has to be spelled with `$strcasecmp`:
+The intended escape is the aggregation-expression form: it compares by simple binary comparison, which
+is why SEM-2's own MongoDB paragraph notes that a case-**in**sensitive comparison inside an `$expr` has
+to be spelled with `$strcasecmp`. **That premise is false on MongoDB 7.0**, which applies the
+aggregate's query-level collation to `$expr` comparisons too (the engine run of `dialect-parity/023`
+showed it); see *Accepted divergence #5* below. The `$expr` form is still what the compiler emits,
+because it is the one spelling that keeps the sensitive comparison out of the query language and is
+what the artifacts pin, but it does not hold the field case-sensitive under a collation.
 
 | Family | Under no collation | Under a collation, on a `sensitive` field |
 |---|---|---|
@@ -2140,6 +2146,17 @@ the only value the query language reinterprets is a BSON regex — so no ordinar
 `$in` array, `$regex` pattern or `blank` sentinel elsewhere in this addendum needs binding. That
 asymmetry is the whole reason the requirement is easy to lose: the escape moves a value that was
 safe into the one place it is not.
+
+*Accepted divergence #5 — MongoDB cannot hold a case-sensitive field in the same request as
+case-insensitive ones.* A pipeline that carries a query-level collation (SEM-1 wants one for the
+case-insensitive field) compares **every** string under it, a `sensitive` field's `$expr` included, and
+no per-stage or per-expression form exists in the pinned subset. A request that mixes the two
+sensitivities therefore returns, on MongoDB, rows that match case-insensitively on the field SC-3
+declared sensitive: SEM-1's third Must-NOT, accepted here in the same register as GRP-2's divergences
+#3 and #4. `dialect-parity/023` records it as an XEQ-4 `allowedDivergence` entry for `mongo`, whose
+`expected` holds the rows the engine returns (`ab-100` and `Ab-100` match `AB-100`); the six other
+backends return the exact rows. A host that needs case-sensitive matching on MongoDB keeps that field
+out of a request that also carries a collation.
 
 *Pinned by* `dialect-parity/023`, the suite's only artifact containing an `$expr`. The `$literal`
 binding of a `$`-prefixed value and the sort refusal are pinned by unit tests alone
@@ -2285,7 +2302,7 @@ rather than left for #1623 to re-adjudicate.
 **OSE-2. The composites, and the one that is spelled differently from the negation a compiler
 composes itself.** `andNode` → `{"bool": {"must": [...]}}`, `orNode` →
 `{"bool": {"should": [...], "minimum_should_match": 1}}`, and a tree-level `notNode` →
-`{"bool": {"must_not": [<child>]}}` — an **array**. A single-child composite is **not** collapsed
+`{"bool": {"must_not": [<child>]}}` — an **array** — wrapped in the null fan-out below. A single-child composite is **not** collapsed
 (`{"bool": {"must": [x]}}`), mirroring SQL-2's `(x)` and MDB-2's `{"$and": [x]}`: the tree's own depth
 is what `filter-tree/011`-`013` pin against SEC-3's budget, and collapsing it would make a boundary
 fixture indistinguishable from a shallower one.
@@ -2736,7 +2753,7 @@ oversight. A seed row may carry a `why`; an authored fixture always does. Two fu
 **XEQ-3. The comparison rule.** The result's column list is compared **exactly**, then the rows **in order**, then each
 cell by its type. The column list is the **logical** one, whatever an engine physically returns: an ordinary row query's
 columns are the schema's fields in declaration order (GRP-3's leaf rule), a grouped level's are GRP-3's group column then
-each aggregation's output name, and a BM-3 values query's is the one schema field named by `setValuesRequest.colId`, and an export's is its own list. A harness maps each
+each aggregation's `valueCols` entry `id` (not its compiled key), and a BM-3 values query's is the one schema field named by `setValuesRequest.colId`, and an export's is its own list. A harness maps each
 engine's rows onto it before comparing (physical to logical, dropping `_id`, hit metadata and any column the compiled
 query never projected), so a harness that keeps MongoDB's `_id` and one that drops it cannot both conform.
 
@@ -2764,9 +2781,11 @@ keeps about sixteen fractional digits, SQL Server `decimal(38,6)`, Search return
 `expectedRows.json` is **named by the `valueCols` entry's `id`**; a compiled alias such as `<field>_<func>`
 (AGG-2) is physical, and a harness maps it onto that `id` before comparing. A decimal `sum`, `min` or
 `max` keeps the exact-decimal rule against another decimal; a Search double metric is compared against a decimal under
-the double tolerance. This holds when the aggregate's output name equals the field's own name (`amount` summed as
-`amount`). A drill-down leaf (`rowGroupCols` equal to `groupKeys`) sends `valueCols` too but projects plain fields, so
-none of this applies to it. A column that is neither a schema field nor an aggregate output name is a mistake in the
+the double tolerance. The `id` may equal the aggregated field's own name (`amount` summed with `id` `amount`); the compiled
+alias (`amount_sum`) still differs and is what the harness maps onto the `id`. A drill-down leaf (`rowGroupCols` equal to `groupKeys`) sends `valueCols` too but projects plain fields, so
+none of this applies to it. An **export** (a request carrying `exportFormat`, EXP-1) discards group state
+(EXP-1(a)), so it is never a grouped level: its `valueCols` entries are not aggregates and its columns are plain
+fields or the export's own list (`page-export/010`, `011`, `024`). A column that is neither a schema field nor a `valueCols` `id` of a grouped level is a mistake in the
 fixture, not an unchecked cell.
 
 **XEQ-4. Accepted divergence.** When a real cross-engine difference is known and accepted, the fixture says so in

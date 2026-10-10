@@ -61,24 +61,28 @@ public enum SqlSubstringAnchor
 /// ANSI SQL every dialect spells identically, so pushing them down would add an override point no
 /// dialect would ever use differently.</para>
 ///
-/// <para><b>Nine rendering methods and ONE capability fact — a distinction worth keeping.</b>
+/// <para><b>Eight rendering methods and TWO engine facts — a distinction worth keeping.</b>
 /// Everything above returns SQL text: the dialect is asked "how do you spell this?" and the builder
-/// splices the answer in. <see cref="EmptyStringIsNull"/> is a different kind of member and the only
-/// one of its kind: it answers a question <em>about the engine</em>, and the builder then composes
+/// splices the answer in. <see cref="EmptyStringIsNull"/> and <see cref="DistinctValuesUseGroupBy"/> are a
+/// different kind of member, the only two of their kind: each answers a question <em>about the engine</em>, and the builder then composes
 /// the predicate itself. Reach for that shape when the composition must stay in one place (because
 /// two operators are defined as each other's negation, say) and only a single engine fact varies
 /// inside it; reach for a rendering method when the whole construct's shape, token order or
 /// parameter count is the dialect's own. Getting that backwards is how four dialects end up carrying
 /// byte-identical implementations of the same method.</para>
 ///
-/// <para><b>This interface has now been widened three times, and none of them was free</b> — #1639
+/// <para><b>This interface has now been widened four times, and none of them was free</b> — #1639
 /// turned <c>RenderScalarComparison</c>'s case-sensitivity argument from a <c>bool</c> into the
 /// three-valued <see cref="SemanticsResolver.CaseSensitivityMode"/>, #1641 added
-/// <see cref="RenderRowLimit"/>, and #1642 added <see cref="EmptyStringIsNull"/>. Each cost every
-/// existing implementation a change and every language port a re-read. BM-1's claim is that adding a
-/// dialect needs no change to <see cref="SqlQueryBuilder"/>, not that this file never moves; but a
-/// fourth widening should have to argue that the seam, and not the candidate dialect, is what is
-/// wrong.</para>
+/// <see cref="RenderRowLimit"/>, #1642 added <see cref="EmptyStringIsNull"/>, and #2206 added
+/// <see cref="DistinctValuesUseGroupBy"/>. Each cost every existing implementation a change and every
+/// language port a re-read. BM-1's claim is that adding a dialect needs no change to
+/// <see cref="SqlQueryBuilder"/>, not that this file never moves; but a fifth widening should have to
+/// argue that the seam, and not the candidate dialect, is what is wrong. The fourth did: T-SQL msg 145
+/// refuses <c>SELECT DISTINCT</c> whose ORDER BY key is not in the select list, a fact about one engine
+/// the builder cannot know. A rendering method would have put a second statement shape for the whole
+/// values query behind the seam; a capability fact keeps the one shape and lets the builder pick
+/// <c>GROUP BY</c> for the one engine that needs it (GRP-6(f)).</para>
 ///
 /// <para>Every method that binds a value takes the <see cref="ISqlParameterSink"/> rather than a
 /// pre-rendered placeholder, because how many parameters a construct binds is itself
@@ -131,7 +135,7 @@ public interface ISqlDialect
     /// <summary>
     /// GRP-6(f): whether the BM-3 distinct set is spelled <c>GROUP BY &lt;col&gt;</c> instead of
     /// <c>SELECT DISTINCT &lt;col&gt;</c>. True only where the engine refuses a <c>DISTINCT</c> query
-    /// whose <c>ORDER BY</c> is an expression rather than a select-list item (SQL Server, msg 145).
+    /// whose <c>ORDER BY</c> key is not in the select list (SQL Server, msg 145).
     /// The two spellings compute the same set; this is a spelling fact, not a semantic one.
     /// </summary>
     bool DistinctValuesUseGroupBy => false;

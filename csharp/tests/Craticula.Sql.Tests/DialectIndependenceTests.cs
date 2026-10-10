@@ -253,23 +253,23 @@ public class DialectIndependenceTests
     }
 
     /// <summary>
-    /// <see cref="ISqlDialect"/>'s own doc says a fourth widening "should have to argue that the seam,
+    /// <see cref="ISqlDialect"/>'s own doc says a fifth widening "should have to argue that the seam,
     /// and not the candidate dialect, is what is wrong". That was prose with nothing behind it, in a
     /// repo where every artifact count is an exact <c>Assert.Equal</c> — so this is the mechanical
-    /// backing: the seam's membership is enumerated, and a tenth-plus member (or a rename) fails here
+    /// backing: the seam's membership is enumerated, and a twelfth member (or a rename) fails here
     /// before it reaches five implementations and every language port.
     ///
-    /// <para>Deliberately not a bare count. A count says "ten" and a diff says nothing about which;
+    /// <para>Deliberately not a bare count. A count says "eleven" and a diff says nothing about which;
     /// naming them makes the failure message the argument itself, and keeps the
-    /// two-properties-versus-eight-methods split — nine renderings and one engine fact — visible as
+    /// properties-versus-methods split — eight renderings, two engine facts and the name — visible as
     /// the thing being asserted rather than an accident of arithmetic. Failing this test is not a
     /// reason to update the list: it is the prompt to write down why the seam, and not the new
     /// dialect, is what needed to change.</para>
-    /// <para>GRP-6(f) widened the property list to three: SQL Server cannot ORDER a DISTINCT by its
-    /// nulls-last CASE key, so <c>DistinctValuesUseGroupBy</c> is the one spelling fact the builder reads.</para>
+    /// <para>GRP-6(f) was the fourth widening (#2206): SQL Server refuses a DISTINCT ordered by a key outside the
+    /// select list (msg 145), so <c>DistinctValuesUseGroupBy</c> is the second engine fact the builder reads.</para>
     /// </summary>
     [Fact]
-    public void The_Seam_Is_Exactly_These_Ten_Members_So_A_Fourth_Widening_Cannot_Land_Silently()
+    public void The_Seam_Is_Exactly_These_Eleven_Members_So_A_Fifth_Widening_Cannot_Land_Silently()
     {
         Assert.Equal(
             ["DistinctValuesUseGroupBy", "EmptyStringIsNull", "Name"],

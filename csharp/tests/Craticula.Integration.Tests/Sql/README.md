@@ -6,9 +6,9 @@ engine only if it has `expected/<backend>.artifact.json` (`postgres`, `mssql`, `
 
 | Engine | How it runs | Pinned image |
 |---|---|---|
-| PostgreSQL 16 | Testcontainers, Npgsql | `postgres:16` |
+| PostgreSQL 16 | Testcontainers, Npgsql | `postgres:16.15` |
 | SQL Server 2022 | Testcontainers, Microsoft.Data.SqlClient | `mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04` |
-| MySQL 8.4 | Testcontainers, MySqlConnector | `mysql:8.4` |
+| MySQL 8.4 | Testcontainers, MySqlConnector | `mysql:8.4.11` |
 | SQLite | in-process shared in-memory database, Microsoft.Data.Sqlite | none |
 
 One container per engine for the whole run (an xUnit collection fixture, started on the first fixture, so a run without
@@ -62,5 +62,5 @@ Every column is nullable. Collation, per SEM-1 / SQL-6 / GRP-2:
 
 `CRATICULA_XEQ_MUTATION=drop-collate` removes every `COLLATE <name>` from the SQL before it is sent. MySQL spells none, so
 its equivalent is declaring every string column `utf8mb4_bin`. With the switch on, tests fail on all four engines (63
-failures against the 11 of the normal run, 2026-10-10: PostgreSQL 32 (1), SQLite 6 (0), MySQL 14 (3), SQL Server 11 (7)), which shows the tier
+failures against none in the normal run, 2026-10-10: PostgreSQL 32, SQLite 6, MySQL 14, SQL Server 11), which shows the tier
 sees a silently ignored collation. Never set it outside that check.

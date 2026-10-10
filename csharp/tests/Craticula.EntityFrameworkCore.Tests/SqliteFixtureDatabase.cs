@@ -21,11 +21,7 @@ namespace Craticula.EntityFrameworkCore.Tests;
 /// does, so the connection is opened once here and handed to EF rather than described to it by a
 /// connection string.</para>
 ///
-/// <para><b>These are NOT <c>dataset.json</c> fixtures, deliberately.</b> That filename and
-/// <c>expectedRows.json</c> are reserved for #1655's execution-equality tier, where they mean a seeded
-/// database generalised over the whole suite. Inventing them here would put a half-designed oracle format
-/// on disk for another story to inherit; the datasets in this suite are inline in the test that reasons
-/// about them, where the reason each row exists can be read next to it.</para>
+/// <para><b>These are NOT <c>dataset.json</c> fixtures, deliberately.</b> The execution-equality tier (#1655, <c>Craticula.Integration.Tests</c>) owns the <c>dataset.json</c> / <c>expectedRows.json</c> format; the datasets in this suite are inline in the test that reasons about them, where the reason each row exists can be read next to it.</para>
 /// </summary>
 internal sealed class SqliteFixtureDatabase : IDisposable
 {

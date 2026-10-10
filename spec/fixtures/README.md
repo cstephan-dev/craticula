@@ -117,8 +117,8 @@ comparison rule and how an accepted divergence is declared. In short:
 **Worked example: `operators/001-eq-string`.** Its seed holds seven rows chosen to sit on each side of every boundary
 (`"active"`, `"ACTIVE"`, `"Approved"`, `"pending"`, a null, `""`, `"activex"`), and its expected result is the three rows
 that match case-insensitively, in `id` order: `[[1,"active"],[2,"ACTIVE"],[3,"Approved"]]`. Without the collation only
-id 1 would match; as a `startsWith`, id 7 would join. Only this fixture carries the pair so far; the rest of the suite
-is authored under #2204.
+id 1 would match; as a `startsWith`, id 7 would join. 179 fixtures carry the pair today, in every category that can
+be executed; the rule lives in `semantics.md` XEQ-1..XEQ-4.
 
 ## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
 
@@ -139,11 +139,10 @@ explicitly, not leave it bare) and **SQL-7** (an engine whose empty string *is* 
 compiles `blank` on a text field to a bare `IS NULL`; emitting the `= ''` disjunct there makes
 `notBlank` return no rows at all). Read that addendum before authoring or reviewing any SQL artifact.
 
-**One cross-dialect divergence is known and deliberately unfixed**, because T-1a compares strings and
-cannot grade it: a zero-width page window (`{"startRow": 100, "endRow": 100}`) yields an empty page on
-Postgres/MySQL/SQLite and a **server error** on SQL Server. Recorded with its reasoning in
-`dialect-parity/README.md`'s "Known divergences deferred to the execution-equality tier"; owned by
-Feature #1624 (T-1b). No fixture exercises it — every fixture pages `0..100`.
+**The one cross-dialect divergence once known here is settled**: a zero-width page window
+(`{"startRow": 100, "endRow": 100}`) returned an empty page on Postgres/MySQL/SQLite and a server error
+on SQL Server (T-SQL msg 10744). The wire request is now rejected at the parser (`semantics.md` SEM-6,
+"The page window is non-empty"), so no backend sees it; pinned by `adversarial/027-zero-width-page-window`.
 
 This was not always so. Fixtures authored in #1630 disagreed with each other on all six of those
 points (the suite was written by seven parallel agents with no compiler to check it). #1638 picked
@@ -156,8 +155,8 @@ Both arms of it have since closed — one in #1639, the other in #1640 and #1641
 recorded where the affected artifacts live rather than only here. **The register is therefore empty:
 `grep -rn "Known open contradiction" spec/` finding nothing is the convention working, not a record
 that went missing.** An artifact that disagrees with a compiler is a bug in one of the two, never an
-expected divergence, with the single exception recorded in the paragraph above (the zero-width page
-window, owned by #1624 at the execution tier).
+expected divergence, with no exception: the zero-width page window that was once one is rejected at the
+parser (SEM-6, `adversarial/027`).
 
 - **CLOSED (#1639): the `mysql`/`mssql`/`sqlite` artifacts in `dialect-parity/` are now quoted too.**
   The *rule* was always universal; only the quote character (`"` vs `[…]` vs backticks) was each
@@ -171,7 +170,7 @@ window, owned by #1624 at the execution tier).
   the per-dialect arm coverage policy, SQLite's `GLOB` for a case-sensitive substring match, SQL
   Server's explicit case-**sensitive** collation, and its `[` escaping) — now normative in
   `spec/semantics.md` as **SQL-5**/**SQL-6** — along with the host DDL obligations and the one known
-  divergence deferred to T-1b (#1624).
+  divergence then deferred to T-1b (the zero-width page window, since settled at the parser, SEM-6).
 - **CLOSED by #1642: the `blank`/`notBlank` composition was scoped to four dialects and Oracle
   falsified it.** `ISqlDialect` had recorded, since #1638, that `IS NULL`/`= ''` were pushed down to
   the query builder because "every v1 dialect spells them identically" — true of four engines and

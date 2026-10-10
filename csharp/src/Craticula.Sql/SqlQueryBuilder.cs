@@ -131,7 +131,9 @@ public static class SqlQueryBuilder
     /// <summary>
     /// GRP-6/BM-3: compiles the set-filter distinct-values query —
     /// <c>SELECT DISTINCT &lt;column&gt; FROM &lt;source&gt; [WHERE &lt;tree&gt;]
-    /// ORDER BY &lt;column&gt; &lt;cap&gt;</c>.
+    /// ORDER BY &lt;column&gt; &lt;cap&gt;</c>. DISTINCT is the default; a dialect with
+    /// <see cref="ISqlDialect.DistinctValuesUseGroupBy"/> (SQL Server) emits <c>GROUP BY &lt;column&gt;</c>
+    /// in its place (GRP-6(f)).
     ///
     /// <para>Everything that varies from <see cref="Build"/> is in this method; every clause it emits
     /// is rendered by the same members. <c>DISTINCT</c> is ANSI and spelled identically on every
