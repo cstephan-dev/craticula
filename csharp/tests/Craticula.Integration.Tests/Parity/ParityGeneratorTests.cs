@@ -122,7 +122,7 @@ public sealed partial class ParityGeneratorTests(ITestOutputHelper output)
             Assert.False(wire.RootElement.TryGetProperty("setValuesRequest", out _));
             Assert.False(wire.RootElement.TryGetProperty("exportFormat", out _));
 
-            // Window: startRow < endRow, at most 100 rows, offsets far below SEC-3.
+            // Window: startRow < endRow, at most 100 rows, offsets below 10000, OpenSearch's default max_result_window (PERF-2, OSE-10); SEC-3 limits only the page size.
             Assert.InRange(page.StartRow, 0, 10000);
             Assert.True(page.StartRow < page.EndRow);
             Assert.InRange(size, 1, ParityRequestGenerator.MaxWindow);

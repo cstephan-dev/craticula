@@ -43,6 +43,14 @@ A malformed value fails the run; it is never replaced by a default.
 3. The id sequences are compared for every pair. A request an engine or its compiler refuses is a failure (PAR-1).
 4. **Every** failing case is collected; the report prints at most 20 in full, then the total and the remaining indexes.
 
+## What the generator offers
+
+Every operator on every field type it applies to, as a catalog of (field, operator) entries visited in turn, so a default run
+reaches all of them. `in` and `notIn` are offered on string, int64, double and boolean fields; on decimal, date and datetime they are a **known defect** (PostgreSQL refuses them, Bug #2304, PAR-3 known-defects table) and are left out while `ParityRequestGenerator.ExcludesKnownDefectSets` is true (delete it, the `.Where` that uses it and the PAR-3 row when #2304 is fixed); the
+ordering operators and `inRange` on the string field are excluded (PAR-3: OSE-6, SEM-1). A filter tree counts every level,
+a NOT included, so no generated filter is deeper than 8 (SEC-3); `ParitySetOperatorTests` sweeps 100,000 cases for it and
+compiles the set-operator requests on all compilers offline.
+
 ## Reading a failure
 
 Each printed case carries: the seed and the case index, the disagreeing pairs, every engine's id sequence, the refusals

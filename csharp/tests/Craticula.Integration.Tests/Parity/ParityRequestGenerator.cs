@@ -34,7 +34,7 @@ namespace Craticula.Integration.Tests.Parity;
 /// <item>groupable fields: none (GRP-2, divergences #3 and #4; <c>group-aggregation/017</c>).</item>
 /// </list>
 /// Outside the register but also kept in range: integers stay within +/-2^53 (XEQ-2), a window is at most 100 rows and
-/// starts below 10000 (SEC-3), and a tree stays under SEC-3's depth and leaf limits.
+/// starts below 10000 (PERF-2: OpenSearch's default <c>max_result_window</c>, past which deep paging is another mechanism; OSE-10), and a tree stays under SEC-3's depth and leaf limits.
 /// </summary>
 internal static class ParityRequestGenerator
 {
@@ -50,22 +50,34 @@ internal static class ParityRequestGenerator
     [
         ("label", FieldType.String, ["eq", "neq", "contains", "notContains", "startsWith", "endsWith", "in", "notIn", "blank", "notBlank"]),
         ("qty", FieldType.Int64, [.. NumberLikeOps, "in", "notIn", "inRange", "blank", "notBlank"]),
-        ("score", FieldType.Double, [.. NumberLikeOps, "inRange", "blank", "notBlank"]),
-        ("price", FieldType.Decimal, [.. NumberLikeOps, "inRange", "blank", "notBlank"]),
-        ("active", FieldType.Boolean, ["true", "false", "eq", "neq", "blank", "notBlank"]),
-        ("born", FieldType.Date, [.. NumberLikeOps, "inRange", "blank", "notBlank"]),
-        ("seen", FieldType.Datetime, [.. NumberLikeOps, "inRange", "blank", "notBlank"])
+        ("score", FieldType.Double, [.. NumberLikeOps, "in", "notIn", "inRange", "blank", "notBlank"]),
+        ("price", FieldType.Decimal, [.. NumberLikeOps, "in", "notIn", "inRange", "blank", "notBlank"]),
+        ("active", FieldType.Boolean, ["true", "false", "eq", "neq", "in", "notIn", "blank", "notBlank"]),
+        ("born", FieldType.Date, [.. NumberLikeOps, "in", "notIn", "inRange", "blank", "notBlank"]),
+        ("seen", FieldType.Datetime, [.. NumberLikeOps, "in", "notIn", "inRange", "blank", "notBlank"])
     ];
 
+    /// <summary>
+    /// KNOWN DEFECT (PAR-3 known-defects table, Bug #2304): PostgreSQL refuses <c>in</c>/<c>notIn</c> on decimal, date and
+    /// datetime fields (SQL-4's array parameter is text[]). While true, the catalog leaves those leaves out. To remove the
+    /// exclusion when #2304 is fixed: delete this constant and the <c>.Where(...)</c> line in <see cref="Catalog"/>, delete
+    /// the PAR-3 row, and flip <c>ParitySetOperatorTests</c>.
+    /// </summary>
+    public const bool ExcludesKnownDefectSets = true;
+
+    private static bool IsKnownDefectSet(FieldType type, string op) =>
+        ExcludesKnownDefectSets && op is "in" or "notIn" && type is FieldType.Decimal or FieldType.Date or FieldType.Datetime;
+
     private static readonly IReadOnlyList<Leaf> Catalog =
-        [.. Kinds.SelectMany(kind => kind.Ops.Select(op => new Leaf(kind.Field, kind.Type, op)))];
+        [.. Kinds.SelectMany(kind => kind.Ops.Select(op => new Leaf(kind.Field, kind.Type, op)))
+            .Where(leaf => !IsKnownDefectSet(leaf.Type, leaf.Op))];
 
     // Sort keys: every field except the string one (register row 1). id is added by hand as a final tiebreaker key.
     private static readonly string[] SortFields = ["qty", "score", "price", "active", "born", "seen"];
 
     // Mostly small starts: the datasets are a few hundred rows and a filter keeps a fraction of them, so a start of 60
     // or more lands past the end of most results and compares two empty windows. One window in FarWindowEvery starts
-    // far past any result (SEC-3's offsets), which keeps the empty-window path, and only that, deliberately.
+    // far past any result (still below 10000, PERF-2's <c>max_result_window</c>), which keeps the empty-window path, and only that, deliberately.
     private static readonly int[] WindowStarts = [0, 0, 0, 0, 0, 0, 1, 2, 3, 5, 8, 12];
 
     private const int FarWindowEvery = 50;
@@ -268,13 +280,18 @@ internal static class ParityRequestGenerator
     // ---- customFilters trees (IR filter nodes, spec/ir.schema.json) -------------------------------------------------
 
     /// <summary>
-    /// An and/or/not tree over <paramref name="leaves"/>. At most six leaves, a NOT only above depth 4 and never directly
-    /// over another NOT, so the tree stays inside SEC-3's default depth (8) and leaf (64) limits.
+    /// An and/or/not tree over <paramref name="leaves"/>. At most six leaves and a NOT only at depth 1 to 3, never directly
+    /// over another NOT. Every level counts, a NOT included (it is a node of its own for SEC-3), so the deepest leaf of the
+    /// worst tree sits at depth 8, SEC-3's default maximum (<c>ParityGeneratorTests</c> sweeps 100,000+ cases for it).
     /// </summary>
-    private static JsonNode Tree(Random rng, IReadOnlyList<Leaf> leaves) => Build(rng, leaves, depth: 1, allowNot: true);
+    private static JsonNode Tree(Random rng, IReadOnlyList<Leaf> leaves) => Build(rng, leaves, depth: 1);
 
-    private static JsonNode Build(Random rng, IReadOnlyList<Leaf> leaves, int depth, bool allowNot)
+    private static JsonNode Build(Random rng, IReadOnlyList<Leaf> leaves, int depth)
     {
+        // The NOT is decided first: it is one level of its own, so everything beneath it starts one level lower.
+        var wrap = depth < 4 && rng.Next(4) == 0;
+        var at = wrap ? depth + 1 : depth;
+
         JsonNode node;
         if (leaves.Count == 1)
         {
@@ -290,16 +307,14 @@ internal static class ParityRequestGenerator
             {
                 var remaining = leaves.Count - taken;
                 var size = g == groups - 1 ? remaining : rng.Next(1, remaining - (groups - g - 1) + 1);
-                children.Add(Build(rng, [.. leaves.Skip(taken).Take(size)], depth + 1, allowNot: true));
+                children.Add(Build(rng, [.. leaves.Skip(taken).Take(size)], at + 1));
                 taken += size;
             }
 
             node = new JsonObject { ["type"] = rng.Next(3) == 0 ? "and" : "or", ["nodes"] = new JsonArray(children.ToArray()) };
         }
 
-        return allowNot && depth < 4 && rng.Next(4) == 0
-            ? new JsonObject { ["type"] = "not", ["node"] = node }
-            : node;
+        return wrap ? new JsonObject { ["type"] = "not", ["node"] = node } : node;
     }
 
     private static JsonNode CustomLeaf(Random rng, Leaf leaf)
@@ -515,7 +530,7 @@ internal static class ParityRequestGenerator
         return model;
     }
 
-    /// <summary>A window with <c>startRow &lt; endRow</c>, at most <see cref="MaxWindow"/> rows, starting far below SEC-3's offsets.</summary>
+    /// <summary>A window with <c>startRow &lt; endRow</c>, at most <see cref="MaxWindow"/> rows, starting far below 10000 (PERF-2's <c>max_result_window</c>).</summary>
     private static (int Start, int Size) Window(Random rng) =>
         (rng.Next(FarWindowEvery) == 0 ? FarWindowStart : WindowStarts[rng.Next(WindowStarts.Length)], WindowSizes[rng.Next(WindowSizes.Length)]);
 }
