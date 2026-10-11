@@ -589,7 +589,8 @@ public static class SqlQueryBuilder
         var caseSensitivity = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation, context);
 
         return context.Dialect.RenderScalarComparison(
-            column, ScalarComparison(op), EncodeValue(value, field, context.Dialect, BoundRounding(op)), caseSensitivity, context.Parameters);
+            column, ScalarComparison(op), EncodeValue(value, field, context.Dialect, BoundRounding(op)), field.Type, caseSensitivity,
+            context.Parameters);
     }
 
     /// <summary>

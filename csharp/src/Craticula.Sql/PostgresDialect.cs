@@ -61,6 +61,7 @@ public sealed class PostgresDialect : ISqlDialect
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {
@@ -71,7 +72,17 @@ public sealed class PostgresDialect : ISqlDialect
             ? $"{quotedColumn} COLLATE {CaseInsensitiveCollation}"
             : quotedColumn;
 
-        return $"{left} {SqlComparisonSymbols.For(comparison)} {parameters.Bind(value)}";
+        // SQL-8 (#2320): decimal, date and datetime values are strings (AR-7), which a host binds as text, and
+        // Postgres has no numeric/date/timestamptz <op> text; cast the placeholder to the column type.
+        var cast = fieldType switch
+        {
+            FieldType.Decimal => "::numeric",
+            FieldType.Date => "::date",
+            FieldType.Datetime => "::timestamptz",
+            _ => ""
+        };
+
+        return $"{left} {SqlComparisonSymbols.For(comparison)} {parameters.Bind(value)}{cast}";
     }
 
     public string RenderSubstringMatch(

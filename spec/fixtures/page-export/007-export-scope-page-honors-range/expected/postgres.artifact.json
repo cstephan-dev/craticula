@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "sql": "SELECT \"id\", \"order_date\" AS \"orderDate\", \"customer_name\" AS \"customerName\", \"total_amount\" AS \"totalAmount\", \"status\", \"region\", \"notes\" FROM \"orders\" WHERE \"total_amount\" >= $1 ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "sql": "SELECT \"id\", \"order_date\" AS \"orderDate\", \"customer_name\" AS \"customerName\", \"total_amount\" AS \"totalAmount\", \"status\", \"region\", \"notes\" FROM \"orders\" WHERE \"total_amount\" >= $1::numeric ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
   "params": [
     "100",
     50,

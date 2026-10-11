@@ -88,7 +88,8 @@ public enum SqlSubstringAnchor
 /// (SEM-4); a rendering method would have moved the instant parsing behind the seam for every dialect.
 /// A sixth change, #2304, is a different kind: it adds no member, it gives <see cref="RenderSetMembership"/> the
 /// field's <see cref="FieldType"/> as an argument, because the Postgres array cast depends on the column type
-/// and nothing else the dialect can see.</para>
+/// and nothing else the dialect can see. #2320 did the same for <see cref="RenderScalarComparison"/> (SQL-8) and
+/// added no member either.</para>
 ///
 /// <para>Every method that binds a value takes the <see cref="ISqlParameterSink"/> rather than a
 /// pre-rendered placeholder, because how many parameters a construct binds is itself
@@ -181,11 +182,19 @@ public interface ISqlDialect
     /// <c>COLLATE NOCASE</c> after the value and likewise needs nothing for <c>Sensitive</c>; SQL
     /// Server spells <em>both</em> directions, because its stock collation is case-INsensitive; MySQL
     /// spells neither, because case sensitivity there is the column's declared collation.
+    ///
+    /// <para><paramref name="fieldType"/> (#2320, SQL-8) is the field's type, there for one engine's sake:
+    /// <c>decimal</c>, <c>date</c> and <c>datetime</c> values are strings (AR-7) that a host binds as text, and
+    /// PostgreSQL has no <c>numeric &gt;= text</c> operator; the Postgres dialect casts the placeholder to the
+    /// column type (<c>$1::numeric</c>, <c>::date</c>, <c>::timestamptz</c>). The other four dialects ignore it.
+    /// A signature widening of an existing member, as #2304 did for <see cref="RenderSetMembership"/>, NOT a new
+    /// member: the seam's membership is unchanged, and the cast cannot live in the builder (BM-1).</para>
     /// </summary>
     string RenderScalarComparison(
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters);
 

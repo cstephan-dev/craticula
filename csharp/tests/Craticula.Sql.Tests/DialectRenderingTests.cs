@@ -342,7 +342,7 @@ public class DialectRenderingTests
 
         Assert.Equal(
             $"[c] COLLATE {collation} = @p1",
-            target.RenderScalarComparison("[c]", SqlScalarComparison.Equal, "a", mode, sink));
+            target.RenderScalarComparison("[c]", SqlScalarComparison.Equal, "a", FieldType.String, mode, sink));
         Assert.Equal(
             $"[c] COLLATE {collation} IN (@p2, @p3)",
             target.RenderSetMembership("[c]", negated: false, ["a", "b"], FieldType.String, mode, sink));
@@ -376,7 +376,7 @@ public class DialectRenderingTests
 
         Assert.Equal(
             $"\"c\" COLLATE {collation} = :p1",
-            target.RenderScalarComparison("\"c\"", SqlScalarComparison.Equal, "a", mode, sink));
+            target.RenderScalarComparison("\"c\"", SqlScalarComparison.Equal, "a", FieldType.String, mode, sink));
         Assert.Equal(
             $"\"c\" COLLATE {collation} IN (:p2, :p3)",
             target.RenderSetMembership("\"c\"", negated: false, ["a", "b"], FieldType.String, mode, sink));
@@ -437,7 +437,7 @@ public class DialectRenderingTests
         Assert.Equal(
             expected,
             target.RenderScalarComparison(
-                target.QuoteIdentifier("c"), SqlScalarComparison.Equal, "a",
+                target.QuoteIdentifier("c"), SqlScalarComparison.Equal, "a", FieldType.String,
                 SemanticsResolver.CaseSensitivityMode.Sensitive, sink));
     }
 
@@ -551,7 +551,7 @@ public class DialectRenderingTests
         var sink = new RecordingSink(target);
 
         var sql = target.RenderScalarComparison(
-            target.QuoteIdentifier("c"), SqlScalarComparison.Equal, "a",
+            target.QuoteIdentifier("c"), SqlScalarComparison.Equal, "a", FieldType.String,
             SemanticsResolver.CaseSensitivityMode.Insensitive, sink);
 
         Assert.Equal(expected, sql);
@@ -573,7 +573,7 @@ public class DialectRenderingTests
         {
             var target = Dialect(name);
             var sql = target.RenderScalarComparison(
-                "c", comparison, 1L, SemanticsResolver.CaseSensitivityMode.NotApplicable, new RecordingSink(target));
+                "c", comparison, 1L, FieldType.Int64, SemanticsResolver.CaseSensitivityMode.NotApplicable, new RecordingSink(target));
 
             Assert.StartsWith($"c {symbol} ", sql, StringComparison.Ordinal);
         }
@@ -729,7 +729,7 @@ public class DialectRenderingTests
         path switch
         {
             "scalar" => target.RenderScalarComparison(
-                target.QuoteIdentifier("c"), SqlScalarComparison.NotEqual, "",
+                target.QuoteIdentifier("c"), SqlScalarComparison.NotEqual, "", FieldType.String,
                 SemanticsResolver.CaseSensitivityMode.Insensitive, sink),
 
             // The empty member is deliberately not first: a guard that checked only values[0], or that

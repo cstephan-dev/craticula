@@ -88,6 +88,7 @@ public sealed class MySqlDialect : ISqlDialect
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters) =>
         // SEM-1: nothing to spell in any of the three modes — see the class remarks.

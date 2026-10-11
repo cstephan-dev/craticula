@@ -81,6 +81,7 @@ public sealed class SqliteDialect : ISqlDialect
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {
