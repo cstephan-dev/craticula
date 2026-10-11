@@ -82,7 +82,7 @@ public class SqlQueryBuilderGroupingTests
             });
 
         Assert.Contains(
-            "WHERE (\"region\" = $1 AND \"amount\" > $2) GROUP BY \"segment\"",
+            "WHERE (\"region\" = $1 AND \"amount\" > $2::numeric) GROUP BY \"segment\"",
             query.Sql,
             StringComparison.Ordinal);
         Assert.Equal(["EMEA", "1000", 50, 0], query.Parameters);

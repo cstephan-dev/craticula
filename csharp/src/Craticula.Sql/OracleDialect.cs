@@ -191,6 +191,7 @@ public sealed class OracleDialect : ISqlDialect
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {

@@ -57,6 +57,8 @@ internal static class DapperParameterBinder
         {
             "sqlite" => PrepareNumbered(query),
             "mysql" => PreparePositional(query),
+            // A scalar decimal/date/datetime value stays a plain string here (it binds as text); the Postgres dialect's own
+            // placeholder cast (SQL-8: $n::numeric, ::date, ::timestamptz) converts it server-side, as SQL-4's array cast does.
             "postgres" => PrepareNamed(query, _ => string.Empty),
             "mssql" => PrepareNamed(query, ordinal => $"@p{ordinal + 1}"),
             "oracle" => PrepareNamed(query, ordinal => $"p{ordinal + 1}"),

@@ -17,7 +17,7 @@ namespace Craticula.Sql;
 /// the <c>blank</c> condition and the SEM-6 tiebreaker all come from
 /// <see cref="SemanticsResolver"/> (#1634) — the one place SEM-* rules live, so the SQL, Mongo and
 /// Search compilers cannot drift apart (G3/G4). What IS this compiler's own responsibility is the
-/// SQL <em>shape</em> those decisions render into: <c>spec/semantics.md</c>'s SQL-0..SQL-7 addendum,
+/// SQL <em>shape</em> those decisions render into: <c>spec/semantics.md</c>'s SQL-0..SQL-8 addendum,
 /// and specifically the tree-level <c>NOT</c> fan-out, which SemanticsResolver deliberately has no
 /// method for because it is a statement about tree shape rather than about one operator.</para>
 ///
@@ -589,7 +589,8 @@ public static class SqlQueryBuilder
         var caseSensitivity = ResolveCaseSensitivity(field, op, SemanticsResolver.CaseSensitivityMechanism.Collation, context);
 
         return context.Dialect.RenderScalarComparison(
-            column, ScalarComparison(op), EncodeValue(value, field, context.Dialect, BoundRounding(op)), caseSensitivity, context.Parameters);
+            column, ScalarComparison(op), EncodeValue(value, field, context.Dialect, BoundRounding(op)), field.Type, caseSensitivity,
+            context.Parameters);
     }
 
     /// <summary>

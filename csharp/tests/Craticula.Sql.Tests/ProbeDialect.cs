@@ -38,7 +38,7 @@ internal sealed class ProbeDialect : ISqlDialect
     public string ParameterPlaceholder(int ordinal) => ":p" + (ordinal + 1).ToString(CultureInfo.InvariantCulture);
 
     public string RenderScalarComparison(
-        string quotedColumn, SqlScalarComparison comparison, object? value, SemanticsResolver.CaseSensitivityMode caseSensitivity, ISqlParameterSink parameters)
+        string quotedColumn, SqlScalarComparison comparison, object? value, FieldType fieldType, SemanticsResolver.CaseSensitivityMode caseSensitivity, ISqlParameterSink parameters)
     {
         var symbol = comparison switch
         {

@@ -387,6 +387,109 @@ public class SqlQueryBuilderOperatorTests
         Assert.Equal(expected, where);
     }
 
+    // ---- scalar comparison: the placeholder is cast to the column type for the three string-encoded types (#2320, SQL-8)
+
+    [Theory]
+    [InlineData("unitCost", "numeric")]
+    [InlineData("birthDate", "date")]
+    [InlineData("createdAt", "timestamptz")]
+    public void Scalar_Comparisons_Cast_The_Placeholder_For_Decimal_Date_And_Datetime(string field, string type)
+    {
+        var column = Schema.Fields[field].Physical!.Sql!.Column;
+
+        foreach (var (op, symbol) in new[]
+        {
+            (ComparisonOperator.Eq, "="), (ComparisonOperator.Gt, ">"), (ComparisonOperator.Gte, ">="),
+            (ComparisonOperator.Lt, "<"), (ComparisonOperator.Lte, "<=")
+        })
+        {
+            var (where, parameters) = Where(Comparison(field, op, Sample(field)));
+            Assert.Equal($"\"{column}\" {symbol} $1::{type}", where);
+
+            // The cast is in the SQL text only: still one string parameter (AR-7).
+            Assert.IsType<string>(Assert.Single(parameters));
+        }
+
+        var (neq, _) = Where(Comparison(field, ComparisonOperator.Neq, Sample(field)));
+        Assert.Equal($"(\"{column}\" <> $1::{type} OR \"{column}\" IS NULL)", neq);
+    }
+
+    [Theory]
+    [InlineData("status", "\"status\" COLLATE craticula_ci")]
+    [InlineData("code", "\"code\"")]
+    [InlineData("age", "\"age\"")]
+    [InlineData("price", "\"price\"")]
+    [InlineData("isActive", "\"is_active\"")]
+    public void Scalar_Comparisons_Leave_The_Placeholder_Uncast_For_String_Int64_Double_And_Boolean(string field, string left)
+    {
+        var (where, _) = Where(Comparison(field, ComparisonOperator.Gte, Sample(field)));
+
+        Assert.Equal($"{left} >= $1", where);
+    }
+
+    [Theory]
+    [InlineData("unitCost", "numeric")]
+    [InlineData("birthDate", "date")]
+    [InlineData("createdAt", "timestamptz")]
+    public void InRange_Casts_Both_Bounds_And_A_Date_Preset_Shape_Is_The_Same_Half_Open_Range(string field, string type)
+    {
+        var column = Schema.Fields[field].Physical!.Sql!.Column;
+
+        // A date preset (AG-2) is expanded to exactly this half-open inRange before the SQL compiler sees it.
+        var (where, parameters) = Where(new ComparisonNode
+        {
+            Field = field,
+            Op = ComparisonOperator.InRange,
+            From = Sample(field),
+            To = Sample(field),
+            FromInclusive = true,
+            ToInclusive = false
+        });
+
+        Assert.Equal($"(\"{column}\" >= $1::{type} AND \"{column}\" < $2::{type})", where);
+        Assert.Equal(2, parameters.Count);
+    }
+
+    [Fact]
+    public void A_Null_Scalar_Value_Stays_A_Bound_Null_Under_The_Cast()
+    {
+        var (where, parameters) = Where(Comparison("unitCost", ComparisonOperator.Eq, new NullValue()));
+
+        Assert.Equal("\"unit_cost\" = $1::numeric", where);
+        Assert.Equal([null], parameters);
+    }
+
+    [Theory]
+    [InlineData("mssql")]
+    [InlineData("mysql")]
+    [InlineData("sqlite")]
+    [InlineData("oracle")]
+    public void The_Other_Four_Dialects_Render_Scalar_Comparisons_On_The_Three_Types_Without_A_Cast(string name)
+    {
+        ISqlDialect dialect = name switch
+        {
+            "mssql" => MssqlDialect.Instance,
+            "mysql" => MySqlDialect.Instance,
+            "sqlite" => SqliteDialect.Instance,
+            _ => OracleDialect.Instance
+        };
+
+        foreach (var field in new[] { "unitCost", "birthDate", "createdAt" })
+        {
+            var query = SqlQueryBuilder.Build(
+                new SqlQueryRequest
+                {
+                    Schema = Schema,
+                    Filter = Comparison(field, ComparisonOperator.Gt, Sample(field)),
+                    Page = new RangePage { StartRow = 0, EndRow = 100 }
+                },
+                dialect);
+
+            Assert.DoesNotContain("::", query.Sql, StringComparison.Ordinal);
+            Assert.DoesNotContain("CAST(", query.Sql, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     // ---- tree shape ------------------------------------------------------------------------------------
 
     [Fact]

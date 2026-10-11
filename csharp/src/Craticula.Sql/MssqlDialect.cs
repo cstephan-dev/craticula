@@ -8,7 +8,7 @@ namespace Craticula.Sql;
 /// <summary>
 /// The SQL Server / Azure SQL dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/dialect-parity/*/expected/mssql.artifact.json</c> and follows
-/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-7) for everything the
+/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-8) for everything the
 /// rule declares universal: <c>[…]</c> quoting, <c>@p1</c> named placeholders,
 /// <c>OFFSET ... ROWS FETCH NEXT ... ROWS ONLY</c> paging, a column-side
 /// <c>COLLATE Latin1_General_CI_AS</c> for SEM-1's exact-match family, <c>LIKE</c> over a <c>+</c>
@@ -98,6 +98,7 @@ public sealed class MssqlDialect : ISqlDialect
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters)
     {

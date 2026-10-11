@@ -7,7 +7,7 @@ namespace Craticula.Sql;
 /// <summary>
 /// The MySQL / MariaDB dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/dialect-parity/*/expected/mysql.artifact.json</c> and follows
-/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-7) for everything the
+/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-8) for everything the
 /// rule declares universal: backtick quoting, <c>?</c> positional placeholders,
 /// <c>LIMIT ? OFFSET ?</c> paging, <c>LIKE</c> over a <c>CONCAT(...)</c> pattern for SEM-7's
 /// substring family, and <c>IN (...)</c>/<c>NOT IN (...)</c> with N scalar parameters for SQL-4 set
@@ -88,6 +88,7 @@ public sealed class MySqlDialect : ISqlDialect
         string quotedColumn,
         SqlScalarComparison comparison,
         object? value,
+        FieldType fieldType,
         SemanticsResolver.CaseSensitivityMode caseSensitivity,
         ISqlParameterSink parameters) =>
         // SEM-1: nothing to spell in any of the three modes — see the class remarks.

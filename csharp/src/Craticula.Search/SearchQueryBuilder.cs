@@ -37,7 +37,7 @@ namespace Craticula.Search;
 ///
 /// <para><b>The rendering rules are pinned in <c>spec/semantics.md</c>'s
 /// "Addendum — canonical OpenSearch/Elasticsearch rendering (OSE-0..OSE-14)"</b>, the exact parallel
-/// of the SQL (SQL-0..SQL-7(b)) and MongoDB (MDB-1..MDB-12) addenda, and for the same reason: the
+/// of the SQL (SQL-0..SQL-8) and MongoDB (MDB-1..MDB-12) addenda, and for the same reason: the
 /// hand-authored fixture suite spelled several of these constructs more than one way from identical
 /// inputs, and no single compiler can satisfy contradictory oracles.</para>
 /// </summary>
