@@ -120,7 +120,7 @@ backend. The rules below are not new: each one points at the rule that already p
 
 | Backend | Compared | Pinned by |
 |---|---|---|
-| `postgres`, `mssql`, `mysql`, `oracle`, `sqlite` | the three members `dialect`, `sql` and `params`, each by value: `sql` character for character, `params` element by element in order; the order of the three members in the wrapper object is not significant | the canonical SQL rendering, SQL-0..SQL-7(b) in `semantics.md` |
+| `postgres`, `mssql`, `mysql`, `oracle`, `sqlite` | the three members `dialect`, `sql` and `params`, each by value: `sql` character for character, `params` element by element in order; the order of the three members in the wrapper object is not significant | the canonical SQL rendering, SQL-0..SQL-8 in `semantics.md` |
 | `mongo` | the whole artifact exactly, **object key order included** | MDB-7 and the MongoDB addendum (a `$sort` document's key order is its tiebreak order) |
 | `search` | objects compared as **unordered maps** (the same keys, each with an equal value, in any order); arrays element by element **in order** | OSE-0 |
 

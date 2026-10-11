@@ -17,7 +17,7 @@ convey intent, not the literal compiler output for any one dialect. The literal 
 quoting, parenthesisation, which operator carries a negation, how a set is parameterized — is pinned
 separately in **three addenda** at the end of this document, all of which *are* normative and *are*
 byte-for-byte what the `spec/fixtures/` artifacts contain: **"Addendum — canonical SQL rendering"**
-(SQL-0..SQL-7(b)) for the Postgres reference arm and its four sibling dialects, **"Addendum —
+(SQL-0..SQL-8) for the Postgres reference arm and its four sibling dialects, **"Addendum —
 canonical MongoDB rendering"** (MDB-1..MDB-12) for the `mongo.artifact.json` arm, and **"Addendum —
 canonical OpenSearch/Elasticsearch rendering"** (OSE-0..OSE-14) for the `search.artifact.json` arm. A
 Mongo or OpenSearch snippet below is illustrative in exactly the way a SQL one is; where the two
@@ -2007,6 +2007,26 @@ on Oracle. No fixture binds an empty value on any backend, so nothing in the sui
 that is not its Postgres arm with tokens substituted; SQL-7(b) is pinned by unit tests alone
 (`DialectRenderingTests`), there being no artifact for a request that does not compile.
 
+**SQL-8. On Postgres the placeholder of a scalar comparison on a `decimal`, `date` or `datetime` field is cast
+to the column type — and that is a dialect rendering, not a universal one.** The sibling of SQL-4, for the
+scalar operators (Bug #2320). Those values are strings (AR-7) and a host binds a string parameter as `text`;
+PostgreSQL has no `numeric >= text`, `date >= text` or `timestamptz > text` operator. On Postgres the placeholder
+of every scalar comparison is therefore cast to the field's column type, and only for these three types:
+`"price" >= $1::numeric`, `"day" >= $1::date`, `"at" > $1::timestamptz`. "Scalar comparison" is `eq`, `neq`,
+`gt`, `gte`, `lt`, `lte`, **each bound of `inRange`** (`"day" >= $1::date AND "day" < $2::date`) and **every
+date preset** (AG-2), which expands to a half-open `inRange` and renders through the same comparison. `string`,
+`int64`, `double` and `boolean` stay uncast, and the parameter list is unchanged (the cast is in the SQL text
+only). SQL Server, MySQL, SQLite and Oracle render exactly as before, and so do the MongoDB and OpenSearch
+backends. Consequences:
+(a) the host's `datetime` column is `timestamptz`, as in SQL-4(a); with a `timestamp` column Postgres compares
+through the session time zone and can shift rows silently.
+(b) A `null` value (AR-7 `nullValue`) stays valid: `NULL::numeric` is a typed NULL, and the parameter list still
+carries the `null`.
+(c) `Craticula.EntityFrameworkCore` hands typed values to the provider and is out of scope.
+
+*Why it is behind the dialect interface.* The cast is a PostgreSQL spelling; the query builder MUST NOT branch on
+the dialect for it (the BM-1 smell of SQL-4). The dialect is handed the field type with the value and decides.
+
 **Cross-links.** `grid-schema.schema.json` (`source`), `$defs/andNode`, `$defs/orNode`,
 `$defs/notNode`, `$defs/unaryOperator` (`blank`, `notBlank`), `$defs/binaryOperator` (`notContains`,
 `contains`), `$defs/setOperator` (`in`, `notIn`), `$defs/textOptions` (`caseSensitivity`), SEM-1,
@@ -2891,7 +2911,7 @@ The first row is a generator rule rather than an XEQ-4 entry: no fixture declare
 order, because `sort-paging/001` agrees on every engine for the letters it seeds. The fixture is named as the evidence
 of what is pinned, and PAR-4 applies the moment a broader string sort is shown to differ. As of the first runs (2026-10-10: the default seed and several other seeds, seven engines, all 21 pairs), the property
 found one true gap: set membership on decimal, date and datetime fields was refused by PostgreSQL. That was a **defect**
-(Bug #2304), not a divergence; it was fixed (SQL-4's array cast; the Dapper adapter also binds Postgres parameters unnamed, which set membership through it needed, while its scalar comparisons on those types remain Bug #2320) and the
+(Bug #2304), not a divergence; it was fixed (SQL-4's array cast; the Dapper adapter also binds Postgres parameters unnamed, which set membership through it needed); scalar comparisons on those types were the same defect (Bug #2320), fixed by SQL-8's placeholder cast; and the
 generator produces those operators again. **No accepted divergence has been recorded by the property**; the register lists
 only generator exclusions.
 
