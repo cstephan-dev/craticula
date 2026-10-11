@@ -1675,7 +1675,7 @@ physical mappings (SC-4) that are already host-declared and already never client
 compiler MUST take the collection from `schema.source` and MUST NOT accept one from the request.
 
 **SQL-1. Always quote identifiers — every column, every alias, and the table.** Postgres renders
-`SELECT * FROM "employees" WHERE "hire_date" >= $1`, never the bare form.
+`SELECT * FROM "employees" WHERE "age" >= $1`, never the bare form.
 
 *Why.* Unquoted identifiers are not "the same thing without the noise" — PostgreSQL **case-folds them
 to lowercase**. The fixture suite contains real proof: `dialect-parity/` declares camelCase physical
@@ -2012,7 +2012,7 @@ to the column type — and that is a dialect rendering, not a universal one.** T
 scalar operators (Bug #2320). Those values are strings (AR-7) and a host binds a string parameter as `text`;
 PostgreSQL has no `numeric >= text`, `date >= text` or `timestamptz > text` operator. On Postgres the placeholder
 of every scalar comparison is therefore cast to the field's column type, and only for these three types:
-`"price" >= $1::numeric`, `"day" >= $1::date`, `"at" > $1::timestamptz`. "Scalar comparison" is `eq`, `neq`,
+`"amount" >= $1::numeric`, `"day" >= $1::date`, `"at" > $1::timestamptz`. "Scalar comparison" is `eq`, `neq`,
 `gt`, `gte`, `lt`, `lte`, **each bound of `inRange`** (`"day" >= $1::date AND "day" < $2::date`) and **every
 date preset** (AG-2), which expands to a half-open `inRange` and renders through the same comparison. `string`,
 `int64`, `double` and `boolean` stay uncast, and the parameter list is unchanged (the cast is in the SQL text

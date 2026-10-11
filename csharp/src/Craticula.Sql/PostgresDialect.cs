@@ -8,10 +8,11 @@ namespace Craticula.Sql;
 /// <summary>
 /// The reference dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/*/expected/postgres.artifact.json</c> and documented in <c>spec/semantics.md</c>'s
-/// "Addendum — canonical SQL rendering" (SQL-0..SQL-7): <c>"</c> quoting, <c>$n</c> placeholders,
+/// "Addendum — canonical SQL rendering" (SQL-0..SQL-8): <c>"</c> quoting, <c>$n</c> placeholders,
 /// <c>LIMIT $n OFFSET $n</c>, the host-created <c>craticula_ci</c> ICU collation for SEM-1's
 /// exact-match family, <c>ILIKE ... ESCAPE '\'</c> for SEM-7's substring family, and
-/// <c>= ANY($1)</c>/<c>&lt;&gt; ALL($1)</c> for SQL-4 set membership.
+/// <c>= ANY($1)</c>/<c>&lt;&gt; ALL($1)</c> for SQL-4 set membership, and the <c>::numeric</c> / <c>::date</c> / <c>::timestamptz</c>
+/// cast of a decimal, date or datetime placeholder for SQL-4 (set arrays) and SQL-8 (scalar comparisons).
 ///
 /// <para><b>Only the case-INsensitive direction has a spelling here.</b> PostgreSQL's default
 /// collation is deterministic and distinguishes case, so

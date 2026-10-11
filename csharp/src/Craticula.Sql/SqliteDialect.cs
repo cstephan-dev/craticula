@@ -7,7 +7,7 @@ namespace Craticula.Sql;
 /// <summary>
 /// The SQLite dialect (TRD §5). Every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/dialect-parity/*/expected/sqlite.artifact.json</c> and follows
-/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-7) for everything the
+/// <c>spec/semantics.md</c>'s "Addendum — canonical SQL rendering" (SQL-0..SQL-8) for everything the
 /// rule declares universal: <c>"</c> quoting, <c>?</c> positional placeholders,
 /// <c>LIMIT ? OFFSET ?</c> paging, and <c>IN (...)</c>/<c>NOT IN (...)</c> with N scalar parameters
 /// for SQL-4 set membership.
