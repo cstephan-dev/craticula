@@ -19,7 +19,7 @@ Run: `dotnet test tests/Craticula.Integration.Tests --filter "FullyQualifiedName
 
 `DapperPostgresExecutionTests` (#2315) runs the set-membership fixtures `operators/035..038` and `048..053` through the
 `Craticula.Dapper` adapter (this project references it as a test host) on the same Postgres container: the adapter binds the
-array as `text[]`, so it proves the dialect's `::numeric[]` / `::date[]` / `::timestamptz[]` cast (SQL-4) for a host port. It proves set membership only: scalar comparisons on decimal, date and datetime through Dapper on Postgres still fail (Bug #2320).
+array as `text[]`, so it proves the dialect's `::numeric[]` / `::date[]` / `::timestamptz[]` cast (SQL-4) for a host port. Since Bug #2320 it also runs `operators/046`, `040`, `041` and `date-presets/001` (scalar comparisons, `inRange`, a date preset: the placeholder cast of SQL-8) and an export walk (`DapperExportStream`, chunk sizes 1 and 3) over a decimal, a date and a datetime sort key, so Dapper on Postgres is proven for set membership, scalar comparisons and the export keyset on all three types.
 
 ## What the harness does
 
