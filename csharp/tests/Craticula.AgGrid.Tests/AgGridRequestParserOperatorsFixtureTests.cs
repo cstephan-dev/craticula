@@ -3,11 +3,11 @@ using Craticula.Core.Ir;
 namespace Craticula.AgGrid.Tests;
 
 /// <summary>
-/// Fixture-driven coverage against the real <c>spec/fixtures/operators/</c> suite (53 cases, AR-6's
+/// Fixture-driven coverage against the real <c>spec/fixtures/operators/</c> suite (56 cases, AR-6's
 /// closed 17-operator set across the AR-7 field-type matrix) — loads each fixture's real
 /// <c>agGridRequest.json</c>, runs it through <see cref="AgGridRequestParser.Parse"/>, and asserts
 /// the resulting IR shape (field, operator, value) rather than taking the plan's summary as ground
-/// truth. Every one of the 53 cases is exercised by name below.
+/// truth. Every one of the 56 cases is exercised by name below.
 /// </summary>
 public class AgGridRequestParserOperatorsFixtureTests
 {
@@ -257,7 +257,7 @@ public class AgGridRequestParserOperatorsFixtureTests
         Assert.False(comparison.ToInclusive);
     }
 
-    // ---- Sanity sweep: every one of the 53 fixtures parses without throwing ------------------------
+    // ---- Sanity sweep: every one of the 56 fixtures parses without throwing ------------------------
 
     public static readonly TheoryData<string> AllOperatorFixtures = new()
     {
@@ -273,7 +273,8 @@ public class AgGridRequestParserOperatorsFixtureTests
         "041-inrange-datetime-exclusive-inclusive", "042-inrange-int64-exclusive-exclusive",
         "043-inrange-date-inclusive-inclusive", "044-true-boolean", "045-false-boolean",
         "046-eq-decimal", "047-gt-decimal", "048-in-decimal", "049-notin-decimal",
-        "050-in-date", "051-notin-date", "052-in-datetime", "053-notin-datetime"
+        "050-in-date", "051-notin-date", "052-in-datetime", "053-notin-datetime", "054-in-datetime-zoneless",
+        "055-in-datetime-zoneless-zone", "056-in-date-zoneless"
     };
 
     [Theory]

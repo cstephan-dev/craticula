@@ -728,6 +728,19 @@ public static class AgGridRequestParser
             return new StringValue { Value = raw };
         }
 
+        return ResolveWireDateText(field, propertyName, raw, fieldConfig.Type, context);
+    }
+
+    /// <summary>
+    /// The shared resolution of one AG Grid wire date text (<c>YYYY-MM-DD</c> or
+    /// <c>YYYY-MM-DD hh:mm:ss</c>) into the typed value a <c>date</c> or <c>datetime</c> field calls for,
+    /// with the request's zone. Used by the comparison path (<see cref="ResolveDateWireValue"/>) and by a
+    /// set filter's <c>values</c> (<see cref="ParseSetCondition"/>), so the two follow one rule (SEM-4).
+    /// Throws <c>malformed-request</c> for any other text and for a non-midnight time on a <c>date</c> field.
+    /// </summary>
+    private static TypedValue ResolveWireDateText(
+        string field, string propertyName, string raw, FieldType fieldType, DateResolutionContext context)
+    {
         if (!TryParseAgGridWireDate(raw, out var wallClock, out var hasTime))
         {
             throw new AgGridRequestParseException(
@@ -736,7 +749,7 @@ public static class AgGridRequestParser
                 $"formats ('YYYY-MM-DD' or 'YYYY-MM-DD hh:mm:ss').");
         }
 
-        if (fieldConfig.Type is FieldType.Datetime)
+        if (fieldType is FieldType.Datetime)
         {
             var instant = DatePresetResolver.LocalDateTimeToInstant(wallClock, context.Zone);
             return new DatetimeValue
@@ -900,7 +913,7 @@ public static class AgGridRequestParser
                     "malformed-request", $"Column '{field}': a 'set' filter's 'values' entry must be a string, got {element.ValueKind}.");
             }
 
-            values.Add(new StringValue { Value = element.GetString()! });
+            values.Add(ResolveSetDateValue(field, element.GetString()!, context));
         }
 
         if (BooleanSelectionOperator(field, values, context) is { } unaryOp)
@@ -910,6 +923,39 @@ public static class AgGridRequestParser
 
         return new ComparisonNode { Field = field, Op = ComparisonOperator.In, Values = values };
     }
+
+    /// <summary>
+    /// A set filter's value on a <c>date</c> or <c>datetime</c> field follows the comparison-filter rule
+    /// (SEM-4 / SEM-5): an ISO-8601 instant on a <c>datetime</c> field stays the verbatim string (Core
+    /// coerces it); the zone-less AG Grid wire forms are resolved here with the request's zone; anything
+    /// else is <c>malformed-request</c>. Without a schema, or for any other field type, the verbatim
+    /// <see cref="StringValue"/> is kept.
+    /// </summary>
+    private static TypedValue ResolveSetDateValue(string field, string raw, DateResolutionContext context)
+    {
+        if (context.Options.Schema is not { } schema
+            || !schema.Fields.TryGetValue(field, out var fieldConfig)
+            || fieldConfig.Type is not (FieldType.Date or FieldType.Datetime))
+        {
+            return new StringValue { Value = raw };
+        }
+
+        if (fieldConfig.Type is FieldType.Datetime && IsIsoInstant(raw))
+        {
+            return new StringValue { Value = raw };
+        }
+
+        return ResolveWireDateText(field, "values", raw, fieldConfig.Type, context);
+    }
+
+    // Same shape Core's FilterNodeValidator.DatetimePattern requires (internal there), plus a real-instant check.
+    private static readonly System.Text.RegularExpressions.Regex IsoInstantPattern = new(
+        @"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static bool IsIsoInstant(string raw) =>
+        IsoInstantPattern.IsMatch(raw)
+        && DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out _);
 
     /// <summary>AR-6's unary operator a boolean column's single-value Set Filter selection maps to,
     /// or <see langword="null"/> when this is an ordinary set membership — see
