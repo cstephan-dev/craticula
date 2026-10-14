@@ -6,10 +6,12 @@ Usage: coverage.py <results_dir> [--threshold N]      (stdlib only, Python 3.10+
 
 Why merge: each test project collects coverage for the assemblies it loads, and a package is
 exercised by several projects (Core.Tests alone covers Core at about 83 %, the union at 93 %).
-Cobertura spells the same source file differently per project (absolute, relative, package-less),
-so lines are keyed by the file's BASENAME plus the line number inside the assembly. A line is
-covered when any file reports hits > 0. Branches are merged the same way, keeping the best
-covered/total ratio per (basename, line); they are reported, never enforced.
+Each test project writes its report relative to its own <source> root (the repo folder, src/, or the
+package folder), so the same file appears under different relative names. Lines are keyed by the file's
+full path, the report's <source> joined with its filename and normalised (an absolute filename is kept as
+it is), plus the line number: the same file always merges, two files that only share a name never do.
+A line is covered when any report gives it hits > 0. Branches are merged the same way, keeping the best
+covered/total ratio per (file, line); they are reported, never enforced.
 
 Exit codes: 0 every in-scope assembly at or above the threshold; 1 at least one below it;
 2 usage or environment error (no cobertura file, an in-scope assembly missing from the data).
@@ -17,6 +19,7 @@ Exit codes: 0 every in-scope assembly at or above the threshold; 1 at least one 
 from __future__ import annotations
 
 import argparse
+import posixpath
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -35,13 +38,23 @@ IN_SCOPE = (
 _CONDITION = re.compile(r"\((\d+)/(\d+)\)")
 
 
-def basename(filename: str) -> str:
-    return filename.replace("\\", "/").rsplit("/", 1)[-1]
+def _is_absolute(path: str) -> bool:
+    return path.startswith("/") or re.match(r"^[A-Za-z]:/", path) is not None
+
+
+def file_key(sources: list[str], filename: str) -> str:
+    """The file's full path: <source> + filename, separators unified and normalised. Coverlet writes one
+    <source> per report; with several, the first is used (the path only has to be the same across reports
+    for the same file and different for different files)."""
+    name = filename.replace("\\", "/")
+    if not _is_absolute(name) and sources:
+        name = sources[0].replace("\\", "/").rstrip("/") + "/" + name
+    return posixpath.normpath(name)
 
 
 def merge(files: list[Path]) -> tuple[dict, dict]:
-    """Returns (lines, branches): per in-scope assembly, {(basename, line): hits} and
-    {(basename, line): (covered, total)}."""
+    """Returns (lines, branches): per in-scope assembly, {(file, line): hits} and
+    {(file, line): (covered, total)}, file being file_key()."""
     lines: dict[str, dict[tuple[str, int], int]] = {}
     branches: dict[str, dict[tuple[str, int], tuple[int, int]]] = {}
     for path in files:
@@ -49,6 +62,7 @@ def merge(files: list[Path]) -> tuple[dict, dict]:
             root = ET.parse(path).getroot()
         except ET.ParseError as error:
             raise ValueError(f"{path}: not valid XML ({error})") from error
+        sources = [(source.text or "").strip() for source in root.iter("source") if (source.text or "").strip()]
         for package in root.iter("package"):
             assembly = package.get("name")
             if assembly not in IN_SCOPE:
@@ -56,7 +70,7 @@ def merge(files: list[Path]) -> tuple[dict, dict]:
             line_map = lines.setdefault(assembly, {})
             branch_map = branches.setdefault(assembly, {})
             for cls in package.iter("class"):
-                name = basename(cls.get("filename", ""))
+                name = file_key(sources, cls.get("filename", ""))
                 for line in cls.iter("line"):
                     key = (name, int(line.get("number")))
                     line_map[key] = max(line_map.get(key, 0), int(line.get("hits", "0")))

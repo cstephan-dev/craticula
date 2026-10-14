@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<coverage version="1.9">
+  <sources>
+    <source>/synthetic/src/</source>
+  </sources>
+  <packages>
+    <package name="Craticula.Core">
+      <classes>
+        <class name="Craticula.Core.Ir.Validation" filename="Craticula.Core/Ir/Validation.cs">
+          <lines>
+            <line number="1" hits="1" branch="False" />
+            <line number="2" hits="1" branch="False" />
+            <line number="3" hits="1" branch="False" />
+            <line number="4" hits="1" branch="False" />
+            <line number="5" hits="1" branch="False" />
+            <line number="6" hits="0" branch="False" />
+            <line number="7" hits="0" branch="False" />
+            <line number="8" hits="0" branch="False" />
+            <line number="9" hits="0" branch="False" />
+            <line number="10" hits="0" branch="False" />
+          </lines>
+        </class>
+        <class name="Craticula.Core.Schema.Validation" filename="Craticula.Core/Schema/Validation.cs">
+          <lines>
+            <line number="1" hits="0" branch="False" />
+            <line number="2" hits="0" branch="False" />
+            <line number="3" hits="0" branch="False" />
+            <line number="4" hits="0" branch="False" />
+            <line number="5" hits="0" branch="False" />
+            <line number="6" hits="1" branch="False" />
+            <line number="7" hits="1" branch="False" />
+            <line number="8" hits="1" branch="False" />
+            <line number="9" hits="1" branch="False" />
+            <line number="10" hits="1" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+    <package name="Craticula.AgGrid">
+      <classes>
+        <class name="Craticula.AgGrid.Thing" filename="Craticula.AgGrid/Thing.cs">
+          <lines>
+            <line number="1" hits="1" branch="False" />
+            <line number="2" hits="1" branch="False" />
+            <line number="3" hits="1" branch="False" />
+            <line number="4" hits="1" branch="False" />
+            <line number="5" hits="1" branch="False" />
+            <line number="6" hits="1" branch="False" />
+            <line number="7" hits="1" branch="False" />
+            <line number="8" hits="1" branch="False" />
+            <line number="9" hits="1" branch="False" />
+            <line number="10" hits="1" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+    <package name="Craticula.Sql">
+      <classes>
+        <class name="Craticula.Sql.Thing" filename="Craticula.Sql/Thing.cs">
+          <lines>
+            <line number="1" hits="1" branch="False" />
+            <line number="2" hits="1" branch="False" />
+            <line number="3" hits="1" branch="False" />
+            <line number="4" hits="1" branch="False" />
+            <line number="5" hits="1" branch="False" />
+            <line number="6" hits="1" branch="False" />
+            <line number="7" hits="1" branch="False" />
+            <line number="8" hits="1" branch="False" />
+            <line number="9" hits="1" branch="False" />
+            <line number="10" hits="1" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+    <package name="Craticula.Mongo">
+      <classes>
+        <class name="Craticula.Mongo.Thing" filename="Craticula.Mongo/Thing.cs">
+          <lines>
+            <line number="1" hits="1" branch="False" />
+            <line number="2" hits="1" branch="False" />
+            <line number="3" hits="1" branch="False" />
+            <line number="4" hits="1" branch="False" />
+            <line number="5" hits="1" branch="False" />
+            <line number="6" hits="1" branch="False" />
+            <line number="7" hits="1" branch="False" />
+            <line number="8" hits="1" branch="False" />
+            <line number="9" hits="1" branch="False" />
+            <line number="10" hits="1" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+    <package name="Craticula.Search">
+      <classes>
+        <class name="Craticula.Search.Thing" filename="Craticula.Search/Thing.cs">
+          <lines>
+            <line number="1" hits="1" branch="False" />
+            <line number="2" hits="1" branch="False" />
+            <line number="3" hits="1" branch="False" />
+            <line number="4" hits="1" branch="False" />
+            <line number="5" hits="1" branch="False" />
+            <line number="6" hits="1" branch="False" />
+            <line number="7" hits="1" branch="False" />
+            <line number="8" hits="1" branch="False" />
+            <line number="9" hits="1" branch="False" />
+            <line number="10" hits="1" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+    <package name="Craticula.Export.Csv">
+      <classes>
+        <class name="Craticula.Export.Csv.Thing" filename="Craticula.Export.Csv/Thing.cs">
+          <lines>
+            <line number="1" hits="1" branch="False" />
+            <line number="2" hits="1" branch="False" />
+            <line number="3" hits="1" branch="False" />
+            <line number="4" hits="1" branch="False" />
+            <line number="5" hits="1" branch="False" />
+            <line number="6" hits="1" branch="False" />
+            <line number="7" hits="1" branch="False" />
+            <line number="8" hits="1" branch="False" />
+            <line number="9" hits="1" branch="False" />
+            <line number="10" hits="1" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>

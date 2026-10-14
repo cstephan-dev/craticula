@@ -27,10 +27,11 @@ def row(output: str, assembly: str) -> str:
 
 
 class CoverageGateTests(unittest.TestCase):
-    def test_same_file_under_three_spellings_merges_to_the_union(self):
-        # Core's Model.cs is reported absolute, relative and backslash/package-less by three projects,
-        # each covering other lines: keyed by raw filename it would be 3 files at 50 % or less.
-        result = gate(FIXTURES / "basename-merge")
+    def test_same_file_under_different_source_roots_merges_to_the_union(self):
+        # Core's Model.cs is reported by four projects under different <source> roots (the repo folder with
+        # Windows separators, src/, the package folder) and once as an absolute filename, each covering other
+        # lines: keyed by raw filename it would be four files at 40 % or less.
+        result = gate(FIXTURES / "same-file-different-roots")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         core = row(result.stdout, "Craticula.Core")
         self.assertIn("10/10", core)
@@ -38,9 +39,18 @@ class CoverageGateTests(unittest.TestCase):
         self.assertIn("PASS", core)
 
     def test_branch_coverage_keeps_the_best_ratio_per_line(self):
-        result = gate(FIXTURES / "basename-merge")
+        result = gate(FIXTURES / "same-file-different-roots")
         # line 3: 1/2 in one project, 2/2 in the other -> 2/2, not 3/4 and not 1/2
         self.assertRegex(row(result.stdout, "Craticula.Core"), r"100\.0%\s+100\.0%\s+PASS")
+
+    def test_two_files_with_the_same_name_are_never_merged(self):
+        # Core/Ir/Validation.cs and Core/Schema/Validation.cs, opposite halves covered: 10 of 20 lines, not 10/10.
+        result = gate(FIXTURES / "same-name-two-files")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        core = row(result.stdout, "Craticula.Core")
+        self.assertIn("10/20", core)
+        self.assertIn("50.0%", core)
+        self.assertIn("FAIL", core)
 
     def test_exactly_90_percent_passes(self):
         result = gate(FIXTURES / "exactly-90")
@@ -72,6 +82,12 @@ class CoverageGateTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertNotIn("EntityFrameworkCore", result.stdout)
         self.assertNotIn("Conformance.Driver", result.stdout)
+        # The gated scope is exactly the six compile-only assemblies (AC-3): no more, no fewer rows.
+        rows = [line.split()[0] for line in result.stdout.splitlines() if line.startswith("Craticula.")]
+        self.assertEqual(
+            ["Craticula.Core", "Craticula.AgGrid", "Craticula.Sql", "Craticula.Mongo", "Craticula.Search",
+             "Craticula.Export.Csv"],
+            rows)
 
     def test_no_cobertura_files_is_an_environment_error(self):
         with tempfile.TemporaryDirectory() as empty:

@@ -3,7 +3,7 @@ namespace Craticula.Conformance.Tests;
 /// <summary>
 /// Runs the offline unit tests of the coverage gate (<c>scripts/test_coverage.py</c>: synthetic cobertura
 /// files through <c>scripts/coverage.py</c>, story #1657) on every <c>dotnet test</c>, so the gate's
-/// basename merge, its exact threshold comparison and its exit codes cannot change unnoticed.
+/// per-file merge, its exact threshold comparison and its exit codes cannot change unnoticed.
 /// </summary>
 public class CoverageGateTests
 {
