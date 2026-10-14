@@ -106,6 +106,34 @@ public class AgGridRequestParserSetDateValuesTests
         Assert.Equal("malformed-request", ex.Reason);
     }
 
+    [Theory]
+    [InlineData("0001-01-01 00:00:00", "Asia/Tokyo")]
+    [InlineData("9999-12-31 23:59:59", "America/New_York")]
+    public void A_Wall_Clock_Outside_The_Representable_Instant_Range_Is_MalformedRequest(string raw, string zone)
+    {
+        // SEC-6: one typed, reason-coded rejection — never an untyped ArgumentOutOfRangeException out of Parse.
+        var ex = Assert.Throws<AgGridRequestParseException>(() => Parse("createdAt", $"[\"{raw}\"]", zone: zone));
+
+        Assert.Equal("malformed-request", ex.Reason);
+    }
+
+    [Theory]
+    [InlineData("0001-01-01 00:00:00", "Asia/Tokyo")]
+    [InlineData("9999-12-31 23:59:59", "America/New_York")]
+    public void A_Comparison_Filter_Wall_Clock_Outside_The_Representable_Instant_Range_Is_MalformedRequest(string raw, string zone)
+    {
+        var request = $$"""
+            { "startRow": 0, "endRow": 100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false,
+              "groupKeys": [], "filterModel": { "createdAt": { "filterType": "date", "type": "equals", "dateFrom": "{{raw}}", "dateTo": null } },
+              "sortModel": [], "requestContext": { "zone": "{{zone}}" } }
+            """;
+        var options = new AgGridParseOptions { Schema = GridSchema.Parse(SchemaJson) };
+
+        var ex = Assert.Throws<AgGridRequestParseException>(() => AgGridRequestParser.Parse(request, options));
+
+        Assert.Equal("malformed-request", ex.Reason);
+    }
+
     [Fact]
     public void Without_A_Schema_The_Verbatim_Value_Is_Kept()
     {

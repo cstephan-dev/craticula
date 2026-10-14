@@ -751,7 +751,23 @@ public static class AgGridRequestParser
 
         if (fieldType is FieldType.Datetime)
         {
-            var instant = DatePresetResolver.LocalDateTimeToInstant(wallClock, context.Zone);
+            DateTimeOffset instant;
+            try
+            {
+                instant = DatePresetResolver.LocalDateTimeToInstant(wallClock, context.Zone);
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                // SEC-6: a wall clock at the edge of the calendar can fall outside the representable instant
+                // range once the zone's offset is applied — one typed, reason-coded rejection, never an
+                // untyped exception out of Parse.
+                throw new AgGridRequestParseException(
+                    "malformed-request",
+                    $"Column '{field}': '{propertyName}' value '{raw}' is outside the range of instants that zone " +
+                    $"'{context.Zone.Id}' can resolve.",
+                    ex);
+            }
+
             return new DatetimeValue
             {
                 Value = instant.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture),
@@ -925,9 +941,9 @@ public static class AgGridRequestParser
     }
 
     /// <summary>
-    /// A set filter's value on a <c>date</c> or <c>datetime</c> field follows the comparison-filter rule
-    /// (SEM-4 / SEM-5): an ISO-8601 instant on a <c>datetime</c> field stays the verbatim string (Core
-    /// coerces it); the zone-less AG Grid wire forms are resolved here with the request's zone; anything
+    /// A set filter's value on a <c>date</c> or <c>datetime</c> field takes the comparison filter's two wire
+    /// spellings (SEM-4 / SEM-5), resolved here with the request's zone, plus — on a <c>datetime</c> field
+    /// only — an ISO-8601 instant, which stays the verbatim string (Core coerces it); anything
     /// else is <c>malformed-request</c>. Without a schema, or for any other field type, the verbatim
     /// <see cref="StringValue"/> is kept.
     /// </summary>
@@ -940,22 +956,13 @@ public static class AgGridRequestParser
             return new StringValue { Value = raw };
         }
 
-        if (fieldConfig.Type is FieldType.Datetime && IsIsoInstant(raw))
+        if (fieldConfig.Type is FieldType.Datetime && FilterNodeValidator.IsIsoInstant(raw))
         {
             return new StringValue { Value = raw };
         }
 
         return ResolveWireDateText(field, "values", raw, fieldConfig.Type, context);
     }
-
-    // Same shape Core's FilterNodeValidator.DatetimePattern requires (internal there), plus a real-instant check.
-    private static readonly System.Text.RegularExpressions.Regex IsoInstantPattern = new(
-        @"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
-        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-
-    private static bool IsIsoInstant(string raw) =>
-        IsoInstantPattern.IsMatch(raw)
-        && DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out _);
 
     /// <summary>AR-6's unary operator a boolean column's single-value Set Filter selection maps to,
     /// or <see langword="null"/> when this is an ordinary set membership — see

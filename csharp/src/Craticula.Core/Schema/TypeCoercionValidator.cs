@@ -350,8 +350,7 @@ public static class TypeCoercionValidator
     /// rather than a semantics-affecting choice.
     /// </summary>
     private static DatetimeValue? TryParseDatetime(string raw) =>
-        FilterNodeValidator.DatetimePattern.IsMatch(raw) &&
-        DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out _)
+        FilterNodeValidator.IsIsoInstant(raw)
             ? new DatetimeValue { Value = raw, Zone = "UTC" }
             : null;
 
