@@ -255,6 +255,17 @@ public static class FilterNodeValidator
     public static bool IsIanaZoneIdShape(string zone) =>
         zone.Length is > 0 and <= 64 && ZonePattern.IsMatch(zone);
 
+    /// <summary>
+    /// Whether <paramref name="raw"/> is an ISO-8601 instant as <c>ir.schema.json</c> requires of a
+    /// <c>datetimeValue.value</c> (a date, a time, and a trailing <c>Z</c> or an explicit offset) and a real
+    /// instant (month 13 or <c>T24:00</c> is refused). Public for the same reason as
+    /// <see cref="IsIanaZoneIdShape"/>: an adapter that must decide whether a wire string is already an instant
+    /// needs the identical rule Core's own coercion applies afterwards, so the two cannot drift (Bug #2319).
+    /// </summary>
+    public static bool IsIsoInstant(string raw) =>
+        DatetimePattern.IsMatch(raw)
+        && DateTimeOffset.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out _);
+
     /// <summary>Internal (not private) so <see cref="Craticula.Core.Schema.TypeCoercionValidator"/>
     /// reuses the same truncation instead of duplicating it — same-assembly precedent already set by
     /// this file's regex patterns below.</summary>

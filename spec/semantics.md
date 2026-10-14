@@ -402,6 +402,19 @@ zone used to resolve it). AG Grid emits date/datetime filter values as zone-less
 schema-declared type and the request context's zone — never the server process's local timezone,
 and never a zone guessed from the string itself (it doesn't carry one).
 
+**A set filter's `values` follow the same rule (pinned).** The values of a set filter (`in`, wire shape
+`{filterType:'set', values:[...]}`) on a `date` or `datetime` field take the comparison filter's two wire
+spellings per field type (plus, on a `datetime` field only, an ISO-8601 instant, because a Set Filter's key for a
+datetime-string column is the raw data string), and the adapter resolves them with the request's zone (`requestContext.zone`,
+else the adapter's default zone). `datetime`: an ISO-8601 instant with `Z` or an offset passes unchanged;
+otherwise `YYYY-MM-DD HH:mm:ss` or `YYYY-MM-DD` is read as a wall-clock time in that zone and resolved to
+the absolute instant (`datetimeValue`, `zone` = the zone used). `date`: `YYYY-MM-DD`, or
+`YYYY-MM-DD HH:mm:ss` with a midnight time only, becomes a `dateValue` (no zone); a non-midnight time, or an
+ISO instant, is rejected, never truncated (a local date is never conflated with an instant). Any other text
+is a request error (`malformed-request`) raised by the adapter, not a later coercion error. A parse without
+a schema keeps the verbatim string. The `customFilters` typed-value path (`notIn`) is already typed and
+unaffected.
+
 **Compilers never emit a zone clause for a `datetimeValue` (pinned).** By the time a `datetimeValue`
 reaches a compiler, `value` is already an absolute instant (an ISO-8601 timestamp with an explicit
 offset/`Z`) — a fixed point on the universal timeline that means the same thing regardless of any
@@ -594,6 +607,12 @@ the user asked for, and dangerous precisely because it fails silently rather tha
 - Boolean and date/datetime coercion (`"true"`/`"false"` → `booleanValue`; AG Grid's
   `"YYYY-MM-DD HH:mm:ss"` string → `dateValue`/`datetimeValue` per SEM-4) follow the identical
   one-layer rule — only the target type differs, not where or how coercion happens.
+- A set filter's `values` on a `date` or `datetime` field are resolved by the adapter like a
+  comparison filter's value, per field type (SEM-4, "A set filter's `values` follow the same rule"): the
+  zone-less `YYYY-MM-DD HH:mm:ss` / `YYYY-MM-DD` spellings are resolved with `requestContext.zone`, an
+  ISO instant on a `datetime` field passes unchanged, and any other text — including a non-midnight time or
+  an ISO instant on a `date` field — is a `malformed-request` raised by the adapter before any typed value
+  exists, not a later coercion error.
 
 **Must NOT.**
 - Compilers must NOT attempt to coerce a `typedValue`'s declared type against a schema's physical

@@ -728,6 +728,19 @@ public static class AgGridRequestParser
             return new StringValue { Value = raw };
         }
 
+        return ResolveWireDateText(field, propertyName, raw, fieldConfig.Type, context);
+    }
+
+    /// <summary>
+    /// The shared resolution of one AG Grid wire date text (<c>YYYY-MM-DD</c> or
+    /// <c>YYYY-MM-DD hh:mm:ss</c>) into the typed value a <c>date</c> or <c>datetime</c> field calls for,
+    /// with the request's zone. Used by the comparison path (<see cref="ResolveDateWireValue"/>) and by a
+    /// set filter's <c>values</c> (<see cref="ParseSetCondition"/>), so the two follow one rule (SEM-4).
+    /// Throws <c>malformed-request</c> for any other text and for a non-midnight time on a <c>date</c> field.
+    /// </summary>
+    private static TypedValue ResolveWireDateText(
+        string field, string propertyName, string raw, FieldType fieldType, DateResolutionContext context)
+    {
         if (!TryParseAgGridWireDate(raw, out var wallClock, out var hasTime))
         {
             throw new AgGridRequestParseException(
@@ -736,9 +749,25 @@ public static class AgGridRequestParser
                 $"formats ('YYYY-MM-DD' or 'YYYY-MM-DD hh:mm:ss').");
         }
 
-        if (fieldConfig.Type is FieldType.Datetime)
+        if (fieldType is FieldType.Datetime)
         {
-            var instant = DatePresetResolver.LocalDateTimeToInstant(wallClock, context.Zone);
+            DateTimeOffset instant;
+            try
+            {
+                instant = DatePresetResolver.LocalDateTimeToInstant(wallClock, context.Zone);
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                // SEC-6: a wall clock at the edge of the calendar can fall outside the representable instant
+                // range once the zone's offset is applied — one typed, reason-coded rejection, never an
+                // untyped exception out of Parse.
+                throw new AgGridRequestParseException(
+                    "malformed-request",
+                    $"Column '{field}': '{propertyName}' value '{raw}' is outside the range of instants that zone " +
+                    $"'{context.Zone.Id}' can resolve.",
+                    ex);
+            }
+
             return new DatetimeValue
             {
                 Value = instant.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture),
@@ -900,7 +929,7 @@ public static class AgGridRequestParser
                     "malformed-request", $"Column '{field}': a 'set' filter's 'values' entry must be a string, got {element.ValueKind}.");
             }
 
-            values.Add(new StringValue { Value = element.GetString()! });
+            values.Add(ResolveSetDateValue(field, element.GetString()!, context));
         }
 
         if (BooleanSelectionOperator(field, values, context) is { } unaryOp)
@@ -909,6 +938,30 @@ public static class AgGridRequestParser
         }
 
         return new ComparisonNode { Field = field, Op = ComparisonOperator.In, Values = values };
+    }
+
+    /// <summary>
+    /// A set filter's value on a <c>date</c> or <c>datetime</c> field takes the comparison filter's two wire
+    /// spellings (SEM-4 / SEM-5), resolved here with the request's zone, plus — on a <c>datetime</c> field
+    /// only — an ISO-8601 instant, which stays the verbatim string (Core coerces it); anything
+    /// else is <c>malformed-request</c>. Without a schema, or for any other field type, the verbatim
+    /// <see cref="StringValue"/> is kept.
+    /// </summary>
+    private static TypedValue ResolveSetDateValue(string field, string raw, DateResolutionContext context)
+    {
+        if (context.Options.Schema is not { } schema
+            || !schema.Fields.TryGetValue(field, out var fieldConfig)
+            || fieldConfig.Type is not (FieldType.Date or FieldType.Datetime))
+        {
+            return new StringValue { Value = raw };
+        }
+
+        if (fieldConfig.Type is FieldType.Datetime && FilterNodeValidator.IsIsoInstant(raw))
+        {
+            return new StringValue { Value = raw };
+        }
+
+        return ResolveWireDateText(field, "values", raw, fieldConfig.Type, context);
     }
 
     /// <summary>AR-6's unary operator a boolean column's single-value Set Filter selection maps to,

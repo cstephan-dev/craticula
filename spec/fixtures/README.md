@@ -117,7 +117,7 @@ comparison rule and how an accepted divergence is declared. In short:
 **Worked example: `operators/001-eq-string`.** Its seed holds seven rows chosen to sit on each side of every boundary
 (`"active"`, `"ACTIVE"`, `"Approved"`, `"pending"`, a null, `""`, `"activex"`), and its expected result is the three rows
 that match case-insensitively, in `id` order: `[[1,"active"],[2,"ACTIVE"],[3,"Approved"]]`. Without the collation only
-id 1 would match; as a `startsWith`, id 7 would join. 179 fixtures carry the pair today, in every category that can
+id 1 would match; as a `startsWith`, id 7 would join. 189 fixtures carry the pair today, in every category that can
 be executed; the rule lives in `semantics.md` XEQ-1..XEQ-4.
 
 ## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
@@ -659,7 +659,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 
 | Directory | Proves | Target count |
 |---|---|---|
-| `operators/` | AR-6's 17-operator closed set, across field types | ~53 |
+| `operators/` | AR-6's 17-operator closed set, across field types | ~56 |
 | `date-presets/` | AG-2 date presets resolved to absolute half-open ranges (SEM-4 type + zone) | ~28 |
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |

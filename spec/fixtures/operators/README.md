@@ -23,7 +23,7 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   own "must NOT omit the null-ordering marker on the theory that the field is probably never null"
   rule: every artifact's `id ASC` sort still carries its adapter-default `nullsPosition: "last"`
   marker — `NULLS LAST` in Postgres, an `__idNullBucket` null-bucket `$addFields`/`$sort`/`$unset`
-  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 53 cases,
+  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 56 cases,
   exactly as `filter-tree/` and `sort-paging/` already do for their own bare `id` sort.
 
   *Corrected in #1643, on all 47.* This bullet used to say "`$addFields`/`$sort` **pair**", and the
@@ -145,11 +145,14 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
 | 051 | `051-notin-date/` | AR-6 `notIn` on `date` via `customFilters`, null-inclusive (SEM-2); `<> ALL($1::date[])`. |
 | 052 | `052-in-datetime/` | AR-6 `in` on `datetime` via the Set Filter wire shape (ISO instants with `Z`); `= ANY($1::timestamptz[])` (SQL-4); rows at `.000Z` / `.001Z` around each member. |
 | 053 | `053-notin-datetime/` | AR-6 `notIn` on `datetime` via `customFilters` (typed values carry `zone: "UTC"`), null-inclusive (SEM-2); `<> ALL($1::timestamptz[])`. |
+| 054 | `054-in-datetime-zoneless/` | AR-6 `in` on `datetime` via the Set Filter wire shape with zone-less `YYYY-MM-DD HH:mm:ss` values (SEM-4, SEM-5; Bug #2319); `requestContext.zone` UTC; artifacts equal 052's. |
+| 055 | `055-in-datetime-zoneless-zone/` | Same as 054 under `America/New_York` (UTC-05:00 in winter): `2026-01-15 09:30:00` is `14:30:00Z`, `2026-02-10 20:00:00` is `2026-02-11T01:00:00Z`; a row holding the wall clock read as UTC must not match. |
+| 056 | `056-in-date-zoneless/` | AR-6 `in` on `date` via the Set Filter wire shape with `YYYY-MM-DD 00:00:00` values (SEM-4, SEM-5; Bug #2319); artifacts equal 050's. |
 
 ## Execution equality (T-1b)
 
-All 53 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
-[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-053 follow it. Every fixture has an oracle-free
+All 56 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
+[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-056 follow it. Every fixture has an oracle-free
 backend set (`postgres`, `mongo`, `search`), so a seeded `''` is allowed and is used where SEM-2 gives it a meaning
 (`blank` / `notBlank`, `neq`, `notIn`). Out of scope: none, because this category has no rejection-only fixture.
 Each seed is 4-9 rows keyed by logical colId, with boundary values just inside and outside, nulls, case variants and

@@ -1,0 +1,27 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "createdAt": {
+      "filterType": "set",
+      "values": [
+        "2026-01-15 09:30:00",
+        "2026-02-10 20:00:00"
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "requestContext": {
+    "zone": "America/New_York"
+  }
+}
