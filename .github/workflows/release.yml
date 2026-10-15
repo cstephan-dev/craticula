@@ -1,15 +1,26 @@
 # Release of the ten Craticula NuGet packages (TRD OS-2 / OS-8).
-# Trigger: manual dispatch only, and only from `main`. The dispatched `version` must equal <Version> in
+# Two ways in: the release-please workflow calls this one after a release pull request is merged (Release Please has
+# then already created the GitHub release and the tag `dotnet-vX.Y.Z`), or the maker starts it by hand with the manual
+# dispatch. Either way it runs only from `main`, the `version` input must equal <Version> in
 # csharp/src/Directory.Build.props, and that version must not exist on nuget.org yet.
 # No NuGet key is stored anywhere: the publish job exchanges its GitHub OIDC token for a short-lived key (nuget.org
 # Trusted Publishing). The publish job runs in the protected environment `nuget` (the maker is its required reviewer;
 # the environment must also be limited to the `main` branch, because a branch can edit this file).
+# Open point, unverified: when this file is called, the OIDC token's workflow claim names the calling file
+# (release-please.yml), so the nuget.org Trusted Publishing policy may have to name release-please.yml, not release.yml.
 # Known deviations, in plain words: this workflow holds its own steps instead of calling shared organisation workflows
-# (the public repository has none); it starts by hand instead of on a tag (no tag trigger or Release Please yet);
-# the release tag is `v<version>`; the repository belongs to a user, not an organisation.
+# (the public repository has none); it is called by the release-please workflow instead of starting on a tag (a tag made
+# with the default token starts no workflow); the release tag is `dotnet-v<version>`; the repository belongs to a user,
+# not an organisation.
 name: release
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to release; must equal <Version> in csharp/src/Directory.Build.props (for example 1.0.0)'
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       version:
@@ -33,7 +44,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Fail loudly, first, from any ref but main. A guard in this file is not enough alone (a branch can edit its own
+      # Fail loudly, first, from any ref but main. In a called workflow GITHUB_REF is the caller's ref, so it is
+      # refs/heads/main for the release-please run (triggered by a push to main) and the dispatched ref for a manual run.
+      # A guard in this file is not enough alone (a branch can edit its own
       # copy): the real control is the environment `nuget` limited to `main` (Deployment branches and tags).
       - name: Only from main
         run: |
@@ -58,7 +71,7 @@ jobs:
         run: |
           props="$(grep -oP '(?<=<Version>)[^<]+' csharp/src/Directory.Build.props | head -n 1)"
           if [ "$INPUT_VERSION" != "$props" ]; then
-            echo "::error::Dispatched version '$INPUT_VERSION' does not equal <Version> '$props' in csharp/src/Directory.Build.props. Bump the property on main first, or dispatch '$props'."
+            echo "::error::Requested version '$INPUT_VERSION' does not equal <Version> '$props' in csharp/src/Directory.Build.props. Bump the property on main first, or release '$props'."
             exit 1
           fi
           echo "Releasing $props"
@@ -142,16 +155,27 @@ jobs:
         with:
           subject-path: nupkgs/*.nupkg
 
-      # Tag name: `v<version>` (not the TRD OS-2 `dotnet-v<version>` prefix, deferred with the tag trigger), created
-      # on the dispatched commit.
+      # Tag name: `dotnet-v<version>` (TRD OS-2). In a called workflow github.event_name is the caller's event ('push'),
+      # so only a manual dispatch creates the release; after a release pull request Release Please already created the
+      # release and the tag, and the packages are attached to it (an existing asset of the same name fails the upload, nothing is overwritten).
       # A CycloneDX SBOM (TRD OS-5) will be generated in the pack job and attached here as one more release asset.
-      - name: GitHub release
+      - name: GitHub release (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: >
-          gh release create "v$VERSION" nupkgs/*.nupkg
+          gh release create "dotnet-v$VERSION" nupkgs/*.nupkg
           --repo "$GITHUB_REPOSITORY"
           --target "$GITHUB_SHA"
-          --title "v$VERSION"
+          --title "dotnet-v$VERSION"
           --generate-notes
+
+      - name: Attach packages to the Release Please release
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: >
+          gh release upload "dotnet-v$VERSION" nupkgs/*.nupkg
+          --repo "$GITHUB_REPOSITORY"
