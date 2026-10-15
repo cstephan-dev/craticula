@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- The shared settings first: MSBuild stops at the nearest Directory.Build.props, so this file must import
+       csharp/Directory.Build.props (target framework, nullable, NuGetAudit) or the src projects would lose them. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- #1660 (TRD P-3, SAST): the SDK's Roslyn security rules on the shipped libraries only. The analyzers ship with
+       the .NET SDK (Microsoft.CodeAnalysis.NetAnalyzers), so this adds no package. Test projects and tools import
+       csharp/Directory.Build.props directly and are unaffected.
+
+       AnalysisModeSecurity=All turns on every rule of the Security category, including the ones disabled by default,
+       and leaves every other category exactly as the SDK default has it (no AnalysisMode change: the style and
+       quality backlog stays off). csharp/src/.editorconfig then raises the Security rules to errors, so a finding
+       fails the build. A Security rule a later SDK adds shows up here as a warning first, which the 0-warning bar
+       catches; add it to the .editorconfig list. -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisModeSecurity>All</AnalysisModeSecurity>
+  </PropertyGroup>
+
+</Project>

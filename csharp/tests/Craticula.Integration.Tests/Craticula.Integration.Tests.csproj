@@ -18,6 +18,9 @@
     <PackageReference Include="Npgsql" />
     <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- Not used by name: lifts SqlClient's transitive System.Security.Cryptography.Pkcs to a patched version
+         (NuGetAudit, #1660; the advisories and the removal condition are in Directory.Packages.props). -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="MongoDB.Driver" />
   </ItemGroup>
