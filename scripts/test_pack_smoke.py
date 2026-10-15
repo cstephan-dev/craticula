@@ -14,6 +14,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pack_check_unpublished as check  # noqa: E402
 import pack_smoke as smoke  # noqa: E402
 
 VERSION = "1.0.0"
@@ -247,6 +248,31 @@ class PackSmokeHelpers(unittest.TestCase):
         self.assertEqual(10, len(smoke.PACKAGES))
         self.assertEqual(6, len(smoke.CORE_PACKAGES))
         self.assertEqual(4, len(smoke.EXPECTED_RANGES))
+
+
+class PackCheckUnpublished(unittest.TestCase):
+    """The release workflow's version-exists check, with an injected lookup (no network)."""
+
+    def test_listed_version_is_reported(self):
+        listed = {"Craticula.Core": ["0.9.0", "1.0.0"], "Craticula.Sql": ["0.9.0"]}
+        found = check.published_ids("1.0.0", ("Craticula.Core", "Craticula.Sql", "Craticula.Mongo"), lambda i: listed.get(i))
+        self.assertEqual(["Craticula.Core"], found)
+
+    def test_unknown_id_404_counts_as_not_published(self):
+        self.assertEqual([], check.published_ids("1.0.0", ("Craticula.Core",), lambda i: None))
+
+    def test_version_forms_compare_equal(self):
+        self.assertEqual(["Craticula.Core"], check.published_ids("1.0", ("Craticula.Core",), lambda i: ["1.0.0+abc"]))
+        self.assertEqual([], check.published_ids("1.0.0", ("Craticula.Core",), lambda i: ["1.0.0-rc.1"]))
+
+    def test_lookup_failure_propagates_so_the_check_fails_closed(self):
+        def broken(_):
+            raise check.RegistryLookupError("down")
+        with self.assertRaises(check.RegistryLookupError):
+            check.published_ids("1.0.0", ("Craticula.Core",), broken)
+
+    def test_ids_are_the_smoke_list(self):
+        self.assertIs(smoke.PACKAGES, check.smoke.PACKAGES)
 
 
 if __name__ == "__main__":
