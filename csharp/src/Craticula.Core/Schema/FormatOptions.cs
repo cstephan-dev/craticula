@@ -41,7 +41,7 @@ public sealed record FormatOptions
     /// <see cref="DateTimeKind"/> is <see cref="DateTimeKind.Unspecified"/>, the ordinary shape of a SQL
     /// <c>timestamp</c> — <c>z</c>/<c>zz</c>/<c>zzz</c> substitutes <b>the formatting machine's own
     /// offset</b>, so the same rows exported from a developer's laptop and from a UTC CI box differ in
-    /// bytes.
+    /// bytes.</para>
     ///
     /// <para><b><c>K</c> is not the same hazard, and an earlier draft of this clause said it was.</b>
     /// Measured, invariant culture: on an <see cref="DateTimeKind.Unspecified"/> value <c>K</c> renders

@@ -9,7 +9,7 @@ namespace Craticula.Core.Ir;
 /// subtree</em>. Without them a backend's three-valued logic drops every NULL-valued row from the
 /// negation — the exact bug SEM-2 exists to prevent. Which fields, and in which order, is therefore
 /// part of the rule rather than a rendering preference, because the order is visible in the emitted
-/// artifact (and in its <c>params</c>, on a backend that binds anything for those disjuncts).
+/// artifact (and in its <c>params</c>, on a backend that binds anything for those disjuncts).</para>
 ///
 /// <para><b>Why it lives here and not in the compiler that first needed it (#1645).</b> It was
 /// <c>Craticula.Sql.SqlQueryBuilder</c>'s private helper until the EF Core execution adapter had to

@@ -330,7 +330,7 @@ public static class CsvWriter
     /// absent. No test in this module could see it, because a test would have to guess which wrapper
     /// type a future adapter picks. Denying by default means an unrecognised type is hardened, so the
     /// worst an adapter bug can now cost is a spurious <c>'</c> on a cell — visible, reportable, and
-    /// not a vulnerability.
+    /// not a vulnerability.</para>
     ///
     /// <para><b>The excluded set must cover every type <see cref="CsvValueFormatter.Format"/> renders
     /// as a number, and that is more than its explicit arms.</b> The formatter ends in
@@ -390,6 +390,9 @@ public static class CsvWriter
     /// bare LF stays a bare LF); only the record separator is normalized to CRLF. Rewriting a value's
     /// own newlines would be the writer editing data it was asked to transport.</para>
     /// </summary>
+    /// <param name="record">The record under construction; the field is appended to it.</param>
+    /// <param name="text">The already-formatted field text.</param>
+    /// <param name="options">The writer options (delimiter, quoting and hardening switches).</param>
     /// <param name="harden">Whether this field is in EXP-6's scope — <see langword="true"/> for every
     /// header, and for a data cell whatever <see cref="IsInHardeningScope"/> says, which is every value
     /// <em>except</em> a numeric, temporal or boolean one. Combined here with

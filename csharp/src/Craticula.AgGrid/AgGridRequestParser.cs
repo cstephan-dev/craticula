@@ -11,7 +11,7 @@ namespace Craticula.AgGrid;
 /// <c>spec/fixtures/README.md</c>'s wire-shape reference, grounded in the real
 /// <c>github/ag-grid</c> TypeScript source) into <see cref="AgGridParsedRequest"/> — the adapter that
 /// isolates every other backend/adapter from AG Grid's own wire quirks. Reads the request via
-/// <see cref="JsonElement"/> directly rather than a full-document <see cref="JsonSerializer.Deserialize"/>,
+/// <see cref="JsonElement"/> directly rather than a full-document <c>JsonSerializer.Deserialize</c>,
 /// since the wire shape itself is not one of <c>ir.schema.json</c>'s own shapes (only the
 /// <c>customFilters</c>/<c>groupKeys</c> fragments are) — the two exceptions below reuse
 /// <see cref="Craticula.Core.Schema.GridSchemaJson.Options"/> for exactly those two fragments instead
@@ -794,7 +794,7 @@ public static class AgGridRequestParser
     /// <summary>
     /// Parses AG Grid's two date-filter wire forms, exactly as <c>_serialiseDate</c> emits them:
     /// <c>YYYY-MM-DD</c> and <c>YYYY-MM-DD hh:mm:ss</c> (a single space separator, zero-padded parts).
-    /// Deliberately exact rather than a lenient <see cref="DateTime.TryParse"/>: a lenient parse would
+    /// Deliberately exact rather than a lenient <c>DateTime.TryParse</c>: a lenient parse would
     /// accept locale-shaped strings AG Grid never sends and quietly succeed on input this adapter
     /// should be rejecting.
     /// </summary>
@@ -1177,7 +1177,7 @@ public static class AgGridRequestParser
     /// path, since any other bogus colId reaches a compiler and is refused there. The refusal comes
     /// from the compiler (<c>SqlQueryBuilder</c> resolves every sort field against
     /// <see cref="GridSchema.Fields"/>), NOT from <c>FieldAllowlistValidator</c>: sort colIds have no
-    /// allowlist stage yet — see <see cref="Craticula.Core.Schema.SemanticsResolver.AppendStableKeyTiebreaker"/>'s
+    /// allowlist stage yet — see <see cref="Craticula.Core.Schema.SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>'s
     /// own note on the orchestrator that does not exist.</para>
     /// </summary>
     private static AutoColumnResolution? ResolveAutoGroupColumn(
@@ -1557,7 +1557,7 @@ public static class AgGridRequestParser
     /// survive that. The deciding case is the obvious host integration: an export request built by
     /// copying the grid's last <c>getRows</c> payload and adding <c>exportFormat</c> would otherwise
     /// hard-fail whenever a user had expanded a group node. <c>page-export/024</c> pins the discard
-    /// end to end.
+    /// end to end.</para>
     ///
     /// <para>A <c>groupKeys</c> with an EMPTY <c>rowGroupCols</c> is still rejected on an export, in
     /// <see cref="ParseGroupAndAggregations"/> and before this method runs. That is not the same rule

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula frontend adapter for AG Grid: parses Server-Side Row Model requests into the canonical IR and maps results back to grid responses.</Description>
     <RootNamespace>Craticula.AgGrid</RootNamespace>
   </PropertyGroup>
 

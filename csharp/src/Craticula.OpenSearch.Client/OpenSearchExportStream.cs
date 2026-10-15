@@ -227,7 +227,7 @@ public static class OpenSearchExportStream
 
     private static string FormatKeepAlive(TimeSpan value) => $"{Math.Max(1, (long)value.TotalSeconds)}s";
 
-    /// <summary>Checks the raw HTTP status rather than <see cref="StringResponse.Success"/> — see
+    /// <summary>Checks the raw HTTP status rather than <c>StringResponse.Success</c> — see
     /// <c>OpenSearchGridQuery.RequireSuccess</c>'s own remarks for why <c>Success</c> alone is not
     /// trustworthy here (a 404 on <c>_search</c> reads back as <see langword="true"/>).</summary>
     private static void RequireSuccess(StringResponse response)

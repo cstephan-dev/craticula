@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula CSV/TSV export writer: streams grid export rows to CSV or TSV with per-column formats and formula-injection hardening.</Description>
     <RootNamespace>Craticula.Export.Csv</RootNamespace>
   </PropertyGroup>
 

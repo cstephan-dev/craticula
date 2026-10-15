@@ -28,7 +28,7 @@ public sealed record SearchQueryRequest
 
     /// <summary>The request's own sort keys, before SEM-6's tiebreaker (which
     /// <see cref="SearchQueryBuilder"/> appends via
-    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker"/>).</summary>
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>).</summary>
     public IReadOnlyList<SortItem>? Sort { get; init; }
 
     public required PageSpec Page { get; init; }

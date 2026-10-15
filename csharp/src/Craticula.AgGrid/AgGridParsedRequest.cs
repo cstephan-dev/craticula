@@ -13,7 +13,7 @@ namespace Craticula.AgGrid;
 ///
 /// <para><see cref="Sort"/>/<see cref="Group"/>/<see cref="Aggregations"/> have no consuming pipeline
 /// yet — the same documented-gap pattern already used for
-/// <see cref="Craticula.Core.Schema.SemanticsResolver.AppendStableKeyTiebreaker"/> in #1634: a future
+/// <see cref="Craticula.Core.Schema.SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/> in #1634: a future
 /// compiler-facing orchestrator must allowlist their field names against a
 /// <see cref="Craticula.Core.Schema.GridSchema"/> (SC-1) and check the relevant capability flags
 /// (<see cref="Craticula.Core.Schema.FieldConfig.Sortable"/>/<see cref="Craticula.Core.Schema.FieldConfig.Groupable"/>/

@@ -15,7 +15,7 @@ namespace Craticula.EntityFrameworkCore;
 /// substring family has the same problem one level up: <c>EF.Functions.Like</c> compiles to the
 /// engine's own <c>LIKE</c>, which folds ASCII case unconditionally on SQLite and MySQL and folds
 /// none at all on PostgreSQL. SEC-4 then adds a third: T-SQL's <c>LIKE</c> has a metacharacter the
-/// other four engines do not.
+/// other four engines do not.</para>
 ///
 /// <para><b>This is NOT a second <c>ISqlDialect</c>, and the difference is structural rather than a
 /// matter of degree.</b> Every member of that interface but one returns SQL <em>text</em> — the

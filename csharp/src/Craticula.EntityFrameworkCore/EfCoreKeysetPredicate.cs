@@ -33,7 +33,7 @@ namespace Craticula.EntityFrameworkCore;
 /// <see cref="Craticula.Core.Schema.GridSchema.StableKey"/> tiebreaker is exactly that guarantee — the
 /// last key is unique and uncollated (<see cref="Craticula.Core.Schema.SemanticsResolver.SortKeyProvenance.AppendedTiebreaker"/>
 /// resolves <c>NotApplicable</c> for the reason its own remarks give: a nondeterministic collation on
-/// the tiebreaker would leave the very ties it exists to break unbroken).
+/// the tiebreaker would leave the very ties it exists to break unbroken).</para>
 ///
 /// <para><b>What happens if that precondition is false is worth being precise about, because the obvious
 /// guess is wrong.</b> The predicate below is "strictly after the last row emitted", so the walk is
@@ -120,8 +120,8 @@ internal static class EfCoreKeysetPredicate
     /// is NOT null: the values after it are those on the far side of the comparison the direction
     /// chooses, <em>plus every null</em> if this key places nulls last.</para>
     ///
-    /// <para><see cref="FieldType.Boolean"/> is spelled separately because C# defines no relational
-    /// operators for <see cref="bool"/> and <see cref="Expression.GreaterThan"/> throws for it. There is
+    /// <para><see cref="Craticula.Core.Schema.FieldType.Boolean"/> is spelled separately because C# defines no relational
+    /// operators for <see cref="bool"/> and <see cref="Expression.GreaterThan(Expression, Expression)"/> throws for it. There is
     /// nothing to approximate: a boolean key has exactly two values, so "after <c>false</c>, ascending"
     /// is <c>= true</c> and "after <c>true</c>, ascending" is nothing at all.</para>
     /// </summary>

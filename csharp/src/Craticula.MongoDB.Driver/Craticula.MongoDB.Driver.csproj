@@ -1,16 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula execution adapter for the official MongoDB .NET driver: compiles the IR to an aggregation pipeline and runs it.</Description>
     <RootNamespace>Craticula.MongoDB.Driver</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- This package's one runtime dependency. Version centrally managed in
-         csharp/Directory.Packages.props — this file names only the package. Unlike Craticula.Dapper's
+         csharp/Directory.Packages.props — this file names the package and, via VersionOverride, the published range
+         (#1658: the nuspec range; restore still resolves its lowest version, the tested one). Unlike Craticula.Dapper's
          ADO.NET abstraction (any provider), MongoDB has exactly one .NET driver, so this reference is
          both the wire protocol AND the document model (BsonDocument/BsonValue) this package reads
          values back through. -->
-    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="MongoDB.Driver" VersionOverride="[3.11.0,4.0)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,9 +29,9 @@
   </ItemGroup>
 
   <!-- Not Craticula.AgGrid: this adapter's own ToGridPageResult() extension (#1649) names
-       Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a
-       <see cref>) — this solution sets no GenerateDocumentationFile (csharp/Directory.Build.props), so a
-       <see cref> is never compiler-checked here in the first place. This package still only ever
+       Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a <see cref>): src/Directory.Build.props turns on GenerateDocumentationFile (#1658), so every
+         <see cref> is compiler-checked, and a cref to Craticula.AgGrid would need the very reference this package
+         must not have. This package still only ever
        executes the pipeline Craticula.Mongo.MongoPipelineBuilder.Build produces. -->
 
 </Project>

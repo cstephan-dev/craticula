@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula execution adapter for OpenSearch.Client: compiles the IR to a search body and runs it, with deep paging and streamed export.</Description>
     <RootNamespace>Craticula.OpenSearch.Client</RootNamespace>
   </PropertyGroup>
 
@@ -15,8 +16,9 @@
 
   <ItemGroup>
     <!-- This package's one runtime dependency. Version centrally managed in
-         csharp/Directory.Packages.props — this file names only the package. -->
-    <PackageReference Include="OpenSearch.Client" />
+         csharp/Directory.Packages.props — this file names the package and, via VersionOverride, the published range
+         (#1658: the nuspec range; restore still resolves its lowest version, the tested one). -->
+    <PackageReference Include="OpenSearch.Client" VersionOverride="[2.1.0,3.0)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,9 +31,9 @@
   </ItemGroup>
 
   <!-- Not Craticula.AgGrid: this adapter's own ToGridPageResult() extension (#1649) names
-       Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a
-       <see cref>) — this solution sets no GenerateDocumentationFile (csharp/Directory.Build.props), so a
-       <see cref> is never compiler-checked here in the first place. This package still only ever
+       Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a <see cref>): src/Directory.Build.props turns on GenerateDocumentationFile (#1658), so every
+         <see cref> is compiler-checked, and a cref to Craticula.AgGrid would need the very reference this package
+         must not have. This package still only ever
        executes the search body Craticula.Search.SearchQueryBuilder.Build produces. -->
 
 </Project>

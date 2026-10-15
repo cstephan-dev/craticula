@@ -21,7 +21,7 @@ public sealed record SqlQueryRequest
     public FilterNode? Filter { get; init; }
 
     /// <summary>The request's own sort keys, before SEM-6's tiebreaker (which
-    /// <see cref="SqlQueryBuilder"/> appends via <see cref="SemanticsResolver.AppendStableKeyTiebreaker"/>).
+    /// <see cref="SqlQueryBuilder"/> appends via <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>).
     /// <see langword="null"/> means the grid chose no sort, and the tiebreaker alone orders the
     /// result.</summary>
     public IReadOnlyList<SortItem>? Sort { get; init; }

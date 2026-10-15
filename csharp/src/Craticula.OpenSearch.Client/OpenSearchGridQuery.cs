@@ -21,7 +21,7 @@ namespace Craticula.OpenSearch.Client;
 /// would be a second, divergence-prone spelling of the same query — the same trap
 /// <c>Craticula.MongoDB.Driver</c>'s adapter avoided by round-tripping through
 /// <c>BsonDocument.Parse(document.ToJsonString())</c> rather than the driver's fluent builder. This
-/// package does the same: <c>PostData.String(json)</c> against <see cref="IOpenSearchLowLevelClient.SearchAsync"/>,
+/// package does the same: <c>PostData.String(json)</c> against <c>IOpenSearchLowLevelClient.SearchAsync</c>,
 /// raw response bodies parsed with <c>System.Text.Json</c>.</para>
 ///
 /// <para><b>This is the first genuinely STATEFUL adapter (#1622's own scope note).</b> EF/Dapper/Mongo
@@ -724,7 +724,7 @@ public static class OpenSearchGridQuery
     private static string FormatKeepAlive(TimeSpan value) => $"{Math.Max(1, (long)value.TotalSeconds)}s";
 
     /// <summary>
-    /// Deliberately checks the raw HTTP status rather than <see cref="StringResponse.Success"/> — found
+    /// Deliberately checks the raw HTTP status rather than <c>StringResponse.Success</c> — found
     /// by this story's own review: <c>OpenSearch.Net</c>'s low-level client whitelists certain non-2xx
     /// statuses as "known" per endpoint (a 404 on <c>_search</c>, the exact shape a stale/closed PIT
     /// returns, reads back as <see langword="true"/> for <c>Success</c>), which would silently let a

@@ -36,7 +36,7 @@ public static class DrillDownFilter
     /// <para>Runs <see cref="GroupSpecValidator.Validate"/> first (the same defense-in-depth every
     /// other public IR entry point performs, since a caller can reach this with a hand-built
     /// <see cref="GroupSpec"/>), and <see cref="FilterNodeValidator.Validate"/> on its own output
-    /// afterwards, mirroring <see cref="Craticula.Core.Schema.SemanticsResolver.AppendStableKeyTiebreaker"/>'s
+    /// afterwards, mirroring <see cref="Craticula.Core.Schema.SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>'s
     /// precedent for a method that MINTS new IR from bare strings: a blank <c>groupCol</c> would
     /// otherwise reach a compiler as a quoted empty identifier.</para>
     /// </summary>

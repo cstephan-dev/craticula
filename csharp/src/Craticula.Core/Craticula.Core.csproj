@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula core: the canonical query IR, GridSchema validation, resource limits and shared semantics that every Craticula compiler and adapter builds on.</Description>
     <RootNamespace>Craticula.Core</RootNamespace>
   </PropertyGroup>
 

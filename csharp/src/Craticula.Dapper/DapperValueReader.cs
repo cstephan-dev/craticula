@@ -37,7 +37,7 @@ internal static class DapperValueReader
     ///
     /// <para><b>Every conversion failure is caught and re-thrown here, not left to whichever framework
     /// method noticed it.</b> <see cref="Convert.ToInt64(object?, IFormatProvider?)"/>/<c>ToDecimal</c>/
-    /// <c>ToDouble</c>/<c>ToBoolean</c>, <see cref="DateOnly.ParseExact(string, string, IFormatProvider?)"/>
+    /// <c>ToDouble</c>/<c>ToBoolean</c>, <c>DateOnly.ParseExact</c>
     /// and <see cref="DateTime.Parse(string, IFormatProvider?, DateTimeStyles)"/> all embed the
     /// UNTRUNCATED input verbatim in their own <see cref="FormatException"/>/<see cref="OverflowException"/>/
     /// <see cref="InvalidCastException"/> message — the exact leak this type's own <see cref="Truncate"/>

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula MongoDB compiler: turns the canonical IR into an injection-safe MongoDB aggregation pipeline (Extended JSON).</Description>
     <RootNamespace>Craticula.Mongo</RootNamespace>
   </PropertyGroup>
 
