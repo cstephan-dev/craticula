@@ -57,6 +57,14 @@ docs/         requirements, architecture, ADRs
 examples/     demo app (React + AG Grid + one sample backend)
 ```
 
+## Packaging
+
+The C# implementation is split into ten NuGet packages: `Craticula.Core`, `Craticula.AgGrid`, `Craticula.Sql`,
+`Craticula.Mongo`, `Craticula.Search`, `Craticula.Export.Csv`, `Craticula.EntityFrameworkCore`, `Craticula.Dapper`,
+`Craticula.MongoDB.Driver` and `Craticula.OpenSearch.Client`. Version 1.0.0 is prepared but **not published yet**: they
+are not on nuget.org. To check that the packages build and a clean consumer compiles against them, run
+`bash scripts/pack-smoke.sh` (Python 3.10+ and the .NET 10 SDK; about 3 minutes).
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
