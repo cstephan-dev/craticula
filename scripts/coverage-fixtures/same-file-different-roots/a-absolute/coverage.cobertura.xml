@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<coverage version="1.9">
+  <sources>
+    <source>/synthetic/src/</source>
+  </sources>
+  <packages>
+    <package name="Craticula.Core">
+      <classes>
+        <class name="Craticula.Core.Model" filename="/synthetic/src/Craticula.Core/Model.cs">
+          <lines>
+            <line number="1" hits="1" branch="False" />
+            <line number="2" hits="1" branch="False" />
+            <line number="3" hits="1" branch="True" condition-coverage="50% (1/2)" />
+            <line number="4" hits="1" branch="False" />
+            <line number="5" hits="0" branch="False" />
+            <line number="6" hits="0" branch="False" />
+            <line number="7" hits="0" branch="False" />
+            <line number="8" hits="0" branch="False" />
+            <line number="9" hits="0" branch="False" />
+            <line number="10" hits="0" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>
