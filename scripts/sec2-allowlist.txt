@@ -1,0 +1,38 @@
+# SEC-2 lint allowlist (scripts/lint-sec2.py): the reviewed trust boundaries of the query-text builders.
+#
+# One entry per line: `path::Type.Member | expression | reason (requirement id)`. The key is the file, the enclosing
+# member and the exact expression the lint reports (whitespace collapsed), so it survives line shifts. An allowlisted
+# expression is accepted as it stands and nothing inside it is traced further; an entry that no longer matches a
+# finding fails the run, so this file cannot rot. Add an entry only for a value that is NOT a user value: a quoting,
+# placeholder or escaping primitive's own input, a schema-declared identifier, or text that never reaches a query.
+# A user value in query text is a SEC-2 defect to fix, never an entry here.
+
+# -- SQL-1 quoting primitives: the one place an identifier meets the delimiter, which each dialect doubles.
+csharp/src/Craticula.Sql/PostgresDialect.cs::PostgresDialect.QuoteIdentifier | identifier.Replace("\"", "\"\"", StringComparison.Ordinal) | the quoting primitive doubles '"' inside "..." (SQL-1)
+csharp/src/Craticula.Sql/SqliteDialect.cs::SqliteDialect.QuoteIdentifier | identifier.Replace("\"", "\"\"", StringComparison.Ordinal) | the quoting primitive doubles '"' inside "..." (SQL-1)
+csharp/src/Craticula.Sql/OracleDialect.cs::OracleDialect.QuoteIdentifier | identifier.Replace("\"", "\"\"", StringComparison.Ordinal) | the quoting primitive doubles '"' inside "..." (SQL-1)
+csharp/src/Craticula.Sql/MySqlDialect.cs::MySqlDialect.QuoteIdentifier | identifier.Replace("`", "``", StringComparison.Ordinal) | the quoting primitive doubles '`' inside `...` (SQL-1)
+csharp/src/Craticula.Sql/MssqlDialect.cs::MssqlDialect.QuoteIdentifier | identifier.Replace("]", "]]", StringComparison.Ordinal) | the quoting primitive doubles ']' inside [...] (SQL-1)
+
+# -- Placeholder primitives: an ordinal SqlParameterBag counts, never a value (the value went to Parameters).
+csharp/src/Craticula.Sql/PostgresDialect.cs::PostgresDialect.ParameterPlaceholder | (ordinal + 1).ToString(CultureInfo.InvariantCulture) | the 1-based number of $n, from the bag's own parameter count (SEC-2)
+csharp/src/Craticula.Sql/MssqlDialect.cs::MssqlDialect.ParameterPlaceholder | (ordinal + 1).ToString(CultureInfo.InvariantCulture) | the 1-based number of @pn, from the bag's own parameter count (SEC-2)
+csharp/src/Craticula.Sql/OracleDialect.cs::OracleDialect.ParameterPlaceholder | (ordinal + 1).ToString(CultureInfo.InvariantCulture) | the 1-based number of :pn, from the bag's own parameter count (SEC-2)
+
+# -- Pattern-escaping loops: the user value's characters, escaped one by one into a VALUE that is bound (SQL) or
+#    embedded as a JSON value (Mongo, Search); the result never becomes query text.
+csharp/src/Craticula.Sql/SqliteDialect.cs::SqliteDialect.EscapeGlobPattern | value | GLOB has no ESCAPE clause, so *, ? and [ are class-wrapped; the result is bound through Bind (SEC-4, D3)
+csharp/src/Craticula.Mongo/MongoRegexEscaping.cs::MongoRegexEscaping.Escape | value | every ASCII character outside [A-Za-z0-9] is backslash-escaped; the result is a $regex JSON value (SEC-4, MDB-11)
+csharp/src/Craticula.Search/SearchRegexEscaping.cs::SearchRegexEscaping.Escape | value | regex metacharacters are backslash-escaped; the result is the terms include JSON value (SEC-4, OSE-12)
+csharp/src/Craticula.Search/SearchWildcardEscaping.cs::SearchWildcardEscaping.Escape | value | *, ? and \ are backslash-escaped; the result is a wildcard JSON value (SEC-4)
+
+# -- Schema-declared identifiers on the document backends (SEC-1's allowlist governs them, not SEC-2).
+csharp/src/Craticula.Mongo/MongoPipelineBuilder.cs::MongoPipelineBuilder.FieldReference | path | the $-prefixed field-path reference to a declared field's physical path or colId, from ResolvePath (SC-1, SC-4, MDB-9)
+csharp/src/Craticula.Mongo/MongoPipelineBuilder.cs::MongoPipelineBuilder.ResolveSortPlan | key.Field | the __<field>NullBucket name of a declared sort field; ResolvePath/ResolveField in the same tuple refuse an undeclared one (SEM-3, MDB-8, SC-1)
+csharp/src/Craticula.Mongo/MongoPipelineBuilder.cs::MongoPipelineBuilder.ResolveGroupedSortTarget | matches[0].OutputName | the __<output name>NullBucket name; an output name is an alias AggregationValidator holds to ^[A-Za-z_][A-Za-z0-9_]*$ or <declared field>_<func> (MDB-8, AGG-2)
+
+# -- Values and names that are not query text.
+csharp/src/Craticula.Search/SearchJson.cs::SearchJson.NormalizeInstant | utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff", CultureInfo.InvariantCulture).TrimEnd('0') | a parsed instant re-spelled as a range bound, embedded as a JSON value (OSE-8, SEC-2)
+csharp/src/Craticula.Dapper/DapperParameterBinder.cs::DapperParameterBinder.Prepare | ordinal + 1 | the driver's parameter NAME (@pn for mssql, pn for oracle) from the binder's own ordinal; it never enters the SQL text (SEC-2)
+csharp/src/Craticula.Dapper/DapperParameterBinder.cs::DapperParameterBinder.PrepareNumbered | query.Sql | the compiled statement (SqlQueryBuilder's linted output) copied to number SQLite's ? placeholders; the count is checked against Parameters (SEC-2)
+csharp/src/Craticula.Dapper/DapperValueReader.cs::DapperValueReader.Truncate | Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty | a database value echoed, truncated, in exception messages only; never query text

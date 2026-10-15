@@ -1,0 +1,2 @@
+# The second field is missing: path::Member | reason
+Craticula.Sql/SafeBuilder.cs::SafeBuilder.Build | a reason without an expression
