@@ -34,6 +34,15 @@ def findings(result: subprocess.CompletedProcess) -> list[str]:
     return [line for line in result.stdout.splitlines() if ": SEC-2: " in line]
 
 
+def located(result: subprocess.CompletedProcess) -> list[str]:
+    """Each finding as `file:line: SEC-2: expression [key: Member | position]`, its reason left out."""
+    out = []
+    for finding in findings(result):
+        head, _, rest = finding.partition(" — ")
+        out.append(f"{head} [{rest.rsplit(' [', 1)[1]}")
+    return out
+
+
 class Sec2LintTests(unittest.TestCase):
     def test_a_raw_value_interpolated_into_sql_text_fails_with_file_and_line(self):
         result = lint("raw-value-interpolated", "Craticula.Sql")
@@ -153,6 +162,145 @@ class Sec2LintTests(unittest.TestCase):
         result = lint("unparseable", "Craticula.Sql")
         self.assertEqual(2, result.returncode, result.stdout + result.stderr)
         self.assertIn("Craticula.Sql/Broken.cs: cannot parse", result.stderr)
+
+    # -- the allowlist trusts one position, never a whole flow (review S1) ----------------------------------------
+
+    def test_trust_on_the_validating_function_still_checks_every_caller_of_a_helper(self):
+        # ResolvePath's return is trusted; FieldReference's parameter is traced to each call site, so the caller
+        # that skips ResolvePath is reported where its raw value enters.
+        case = "transitive-trust"
+        result = lint(case, "Craticula.Mongo", allowlist=FIXTURES / case / "allowlist.txt")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        raw = line_of(case, "Craticula.Mongo/FieldPaths.cs", "var path = request.ColId;")
+        self.assertEqual(
+            [f"Craticula.Mongo/FieldPaths.cs:{raw}: SEC-2: request.ColId [key: FieldPaths.Raw | value of local path]"],
+            located(result))
+
+    def test_a_trust_entry_on_a_parameter_as_passed_in_is_refused(self):
+        case = "transitive-trust"
+        result = lint(case, "Craticula.Mongo", allowlist=FIXTURES / case / "parameter-allowlist.txt")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        hole = line_of(case, "Craticula.Mongo/FieldPaths.cs", '=> $"${path}";')
+        raw = line_of(case, "Craticula.Mongo/FieldPaths.cs", "var path = request.ColId;")
+        self.assertEqual(
+            [f"Craticula.Mongo/FieldPaths.cs:{hole}: SEC-2: path [key: FieldPaths.FieldReference | interpolation hole]",
+             f"Craticula.Mongo/FieldPaths.cs:{raw}: SEC-2: request.ColId [key: FieldPaths.Raw | value of local path]"],
+            located(result))
+        self.assertIn("trusts every call site, present and future", result.stdout)
+
+    def test_a_trust_entry_covers_its_own_position_not_the_same_text_elsewhere_in_the_member(self):
+        # The entry trusts `value` iterated into `character`; the same `value` appended whole is checked again.
+        case = "escaper-position"
+        result = lint(case, "Craticula.Mongo", allowlist=FIXTURES / case / "allowlist.txt")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        whole = line_of(case, "Craticula.Mongo/MongoRegexEscaping.cs", "escaped.Append(value);")
+        self.assertEqual(
+            [f"Craticula.Mongo/MongoRegexEscaping.cs:{whole}: SEC-2: value "
+             f"[key: MongoRegexEscaping.Escape | StringBuilder.Append argument]"],
+            located(result))
+        self.assertIn("1 finding(s) and 0 stale allowlist entries", result.stdout)  # the loop's entry still matched
+
+    def test_a_not_query_text_member_is_silenced_and_its_result_in_query_text_fails(self):
+        case = "not-query-text"
+        listed = lint(case, "Craticula.Dapper", allowlist=FIXTURES / case / "allowlist.txt")
+        self.assertEqual(1, listed.returncode, listed.stdout + listed.stderr)
+        lookup = line_of(case, "Craticula.Dapper/ValueReader.cs", "SELECT * FROM t WHERE c = '")
+        self.assertEqual(
+            [f"Craticula.Dapper/ValueReader.cs:{lookup}: SEC-2: Truncate(userValue) "
+             f"[key: ValueReader.Lookup | concatenation operand]"],
+            located(listed))
+        self.assertIn("declared never query text (allowlist line 2)", listed.stdout)
+
+        # Without the entry Truncate's own concatenation is query text built from a value the lint cannot trace.
+        unlisted = lint(case, "Craticula.Dapper")
+        body = line_of(case, "Craticula.Dapper/ValueReader.cs", "Convert.ToString(value")
+        self.assertIn(f"Craticula.Dapper/ValueReader.cs:{body}: SEC-2: Convert.ToString(", unlisted.stdout)
+
+    def test_a_not_query_text_entry_that_silences_nothing_is_stale(self):
+        case = "not-query-text"
+        result = lint(case, "Craticula.Dapper", allowlist=FIXTURES / case / "stale-allowlist.txt")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn("stale-allowlist.txt:3: SEC-2: stale allowlist entry not-query-text "
+                      "Craticula.Dapper/ValueReader.cs::ValueReader.ToInt64", result.stdout)
+
+    def test_an_entry_whose_file_is_missing_or_outside_the_scope_fails_and_a_partial_run_skips_the_rest(self):
+        case = "stale-scope"
+        result = lint(case, "--stats", "Craticula.Sql", allowlist=FIXTURES / case / "allowlist.txt")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        stale = [line for line in findings(result) if "stale allowlist entry" in line]
+        self.assertEqual(2, len(stale), result.stdout)
+        self.assertIn("allowlist.txt:2: SEC-2: stale allowlist entry trust Craticula.Sql/Missing.cs", stale[0])
+        self.assertIn("its file does not exist", stale[0])
+        self.assertIn("allowlist.txt:3: SEC-2: stale allowlist entry trust Craticula.Core/Outside.cs", stale[1])
+        self.assertIn("outside the files the lint scans", stale[1])
+        self.assertIn("1 not judged (outside the given paths)", result.stdout)
+
+    # -- types hidden by `var`, and statements handed to the database (review S2) ---------------------------------
+
+    def test_a_var_local_takes_the_string_type_of_its_initializer(self):
+        case = "var-concatenation"
+        result = lint(case, "Craticula.Dapper")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        file = "Craticula.Dapper/Statements.cs"
+        concatenated = line_of(case, file, "var sql = head + request.Value;")
+        appended = line_of(case, file, "sql += request.Value;")
+        self.assertEqual(
+            [f"{file}:{concatenated}: SEC-2: request.Value [key: Statements.Concatenated | concatenation operand]",
+             f"{file}:{appended}: SEC-2: request.Value [key: Statements.Appended | concatenation operand]"],
+            located(result))
+
+    def test_a_raw_value_handed_to_a_database_command_fails_and_the_compiled_statement_passes(self):
+        case = "command-sinks"
+        result = lint(case, "Craticula.Dapper")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        file = "Craticula.Dapper/Commands.cs"
+        expected = [
+            ("new CommandDefinition(request.Value)", "Commands.Definition | command text of new CommandDefinition"),
+            ("command.CommandText = request.Value", "Commands.Text | CommandText assignment"),
+            ("new SqlCommand(request.Value", "Commands.Constructed | command text of new SqlCommand"),
+            ("{ CommandText = request.Value }", "Commands.Initialized | CommandText assignment"),
+            ("ExecuteSqlRaw(request.Value)", "Commands.Raw | SQL text of ExecuteSqlRaw"),
+            ("FromSqlRaw(request.Value)", "Commands.FromRaw | SQL text of FromSqlRaw"),
+            ("ExecuteAsync(request.Value)", "Commands.Dapper | SQL text of ExecuteAsync"),
+        ]
+        self.assertEqual(
+            [f"{file}:{line_of(case, file, needle)}: SEC-2: request.Value [key: {key}]" for needle, key in expected],
+            located(result))
+
+    # -- calls the lint used to miss or trust by name (review S3) ------------------------------------------------
+
+    def test_a_method_group_is_a_call_site_whose_arguments_cannot_be_traced(self):
+        # WhereClause has one safe direct call; ConvertAll hands it raw columns. Record members and properties that
+        # share a method's name are not method groups.
+        case = "method-group"
+        result = lint(case, "Craticula.Sql")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        group = line_of(case, "Craticula.Sql/Clauses.cs", "ConvertAll(WhereClause)")
+        self.assertEqual(
+            [f"Craticula.Sql/Clauses.cs:{group}: SEC-2: WhereClause [key: Clauses.Unsafe | delegate of WhereClause]"],
+            located(result))
+
+    def test_an_inherited_or_unresolved_unqualified_call_is_a_call_site(self):
+        case = "inherited-call"
+        result = lint(case, "Craticula.Sql")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        file = "Craticula.Sql/Ordering.cs"
+        lines = [number for number, text in enumerate(
+            (FIXTURES / case / file).read_text(encoding="utf-8").splitlines(), 1) if "Order(userColumn)" in text]
+        self.assertEqual(
+            [f"{file}:{lines[0]}: SEC-2: userColumn [key: UserOrdering.Unsafe | argument column of Order]",
+             f"{file}:{lines[1]}: SEC-2: userColumn [key: FrameworkOrdering.Unsafe | argument column of Order]"],
+            located(result))
+
+    def test_only_the_listed_escapers_are_trusted_never_a_framework_escape_method(self):
+        case = "framework-escape"
+        result = lint(case, "Craticula.Search")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        line = line_of(case, "Craticula.Search/Scripts.cs", "Uri.EscapeDataString(userValue)")
+        self.assertEqual(
+            [f"Craticula.Search/Scripts.cs:{line}: SEC-2: Uri.EscapeDataString(userValue) "
+             f"[key: Scripts.PriceAbove | concatenation operand]"],
+            located(result))
 
 
 if __name__ == "__main__":

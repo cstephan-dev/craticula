@@ -1,0 +1,2 @@
+# The trust sits on the function that validates, so FieldReference's callers are still checked one by one.
+trust Craticula.Mongo/FieldPaths.cs::FieldPaths.ResolvePath | return value | ResolveField(field, schema).Path ?? field | a declared field's path, else its declared colId (SC-1)

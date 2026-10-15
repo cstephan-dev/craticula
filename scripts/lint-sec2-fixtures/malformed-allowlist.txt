@@ -1,2 +1,2 @@
-# The second field is missing: path::Member | reason
-Craticula.Sql/SafeBuilder.cs::SafeBuilder.Build | a reason without an expression
+# The expression is missing: trust path::Member | position | reason
+trust Craticula.Sql/SafeBuilder.cs::SafeBuilder.Build | interpolation hole | a reason without an expression

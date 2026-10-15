@@ -1,0 +1,4 @@
+# Run over Craticula.Sql only: the first two entries can never match, the third is a file this partial run skips.
+trust Craticula.Sql/Missing.cs::Missing.Render | interpolation hole | x | a file that was deleted
+trust Craticula.Core/Outside.cs::Outside.Render | interpolation hole | x | a file outside the query-text builders
+trust csharp/src/Craticula.Mongo/Partial.cs::Partial.Render | interpolation hole | x | a builder file this run does not scan

@@ -6,16 +6,24 @@ Usage: lint-sec2.py [--root <repo>] [--allowlist <file>] [--stats] [--explain] [
 
 Default scope: the query-text builders csharp/src/Craticula.{Sql,Mongo,Search,Dapper,EntityFrameworkCore}/**/*.cs.
 Paths are files or folders, relative to --root. Exit codes: 0 clean; 1 at least one finding or one stale allowlist
-entry, each printed as `file:line: SEC-2: <expression> - <why>`; 2 usage or environment error: a scope path missing or
-holding no .cs file, an unreadable or malformed allowlist, or a construct the lint cannot parse (it fails closed).
+entry, each finding printed as `file:line: SEC-2: <expression> - <why> [key: <Type.Member> | <position>]`; 2 usage or
+environment error: a scope path missing or holding no .cs file, an unreadable or malformed allowlist, or a construct
+the lint cannot parse (it fails closed).
 
 WHAT COUNTS AS QUERY TEXT. Every string construction in a scoped file is presumed query text (a "sink"):
   - each hole of an interpolated string ($"", $@"", @$"", raw $\"\"\"...\"\"\" with any number of $);
-  - each operand of a `+` chain with a string-typed operand (a string or char literal, an interpolated string, a
-    string-returning call, a name declared `string`), and the right side of `+=` on a string;
+  - each operand of a `+` chain with a string-typed operand, and the right side of `+=` on a string. String-typed: a
+    string or char literal, an interpolated string, a call that can return a string (a string method, a primitive or
+    an Escape*, any scanned method of that name declared `string`), a name declared `string` (local, parameter, field),
+    a `var` local any of whose initializers is string-typed, and a `?:`, `??` or switch with a string-typed branch;
   - every argument of string.Join / string.Concat / string.Format (for Join over a collection: each element);
   - every argument of StringBuilder.Append / AppendLine / AppendFormat / Insert, and the text of
-    `new StringBuilder(text)`.
+    `new StringBuilder(text)`;
+  - the statement handed to a database, even when no string is built around it: the command text of
+    `new CommandDefinition(...)` (Dapper) and of `new <Name>Command(text, ...)` (ADO.NET: SqlCommand, NpgsqlCommand...),
+    a `CommandText` assignment or initializer, the SQL argument of EF Core's FromSqlRaw / ExecuteSqlRaw(Async) /
+    SqlQueryRaw and of Dapper's Query* / Execute* methods. For the ADO.NET constructors and Dapper's methods the
+    argument is skipped when its type is known not to be a string (a CommandDefinition, a CancellationToken).
 Exempt: everything inside the arguments of `new <Name>Exception(...)`, or of a target-typed `new(...)` in a member whose
 declared type ends in `Exception`, or of an exception type's `: base(...)`. Exception messages are not query text.
 
@@ -24,15 +32,18 @@ WHEN A SINK OPERAND IS SAFE. Checked by provenance, recursively, under this clos
   - a `const` of a scanned type (bare inside the type, or Type.Name): compile-time text;
   - an enum member (Enum.Member) or a name declared with an enum type (enums of the scanned files and of csharp/src, and
     StringComparison): it renders a compiled-in identifier; a bool-valued expression (comparison, !, is) likewise;
-  - a PRIMITIVE call, trusted by callee name; its arguments are not query text:
-      Bind(...) and the method group X.Bind: ISqlParameterSink, the value goes to the parameter list and the result is
-        the dialect's placeholder (SEC-2's own mechanism);
-      QuoteIdentifier(...): ISqlDialect, SQL-1, a delimited identifier with its delimiter doubled;
-      ParameterPlaceholder(...): ISqlDialect, the placeholder text for an ordinal;
-      Escape*(...): ONLY in Mongo, Search and EF Core files, where the result is a pattern VALUE (regex, wildcard, LIKE)
-        embedded as a JSON value or bound by EF Core (SEC-4). In a SQL file an escaped value in query text is a
-        finding: escaping a pattern does not make it SQL text, binding it does.
-    The body of every in-scope primitive is checked with its parameters UNTRUSTED (every splice in it, and its return
+  - a PRIMITIVE call; its arguments are not query text:
+      Bind(...) and the method group X.Bind, by name: ISqlParameterSink, the value goes to the parameter list and the
+        result is the dialect's placeholder (SEC-2's own mechanism);
+      QuoteIdentifier(...), by name: ISqlDialect, SQL-1, a delimited identifier with its delimiter doubled;
+      ParameterPlaceholder(...), by name: ISqlDialect, the placeholder text for an ordinal;
+      a pattern ESCAPER, by type and name (`Type.M(...)`, or `M(...)` inside the type): MongoRegexEscaping.Escape,
+        SearchRegexEscaping.Escape, SearchWildcardEscaping.Escape and Craticula.Core's SqlPatternEscaping.Escape /
+        EscapeIncludingLeftBracket (outside the scanned files). ONLY in Mongo, Search and EF Core files, where the
+        result is a pattern VALUE (regex, wildcard, LIKE) embedded as a JSON value or bound by EF Core (SEC-4). In a
+        SQL file an escaped value in query text is a finding: escaping a pattern does not make it SQL text, binding it
+        does. Any other Escape* (Uri.EscapeDataString, Regex.Escape) is code the lint cannot see.
+    The body of every scanned primitive is checked with its parameters UNTRUSTED (every splice in it, and its return
     value when it returns a string), so each primitive implementation that touches raw input is a reviewed allowlist
     entry, and a method that only borrows a primitive's name (`string Bind(string x) => x;`) is caught;
   - a composition of safe parts: an interpolated string or a `+` chain (its parts are sinks of their own), string.Join,
@@ -45,33 +56,56 @@ WHEN A SINK OPERAND IS SAFE. Checked by provenance, recursively, under this clos
     over a safe collection, pattern and deconstruction designations. Increments add no source. An out variable, a catch
     variable or the parameter of a lambda handed to an unknown caller has no traceable source;
   - a PARAMETER of a non-primitive in-scope method whose every in-scope call site passes a safe argument (C# binding:
-    by position, by name, defaults, `params`). The finding then lands on the CALL SITE, where the value enters. A
-    parameter with no in-scope call site is untrusted;
+    by position, by name, defaults, `params`). The finding then lands on the CALL SITE, where the value enters. Call
+    sites are found as calls are resolved (below), plus every unqualified call that resolves to nothing the lint can
+    place (a base type outside the scan, a `using static` import), which counts as a call site of every in-scope method
+    of that name. A parameter with no in-scope call site is untrusted, and so is one whose method is handed over as a
+    DELEGATE: a method group (`list.ConvertAll(Render)`, `Func<..> f = this.Render`) is a call site whose arguments
+    nobody can see, reported at the method group;
   - a call to an in-scope METHOD whose every return expression is safe, for every declaration the call can reach: an
-    unqualified call reaches a local function or a method of an enclosing type, `Type.M(...)` that type's methods,
-    `obj.M(...)` every in-scope method named M. Tuple components consumed by deconstruction are followed one by one;
-  - COMPILED QUERY TEXT: `<local>.Sql` where every value assigned to the local is a call to SqlQueryBuilder.Build or
-    SqlQueryBuilder.BuildSetValues, since that text came out of the linted builder (the Dapper count wrap).
+    unqualified (or this./base.) call reaches a local function, else a method of an enclosing type, of its scanned base
+    types and interfaces, or of the scanned types derived from it (inheritance, overrides); `Type.M(...)` that type's
+    and its bases' methods; `obj.M(...)` every in-scope method named M. Tuple components consumed by deconstruction are
+    followed one by one;
+  - COMPILED QUERY TEXT: `<x>.Sql` where every value x can hold, through locals, parameters (every in-scope call site)
+    and `with` copies, is a call to SqlQueryBuilder.Build or SqlQueryBuilder.BuildSetValues, since that text came out
+    of the linted builder (the Dapper adapter); the new `Sql` of a `with` copy is query text of its own.
 Anything else is a finding: a member of a runtime object (request.Value, key.Field), a call into code the lint cannot
 see, a lambda parameter. It is reported where it enters: the sink operand, or the call-site argument, assigned value or
 return expression that feeds a sink.
 
-ALLOWLIST (scripts/sec2-allowlist.txt): `path::Type.Member | expression | reason (requirement id)`, '#' comments. The
-key survives line shifts: the file, the enclosing member and the exact expression of the finding (whitespace collapsed).
-An allowlisted expression is a reviewed trust boundary: accepted as it stands, nothing inside it is traced further. An
-entry whose file was scanned but that matched no finding is stale and fails the run.
+ALLOWLIST (scripts/sec2-allowlist.txt), one entry per line, '#' comments:
+  `trust path::Type.Member | position | expression | reason (requirement id)`: a reviewed trust boundary, accepted as
+    it stands, nothing inside it traced further. The key survives line shifts: the file, the enclosing member, the
+    POSITION and the exact expression (whitespace collapsed), as the finding's `[key: ...]` prints them. The position is
+    the kind of place the expression sits in: a sink (`interpolation hole`, `concatenation operand`, `StringBuilder.
+    Append argument`...), `value of local x`, `collection iterated into x`, `argument p of M`, `return value`, `operand
+    of ??`, `branch of ?:`, `delegate of M`... So the same text elsewhere in the member, or reaching text another way
+    (the value an escaping loop iterates, appended whole), is checked again. An entry may not trust a parameter of a
+    non-primitive method as it is passed in (`p`, `p.X`, `p[i]`): that would vouch for every call site, present and
+    future, so it is a finding; trust the function that validates the value (its return value) or the argument.
+  `not-query-text path::Type.Member | reason`: the member's result is never query text (a bound value, a message).
+    Its own string constructions, and those of its local functions, are not checked; in exchange, a call that can
+    reach it is a finding wherever its result reaches query text.
+A STALE entry fails the run (exit 1): one whose file was scanned but that matched nothing (silenced nothing), one whose
+file does not exist, and one whose file lies outside the default scope (it can never match). A run over explicit paths
+does not judge an entry for a default-scope file it did not scan (`--stats` counts them).
 
 BLIND SPOTS (syntactic, no Roslyn): calls resolve by NAME within the reach above, so overloads, interface
-implementations and virtual dispatch merge (conservative: every reachable body must be safe); a method inherited from a
-base type or imported with `using static` is not seen (calling it is a finding). Code outside the scanned files is not
-seen either: calling into it is a finding, and a caller of a scanned public method is not checked, so ISqlDialect's
-`quotedColumn` contract binds a host that calls a dialect directly. Values that travel through fields, object
-properties, delegates or reflection are untrusted, never traced. A primitive is trusted by NAME at its call sites, so a
-new method named Bind, QuoteIdentifier, ParameterPlaceholder or Escape* is a review item even when its body passes.
-A message built in a local and thrown later is flagged (inline it). JSON keys and paths built WITHOUT string
-construction (`new JsonObject { [colId] = ... }`) are not text construction: SEC-1's field allowlist governs them.
-Locals are scoped per method by name, not per block (same-named locals merge their sources). Text written through
-TextWriter, Span, string.Create or FormattableString is not scanned.
+implementations and virtual dispatch merge (conservative: every reachable body must be safe); base types are matched
+by simple name. The result of a method inherited from a type outside the scan, or imported with `using static`, is not
+seen (using it is a finding). Code outside the scanned files is not seen either: calling into it is a finding, and a
+caller of a scanned public method is not checked, so ISqlDialect's `quotedColumn` contract binds a host that calls a
+dialect directly. Values that travel through fields, object properties, delegate variables or reflection are
+untrusted, never traced. A method group is recognized where a delegate can sit (an argument, an assigned, initialized
+or returned value, a branch, an element) and only when its name is not also a field, property or record member of
+csharp/src (a light scan): a method sharing such a name is not seen as handed over. A `var` local is typed from its
+initializers; a call types it only when the lint resolves the call as C# does (not `obj.M(...)`). Bind,
+QuoteIdentifier and ParameterPlaceholder are trusted by NAME at their call sites, so a new method so named is a review
+item even when its body passes. A message built in a local and thrown later is flagged (inline it). JSON keys and paths
+built WITHOUT string construction (`new JsonObject { [colId] = ... }`) are not text construction: SEC-1's field
+allowlist governs them. Locals are scoped per method by name, not per block (same-named locals merge their sources).
+Text written through TextWriter, Span, string.Create or FormattableString is not scanned.
 """
 from __future__ import annotations
 
@@ -79,7 +113,7 @@ import argparse
 import bisect
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 DEFAULT_SCOPE = (
     "csharp/src/Craticula.Sql",
@@ -93,7 +127,22 @@ SYMBOL_SOURCES = "csharp/src"
 DEFAULT_ALLOWLIST = Path(__file__).resolve().parent / "sec2-allowlist.txt"
 
 PRIMITIVES = ("Bind", "QuoteIdentifier", "ParameterPlaceholder")
+# The pattern escapers, trusted by TYPE and name only (a framework Escape* such as Uri.EscapeDataString is not one).
+# SqlPatternEscaping lives in Craticula.Core, outside the scanned files; the others' bodies are scanned.
+ESCAPERS = {("MongoRegexEscaping", "Escape"), ("SearchRegexEscaping", "Escape"), ("SearchWildcardEscaping", "Escape"),
+            ("SqlPatternEscaping", "Escape"), ("SqlPatternEscaping", "EscapeIncludingLeftBracket")}
+ESCAPER_NAMES = {name for _, name in ESCAPERS}
 COMPILED_QUERY_CALLS = {("SqlQueryBuilder", "Build"), ("SqlQueryBuilder", "BuildSetValues")}
+# Statements handed to a database: their text argument is a sink even when no string is built around it.
+EF_RAW_SQL = {"FromSqlRaw", "ExecuteSqlRaw", "ExecuteSqlRawAsync", "SqlQueryRaw"}
+DAPPER_SQL = {
+    "Query", "QueryAsync", "QueryFirst", "QueryFirstAsync", "QueryFirstOrDefault", "QueryFirstOrDefaultAsync",
+    "QuerySingle", "QuerySingleAsync", "QuerySingleOrDefault", "QuerySingleOrDefaultAsync", "QueryMultiple",
+    "QueryMultipleAsync", "QueryUnbufferedAsync", "Execute", "ExecuteAsync", "ExecuteScalar", "ExecuteScalarAsync",
+    "ExecuteReader", "ExecuteReaderAsync",
+}
+# Extension classes whose methods are also called in their static form, the receiver as first argument.
+SQL_EXTENSION_CLASSES = {"SqlMapper", "RelationalQueryableExtensions", "RelationalDatabaseFacadeExtensions"}
 STRING_METHODS = {
     "ToString", "Replace", "Trim", "TrimStart", "TrimEnd", "Substring", "PadLeft", "PadRight", "ToUpper", "ToLower",
     "ToUpperInvariant", "ToLowerInvariant", "Normalize",
@@ -946,6 +995,7 @@ class Method:
         self.roots: list[Node] = []
         self.locals: dict[str, list[tuple]] = {}
         self.local_types: dict[str, str] = {}
+        self.var_values: dict[str, list[Node]] = {}  # initializers of `var` locals, typed on demand
         self.param_writes: dict[str, list[Node]] = {}
         self.parent: Method | None = None
 
@@ -955,7 +1005,7 @@ class Method:
 
     @property
     def is_primitive(self):
-        return self.name in PRIMITIVES or self.name.startswith("Escape")
+        return self.name in PRIMITIVES or (self.type_chain[-1] if self.type_chain else "", self.name) in ESCAPERS
 
     def param_index(self, name):
         return next((i for i, p in enumerate(self.params) if p.name == name), None)
@@ -977,6 +1027,7 @@ class SourceFile:
         self.token_starts: list[int] = []
         self.methods: list[Method] = []
         self.types: dict[str, TypeInfo] = {}
+        self.bases: dict[str, set[str]] = {}  # type name -> the simple names of its base types and interfaces
         self.enums: dict[str, set[str]] = {}
         self.parser: FileParser | None = None
 
@@ -1108,6 +1159,8 @@ class FileParser:
             self.file.methods.append(ctor)
             info.primary = ctor
             j = self.m[j] + 1
+        if j < hi and t[j].text == ":":
+            self.file.bases.setdefault(name, set()).update(self.base_list(j + 1, hi))
         while j < hi and t[j].text not in ("{", ";"):
             if t[j].kind == "op" and t[j].text in ("(", "["):
                 j = self.m[j]
@@ -1121,6 +1174,26 @@ class FileParser:
         else:
             self.members(j + 1, close, info.chain, info)
         return close + 1
+
+    def base_list(self, k, hi):
+        """The simple names of `: Base<T>(args), IFoo, Ns.IBar where ...` up to the type's body."""
+        t, names, item = self.t, [], []
+        while k < hi and t[k].text not in ("{", ";") and not (t[k].kind == "id" and t[k].text == "where"):
+            tok = t[k]
+            if tok.kind == "op" and tok.text in ("(", "["):
+                k = self.m[k] + 1
+                continue
+            if tok.kind == "op" and tok.text == "<":
+                close = self.ep(k, hi).skip_type_args(k)
+                k = (close if close is not None else k) + 1
+                continue
+            if tok.kind == "op" and tok.text == ",":
+                names += item[-1:]
+                item = []
+            elif tok.kind == "id":
+                item.append(tok.text)
+            k += 1
+        return names + item[-1:]
 
     def params(self, lo, hi):
         result = []
@@ -1510,23 +1583,11 @@ class StatementParser:
                     self.fp.fail(a, "cannot read a local declaration")
                 value = self.expr(a + 2, b)
                 self.local(name, ("expr", value))
-                if type_text == "var":
-                    self.method.local_types[name] = infer_type(value)
+                if type_text == "var":  # typed by the analysis, which sees every method's return type
+                    self.method.var_values.setdefault(name, []).append(value)
             else:
                 self.local(name, ("none",))
         return True
-
-
-def infer_type(node: Node) -> str:
-    if node.kind == "interp" or (node.kind == "lit" and node.lit == "str"):
-        return "string"
-    if node.kind == "new":
-        return node.type
-    if node.kind == "call" and callee_name(node) in BUILDER_METHODS and builder_root(node) is not None:
-        return "StringBuilder"
-    if node.kind == "call" and callee_name(node) in PRIMITIVES + ("ToString",):
-        return "string"
-    return "var"
 
 
 def norm_type(type_text) -> str:
@@ -1604,6 +1665,41 @@ def children(node: Node):
     return []
 
 
+def delegate_slots(node: Node) -> set[int]:
+    """The ids of the children of `node` that can hold a delegate, hence a method group."""
+    k = node.kind
+    if k in ("call", "new"):
+        out = {id(a.expr) for a in node.args if a.ref is None}
+        if k == "new":
+            out |= {id(value) for _, _, value in node.init}
+        return out
+    if k == "assign":
+        return {id(node.value)}
+    if k == "cond":
+        return {id(node.then), id(node.other)}
+    if k == "binary" and node.op == "??":
+        return {id(node.left), id(node.right)}
+    if k in ("paren", "cast"):
+        return {id(node.inner if k == "paren" else node.operand)}
+    if k == "coll":
+        return {id(e) for _, e in node.elements}
+    if k == "tuple":
+        return {id(item) for item in node.items}
+    if k == "switch":
+        return {id(value) for _, _, value in node.arms}
+    if k == "lambda" and node.body is not None:
+        return {id(node.body)}
+    return set()
+
+
+def text_argument(args, names, index):
+    """The argument bound to a text parameter: by one of its names, else the positional argument at `index`."""
+    named = next((a.expr for a in args if a.name in names), None)
+    if named is not None:
+        return named
+    return args[index].expr if index < len(args) and args[index].name is None else None
+
+
 def plus_operands(node: Node, out: list, chained: set):
     """Flattens a left-associative `a + b + c` chain; records the inner `+` nodes in `chained`."""
     if node.kind == "binary" and node.op == "+":
@@ -1621,33 +1717,66 @@ ELEMENTS = ("elements",)
 
 
 class Finding:
-    def __init__(self, file, line, member, expression, why):
-        self.file, self.line, self.member, self.expression, self.why = file, line, member, expression, why
+    def __init__(self, file, line, member, position, expression, why):
+        self.file, self.line, self.member, self.position = file, line, member, position
+        self.expression, self.why = expression, why
 
     def __str__(self):
-        return f"{self.file}:{self.line}: SEC-2: {self.expression} — {self.why}"
+        return (f"{self.file}:{self.line}: SEC-2: {self.expression} — {self.why} "
+                f"[key: {self.member} | {self.position}]")
+
+
+class Allowlist:
+    """The parsed allowlist: `trust` keys (file, member, position, expression) and `not-query-text` keys (file,
+    member), each mapped to its line number."""
+
+    def __init__(self, trust: dict, not_text: dict):
+        self.trust, self.not_text = trust, not_text
+
+    def entries(self):
+        """(line, kind, the key a match records, description) for every entry, in file order."""
+        rows = [(n, "trust", k, f"{k[0]}::{k[1]} | {k[2]} | {k[3]}") for k, n in self.trust.items()]
+        rows += [(n, "not-query-text", ("not-query-text",) + k, f"{k[0]}::{k[1]}") for k, n in self.not_text.items()]
+        return sorted(rows, key=lambda row: row[0])
 
 
 class Analysis:
-    def __init__(self, files: list[SourceFile], enums: dict[str, set[str]], allowlist: dict):
+    def __init__(self, files: list[SourceFile], enums: dict[str, set[str]], allowlist: Allowlist,
+                 member_names: set[str] = frozenset()):
         self.files, self.enums, self.allowlist = files, enums, allowlist
         self.methods_by_name: dict[str, list[Method]] = {}
         self.types: dict[str, TypeInfo] = {}
+        self.bases: dict[str, set[str]] = {}
+        # fields, constants, properties and record members: of the scanned types, and of csharp/src by a light scan
+        self.data_names: set[str] = set(member_names)
         for f in files:
             for m in f.methods:
                 self.methods_by_name.setdefault(m.name, []).append(m)
+                if m.kind in ("property", "indexer"):
+                    self.data_names.add(m.name)
             for name, info in f.types.items():
                 self.types.setdefault(name, info)
+                self.data_names.update(info.consts, info.fields)
+                if info.primary is not None:
+                    self.data_names.update(p.name for p in info.primary.params)
+            for name, bases in f.bases.items():
+                self.bases.setdefault(name, set()).update(bases)
+        self.method_names = {name for name, ms in self.methods_by_name.items()
+                             if any(m.kind in ("method", "local function") for m in ms)}
         self.calls: dict[str, list[tuple[Node, Method]]] = {}
         self.news: dict[str, list[tuple[Node, Method]]] = {}
+        self.group_refs: dict[str, list[tuple[Node, Method]]] = {}  # method groups: a method used as a delegate
+        self.not_calls: set[int] = set()  # call targets, member-access targets and nameof arguments
         self.sinks: list[tuple[Node, tuple, Method, str]] = []
         self.chained: set[int] = set()
         self.queue: list[tuple] = []
         self.seen: set = set()
         self.text_params: set = set()
         self.text_methods: set = set()
+        self.typing: set = set()
+        self.compiled_stack: set = set()
         self.findings: dict[tuple, Finding] = {}
-        self.allowlist_hits: dict[tuple, int] = {}
+        self.allowlist_hits: set = set()
         self.constructions: dict[str, int] = {}
         self.resolutions: dict[str, int] = {}
         self.explained: list[tuple] = []
@@ -1670,23 +1799,33 @@ class Analysis:
                         if ret.kind != "yield":
                             self.sinks.append((ret, SCALAR, method, "return of a primitive"))
 
-    def walk(self, node, method: Method, in_exception: bool):
+    def walk(self, node, method: Method, in_exception: bool, delegate_slot: bool = True):
+        """`delegate_slot`: the node sits where a delegate can (an argument, an assigned or returned value, a branch,
+        an element), so a bare method name there is a method group rather than a property read."""
         if node is None:
             return
-        self.visit(node, method, in_exception)
+        self.visit(node, method, in_exception, delegate_slot)
         if node.kind == "new":
             in_exception = in_exception or simple_type(node.type).endswith("Exception") or (
                 node.type == "" and simple_type(method.ret_type).endswith("Exception"))
+        slots = delegate_slots(node)
         for child in children(node):
-            self.walk(child, method, in_exception)
+            self.walk(child, method, in_exception, id(child) in slots)
 
-    def visit(self, node, method: Method, in_exception):
+    def visit(self, node, method: Method, in_exception, delegate_slot=False):
         k = node.kind
+        if k in ("name", "member") and delegate_slot and id(node) not in self.not_calls:
+            self.method_group(node, method)
         if k == "call":
             name = callee_name(node)
             if name is not None:
                 self.calls.setdefault(name, []).append((node, method))
+            self.not_calls.add(id(node.target))
+            if name == "nameof" and node.target.kind == "name":
+                self.not_calls.update(id(a.expr) for a in node.args)
             self.call_writes(node, method)
+        elif k == "member":
+            self.not_calls.add(id(node.target))  # `x.M.y`: what is accessed is never a method group
         elif k == "new":
             self.news.setdefault(simple_type(node.type), []).append((node, method))
         elif k == "assign":
@@ -1714,6 +1853,17 @@ class Analysis:
                     plus_operands(node, [], self.chained)
             return
         self.sink(node, method)
+
+    def method_group(self, node, method):
+        """`M`, `this.M`, `Type.M` or `obj.M` not called here: the method is handed over as a delegate, and whoever
+        invokes it passes values the lint cannot see. A name that is also a field, a property or a record member of
+        a scanned type is read as that member, not as a method group."""
+        name = node.id if node.kind == "name" else node.name
+        if name not in self.method_names or name in self.data_names:
+            return
+        if node.kind == "name" and self.resolve(name, method) is not None:
+            return
+        self.group_refs.setdefault(name, []).append((node, method))
 
     def call_writes(self, call, method):
         name = callee_name(call)
@@ -1778,13 +1928,24 @@ class Analysis:
                 self.count(self.constructions, "+ concatenations")
                 for o in operands:
                     self.sinks.append((o, SCALAR, method, "concatenation operand"))
-        elif k == "assign" and node.op == "+=" and node.target.kind == "name" and self.stringy(node.target, method):
+        elif k == "assign" and node.target.kind == "member" and node.target.name == "CommandText" and node.op in (
+                "=", "+=", "??="):
+            self.count(self.constructions, "database commands")
+            self.sinks.append((node.value, SCALAR, method, "CommandText assignment"))
+        elif k == "assign" and node.op == "+=" and node.target.kind in ("name", "member") and self.stringy(
+                node.target, method):
             self.count(self.constructions, "+ concatenations")
             self.sinks.append((node.value, SCALAR, method, "concatenation operand"))
         elif k == "call":
             name = callee_name(node)
             q = qualifier(node.target.target) if node.target.kind == "member" else None
-            if q in STRING_TYPES and name in ("Join", "Concat", "Format"):
+            if node.target.kind == "member" and (name in EF_RAW_SQL or name in DAPPER_SQL):
+                static = q is not None and q.split(".")[-1] in SQL_EXTENSION_CLASSES
+                text = text_argument(node.args, ("sql",), 1 if static else 0)
+                if text is not None and (name in EF_RAW_SQL or self.may_be_text(text, method)):
+                    self.count(self.constructions, "database commands")
+                    self.sinks.append((text, SCALAR, method, f"SQL text of {name}"))
+            elif q in STRING_TYPES and name in ("Join", "Concat", "Format"):
                 self.count(self.constructions, "string.Join/Concat/Format calls")
                 args = [a for a in node.args if a.name is None]
                 if name == "Join":
@@ -1801,10 +1962,21 @@ class Analysis:
                 self.count(self.constructions, "StringBuilder appends")
                 for a in node.args[1:] if name == "Insert" else node.args:
                     self.sinks.append((a.expr, SCALAR, method, f"StringBuilder.{name} argument"))
-        elif (k == "new" and simple_type(node.type) == "StringBuilder" and node.args
-              and not self.numeric(node.args[0].expr, method)):
-            self.count(self.constructions, "StringBuilder appends")
-            self.sinks.append((node.args[0].expr, SCALAR, method, "StringBuilder initial text"))
+        elif k == "new":
+            created = simple_type(node.type)
+            if created == "StringBuilder" and node.args and not self.numeric(node.args[0].expr, method):
+                self.count(self.constructions, "StringBuilder appends")
+                self.sinks.append((node.args[0].expr, SCALAR, method, "StringBuilder initial text"))
+            elif created == "CommandDefinition" or (created.endswith("Command") and node.args):
+                # Dapper's CommandDefinition(commandText, ...), ADO.NET's SqlCommand(cmdText, ...) and kin
+                text = text_argument(node.args, ("commandText", "cmdText"), 0)
+                if text is not None and (created == "CommandDefinition" or self.may_be_text(text, method)):
+                    self.count(self.constructions, "database commands")
+                    self.sinks.append((text, SCALAR, method, f"command text of new {created}"))
+            for kind, key, value in node.init:
+                if kind == "member" and key == "CommandText":
+                    self.count(self.constructions, "database commands")
+                    self.sinks.append((value, SCALAR, method, "CommandText assignment"))
 
     def numeric(self, node, method):
         """Is this a capacity-like integer expression (literal, .Length/.Count, int-typed name, arithmetic of those)?"""
@@ -1830,7 +2002,15 @@ class Analysis:
             return simple_type(self.declared_type(receiver.id, method)) == "StringBuilder"
         return False
 
+    def may_be_text(self, node, method):
+        """Can this argument be a string? Only a type the lint knows to be something else (a CommandDefinition, a
+        CancellationToken, an enum) says no."""
+        known = self.static_type(node, method)
+        return known is None or norm_type(known) in STRING_TYPES
+
     def stringy(self, node, method):
+        """Can this operand make a `+` a string concatenation? Over-approximates: every string construction is a
+        sink, so a doubt adds a sink, never removes one."""
         k = node.kind
         if k == "interp" or (k == "lit" and node.lit in ("str", "chr")):
             return True
@@ -1838,6 +2018,16 @@ class Analysis:
             return self.stringy(node.inner, method)
         if k == "cond":
             return self.stringy(node.then, method) or self.stringy(node.other, method)
+        if k == "binary" and node.op == "??":
+            return self.stringy(node.left, method) or self.stringy(node.right, method)
+        if k == "binary" and node.op == "+":
+            operands: list[Node] = []
+            plus_operands(node, operands, set())
+            return any(self.stringy(o, method) for o in operands)
+        if k == "switch":
+            return any(self.stringy(value, method) for _, _, value in node.arms)
+        if k == "assign":
+            return self.stringy(node.value, method)
         if k == "call":
             name = callee_name(node)
             if name in STRING_METHODS or name in PRIMITIVES or (name or "").startswith("Escape"):
@@ -1887,13 +2077,61 @@ class Analysis:
         return None
 
     def declared_type(self, name, method):
+        """The declared type of a local, parameter or field; a `var` local takes the type of its initializers."""
         r = self.resolve(name, method)
         if r is None:
             return None
         if r[0] == "local":
-            return r[1].local_types.get(name)
+            declared = r[1].local_types.get(name)
+            return self.var_type(name, r[1]) if declared == "var" else declared
         if r[0] == "param":
             return r[1].params[r[2]].type
+        if r[0] == "field":
+            return self.types[r[1]].fields.get(name)
+        return None
+
+    def var_type(self, name, owner: Method):
+        """`var x = ...`: string if any initializer can be one (a doubt makes more sinks, never fewer), else the one
+        type every initializer agrees on, else unknown (None)."""
+        key = (id(owner), name)
+        if key in self.typing:
+            return None
+        self.typing.add(key)
+        try:
+            found = {self.static_type(value, owner) for value in owner.var_values.get(name, [])}
+        finally:
+            self.typing.discard(key)
+        if any(norm_type(t) in STRING_TYPES for t in found if t):
+            return "string"
+        return found.pop() if len(found) == 1 else None
+
+    def static_type(self, node, method):
+        """The type of an expression where the lint can know it: "string" for every string construction and every
+        call that can return one, StringBuilder for an Append chain, the type of a `new`, a name's declared type, and
+        the return type every reachable declaration agrees on for a call the lint resolves the way C# does (unqualified,
+        this./base., Type.M). `obj.M(...)` yields no other type: its real callee may be code the lint cannot see."""
+        k = node.kind
+        if k == "interp":
+            return "string"
+        if k == "lit":
+            return {"str": "string", "chr": "char"}.get(node.lit)
+        if k == "new":
+            return node.type if node.type not in ("", "[]", "<anonymous>") else None
+        if k == "paren":
+            return self.static_type(node.inner, method)
+        if k == "name":
+            return self.declared_type(node.id, method)
+        if k == "call" and callee_name(node) in BUILDER_METHODS and builder_root(node) is not None:
+            return "StringBuilder"
+        if k in ("call", "cond", "switch", "binary", "assign") and self.stringy(node, method):
+            return "string"
+        if k == "call":
+            receiver = node.target.target if node.target.kind == "member" else None
+            if receiver is None or (receiver.kind == "name" and receiver.id in ("this", "base")) or self.type_like(
+                    receiver, method):
+                returned = {norm_type(m.ret_type) for m in self.declarations(node, method) or []}
+                if len(returned) == 1:
+                    return returned.pop() or None
         return None
 
     def is_enum_type(self, type_text):
@@ -1903,35 +2141,71 @@ class Analysis:
     # -- phase 2: check every sink operand, then everything that feeds one -------------------------------------
     def check_all(self):
         for node, mode, method, kind in self.sinks:
-            category = self.position(node, mode, method, (method.file.rel, method.file.line(node.start)))
+            where = (method.file.rel, method.file.line(node.start))
+            silenced = self.not_text_entry(method)
+            if silenced is not None:
+                self.allowlist_hits.add(silenced)
+                category = "not query text (allowlisted)"
+            else:
+                category = self.position(node, mode, method, where, kind)
             self.count(self.resolutions, category)
-            self.explained.append((method.file.rel, method.file.line(node.start), kind, method.file.text(node),
-                                   category))
+            self.explained.append((where[0], where[1], kind, method.file.text(node), category))
             while self.queue:
                 self.position(*self.queue.pop())
 
-    def position(self, node, mode, method: Method, origin):
-        """Judges one text position and returns its top-level category; references it relies on are queued."""
+    def not_text_entry(self, method: Method):
+        """The `not-query-text` key covering this member or the member a local function sits in, else None."""
+        m = method
+        while m is not None:
+            key = (m.file.rel, m.key)
+            if key in self.allowlist.not_text:
+                return ("not-query-text",) + key
+            m = m.parent
+        return None
+
+    def position(self, node, mode, method: Method, origin, role):
+        """Judges one text position and returns its top-level category; references it relies on are queued.
+        `role` names the kind of place the expression sits in: the allowlist key is the file, the member, the role
+        and the expression, so the same text anywhere else in the member is a position of its own."""
         key = (id(node), mode)
         if key in self.seen:
             return "already checked"
         self.seen.add(key)
         f = method.file
         expression = f.text(node)
-        akey = (f.rel, method.key, expression)
-        if akey in self.allowlist:
-            self.allowlist_hits[akey] = self.allowlist_hits.get(akey, 0) + 1
-            return "allowlisted"
+        akey = (f.rel, method.key, role, expression)
+        line = f.line(node.start)
+        via = "" if origin == (f.rel, line) else f" (it reaches query text at {origin[0]}:{origin[1]})"
+        if akey in self.allowlist.trust:
+            self.allowlist_hits.add(akey)
+            owner = self.passes_parameter(node, method)
+            if owner is None:
+                return "allowlisted"
+            why = (f"the allowlist entry at line {self.allowlist.trust[akey]} trusts parameter `{expression}` of "
+                   f"{owner.name} as it stands, which trusts every call site, present and future: trust the call "
+                   f"site's argument or the function that validates it instead")
+            self.findings.setdefault(akey, Finding(f.rel, line, method.key, role, expression, why + via))
+            self.check(node, mode, method, origin)  # refused: traced on as if the entry were absent
+            return "finding"
         category, why = self.check(node, mode, method, origin)
         if why is None:
             return category
-        line = f.line(node.start)
-        via = "" if origin == (f.rel, line) else f" (it reaches query text at {origin[0]}:{origin[1]})"
-        self.findings.setdefault(akey, Finding(f.rel, line, method.key, expression, why + via))
+        self.findings.setdefault(akey, Finding(f.rel, line, method.key, role, expression, why + via))
         return "finding"
 
-    def defer(self, node, mode, method, origin):
-        self.queue.append((node, mode, method, origin))
+    def passes_parameter(self, node, method):
+        """The non-primitive method whose parameter this expression passes through unchanged (`p`, `p.X`, `p[i]`),
+        else None. A trust entry there would vouch for whatever any caller hands in."""
+        while node.kind in ("paren", "cast", "member", "index") or (node.kind == "unary" and node.op == "!!"):
+            node = node.inner if node.kind == "paren" else node.operand if node.kind in ("cast", "unary") \
+                else node.target
+        if node.kind != "name":
+            return None
+        r = self.resolve(node.id, method)
+        return r[1] if r is not None and r[0] == "param" and not r[1].is_primitive else None
+
+    def defer(self, node, mode, method, origin, role):
+        self.queue.append((node, mode, method, origin, role))
 
     def check(self, node, mode, method: Method, origin):
         """(category, None) when `node` is safe in a text position, (category, why) when it is not."""
@@ -1953,10 +2227,14 @@ class Analysis:
             return "conditional", None
         if k in ("cond", "switch") or (k == "binary" and node.op == "??"):
             # each branch is a position of its own, so a finding names the arm that brings the value in
-            branches = ([node.then, node.other] if k == "cond" else [node.left, node.right] if k == "binary"
-                        else [value for _, _, value in node.arms])
+            if k == "cond":
+                branches, role = [node.then, node.other], "branch of ?:"
+            elif k == "binary":
+                branches, role = [node.left, node.right], "operand of ??"
+            else:
+                branches, role = [value for _, _, value in node.arms], "switch arm"
             for branch in branches:
-                self.defer(branch, mode, method, origin)
+                self.defer(branch, mode, method, origin, role)
             return "conditional", None
         if k == "binary":
             if node.op in BOOL_OPS:
@@ -1985,21 +2263,21 @@ class Analysis:
         if k == "tuple":
             if mode[0] == "component":
                 if mode[1] < len(node.items):
-                    self.defer(node.items[mode[1]], mode[2], method, origin)
+                    self.defer(node.items[mode[1]], mode[2], method, origin, "tuple item")
                 return "tuple component", None
             for item in node.items:
-                self.defer(item, mode, method, origin)
+                self.defer(item, mode, method, origin, "tuple item")
             return "composition", None
         if k == "coll":
             for spread, element in node.elements:
-                self.defer(element, ELEMENTS if spread else SCALAR, method, origin)
+                self.defer(element, ELEMENTS if spread else SCALAR, method, origin, "collection element")
             return "composition", None
         if k == "new":
             return self.check_new(node, mode, method, origin)
         if k == "name":
             return self.check_name(node, mode, method, origin)
         if k == "member":
-            return self.check_member(node, mode, method)
+            return self.check_member(node, mode, method, origin)
         if k == "call":
             return self.check_call(node, mode, method, origin)
         if k == "index":
@@ -2009,6 +2287,9 @@ class Analysis:
             return "unknown", "a lambda is not query text"
         if k == "decl":
             return "unknown", f"`{text}` declares a variable with no traceable value"
+        if k == "delegate":
+            return "unknown", (f"`{text}` hands {node.owner.name} over as a delegate: whoever invokes it passes "
+                               f"parameter `{node.param}` a value the lint cannot trace")
         return "unknown", f"`{text}` is an object, not query text"
 
     def check_new(self, node, mode, method, origin):
@@ -2018,10 +2299,10 @@ class Analysis:
             if any(kind != "element" for kind, _, _ in node.init):
                 return "unknown", f"`new {node.type}` holds entries the lint cannot trace"
             for _, _, value in node.init:
-                self.defer(value, SCALAR, method, origin)
+                self.defer(value, SCALAR, method, origin, "collection element")
             for a in node.args:
                 if not self.numeric(a.expr, method):
-                    self.defer(a.expr, ELEMENTS, method, origin)
+                    self.defer(a.expr, ELEMENTS, method, origin, "collection source")
             return "composition", None
         return "unknown", f"`new {node.type}(...)` is an object, not query text"
 
@@ -2053,18 +2334,18 @@ class Analysis:
         for source in sources:
             kind = source[0]
             if kind == "expr":
-                self.defer(source[1], mode, owner, origin)
+                self.defer(source[1], mode, owner, origin, f"value of local {name}")
             elif kind == "add":
-                self.defer(source[1], SCALAR, owner, origin)
+                self.defer(source[1], SCALAR, owner, origin, f"item added to {name}")
             elif kind == "elem":
-                self.defer(source[1], ELEMENTS, owner, origin)
+                self.defer(source[1], ELEMENTS, owner, origin, f"collection iterated into {name}")
             elif kind == "decon":
-                self.defer(source[1], ("component", source[2], mode), owner, origin)
+                self.defer(source[1], ("component", source[2], mode), owner, origin, f"value deconstructed into {name}")
             elif kind == "pattern":
                 sub = mode
                 for step in reversed(source[2]):
                     sub = ("component", step[1], sub) if step[0] == "pos" else ELEMENTS
-                self.defer(source[1], sub, owner, origin)
+                self.defer(source[1], sub, owner, origin, f"value matched into {name}")
         return "local", None
 
     def check_param(self, name, owner: Method, index, mode, origin):
@@ -2072,20 +2353,23 @@ class Analysis:
             return "unknown", (f"`{name}` is a parameter of the primitive {owner.name}, untrusted inside its own body "
                                f"(a reviewed allowlist entry is the trust boundary)")
         for value in owner.param_writes.get(name, []):
-            self.defer(value, mode, owner, origin)
+            self.defer(value, mode, owner, origin, f"value assigned to parameter {name}")
         key = (id(owner), index, mode)
         if key in self.text_params:
             return "parameter", None
-        sites = self.call_sites(owner)
-        if not sites:
+        sites, groups = self.call_sites(owner), self.group_sites(owner)
+        if not sites and not groups:
             return "unknown", f"parameter `{name}` of {owner.name} has no call site the lint can check"
         self.text_params.add(key)
         param = owner.params[index]
         for bound, caller in sites:
             for arg in bound.get(index, []):
-                self.defer(arg, mode, caller, origin)
+                self.defer(arg, mode, caller, origin, f"argument {name} of {owner.name}")
             if index not in bound and param.default is not None:
-                self.defer(param.default, mode, owner, origin)
+                self.defer(param.default, mode, owner, origin, f"default of parameter {name}")
+        for ref, caller in groups:
+            pseudo = Node("delegate", ref.start, ref.end, owner=owner, param=name)
+            self.defer(pseudo, mode, caller, origin, f"delegate of {owner.name}")
         return "parameter", None
 
     def call_sites(self, owner: Method):
@@ -2095,7 +2379,7 @@ class Analysis:
         else:
             found = []
             for node, caller in self.calls.get(owner.name, []):
-                if any(m is owner for m in self.targets(node, caller)):
+                if any(m is owner for m in self.targets(node, caller, sites=True)):
                     args = list(node.args)
                     if owner.params and "this" in owner.params[0].mods and node.target.kind == "member":
                         args.insert(0, Arg(None, None, node.target.target))
@@ -2106,6 +2390,17 @@ class Analysis:
             if bound is not None:
                 sites.append((bound, caller))
         return sites
+
+    def group_sites(self, owner: Method):
+        """Every reference that hands `owner` over as a delegate (a method group), with the referencing method."""
+        if owner.kind not in ("method", "local function"):
+            return []
+        found = []
+        for ref, caller in self.group_refs.get(owner.name, []):
+            as_call = Node("call", ref.start, ref.end, target=ref, args=[])
+            if any(m is owner for m in self.targets(as_call, caller, sites=True)):
+                found.append((ref, caller))
+        return found
 
     def bind(self, owner, args):
         """C# argument binding: an argument binds by position unless named (named arguments may sit in their own
@@ -2128,11 +2423,28 @@ class Analysis:
                 return None
         return bound
 
-    def targets(self, call, caller: Method):
-        """The in-scope declarations a call can reach. Unqualified: a local function of the calling method, else a
-        method of an enclosing type. `Type.M(...)`: that type's methods. `obj.M(...)`: every in-scope method named M."""
+    def ancestors(self, type_name):
+        """The scanned base types and interfaces of a type, transitively, by simple name."""
+        out, todo = set(), [type_name]
+        while todo:
+            for base in self.bases.get(todo.pop(), ()):
+                if base not in out:
+                    out.add(base)
+                    todo.append(base)
+        return out
+
+    def descendants(self, type_name):
+        return {name for name in self.bases if type_name in self.ancestors(name)}
+
+    def targets(self, call, caller: Method, sites=False):
+        """The in-scope declarations a call can reach. Unqualified (or this./base.): a local function of the calling
+        method, else a method of an enclosing type, of its scanned base types or of the scanned types derived from it
+        (inheritance and overrides). `Type.M(...)`: that type's and its bases' methods. `obj.M(...)`: every in-scope
+        method named M. With `sites` (who may call this declaration?), an unqualified call that reaches none of those
+        -- a base type outside the scan, a `using static` import -- counts as reaching every in-scope method named M."""
         name = callee_name(call)
         candidates = [m for m in self.methods_by_name.get(name, []) if m.kind in ("method", "local function")]
+        methods = [c for c in candidates if c.kind == "method"]
         target = call.target
         receiver = target.target if target.kind == "member" else None
         if receiver is None or (receiver.kind == "name" and receiver.id in ("this", "base")):
@@ -2145,18 +2457,24 @@ class Analysis:
             if local:
                 return local
             chain = caller.type_chain
-            return [c for c in candidates if c.kind == "method" and chain[:len(c.type_chain)] == c.type_chain]
+            related = set()
+            for type_name in chain:
+                related |= self.ancestors(type_name) | self.descendants(type_name)
+            found = [c for c in methods if chain[:len(c.type_chain)] == c.type_chain
+                     or (c.type_chain and c.type_chain[-1] in related)]
+            return methods if sites and not found else found
         if self.type_like(receiver, caller):
             type_name = qualifier(receiver).split(".")[-1]
-            return [c for c in candidates if c.kind == "method" and c.type_chain and c.type_chain[-1] == type_name]
-        return [c for c in candidates if c.kind == "method"]
+            names = {type_name} | self.ancestors(type_name)
+            return [c for c in methods if c.type_chain and c.type_chain[-1] in names]
+        return methods
 
     def type_like(self, node, method):
         """Is this name or member chain a type (it does not start with a local, a parameter or a field)?"""
         q = qualifier(node)
         return q is not None and self.resolve(q.split(".")[0], method) is None
 
-    def check_member(self, node, mode, method):
+    def check_member(self, node, mode, method, origin):
         q = qualifier(node.target)
         if q is not None and self.type_like(node.target, method):
             last = q.split(".")[-1]
@@ -2167,20 +2485,64 @@ class Analysis:
             info = self.types.get(last)
             if info is not None and node.name in info.consts:
                 return "const", None
-        if node.name == "Sql" and node.target.kind == "name":
-            r = self.resolve(node.target.id, method)
-            if r is not None and r[0] == "local":
-                sources = [s for s in r[1].locals.get(node.target.id, []) if s[0] != "none"]
-                if sources and all(s[0] == "expr" and self.compiled_query(s[1]) for s in sources):
-                    return "compiled query", None
+        if node.name == "Sql" and self.compiled(node.target, method, origin):
+            return "compiled query", None
         return "unknown", (f"`{method.file.text(node)}` is a member of a runtime object, not a placeholder, a quoted "
                            f"identifier, a constant or an enum")
 
-    def compiled_query(self, node):
-        if node.kind != "call" or node.target.kind != "member":
+    def compiled(self, node, method, origin):
+        """Is this the SqlQuery that SqlQueryBuilder.Build / BuildSetValues returned, through locals, parameters (every
+        call site) and `with` copies? A copy's new `Sql` is checked as query text in its own right."""
+        k = node.kind
+        if k == "paren":
+            return self.compiled(node.inner, method, origin)
+        if k == "cast" or (k == "unary" and node.op == "!!"):
+            return self.compiled(node.operand, method, origin)
+        if k == "call":
+            if node.target.kind != "member":
+                return False
+            q = qualifier(node.target.target)
+            return q is not None and (q.split(".")[-1], node.target.name) in COMPILED_QUERY_CALLS
+        if k == "with":
+            if not self.compiled(node.target, method, origin):
+                return False
+            for kind, key, value in node.init:
+                if kind == "member" and key == "Sql":
+                    self.defer(value, SCALAR, method, origin, "Sql of a copied compiled query")
+            return True
+        if k != "name":
             return False
-        q = qualifier(node.target.target)
-        return q is not None and (q.split(".")[-1], node.target.name) in COMPILED_QUERY_CALLS
+        r = self.resolve(node.id, method)
+        if r is None or r[0] not in ("local", "param"):
+            return False
+        key = (id(r[1]), node.id)
+        if key in self.compiled_stack:
+            return True  # a cycle brings in no value of its own; every other source is checked
+        self.compiled_stack.add(key)
+        try:
+            if r[0] == "local":
+                sources = [s for s in r[1].locals.get(node.id, []) if s[0] != "none"]
+                return bool(sources) and all(s[0] == "expr" and self.compiled(s[1], r[1], origin) for s in sources)
+            owner, index = r[1], r[2]
+            if owner.is_primitive or owner.param_writes.get(node.id) or self.group_sites(owner):
+                return False
+            sites = self.call_sites(owner)
+            return bool(sites) and all(
+                index in bound and all(self.compiled(arg, caller, origin) for arg in bound[index])
+                for bound, caller in sites)
+        finally:
+            self.compiled_stack.discard(key)
+
+    def escaper(self, call, method):
+        """Is this call one of the pattern escapers (ESCAPERS), by type and name?"""
+        name = callee_name(call)
+        if name not in ESCAPER_NAMES:
+            return False
+        target = call.target
+        if target.kind == "name":  # inside the escaper's own type
+            return any((type_name, name) in ESCAPERS for type_name in method.type_chain)
+        return (target.kind == "member" and self.type_like(target.target, method)
+                and (qualifier(target.target).split(".")[-1], name) in ESCAPERS)
 
     def check_call(self, node, mode, method, origin):
         f = method.file
@@ -2191,8 +2553,8 @@ class Analysis:
             return "nameof", None
         if name in PRIMITIVES:
             return "primitive " + name, None
-        if name is not None and name.startswith("Escape"):
-            if f.profile == "value" or method.name.startswith("Escape"):
+        if self.escaper(node, method):
+            if f.profile == "value":
                 return "primitive Escape (a pattern value)", None
             return "unknown", ("an escaped pattern is a value, not SQL text: bind it (SEC-2, SEC-4) instead of "
                                "splicing it into the statement")
@@ -2217,7 +2579,7 @@ class Analysis:
                 return self.check(selector.body, SCALAR, method, origin)
             if selector.kind == "lambda":
                 for ret in getattr(selector, "returns", []):
-                    self.defer(ret, SCALAR, method, origin)
+                    self.defer(ret, SCALAR, method, origin, "selector return")
                 return "local", None
             return "unknown", f"`{f.text(selector)}` is a selector the lint cannot trace"
         if receiver is not None and name in ELEMENT_METHODS:
@@ -2231,6 +2593,11 @@ class Analysis:
         declarations = self.declarations(node, method)
         if declarations is None:
             return "unknown", f"the result of `{f.text(target)}(...)` comes from code the lint cannot see"
+        declared = next((d for d in declarations if self.not_text_entry(d) is not None), None)
+        if declared is not None:
+            line = self.allowlist.not_text[self.not_text_entry(declared)[1:]]
+            return "unknown", (f"the result of {declared.name} is declared never query text (allowlist line {line}), "
+                               f"so it must not reach query text")
         key = (name, id(declarations[0]), mode)
         if key not in self.text_methods:
             self.text_methods.add(key)
@@ -2238,9 +2605,9 @@ class Analysis:
                 for ret in declaration.returns:
                     if ret.kind == "yield":
                         if mode == ELEMENTS:
-                            self.defer(ret.operand, SCALAR, declaration, origin)
+                            self.defer(ret.operand, SCALAR, declaration, origin, "yielded value")
                     else:
-                        self.defer(ret, mode, declaration, origin)
+                        self.defer(ret, mode, declaration, origin, "return value")
         return "method", None
 
     def declarations(self, call, method):
@@ -2253,28 +2620,59 @@ class Analysis:
 
 # ---- driver ------------------------------------------------------------------------------------------------------
 
-def read_allowlist(path: Path) -> dict:
+ENTRY_SHAPES = ("`trust path::Type.Member | position | expression | reason` or "
+                "`not-query-text path::Type.Member | reason`")
+
+
+def read_allowlist(path: Path) -> Allowlist:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as error:
         raise LintError(f"cannot read the allowlist {path}: {error.strerror or error}") from error
-    entries = {}
+    trust, not_text = {}, {}
     for number, raw in enumerate(lines, 1):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        parts = line.split(" | ")
-        if len(parts) < 3 or "::" not in parts[0]:
-            raise LintError(f"{path}:{number}: malformed entry, expected `path::Type.Member | expression | reason`")
+        kind, _, rest = line.partition(" ")
+        parts = rest.split(" | ")
+        if kind not in ("trust", "not-query-text") or "::" not in parts[0] or len(parts) < (
+                4 if kind == "trust" else 2):
+            raise LintError(f"{path}:{number}: malformed entry, expected {ENTRY_SHAPES}")
         file_part, member = (x.strip() for x in parts[0].split("::", 1))
-        expression = re.sub(r"\s+", " ", " | ".join(parts[1:-1])).strip()
-        if not (file_part and member and expression and parts[-1].strip()):
-            raise LintError(f"{path}:{number}: an entry needs a path, a member, an expression and a reason")
-        key = (file_part, member, expression)
-        if key in entries:
-            raise LintError(f"{path}:{number}: duplicate entry (first at line {entries[key]})")
-        entries[key] = number
-    return entries
+        if kind == "trust":
+            position = parts[1].strip()
+            expression = re.sub(r"\s+", " ", " | ".join(parts[2:-1])).strip()
+            key, table, fields = (file_part, member, position, expression), trust, (position, expression)
+        else:
+            key, table, fields = (file_part, member), not_text, ()
+        if not (file_part and member and all(fields) and parts[-1].strip()):
+            raise LintError(f"{path}:{number}: malformed entry, expected {ENTRY_SHAPES}")
+        if key in table:
+            raise LintError(f"{path}:{number}: duplicate entry (first at line {table[key]})")
+        table[key] = number
+    return Allowlist(trust, not_text)
+
+
+def stale_entries(allowlist: Allowlist, hits: set, root: Path, scanned: set, explicit_paths: bool):
+    """(line, kind, entry, why) for every entry that vouches for nothing in this run, and the count of entries a
+    partial run could not judge. Scanned file, no match: stale. A file that does not exist, or that lies outside the
+    default scope, can never be matched: stale in every run. A file of the default scope that a run over explicit
+    paths did not scan is not judged (a partial run cannot tell)."""
+    stale, unjudged = [], 0
+    for number, kind, key, description in allowlist.entries():
+        file_part = key[0] if kind == "trust" else key[1]
+        if file_part in scanned:
+            if key not in hits:
+                stale.append((number, kind, description, "nothing matches it any more: remove it"))
+        elif not (root / file_part).is_file():
+            stale.append((number, kind, description, "its file does not exist: remove or correct it"))
+        elif explicit_paths and any(PurePosixPath(file_part).is_relative_to(scope) for scope in DEFAULT_SCOPE):
+            unjudged += 1
+        else:
+            stale.append((number, kind, description, "its file is outside the files the lint scans, so it can "
+                                                     "never match: remove it"))
+    return stale, unjudged
 
 
 def collect_files(root: Path, paths: list[str]) -> list[Path]:
@@ -2316,6 +2714,33 @@ def scan_enums(paths) -> dict[str, set[str]]:
     return enums
 
 
+_PROPERTY_DECL = re.compile(
+    r"\b([A-Za-z_]\w*)\s*\{\s*(?:(?:public|private|protected|internal)\s+)*(?:get|set|init)\b"
+    r"|(?:\b(?:public|private|protected|internal|static|override|virtual|abstract|sealed|new|required)\s+)+"
+    r"[\w<>\[\],.?]+(?:\s*<[^;{}()]*>)?\??\s+([A-Za-z_]\w*)\s*=>")
+_RECORD_DECL = re.compile(r"\brecord\s+(?:class\s+|struct\s+)?\w+\s*(?:<[^>]*>)?\s*\(([^)]*)\)")
+
+
+def scan_members(paths) -> set[str]:
+    """Property and record-member names declared anywhere in csharp/src, by a light scan: `obj.Name` is read as such a
+    member, never as a method group, even when a scanned method shares the name (Aggregation.Alias, SqlQueryBuilder's
+    Alias(...))."""
+    names: set[str] = set()
+    for path in paths:
+        try:
+            text = re.sub(r"//[^\n]*|/\*.*?\*/", "", path.read_text(encoding="utf-8-sig"), flags=re.S)
+        except (OSError, UnicodeDecodeError):
+            continue
+        for match in _PROPERTY_DECL.finditer(text):
+            names.add(match.group(1) or match.group(2))
+        for match in _RECORD_DECL.finditer(text):
+            for part in match.group(1).split(","):
+                ids = re.findall(r"[A-Za-z_]\w*", part.split("=")[0])
+                if ids:
+                    names.add(ids[-1])
+    return names
+
+
 def run(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent,
@@ -2350,12 +2775,14 @@ def run(argv=None) -> int:
         files.append(f)
 
     symbols = root / SYMBOL_SOURCES
-    enums = scan_enums(sorted(symbols.rglob("*.cs")) if symbols.is_dir() else [])
+    symbol_files = sorted(x for x in symbols.rglob("*.cs") if not {"bin", "obj"} & set(x.parts)) \
+        if symbols.is_dir() else []
+    enums = scan_enums(symbol_files)
     for f in files:
         for name, members in f.enums.items():
             enums.setdefault(name, set()).update(members)
 
-    analysis = Analysis(files, enums, allowlist)
+    analysis = Analysis(files, enums, allowlist, scan_members(symbol_files + paths))
     try:
         analysis.collect()
         analysis.check_all()
@@ -2363,14 +2790,12 @@ def run(argv=None) -> int:
         raise LintError(f"cannot parse a lambda body: {error}") from error
 
     scanned = {f.rel for f in files}
-    stale = [(number, key) for key, number in sorted(allowlist.items(), key=lambda kv: kv[1])
-             if key[0] in scanned and key not in analysis.allowlist_hits]
+    stale, unjudged = stale_entries(allowlist, analysis.allowlist_hits, root, scanned, bool(args.paths))
     findings = sorted(analysis.findings.values(), key=lambda x: (x.file, x.line, x.expression))
     for finding in findings:
         print(finding)
-    for number, (file_part, member, expression) in stale:
-        print(f"{args.allowlist}:{number}: SEC-2: stale allowlist entry {file_part}::{member} | {expression} "
-              f"— nothing matches it any more: remove it")
+    for number, kind, description, why in stale:
+        print(f"{args.allowlist}:{number}: SEC-2: stale allowlist entry {kind} {description} — {why}")
 
     if args.explain:
         for rel, line, kind, expression, category in sorted(analysis.explained, key=lambda x: (x[0], x[1])):
@@ -2383,8 +2808,8 @@ def run(argv=None) -> int:
         print("Sink operands by resolution: " + ", ".join(
             f"{k} {v}" for k, v in sorted(analysis.resolutions.items(), key=lambda kv: (-kv[1], kv[0]))))
         print(f"Positions checked (sink operands and everything feeding them): {len(analysis.seen)}; "
-              f"allowlist: {len(allowlist)} entries, "
-              f"{len(analysis.allowlist_hits)} matched")
+              f"allowlist: {len(allowlist.trust)} trust and {len(allowlist.not_text)} not-query-text entries, "
+              f"{len(analysis.allowlist_hits)} matched, {unjudged} not judged (outside the given paths)")
     if findings or stale:
         print(f"FAIL: SEC-2 lint, {len(findings)} finding(s) and {len(stale)} stale allowlist entr"
               f"{'y' if len(stale) == 1 else 'ies'} in {len(files)} files")

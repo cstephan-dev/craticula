@@ -1,0 +1,3 @@
+# ToInt64 builds no string outside an exception message, so the entry silences nothing.
+not-query-text Craticula.Dapper/ValueReader.cs::ValueReader.Truncate | a database value echoed in exception messages only
+not-query-text Craticula.Dapper/ValueReader.cs::ValueReader.ToInt64 | builds no query text either
