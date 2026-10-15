@@ -38,8 +38,8 @@ public sealed record EfCoreQueryRequest
     public FilterNode? Filter { get; init; }
 
     /// <summary>The request's own sort keys, before SEM-6's tiebreaker (which
-    /// <see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}"/> appends via
-    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker"/>). <see langword="null"/> means the
+    /// <see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/> appends via
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>). <see langword="null"/> means the
     /// grid chose no sort, and the tiebreaker alone orders the result — which on this path is load
     /// bearing twice over, since EXP-3's keyset walk needs a total order to chunk on.</summary>
     public IReadOnlyList<SortItem>? Sort { get; init; }
@@ -55,7 +55,7 @@ public sealed record EfCoreQueryRequest
     /// AR-8: AG Grid SSRM's row-group drill-down protocol. Compiled by
     /// <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/> since #1887 (GRP-1..GRP-6: the grouped
     /// level's projection and aggregates, GRP-2's exact bucket keys, GRP-4's tiebreaker substitution).
-    /// <see cref="EfCoreQueryBuilder.ApplyFilter{TRow}"/>/<see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}"/>
+    /// <see cref="EfCoreQueryBuilder.ApplyFilter{TRow}"/>/<see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/>
     /// — the per-clause entry points, reached directly rather than through the grid orchestration —
     /// still <b>refuse</b> a non-<see langword="null"/> value, naming why: those two apply a single
     /// clause each, and neither has a defined meaning for "restrict/order by group state" on its own.
@@ -67,7 +67,7 @@ public sealed record EfCoreQueryRequest
 
     /// <summary>AR-8's <c>valueCols</c>, compiled alongside <see cref="Group"/> since #1887. Checked
     /// independently of it at the per-clause entry points (<see cref="EfCoreQueryBuilder.ApplyFilter{TRow}"/>/
-    /// <see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}"/> refuse a non-empty value even with no
+    /// <see cref="EfCoreQueryBuilder.ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/> refuse a non-empty value even with no
     /// <see cref="Group"/> set), because AG Grid can send <c>valueCols</c> with no <c>rowGroupCols</c>
     /// at all (pivot mode, or a grid whose user added an aggregation before grouping), and silently
     /// dropping the aggregates there would return leaf rows where the caller asked for totals.</summary>

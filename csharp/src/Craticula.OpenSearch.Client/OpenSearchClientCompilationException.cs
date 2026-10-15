@@ -16,7 +16,7 @@ namespace Craticula.OpenSearch.Client;
 /// (<c>Craticula.OpenSearch.Client</c>) picking the SAME simple name as a sibling adapter's own
 /// exception would be a silent, needless landmine the moment a host imports both namespaces in one
 /// <c>catch</c> — so this type is named after ITS OWN package, exactly as
-/// <see cref="Craticula.MongoDB.Driver.MongoDriverCompilationException"/> is named after
+/// <c>Craticula.MongoDB.Driver.MongoDriverCompilationException</c> is named after
 /// <c>Craticula.MongoDB.Driver</c> rather than reusing <c>Craticula.Mongo</c>'s own
 /// <c>MongoCompilationException</c>.</para>
 ///

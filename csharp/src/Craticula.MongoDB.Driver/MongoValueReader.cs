@@ -41,7 +41,7 @@ internal static class MongoValueReader
     /// <para><b>Every conversion failure is caught and re-thrown here, not left to whichever framework
     /// method noticed it</b> — mirroring <c>DapperValueReader.Read</c>'s own reasoning: the parsing
     /// methods this file calls (<see cref="Convert.ToInt64(object?, IFormatProvider?)"/> and its
-    /// siblings, <see cref="DateOnly.ParseExact(string, string, IFormatProvider?)"/>,
+    /// siblings, <c>DateOnly.ParseExact</c>,
     /// <see cref="DateTime.Parse(string, IFormatProvider?, DateTimeStyles)"/>) embed the UNTRUNCATED
     /// value in their own exception message, which <see cref="Truncate"/> exists to bound. Deliberately
     /// NOT the driver's own <see cref="BsonValue.ToInt64"/>/<c>ToDecimal</c>/<c>ToDouble</c>/<c>ToBoolean</c>

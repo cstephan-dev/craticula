@@ -15,7 +15,7 @@ namespace Craticula.Core.Export;
 /// cell), whereas a length mismatch is caught by <c>Craticula.Export.Csv.CsvWriter</c> on the first
 /// row. <see cref="FromCells"/> exists for an adapter whose driver hands back a name-keyed document
 /// and has no cheaper way to resolve the column list up front, making that mapping the ONE place the
-/// two representations would meet.
+/// two representations would meet.</para>
 ///
 /// <para><b>#1647 found <see cref="FromCells"/> is not actually needed by every name-keyed
 /// driver.</b> `Craticula.MongoDB.Driver` reads raw BSON documents — the shape `FromCells` was

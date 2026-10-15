@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula search compiler: turns the canonical IR into an OpenSearch / Elasticsearch search request body.</Description>
     <RootNamespace>Craticula.Search</RootNamespace>
   </PropertyGroup>
 

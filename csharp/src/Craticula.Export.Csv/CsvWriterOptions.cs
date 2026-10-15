@@ -43,7 +43,7 @@ public sealed record CsvWriterOptions
     /// <summary>The field separator. Comma by default (EXP-4); <c>;</c> via
     /// <see cref="SemicolonPreset"/>; tab for <see cref="ExportFormat.Tsv"/> via
     /// <see cref="ForFormat"/>. Any other single character is allowed, subject to
-    /// <see cref="Validate"/>.</summary>
+    /// <see cref="Validate()"/>.</summary>
     public char Delimiter { get; init; } = ',';
 
     /// <summary>EXP-4's "header row on by default". When off, the first record emitted is the first

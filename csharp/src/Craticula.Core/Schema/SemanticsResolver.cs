@@ -146,7 +146,7 @@ public static class SemanticsResolver
         Request,
 
         /// <summary>The <see cref="GridSchema.StableKey"/> tiebreaker
-        /// <see cref="AppendStableKeyTiebreaker"/> minted, which no user asked for.</summary>
+        /// <see cref="AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/> minted, which no user asked for.</summary>
         AppendedTiebreaker
     }
 

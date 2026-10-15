@@ -1,0 +1,157 @@
+# Release of the ten Craticula NuGet packages (TRD OS-2 / OS-8).
+# Trigger: manual dispatch only, and only from `main`. The dispatched `version` must equal <Version> in
+# csharp/src/Directory.Build.props, and that version must not exist on nuget.org yet.
+# No NuGet key is stored anywhere: the publish job exchanges its GitHub OIDC token for a short-lived key (nuget.org
+# Trusted Publishing). The publish job runs in the protected environment `nuget` (the maker is its required reviewer;
+# the environment must also be limited to the `main` branch, because a branch can edit this file).
+# Known deviations, in plain words: this workflow holds its own steps instead of calling shared organisation workflows
+# (the public repository has none); it starts by hand instead of on a tag (no tag trigger or Release Please yet);
+# the release tag is `v<version>`; the repository belongs to a user, not an organisation.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release; must equal <Version> in csharp/src/Directory.Build.props (for example 1.0.0)'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    # Smoke about 3 min, offline tests, then the container tier with its 10-minute parity budget and image pulls
+    # (the nightly allows 60 minutes for the tier alone).
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      # Fail loudly, first, from any ref but main. A guard in this file is not enough alone (a branch can edit its own
+      # copy): the real control is the environment `nuget` limited to `main` (Deployment branches and tags).
+      - name: Only from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::The release runs only from refs/heads/main; this run is on '$GITHUB_REF'. Dispatch it on main."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Check that the input equals the Version property
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          props="$(grep -oP '(?<=<Version>)[^<]+' csharp/src/Directory.Build.props | head -n 1)"
+          if [ "$INPUT_VERSION" != "$props" ]; then
+            echo "::error::Dispatched version '$INPUT_VERSION' does not equal <Version> '$props' in csharp/src/Directory.Build.props. Bump the property on main first, or dispatch '$props'."
+            exit 1
+          fi
+          echo "Releasing $props"
+
+      # Ten ids from the pack smoke's own list. A published version is permanent: bump <Version> instead of re-running.
+      - name: Check that the version is not on nuget.org yet
+        run: python scripts/pack_check_unpublished.py
+
+      - name: Pack smoke
+        run: bash scripts/pack-smoke.sh
+
+      - name: Offline tests
+        working-directory: csharp
+        run: >
+          dotnet test Craticula.sln
+          --filter "FullyQualifiedName!~MongoDB.Driver.Tests&FullyQualifiedName!~OpenSearch.Client.Tests&FullyQualifiedName!~Integration.Tests.Containers"
+
+      # Execution-equality tier and parity property tests on all engines in containers (TRD P-3, "on release"): the
+      # same run as the nightly pipeline. "on" makes a missing Docker daemon fail instead of skipping. The Oracle engine
+      # has no container tests in this project (OQ-6), so nothing is excluded here.
+      - name: Integration tier (containers and parity)
+        run: dotnet test csharp/tests/Craticula.Integration.Tests -c Release
+        env:
+          CRATICULA_INTEGRATION_DOCKER: "on"
+          CRATICULA_PARITY_SEED: "20261010"
+          CRATICULA_PARITY_CASES: "200"
+
+      - name: Pack the ten packages
+        run: |
+          mkdir -p "$RUNNER_TEMP/nupkgs"
+          for proj in csharp/src/*/*.csproj; do
+            dotnet pack "$proj" -c Release -o "$RUNNER_TEMP/nupkgs"
+          done
+          ls -l "$RUNNER_TEMP/nupkgs"
+          test "$(ls "$RUNNER_TEMP"/nupkgs/*.nupkg | wc -l)" -eq 10
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nupkgs
+          path: ${{ runner.temp }}/nupkgs/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: nuget
+    permissions:
+      id-token: write       # OIDC: NuGet/login and the attestation
+      attestations: write   # actions/attest-build-provenance
+      contents: write       # the GitHub release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nupkgs
+          path: nupkgs
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # Trusted Publishing: the user is the nuget.org profile name (a repository variable, not a secret).
+      - name: NuGet login (OIDC)
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      # --skip-duplicate only matters after a partial publish (some ids went through, one failed): the pack job already
+      # refuses a version that is on nuget.org, so a normal run never meets a duplicate. Finishing a partial publish is a
+      # deliberate manual path (see the maker's release checklist); the default is to bump <Version>.
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          for f in nupkgs/*.nupkg; do
+            dotnet nuget push "$f" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: nupkgs/*.nupkg
+
+      # Tag name: `v<version>` (not the TRD OS-2 `dotnet-v<version>` prefix, deferred with the tag trigger), created
+      # on the dispatched commit.
+      # A CycloneDX SBOM (TRD OS-5) will be generated in the pack job and attached here as one more release asset.
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: >
+          gh release create "v$VERSION" nupkgs/*.nupkg
+          --repo "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --title "v$VERSION"
+          --generate-notes

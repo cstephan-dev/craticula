@@ -31,7 +31,7 @@ namespace Craticula.Core.Ir;
 /// of that, only the two IR members below, both of which are already <c>Craticula.Core.Ir</c> types.
 /// Taking them directly is therefore not a widening for convenience: it is the honest parameter list,
 /// and it is what keeps this from becoming a fresh copy every time another request shape appears.
-/// Passing <paramref name="aggregations"/> separately follows the IR itself, where <c>groupSpec</c>
+/// Passing <c>aggregations</c> separately follows the IR itself, where <c>groupSpec</c>
 /// and <c>aggregations</c> are siblings rather than nested (<c>spec/ir.schema.json</c>).</para>
 ///
 /// <para><b>Why it is in Core rather than in each compiler (#1885).</b> Until this ticket the SQL,

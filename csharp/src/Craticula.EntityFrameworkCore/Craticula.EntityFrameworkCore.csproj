@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula execution adapter for Entity Framework Core: runs the canonical IR against a DbContext through IQueryable expression trees.</Description>
     <RootNamespace>Craticula.EntityFrameworkCore</RootNamespace>
   </PropertyGroup>
 
@@ -25,8 +26,9 @@
          its DbContext, and the test project references Sqlite for exactly that reason.
 
          Version centrally managed in csharp/Directory.Packages.props (10.0.11, the release that
-         targets net10.0, which every project here does) — this file names only the package. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+         targets net10.0, which every project here does) — this file names the package and, via VersionOverride, the published range
+         (#1658: the nuspec range; restore still resolves its lowest version, the tested one). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" VersionOverride="[10.0.11,11.0)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,9 +43,9 @@
          SemanticsResolver). Not Craticula.Export.Csv, though this adapter yields ExportRow — that type
          moved into Craticula.Core.Export precisely so an adapter is not welded to one file format.
          Not Craticula.AgGrid either: this adapter's own ToGridPageResult() extension (#1649) names
-         Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a
-         <see cref>) — this solution sets no GenerateDocumentationFile (csharp/Directory.Build.props), so
-         a <see cref> is never compiler-checked here in the first place. No AG-Grid type is ever used in
+         Craticula.AgGrid.LoadSuccessParamsMapper.Map only in a plain-prose doc comment (a <c> tag, not a <see cref>): src/Directory.Build.props turns on GenerateDocumentationFile (#1658), so every
+         <see cref> is compiler-checked, and a cref to Craticula.AgGrid would need the very reference this package
+         must not have. No AG-Grid type is ever used in
          this package's own code, so the "second grid vendor drives this adapter through IR alone" claim
          still holds unmodified. -->
     <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />

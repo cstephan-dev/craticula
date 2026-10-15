@@ -17,7 +17,7 @@ namespace Craticula.Export.Csv;
 /// <see cref="CsvWriterOptions"/>; a host that gets a warning it did not read cannot recover the
 /// file.</para>
 ///
-/// <para>Every collision-class check runs in <see cref="CsvWriterOptions.Validate"/>, i.e. BEFORE a
+/// <para>Every collision-class check runs in <see cref="CsvWriterOptions.Validate()"/>, i.e. BEFORE a
 /// single byte is written and before the row stream is touched, so a rejected configuration never
 /// leaves a half-written file behind.</para>
 /// </summary>

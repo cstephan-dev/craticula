@@ -99,7 +99,7 @@ public sealed class GridSchemaModelCacheKeyFactory : IModelCacheKeyFactory
 /// onto whatever <see cref="IQueryable{T}"/> it is handed, which is what makes EF's global query
 /// filters — AR-4's whole reason for existing — reachable from a real <c>DbSet</c>.</para>
 ///
-/// <para><b>Keyless, deliberately (<see cref="EntityTypeBuilder.HasNoKey"/>).</b> A grid query is a
+/// <para><b>Keyless, deliberately (<c>EntityTypeBuilder.HasNoKey</c>).</b> A grid query is a
 /// read. Declaring a key would buy change tracking nobody wants and one active hazard: EF's identity
 /// resolution returns the <em>same instance</em> for two rows with equal key values, so a schema whose
 /// declared <see cref="GridSchema.StableKey"/> turned out not to be unique would silently collapse

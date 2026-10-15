@@ -24,7 +24,7 @@ public sealed record MongoQueryRequest
 
     /// <summary>The request's own sort keys, before SEM-6's tiebreaker (which
     /// <see cref="MongoPipelineBuilder"/> appends via
-    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker"/>).</summary>
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>).</summary>
     public IReadOnlyList<SortItem>? Sort { get; init; }
 
     public required PageSpec Page { get; init; }

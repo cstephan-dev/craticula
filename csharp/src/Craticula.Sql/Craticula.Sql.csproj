@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Craticula SQL compiler: turns the canonical IR into parameterized, injection-safe SQL for PostgreSQL, SQL Server, MySQL/MariaDB, SQLite and Oracle.</Description>
     <RootNamespace>Craticula.Sql</RootNamespace>
   </PropertyGroup>
 

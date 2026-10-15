@@ -36,7 +36,7 @@ namespace Craticula.EntityFrameworkCore;
 ///
 /// <para><b>What is genuinely this adapter's own.</b> Three things, and each has its reason recorded at
 /// the method that does it. (1) SEM-3's null placement is <em>emulated</em> on every provider, because
-/// LINQ has no <c>NULLS FIRST</c>/<c>NULLS LAST</c> — see <see cref="ApplyOrdering{TRow}"/>. (2) SEM-2's
+/// LINQ has no <c>NULLS FIRST</c>/<c>NULLS LAST</c> — see <see cref="ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/>. (2) SEM-2's
 /// null-inclusive disjuncts are spelled explicitly even though EF's C#-semantics rewriter would add
 /// most of them — see <see cref="NullInclusive"/>. (3) Values are bound through a wrapper object so EF
 /// parameterizes them instead of inlining literals — see <see cref="Bind"/>. Everything else that
@@ -44,7 +44,7 @@ namespace Craticula.EntityFrameworkCore;
 ///
 /// <para><b>Scope (#1645): filters, sort, paging.</b> A request carrying a <see cref="GroupSpec"/> or
 /// an <see cref="Aggregation"/> is refused by <see cref="ApplyFilter{TRow}"/>/
-/// <see cref="ApplyOrdering{TRow}"/> — the per-clause entry points, which still have no defined
+/// <see cref="ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/> — the per-clause entry points, which still have no defined
 /// meaning for group state on their own.</para>
 ///
 /// <para><b>Grouping (#1887, BM-2's EF counterpart).</b> <see cref="EfCoreGridQuery.FetchPageAsync{TRow}"/>
@@ -66,7 +66,7 @@ public static class EfCoreQueryBuilder
     /// <para>Re-runs the IR's own structural validators first, the defense-in-depth every public entry
     /// point in this codebase performs (<see cref="TypeCoercionValidator.Coerce"/>,
     /// <see cref="ResourceLimitsValidator.Validate"/>,
-    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker"/>,
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>,
     /// <c>SqlQueryBuilder.Build</c>), since a caller can reach this method with a hand-built tree that
     /// never went through <see cref="GridFilterPipeline"/>. On this path one of those validators is
     /// doing more than it looks: <see cref="FilterNodeValidator"/> is what rejects an <c>in</c> with an
@@ -307,7 +307,7 @@ public static class EfCoreQueryBuilder
     /// <para><b>Split in two since #1887</b> (<see cref="ValidateAndBuildRowContext"/> plus this
     /// method's own two refusals): the new grouped orchestration in <see cref="EfCoreGridQuery"/> is a
     /// LEGITIMATE caller with group state on the request, so it calls the validating half directly and
-    /// skips these two throws. <see cref="ApplyFilter{TRow}"/>/<see cref="ApplyOrdering{TRow}"/> keep
+    /// skips these two throws. <see cref="ApplyFilter{TRow}"/>/<see cref="ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/> keep
     /// calling this method unchanged — a caller that reaches the per-clause entry points with group
     /// state still gets the same refusal it always did, since nothing about those methods' own contract
     /// changed.</para>
@@ -543,7 +543,7 @@ public static class EfCoreQueryBuilder
     /// than <c>bool?</c> and can be composed into a predicate directly.
     ///
     /// <para><see cref="bool"/> has no relational operators, so a <c>gt</c>/<c>lt</c> on a
-    /// <see cref="FieldType.Boolean"/> field cannot be built at all — <see cref="Expression.GreaterThan"/>
+    /// <see cref="FieldType.Boolean"/> field cannot be built at all — <see cref="Expression.GreaterThan(Expression, Expression)"/>
     /// throws for it. That is left as the exception it is rather than caught and re-thrown: no wire
     /// shape produces it (AG Grid's boolean columns send a set filter, which AR-6 turns into the unary
     /// <c>true</c>/<c>false</c>), so a message here would document a path nothing reaches.</para>
@@ -882,7 +882,7 @@ public static class EfCoreQueryBuilder
     /// ordering (<see cref="ApplyGroupedOrdering{TRow}"/>) needs the SAME four
     /// <see cref="Queryable"/> methods over <c>IGrouping&lt;TKey,TRow&gt;</c>, a type resolved at
     /// runtime from the group column's declared <see cref="FieldType"/> rather than known at compile
-    /// time, so it cannot go through the generic <typeparamref name="TRow"/> parameter
+    /// time, so it cannot go through the generic <c>TRow</c> parameter
     /// <see cref="Order{TRow}"/> itself is typed on.
     /// </summary>
     private static object ApplyOrderingStep(object source, Type sourceType, LambdaExpression key, bool descending, bool first)
@@ -973,7 +973,7 @@ public static class EfCoreQueryBuilder
     /// runtime; there is no <typeparamref name="TRow"/>-only generic signature that could express it.
     /// So the <c>GroupBy</c>/<c>OrderBy</c>/<c>Select</c> composition below carries the intermediate
     /// grouped query as <see cref="object"/> and dispatches each step through
-    /// <see cref="MethodInfo.MakeGenericMethod(Type[])"/> + <see cref="MethodInfo.Invoke"/> — the same
+    /// <see cref="MethodInfo.MakeGenericMethod(Type[])"/> + <c>MethodInfo.Invoke</c> — the same
     /// pattern <see cref="Order{TRow}"/> already uses for a per-field key type, one level up.</para>
     /// </summary>
     internal static IQueryable<object?[]> ApplyGroupedLevel<TRow>(
@@ -1147,7 +1147,7 @@ public static class EfCoreQueryBuilder
     /// <summary>
     /// One aggregate selector, e.g. <c>g.Sum(row =&gt; EF.Property&lt;decimal?&gt;(row, "amount"))</c> —
     /// built as an <see cref="Expression.Call(MethodInfo, Expression[])"/> NODE (never
-    /// <see cref="MethodInfo.Invoke"/>: unlike <see cref="BuildGroupedQuery{TRow}"/>'s <c>GroupBy</c> or
+    /// <c>MethodInfo.Invoke</c>: unlike <see cref="BuildGroupedQuery{TRow}"/>'s <c>GroupBy</c> or
     /// <see cref="ApplyGroupedOrdering{TRow}"/>'s <c>OrderBy</c>, this call is not a top-level query
     /// composition step against a real <see cref="IQueryable{T}"/> — it is a SUB-expression inside the
     /// body of a larger lambda (the level's projection, or one of its sort keys) that EF's own query
@@ -1156,14 +1156,14 @@ public static class EfCoreQueryBuilder
     /// <para><b>AGG-1's trap, and why it is spelled rather than <c>g.Count()</c>.</b> A bare row count
     /// answers a different question the moment the counted field can be <see langword="null"/> — it
     /// counts every row in the bucket regardless of the field. The non-null-count form
-    /// (<c>g.Count(row =&gt; EF.Property&lt;T&gt;(row, field) != null)</c>) is <see cref="Enumerable.Count"/>'s
+    /// (<c>g.Count(row =&gt; EF.Property&lt;T&gt;(row, field) != null)</c>) is <see cref="Enumerable.Count{TSource}(IEnumerable{TSource}, Func{TSource, bool})"/>'s
     /// PREDICATE overload, matching <c>Craticula.Sql</c>'s <c>COUNT(&lt;field&gt;)</c> and
     /// <c>Craticula.Mongo</c>'s conditional <c>$sum</c> — the identical rule realised through this
     /// backend's own mechanism.</para>
     ///
     /// <para><b>Kept nullable even where an aggregate can never actually be null</b> (<c>count</c>'s
     /// result, converted to <c>int?</c>) — the uniform, "even where inert" convention
-    /// <see cref="ApplyOrdering{TRow}"/>'s own null bucket already follows, so
+    /// <see cref="ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/>'s own null bucket already follows, so
     /// <see cref="ApplyGroupedOrdering{TRow}"/> can build the SAME null-bucket comparison over every
     /// aggregate without a second, nullability-conditional code path.</para>
     ///
@@ -1355,7 +1355,7 @@ public static class EfCoreQueryBuilder
     /// storage reasons — a column may well be <c>NOT NULL</c> — but because SEM-2 and SEM-3 both need
     /// "is this cell null" to be <em>expressible</em>: <c>row.Amount == null</c> does not compile
     /// against a bare <see cref="long"/>, and it is the leading key of every ordering this adapter
-    /// emits (see <see cref="ApplyOrdering{TRow}"/>) as well as every null-inclusive disjunct SEM-2
+    /// emits (see <see cref="ApplyOrdering{TRow}(IQueryable{TRow}, EfCoreQueryRequest, EfCoreProviderSemantics)"/>) as well as every null-inclusive disjunct SEM-2
     /// requires. Asking for <c>long?</c> where the model declares <c>long</c> is harmless: EF resolves
     /// <c>EF.Property</c> by name and the generic argument only shapes the C# expression.</para>
     ///

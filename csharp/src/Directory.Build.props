@@ -18,4 +18,42 @@
     <AnalysisModeSecurity>All</AnalysisModeSecurity>
   </PropertyGroup>
 
+  <!-- #1658: NuGet packaging for the ten shipped libraries. Version is the one property the release bumps. Tools and
+       tests keep IsPackable=false from csharp/Directory.Build.props; only src projects import this file's settings. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Version>1.0.0</Version>
+    <Authors>Christian Stephan</Authors>
+    <Company>Pluries</Company>
+    <Copyright>Copyright (c) Christian Stephan</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/pluries/craticula</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/pluries/craticula</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>ag-grid;ssrm;server-side-row-model;query-compiler;sql;mongodb;opensearch;elasticsearch</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <!-- Reproducible, debuggable packages: embedded PDB, SourceLink (built into the SDK), deterministic paths in CI. -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>embedded</DebugType>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TF_BUILD)' != '' Or '$(GITHUB_ACTIONS)' != ''">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- XML docs make every <see cref> compiler-checked. CS1591 (missing comment on a public member) stays off. -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
 </Project>

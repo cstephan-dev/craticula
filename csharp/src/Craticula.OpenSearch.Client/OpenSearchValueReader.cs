@@ -13,7 +13,7 @@ namespace Craticula.OpenSearch.Client;
 ///
 /// <para><b>The "wrapper type" hazard those two guard against is genuinely smaller here.</b> A
 /// <see cref="JsonElement"/> off <c>System.Text.Json</c> is already fairly native — no
-/// <see cref="MongoDB.Bson.BsonValue"/>-style subtype zoo, no ADO.NET provider-specific CLR surprise —
+/// <c>MongoDB.Bson.BsonValue</c>-style subtype zoo, no ADO.NET provider-specific CLR surprise —
 /// but the explicit per-<see cref="FieldType"/> dispatch still matters for two real fidelity questions
 /// this reader is the one place that answers: whether a numeric token round-trips through
 /// <see cref="decimal"/> without going through <see cref="double"/> first (<see cref="Read"/>'s own
@@ -69,7 +69,7 @@ internal static class OpenSearchValueReader
     /// field goes through <see cref="double"/> at the ENGINE itself, before this reader ever sees the
     /// response — so declaring the output <see cref="FieldType.Decimal"/> (this package's own
     /// <c>ResolveAggregationType</c>, matching every sibling's declared-output-type convention) cannot
-    /// recover precision that was already lost server-side; <see cref="Convert.ToDecimal(double, IFormatProvider)"/>
+    /// recover precision that was already lost server-side; <c>Convert.ToDecimal</c>
     /// converts the double FAITHFULLY, it does not un-lose anything. A test dataset built from values
     /// that happen to be exact in binary floating point (multiples of a power-of-two fraction, e.g.
     /// <c>0.25</c>/<c>0.50</c>/<c>0.75</c>) round-trips perfectly for exactly that reason — it is not

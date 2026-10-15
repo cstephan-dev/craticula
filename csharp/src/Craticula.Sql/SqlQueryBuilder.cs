@@ -53,7 +53,7 @@ public static class SqlQueryBuilder
     /// ordered parameters. Re-runs the IR's own structural validators first — the same
     /// defense-in-depth every other public entry point in this codebase performs
     /// (<see cref="TypeCoercionValidator.Coerce"/>, <see cref="ResourceLimitsValidator.Validate"/>,
-    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker"/>), since a caller can reach this
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>), since a caller can reach this
     /// method with a hand-built tree that never went through <see cref="GridFilterPipeline"/>.
     /// </summary>
     /// <exception cref="SqlCompilationException">A structurally valid shape this compiler has no
