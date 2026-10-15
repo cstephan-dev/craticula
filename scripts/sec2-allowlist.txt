@@ -1,0 +1,52 @@
+# SEC-2 lint allowlist (scripts/lint-sec2.py): the reviewed trust boundaries of the query-text builders.
+#
+# Two kinds of entry, one per line ('#' starts a comment):
+#
+#   trust path::Type.Member | position | expression | reason (requirement id)
+#     The finding the lint printed, accepted as it stands: nothing inside the expression is traced further. The key
+#     is the file, the enclosing member, the POSITION (the `[key: ... | position]` the finding prints: an interpolation
+#     hole, a `+` operand, the value of local `x`, argument `p` of `M`, a return value...) and the exact expression
+#     (whitespace collapsed). The same text anywhere else in the member, or in another kind of position, is checked
+#     again. An entry may not trust a parameter of an ordinary method as it is passed in (`p`, `p.X`, `p[i]`): that
+#     would vouch for every call site, present and future. Trust the function that validates the value instead (its
+#     return), or the argument at the call site.
+#
+#   not-query-text path::Type.Member | reason
+#     The member's result is never query text. Its own string constructions are not checked; in exchange, a call to
+#     it that reaches query text is a finding. For values that are bound or only ever echoed in exception messages.
+#
+# Add an entry only for a value that is NOT a user value: a quoting, placeholder or escaping primitive's own input, a
+# schema-declared identifier, or text that never reaches a query. A user value in query text is a SEC-2 defect to fix,
+# never an entry here. An entry that matches nothing in the run fails it (exit 1), and so does an entry whose file
+# does not exist or lies outside the scanned files, so this file cannot rot.
+
+# -- SQL-1 quoting primitives: the one place an identifier meets the delimiter, which each dialect doubles.
+trust csharp/src/Craticula.Sql/PostgresDialect.cs::PostgresDialect.QuoteIdentifier | concatenation operand | identifier.Replace("\"", "\"\"", StringComparison.Ordinal) | the quoting primitive doubles '"' inside "..." (SQL-1)
+trust csharp/src/Craticula.Sql/SqliteDialect.cs::SqliteDialect.QuoteIdentifier | concatenation operand | identifier.Replace("\"", "\"\"", StringComparison.Ordinal) | the quoting primitive doubles '"' inside "..." (SQL-1)
+trust csharp/src/Craticula.Sql/OracleDialect.cs::OracleDialect.QuoteIdentifier | concatenation operand | identifier.Replace("\"", "\"\"", StringComparison.Ordinal) | the quoting primitive doubles '"' inside "..." (SQL-1)
+trust csharp/src/Craticula.Sql/MySqlDialect.cs::MySqlDialect.QuoteIdentifier | concatenation operand | identifier.Replace("`", "``", StringComparison.Ordinal) | the quoting primitive doubles '`' inside `...` (SQL-1)
+trust csharp/src/Craticula.Sql/MssqlDialect.cs::MssqlDialect.QuoteIdentifier | concatenation operand | identifier.Replace("]", "]]", StringComparison.Ordinal) | the quoting primitive doubles ']' inside [...] (SQL-1)
+
+# -- Placeholder primitives: an ordinal SqlParameterBag counts, never a value (the value went to Parameters).
+trust csharp/src/Craticula.Sql/PostgresDialect.cs::PostgresDialect.ParameterPlaceholder | concatenation operand | (ordinal + 1).ToString(CultureInfo.InvariantCulture) | the 1-based number of $n, from the bag's own parameter count (SEC-2)
+trust csharp/src/Craticula.Sql/MssqlDialect.cs::MssqlDialect.ParameterPlaceholder | concatenation operand | (ordinal + 1).ToString(CultureInfo.InvariantCulture) | the 1-based number of @pn, from the bag's own parameter count (SEC-2)
+trust csharp/src/Craticula.Sql/OracleDialect.cs::OracleDialect.ParameterPlaceholder | concatenation operand | (ordinal + 1).ToString(CultureInfo.InvariantCulture) | the 1-based number of :pn, from the bag's own parameter count (SEC-2)
+
+# -- Pattern-escaping loops: the user value's characters, escaped one by one into a VALUE embedded as a JSON value
+#    (Mongo, Search); the result never becomes query text. The position pins the loop: `value` appended whole is
+#    checked again.
+trust csharp/src/Craticula.Mongo/MongoRegexEscaping.cs::MongoRegexEscaping.Escape | collection iterated into character | value | every ASCII character outside [A-Za-z0-9] is backslash-escaped; the result is a $regex JSON value (SEC-4, MDB-11)
+trust csharp/src/Craticula.Search/SearchRegexEscaping.cs::SearchRegexEscaping.Escape | collection iterated into character | value | regex metacharacters are backslash-escaped; the result is the terms include JSON value (SEC-4, OSE-12)
+trust csharp/src/Craticula.Search/SearchWildcardEscaping.cs::SearchWildcardEscaping.Escape | collection iterated into character | value | *, ? and \ are backslash-escaped; the result is a wildcard JSON value (SEC-4)
+not-query-text csharp/src/Craticula.Sql/SqliteDialect.cs::SqliteDialect.EscapeGlobPattern | GLOB has no ESCAPE clause, so *, ? and [ are class-wrapped into a pattern VALUE that RenderSubstringMatch binds through Bind; never spliced into the statement (SEC-4, D3)
+
+# -- Schema-declared identifiers on the document backends (SEC-1's allowlist governs them, not SEC-2).
+trust csharp/src/Craticula.Mongo/MongoPipelineBuilder.cs::MongoPipelineBuilder.ResolvePath | return value | ResolveField(field, context).Physical?.Mongo?.Path ?? field | the declared field's physical path, else its colId: ResolveField (evaluated first) throws for a field the GridSchema does not declare, so either side is schema-declared (SC-1, SC-4, MDB-9)
+trust csharp/src/Craticula.Mongo/MongoPipelineBuilder.cs::MongoPipelineBuilder.AppendSortStages | argument path of FieldReference | key.Path | SortKeyPlan is private to this builder and its Path is only ever ResolvePath of a declared sort field, ResolveGroupedSortTarget's output name (see below) or the GroupKeyPath constant "_id" (SC-1, MDB-8, AGG-2)
+trust csharp/src/Craticula.Mongo/MongoPipelineBuilder.cs::MongoPipelineBuilder.ResolveSortPlan | interpolation hole | key.Field | the __<field>NullBucket name of a declared sort field; ResolvePath/ResolveField in the same tuple refuse an undeclared one (SEM-3, MDB-8, SC-1)
+trust csharp/src/Craticula.Mongo/MongoPipelineBuilder.cs::MongoPipelineBuilder.ResolveGroupedSortTarget | value of local output | matches[0].OutputName | the __<output name>NullBucket name; an output name is an alias AggregationValidator holds to ^[A-Za-z_][A-Za-z0-9_]*$ or <declared field>_<func> (MDB-8, AGG-2)
+
+# -- Values and names that are not query text.
+trust csharp/src/Craticula.Search/SearchJson.cs::SearchJson.NormalizeInstant | concatenation operand | utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff", CultureInfo.InvariantCulture).TrimEnd('0') | a parsed instant re-spelled as a range bound, embedded as a JSON value (OSE-8, SEC-2)
+trust csharp/src/Craticula.Dapper/DapperParameterBinder.cs::DapperParameterBinder.Prepare | interpolation hole | ordinal + 1 | the driver's parameter NAME (@pn for mssql, pn for oracle) from the binder's own ordinal; it never enters the SQL text (SEC-2)
+not-query-text csharp/src/Craticula.Dapper/DapperValueReader.cs::DapperValueReader.Truncate | a database value echoed, truncated, in exception messages only; never query text

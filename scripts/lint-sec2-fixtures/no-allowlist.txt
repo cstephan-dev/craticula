@@ -1,0 +1,1 @@
+# No reviewed exception: the fixtures run against this file unless their case brings its own allowlist.

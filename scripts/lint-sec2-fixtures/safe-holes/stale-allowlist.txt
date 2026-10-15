@@ -1,0 +1,2 @@
+# An entry for an expression the lint does not report (the argument of a QuoteIdentifier call is not query text).
+trust Craticula.Sql/SafeBuilder.cs::SafeBuilder.Build | argument identifier of QuoteIdentifier | filter.Column | never a finding, so this entry is stale

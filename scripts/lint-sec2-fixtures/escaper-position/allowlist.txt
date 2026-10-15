@@ -1,0 +1,2 @@
+# The loop, by its position: `value` iterated into `character`. The same `value` appended whole is another position.
+trust Craticula.Mongo/MongoRegexEscaping.cs::MongoRegexEscaping.Escape | collection iterated into character | value | each character outside [A-Za-z0-9] is backslash-escaped (SEC-4)

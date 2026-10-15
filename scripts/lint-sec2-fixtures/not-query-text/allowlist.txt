@@ -1,0 +1,2 @@
+# Truncate's text is only ever an exception message: its body is not query text, and its result must not become any.
+not-query-text Craticula.Dapper/ValueReader.cs::ValueReader.Truncate | a database value echoed in exception messages only

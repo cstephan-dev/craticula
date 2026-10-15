@@ -1,0 +1,2 @@
+# The reviewed primitive of this fixture.
+trust Craticula.Sql/QuotingDialect.cs::QuotingDialect.QuoteIdentifier | concatenation operand | identifier.Replace("\"", "\"\"", StringComparison.Ordinal) | the quoting primitive doubles '"' inside "..." (SQL-1)

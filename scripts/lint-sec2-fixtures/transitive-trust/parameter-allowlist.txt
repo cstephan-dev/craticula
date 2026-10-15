@@ -1,0 +1,4 @@
+# The same validator, plus an entry on FieldReference's parameter as it is passed in: refused, it would vouch for
+# every caller, including Raw.
+trust Craticula.Mongo/FieldPaths.cs::FieldPaths.ResolvePath | return value | ResolveField(field, schema).Path ?? field | a declared field's path, else its declared colId (SC-1)
+trust Craticula.Mongo/FieldPaths.cs::FieldPaths.FieldReference | interpolation hole | path | every caller resolves the path first (it does not)

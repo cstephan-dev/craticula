@@ -1,0 +1,2 @@
+# The expression is missing: trust path::Member | position | reason
+trust Craticula.Sql/SafeBuilder.cs::SafeBuilder.Build | interpolation hole | a reason without an expression
