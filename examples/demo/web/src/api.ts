@@ -1,0 +1,101 @@
+import type { IServerSideGetRowsRequest } from 'ag-grid-community';
+
+export type Provider = 'postgres' | 'mongo';
+
+export const PROVIDERS: readonly { id: Provider; label: string }[] = [
+  { id: 'postgres', label: 'PostgreSQL' },
+  { id: 'mongo', label: 'MongoDB' },
+];
+
+/** The body the grid builds for a block; the API parses it with the library, so it is sent as is. */
+export type GridRequest = IServerSideGetRowsRequest;
+
+export interface RowsResponse {
+  rows: Record<string, unknown>[];
+  lastRow?: number | null;
+  groupLevelInfo?: unknown;
+}
+
+export interface QueryView {
+  kind: string;
+  dialect: string;
+  text: string;
+  parameters: unknown[];
+}
+
+export interface HealthResponse {
+  status: string;
+  providers: string[];
+}
+
+/** Every failure the page can show: the API's `{ error: { kind, message } }`, or a transport failure (status 0). */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly kind: string;
+
+  constructor(status: number, kind: string, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.kind = kind;
+  }
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(path, init);
+  } catch {
+    throw new ApiError(0, 'backend-unavailable', 'The API did not answer. Is it running on port 5080?');
+  }
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  return response;
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  try {
+    const body: unknown = await response.json();
+    const error = (body as { error?: { kind?: unknown; message?: unknown } } | null)?.error;
+    if (typeof error?.kind === 'string' && typeof error.message === 'string') {
+      return new ApiError(response.status, error.kind, error.message);
+    }
+  } catch {
+    // Not JSON (a proxy error page, for instance): fall through to the generic form.
+  }
+  // The dev proxy answers 500 when nothing listens on the API port; say that instead of a bare status.
+  const kind = response.status >= 500 ? 'backend-unavailable' : `http-${response.status}`;
+  return new ApiError(response.status, kind, `The API answered HTTP ${response.status} without an error body.`);
+}
+
+function post(provider: Provider, route: string, body: unknown): Promise<Response> {
+  return send(`/api/${provider}/${route}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function fetchRows(provider: Provider, request: GridRequest): Promise<RowsResponse> {
+  return (await post(provider, 'rows', request)).json() as Promise<RowsResponse>;
+}
+
+export async function fetchQuery(provider: Provider, request: GridRequest): Promise<QueryView> {
+  return (await post(provider, 'query', request)).json() as Promise<QueryView>;
+}
+
+/** Distinct values of one column for the set filter, ascending, nulls last. */
+export async function fetchValues(provider: Provider, colId: string): Promise<unknown[]> {
+  const response = await post(provider, 'values', { setValuesRequest: { colId, filterModel: {} } });
+  const body = (await response.json()) as { values?: unknown[] };
+  return body.values ?? [];
+}
+
+export async function fetchExport(provider: Provider, request: unknown): Promise<Blob> {
+  return (await post(provider, 'export.csv', request)).blob();
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  return (await send('/api/health')).json() as Promise<HealthResponse>;
+}
