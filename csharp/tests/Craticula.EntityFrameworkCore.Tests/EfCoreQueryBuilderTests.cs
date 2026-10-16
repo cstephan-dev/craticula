@@ -114,6 +114,7 @@ public class EfCoreQueryBuilderTests
 
         // false: EF keeps a constant `WHERE 0`; true: EF drops the always-true predicate altogether.
         Assert.Equal(hasWhere, sql.Contains("WHERE 0", StringComparison.Ordinal));
+        Assert.Equal(hasWhere, sql.Contains("WHERE", StringComparison.Ordinal));
         Assert.DoesNotContain("IS NULL", sql, StringComparison.Ordinal);
         Assert.DoesNotContain(" IN ", sql, StringComparison.Ordinal);
     }

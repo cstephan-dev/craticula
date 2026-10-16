@@ -22,7 +22,7 @@ spec doesn't have, the spec changes first, then the port follows.
   `int64` numeric bounds) that exist purely to keep the *shape* well-formed, not to police policy.
 - **`semantics.md`** — the normative semantics document (§7 of the TRD, rules SEM-1..SEM-7: case
   sensitivity, null handling, null ordering, dates & zones, type coercion, deterministic paging,
-  and `contains` on ES/OpenSearch; plus an addendum pinning aggregation semantics the TRD's own
+  and `contains` on ES/OpenSearch; plus SEM-8, empty set membership (added in #2455, beyond the TRD's enumeration), and an addendum pinning aggregation semantics the TRD's own
   SEM-1..7 enumeration doesn't cover). Each rule states the normative behavior, the naive alternative
   it rules out, a worked example per backend family (SQL, MongoDB, OpenSearch/Elasticsearch)
   reaching the same logical outcome through different backend-native mechanisms, an explicit

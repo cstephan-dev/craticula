@@ -1,0 +1,1 @@
+Proves SEM-8 under a tree-level `not`: `not(notIn [])` is `not(true)`, so only the SEM-2 null fan-out remains and the rows whose field is NULL or missing match, and nothing else. Same constants as 058 inside the negation, with the `IS NULL` / `{field: null}` / `must_not: exists` disjunct SEM-2 puts outside every `not`.

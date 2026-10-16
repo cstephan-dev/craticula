@@ -1,7 +1,7 @@
 # `spec/semantics.md` — Semantics specification (SEM-1..SEM-8)
 
 Normative per **AR-1** ([TRD](../docs/TRD-grid-query-compiler.md) §7): this document, not any single
-compiler, is where these seven behaviors are decided. A backend compiler that disagrees with a rule
+compiler, is where these behaviors are decided (SEM-1..SEM-7 from the TRD, SEM-8 added in #2455). A backend compiler that disagrees with a rule
 below has a bug, not an alternative opinion. Every rule here is the target of conformance fixtures
 (`spec/fixtures/`, TRD T-1) authored in a later work item (#1630) — this document states the rule
 and gives **illustrative** examples; it does not itself constitute the enforceable test suite.
@@ -887,8 +887,9 @@ matches **no** row; `notIn` with no values matches **every** row. Both answers h
 field is NULL or missing: `in []` never matches one (SEM-2: `in` never matches null), and `notIn []`
 matches it, the constant being true for every row, so no `IS NULL` disjunct is added next to it.
 The empty list is a constant, so it composes by ordinary Boolean logic inside `and`, `or` and `not`
-(`in [] OR p` matches what `p` matches; `notIn [] AND p` matches what `p` matches; the null
-fan-out of SEM-2 applies at a `notNode` as ever). Compilers do not fold the constant out of the
+(`in [] OR p` matches what `p` matches; `notIn [] AND p` matches what `p` matches). The null
+fan-out of SEM-2 applies at a `notNode` as ever, so `not(in [])` matches every row and `not(notIn [])`
+matches exactly the rows whose field is NULL or missing. Compilers do not fold the constant out of the
 tree.
 
 **Rendering.** The empty list is never sent to the engine as a list.
@@ -903,7 +904,12 @@ value, and its own client-side row model then shows no rows. Rejecting the reque
 host re-implement that rule. A null "(Blanks)" element inside `values` is a different matter and
 stays rejected.
 
-**Fixtures.** `operators/057`-`061`, `dialect-parity/026`.
+**Must NOT.** Emit `IN ()` or bind an empty array; add an `IS NULL` disjunct next to the constant itself; reject
+the request; fold the constant out of the tree.
+
+**Cross-links.** `$defs/setComparisonNode`, SEM-2 (null handling), SQL-4 (typed set arrays), MDB-9, OSE-7.
+
+**Fixtures.** `operators/057`-`062`, `dialect-parity/026`.
 
 ---
 
@@ -1832,7 +1838,7 @@ string array. Consequences:
 zone makes Postgres compare through the session time zone and can shift rows silently; that is a host
 obligation, like SQLite's fixed-width datetime text.
 (b) A `null` element in the list (AR-7 `nullValue` beside real values) is allowed and stays NULL inside the
-array. An empty list is already refused by SEC-6.
+array. An empty list is a constant under SEM-8 (`1 = 0` / `1 = 1`) and never reaches this cast.
 (c) `Craticula.EntityFrameworkCore` hands typed values to the provider and is out of scope.
 
 *Why it is behind the dialect interface.* `ANY(array)` does not exist in SQL Server, MySQL or SQLite.
@@ -2204,7 +2210,8 @@ what the artifacts pin, but it does not hold the field case-sensitive under a co
 | Family | Under no collation | Under a collation, on a `sensitive` field |
 |---|---|---|
 | scalar (`eq`…`lte`) | `{"c": {"$eq": v}}` | `{"$expr": {"$eq": ["$c", {"$literal": v}]}}` |
-| set (`in`/`notIn`) | `{"c": {"$in": [...]}}` / `$nin` | `{"$expr": {"$in": ["$c", [{"$literal": v₁}, …]]}}` / `{"$expr": {"$not": [{"$in": …}]}}` |
+| set (`in`/`notIn`), non-empty | `{"c": {"$in": [...]}}` / `$nin` | `{"$expr": {"$in": ["$c", [{"$literal": v₁}, …]]}}` / `{"$expr": {"$not": [{"$in": …}]}}` |
+| set, empty list (SEM-8) | `{"c": {"$in": []}}` / `{"c": {"$nin": []}}` | **unchanged** — the constant applies before any collation or `$expr` choice |
 | `inRange` | one field document (MDB-6) | `{"$expr": {"$and": [{"$gte": ["$c", {"$literal": a}]}, {"$lt": ["$c", {"$literal": b}]}]}}` |
 | substring | `{"c": {"$regex": …}}` | **unchanged** — a collation does not reach a `$regex` at all |
 | sort key | `{"c": 1}` | **rejected** — see below |
@@ -2551,7 +2558,7 @@ contradict each other, so the schema is what changes. No fixture reaches this co
 precisely why it is written down here.
 
 **OSE-7. Set membership is a `terms` query — except on a case-insensitive `string`, where it is a
-`should` of `term` queries.**
+`should` of `term` queries.** *(An empty list is SEM-8's constant, `match_none` / `match_all`, before either form.)*
 
 ```json
 { "terms": { "age": [30, 40] } }

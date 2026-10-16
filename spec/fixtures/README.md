@@ -659,14 +659,14 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 
 | Directory | Proves | Target count |
 |---|---|---|
-| `operators/` | AR-6's 17-operator closed set, across field types | ~61 |
+| `operators/` | AR-6's 17-operator closed set, across field types | ~62 |
 | `date-presets/` | AG-2 date presets resolved to absolute half-open ranges (SEM-4 type + zone) | ~28 |
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
 | `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
 | `page-export/` | AG-3/EXP-2 page spec, EXP-1 export + EXP-4/EXP-5/EXP-8 byte-exact writer output (delimiters, BOM, per-field formats) + EXP-6 hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits, duplicate aggregation output names | ~20 |
-| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7, SQL-5/6/7, MDB-9) + AGG-6's five-SQL-dialect aggregate case | ~25 |
+| `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7/8, SQL-5/6/7, MDB-9) + AGG-6's five-SQL-dialect aggregate case | ~26 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |
 
 Each category directory has its own `README.md` enumerating its cases and the specific requirement

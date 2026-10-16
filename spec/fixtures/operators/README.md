@@ -23,7 +23,7 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   own "must NOT omit the null-ordering marker on the theory that the field is probably never null"
   rule: every artifact's `id ASC` sort still carries its adapter-default `nullsPosition: "last"`
   marker — `NULLS LAST` in Postgres, an `__idNullBucket` null-bucket `$addFields`/`$sort`/`$unset`
-  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 61 cases,
+  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 62 cases,
   exactly as `filter-tree/` and `sort-paging/` already do for their own bare `id` sort.
 
   *Corrected in #1643, on all 47.* This bullet used to say "`$addFields`/`$sort` **pair**", and the
@@ -153,11 +153,12 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
 | 059 | `059-in-empty-int64/` | SEM-8 `in []` on `int64`: no row, nothing bound. |
 | 060 | `060-in-empty-inside-or/` | SEM-8 composition: `(in [] OR age = 30)` matches what `age = 30` matches. |
 | 061 | `061-notin-empty-inside-and/` | SEM-8 composition: `(notIn [] AND age > 30)` matches what `age > 30` matches. |
+| 062 | `062-not-notin-empty/` | SEM-8 under a tree-level `not`: `not(notIn [])` matches only the NULL rows (SEM-2 fan-out outside the negation). |
 
 ## Execution equality (T-1b)
 
-All 61 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
-[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-061 follow it. Every fixture has an oracle-free
+All 62 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
+[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-062 follow it. Every fixture has an oracle-free
 backend set (`postgres`, `mongo`, `search`), so a seeded `''` is allowed and is used where SEM-2 gives it a meaning
 (`blank` / `notBlank`, `neq`, `notIn`). Out of scope: none, because this category has no rejection-only fixture.
 Each seed is 4-9 rows keyed by logical colId, with boundary values just inside and outside, nulls, case variants and

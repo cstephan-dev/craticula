@@ -405,7 +405,7 @@ this suite by construction. One was recorded here and is now settled:
 
 ## Execution-equality oracle (T-1b, #2204)
 
-All 25 cases carry `dataset.json` + `expectedRows.json` (XEQ-1). An ordinary row query returns every schema field in
+All 26 cases carry `dataset.json` + `expectedRows.json` (XEQ-1). An ordinary row query returns every schema field in
 declaration order, ordered by the request's sort and then SEM-6's `id` tiebreaker; `024` is a grouped level
 (`department`, then the `salary` sum and the `age` average, the average compared as a double). The single-backend
 mechanics cases `001`-`005` and `025` are held on their one artifact. `003` seeds 26 rows so its `startRow: 20` page is not
