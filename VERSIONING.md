@@ -8,8 +8,9 @@ Craticula uses [Semantic Versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
   the semantics and the conformance fixtures. Each implementation states the spec version it passes.
 - The **package version** is the version of the .NET packages. All ten packages share one version number.
 
-The two move separately. The compatibility table in the [README](README.md#compatibility) shows which spec version
-the latest release implements.
+The two move separately. The compatibility table in the [README](README.md#compatibility) shows the spec version on
+`main`, which the next release implements. The notes of each release state the spec version that release was built with.
+The `Latest release:` line in the README shows the last published package version.
 
 ## What drives the package version
 
@@ -19,16 +20,16 @@ the latest release implements.
 
 ## What is a breaking change
 
-A change is breaking, and needs a new major version, when it does any of these:
+One rule decides the bump. A change is breaking, and needs a new major version, when it does any of these:
 
 - It removes or changes a public type or member, so that code that compiled before no longer compiles.
-- It changes the compiled artifact (the SQL text and parameters, the MongoDB pipeline or the search query) for the
-  same request and schema.
+- It changes the shape of the compiled artifact (the SQL text and parameters, the MongoDB pipeline or the search query)
+  for the same request and schema: its structure, the order of its parameters, or the meaning of a field.
 - It changes an error kind: a request that was accepted is rejected, or the other way round, or a rejection now has a
   different kind.
 
-A spec change that changes artifacts is at least a minor version of the packages. It is a major version when it is
-also breaking by the rules above.
+A spec change that alters the generated text or the semantics without changing the shape (for example a typed cast or a
+rendering fix) is a minor version. A change is a patch only when the output for every valid request is unchanged.
 
 ## Adapters and provider majors
 

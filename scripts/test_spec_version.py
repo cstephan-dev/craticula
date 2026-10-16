@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pins the spec version (story #1661): spec/VERSION is the one place it is written, and the conformance driver's
+"""Pins the spec version: spec/VERSION is the one place it is written, and the conformance driver's
 SpecVersion constant and every csharp/src package README must claim the same value. Reads public files only.
 The check functions take a repository root, so the negative tests below run them on scratch directories.
 Run: python3 scripts/test_spec_version.py (also run by Craticula.Conformance.Tests/SpecVersionTests.cs on `dotnet test`).

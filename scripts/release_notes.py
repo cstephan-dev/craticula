@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adds the spec-version line to a release's notes (story #1661, AC-2). Pure stdlib, no network.
+"""Adds the spec-version line to a release's notes. Pure stdlib, no network.
 
 The release workflow reads the current notes with `gh release view`, runs this script on that file and uploads the
 result with `gh release edit --notes-file`. The line is `Spec version X.Y.Z · conformance fixture suite: N fixtures`;

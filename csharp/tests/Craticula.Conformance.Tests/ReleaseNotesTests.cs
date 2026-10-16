@@ -1,7 +1,7 @@
 namespace Craticula.Conformance.Tests;
 
 /// <summary>
-/// Runs <c>scripts/test_release_notes.py</c> (story #1661, AC-2) on every <c>dotnet test</c>: the spec-version line for the
+/// Runs <c>scripts/test_release_notes.py</c> on every <c>dotnet test</c>: the spec-version line for the
 /// release notes is built from <c>spec/VERSION</c> and the fixture folders, appended once, and bad input is refused.
 /// No network and no GitHub.
 /// </summary>

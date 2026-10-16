@@ -173,32 +173,42 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual("github.event_name == 'workflow_dispatch'", conds["GitHub release (manual dispatch)"])
         self.assertEqual("github.event_name != 'workflow_dispatch'", conds["Attach packages to the Release Please release"])
 
-    def test_spec_version_step_is_last_tolerant_env_only_and_checkout_is_sparse(self):
+    def test_publish_job_runs_no_checkout_and_no_repository_script(self):
         if yaml is None:
             self.skipTest("PyYAML is not installed")
         wf = yaml.safe_load(self.text)
-        steps = wf["jobs"]["publish"]["steps"]
-        names = [s.get("name") for s in steps]
-        step_name = "Add the spec version to the release notes"
-        self.assertEqual(1, names.count(step_name))
-        index = names.index(step_name)
-        step = steps[index]
-        self.assertIn("Attach packages to the Release Please release", names[:index], "after the nupkg upload")
-        attest = [i for i, s in enumerate(steps) if str(s.get("uses", "")).startswith("actions/attest-build-provenance@")]
-        self.assertEqual(1, len(attest))
-        self.assertLess(attest[0], index, "after the attestation")
-        self.assertIs(True, step["continue-on-error"])
-        self.assertEqual({"GH_TOKEN": "${{ github.token }}", "VERSION": "${{ inputs.version }}"}, step["env"])
-        self.assertNotIn("${{", step["run"], "values reach the script through env only")
-        self.assertIn("::warning::", step["run"])
-        self.assertNotIn("secrets.", step["run"])
-        checkout = steps[index - 1]
-        self.assertTrue(checkout["uses"].startswith("actions/checkout@"))
-        self.assertIs(False, checkout["with"]["persist-credentials"])
-        self.assertEqual(["spec", "scripts/release_notes.py"], checkout["with"]["sparse-checkout"].split())
+        for step in wf["jobs"]["publish"]["steps"]:
+            self.assertFalse(str(step.get("uses", "")).startswith("actions/checkout@"), "publish has no checkout")
+            self.assertNotIn("release_notes.py", str(step.get("run", "")))
         self.assertEqual({"id-token": "write", "attestations": "write", "contents": "write"},
                          wf["jobs"]["publish"]["permissions"])
         self.assertEqual({"contents": "read"}, wf["permissions"])
+
+    def test_release_notes_job_is_separate_tolerant_least_privilege_and_env_only(self):
+        if yaml is None:
+            self.skipTest("PyYAML is not installed")
+        wf = yaml.safe_load(self.text)
+        job = wf["jobs"]["release-notes"]
+        self.assertEqual("publish", job["needs"])
+        self.assertIs(True, job["continue-on-error"])
+        self.assertEqual({"contents": "write"}, job["permissions"])
+        self.assertNotIn("environment", job)
+        steps = job["steps"]
+        checkout = steps[0]
+        self.assertTrue(checkout["uses"].startswith("actions/checkout@"))
+        self.assertIs(False, checkout["with"]["persist-credentials"])
+        self.assertEqual(["spec", "scripts/release_notes.py"], checkout["with"]["sparse-checkout"].split())
+        self.assertIs(False, checkout["with"]["sparse-checkout-cone-mode"])
+        named = [s for s in steps if s.get("name") == "Add the spec version to the release notes"]
+        self.assertEqual(1, len(named))
+        step = named[0]
+        self.assertEqual({"GH_TOKEN": "${{ github.token }}", "VERSION": "${{ inputs.version }}"}, step["env"])
+        self.assertNotIn("${{", step["run"], "values reach the script through env only")
+        self.assertIn("::warning::", step["run"])
+        self.assertNotIn("secrets.", str(job))
+        self.assertNotIn("id-token", str(job))
+        for name, other in wf["jobs"].items():
+            self.assertEqual(name == "publish", other.get("permissions", {}).get("id-token") == "write", name)
 
 
 if __name__ == "__main__":

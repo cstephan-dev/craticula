@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests scripts/release_notes.py (story #1661, AC-2): the line is built from spec/VERSION and the fixture folders,
+"""Tests scripts/release_notes.py: the line is built from spec/VERSION and the fixture folders,
 appended once, and a bad version or an empty suite is refused. Scratch directories only, no network.
 Run: python3 scripts/test_release_notes.py (also run by Craticula.Conformance.Tests/ReleaseNotesTests.cs on `dotnet test`).
 """

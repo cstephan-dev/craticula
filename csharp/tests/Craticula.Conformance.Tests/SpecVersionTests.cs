@@ -1,7 +1,7 @@
 namespace Craticula.Conformance.Tests;
 
 /// <summary>
-/// Runs <c>scripts/test_spec_version.py</c> (story #1661) on every <c>dotnet test</c>: <c>spec/VERSION</c> equals the
+/// Runs <c>scripts/test_spec_version.py</c> on every <c>dotnet test</c>: <c>spec/VERSION</c> equals the
 /// conformance driver's <c>SpecVersion</c> and the claim line in every <c>csharp/src</c> package README. No network.
 /// </summary>
 public class SpecVersionTests

@@ -8,6 +8,7 @@
 # the environment must also be limited to the `main` branch, because a branch can edit this file).
 # Open point, unverified: when this file is called, the OIDC token's workflow claim names the calling file
 # (release-please.yml), so the nuget.org Trusted Publishing policy may have to name release-please.yml, not release.yml.
+# The last job, release-notes, adds the spec version line to the release notes in a separate non-blocking job.
 # Known deviations, in plain words: this workflow holds its own steps instead of calling shared organisation workflows
 # (the public repository has none); it is called by the release-please workflow instead of starting on a tag (a tag made
 # with the default token starts no workflow); the release tag is `dotnet-v<version>`; the repository belongs to a user,
@@ -180,11 +181,20 @@ jobs:
           gh release upload "dotnet-v$VERSION" nupkgs/*.nupkg
           --repo "$GITHUB_REPOSITORY"
 
-      # The spec version and the size of the fixture suite go into the release notes (story #1661). This runs after
-      # the packages are on nuget.org and attached to the release, so it must never fail a release that already
-      # published: continue-on-error keeps the job green and the script prints a warning annotation instead. A missing
-      # line is fixed by hand with `gh release edit`. The checkout takes only `spec` and the one script from the
-      # dispatched commit, with no stored token; `contents: write` (already on this job) covers `gh release edit`.
+  # The spec version and the size of the fixture suite go into the release notes. This is its own job, after the packages
+  # are on nuget.org and attached to the release, for two reasons: the publish job holds the OIDC token and the
+  # attestation right, so it runs no repository script and has no checkout; and a failure here must never fail a release
+  # that already published (job-level continue-on-error, a warning annotation instead). A missing line is fixed by hand
+  # with `gh release edit`. The job has `contents: write` only (what `gh release edit` needs), no environment, no
+  # id-token. The checkout takes only `spec` and the one script, with no stored token.
+  release-notes:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -194,7 +204,6 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Add the spec version to the release notes
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
