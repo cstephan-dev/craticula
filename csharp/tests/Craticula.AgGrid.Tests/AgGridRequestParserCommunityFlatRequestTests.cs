@@ -3,8 +3,9 @@ using Craticula.Core.Ir;
 namespace Craticula.AgGrid.Tests;
 
 /// <summary>
-/// AG-7 (story #2454): the exact shape AG Grid Community's Infinite Row Model sends — <c>startRow</c>, <c>endRow</c>,
-/// <c>sortModel</c>, <c>filterModel</c>, and nothing else — parses to a flat request, and the native in-range option a
+/// AG-7 (story #2454): the fields AG Grid Community's Infinite Row Model sends — <c>startRow</c>, <c>endRow</c>,
+/// <c>sortModel</c>, <c>filterModel</c>, and no group, value, pivot or context field (a v35+ grid also adds a sort item's
+/// <c>type</c>, which the parser ignores) — parses to a flat request, and the native in-range option a
 /// Community number or date filter offers is rejected exactly as it is for the SSRM (SEM-4; <c>customFilters</c> is the
 /// way). The compile side of the same shape is graded by <c>spec/fixtures/community-infinite/</c>.
 /// </summary>

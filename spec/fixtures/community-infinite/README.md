@@ -8,13 +8,17 @@ aggregation, pivot or set filter (all Enterprise), so every case is a **flat** r
 
 The Infinite Row Model's `getRows` params carry `startRow`, `endRow`, `sortModel` and `filterModel` (and an optional
 `context`). There is no `rowGroupCols`, `valueCols`, `pivotCols`, `pivotMode` or `groupKeys`, and no `requestContext`. The cases here
-leave those fields out exactly as Community does; the host adds nothing. Because no `requestContext.zone` is sent, a date case
-resolves on `AgGridParseOptions.DefaultZone` (UTC unless the host sets another) — each date case says so in its `description.md`.
+leave those fields out as Community does; the host adds nothing. No `requestContext` is sent, so a `datetime` field would resolve on
+`AgGridParseOptions.DefaultZone` (UTC unless the host sets another); the date cases here are on `date` fields, which need no zone.
 
 The filter model follows AG Grid's own filter classes: `{filterType: "text", type, filter}`, `{filterType: "number", type, filter}`,
-`{filterType: "date", type, dateFrom}` (with `dateFrom` spelled `YYYY-MM-DD HH:mm:ss`, as the date filter sends it), and two
+`{filterType: "date", type, dateFrom}` (on a `date` column `dateFrom` is `YYYY-MM-DD`, as AG Grid 36 sends it), and two
 conditions as `{filterType, operator: "AND" | "OR", conditions: [..]}` (the form AG Grid 36 sends; majors before it sent
 `condition1`/`condition2`, which the parser also accepts and `filter-tree/003` and `ag-grid-majors/` pin).
+
+Not modelled: AG Grid 35 and later also send a `type` on every sort item and `filterModel: {}` (not `null`) when no filter is
+set. The parser ignores both; `ag-grid-majors/005` and `006` cover them, and a captured payload carrying them still equals its
+oracle (the oracle script compares requests after dropping those differences).
 
 ## Provenance: `derived` or `captured`
 

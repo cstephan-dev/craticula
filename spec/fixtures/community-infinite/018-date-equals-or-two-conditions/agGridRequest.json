@@ -9,13 +9,13 @@
         {
           "filterType": "date",
           "type": "equals",
-          "dateFrom": "1990-05-12 00:00:00",
+          "dateFrom": "1990-05-12",
           "dateTo": null
         },
         {
           "filterType": "date",
           "type": "equals",
-          "dateFrom": "1991-07-04 00:00:00",
+          "dateFrom": "1991-07-04",
           "dateTo": null
         }
       ]

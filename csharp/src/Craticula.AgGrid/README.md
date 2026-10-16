@@ -47,8 +47,8 @@ A flat grid on the free Community edition works too. The Infinite Row Model send
 - **Needs Enterprise, so not covered:** row grouping, aggregation, pivot and the set filter.
 - **Not accepted:** the native in-range option is rejected (its two bounds carry no inclusivity); send a range through
   the `customFilters` extension with the inclusivity you mean, or hide the option on the column.
-- **Dates** resolve in the zone from `AgGridParseOptions.DefaultZone` (UTC unless you set one), because Community
-  sends no `requestContext.zone`.
+- **Dates:** a `date` column needs no zone. A `datetime` column resolves in the zone from `AgGridParseOptions.DefaultZone`
+  (UTC unless you set one), because Community sends no `requestContext.zone`.
 - **Status:** proven by derived test requests (`spec/fixtures/community-infinite`), not yet by payloads recorded from a
   real grid; the folder's README says how to swap one in.
 

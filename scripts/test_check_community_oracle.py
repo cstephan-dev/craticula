@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for scripts/check-community-oracle.py (spec/fixtures/community-infinite, AG-6)."""
+"""Unit tests for scripts/check-community-oracle.py (spec/fixtures/community-infinite, AG-7)."""
 import importlib.util
 import json
 import pathlib
@@ -62,14 +62,28 @@ class Mutations(unittest.TestCase):
     def test_a_missing_source_is_reported_as_2(self):
         self.assertEqual(2, oracle.check({"001-case": "operators/nope"})[0][0])
 
-    def test_date_spelling_is_normalised(self):
-        self.assertEqual({"dateFrom": "2026-01-01 00:00:00"}, oracle.normalise({"dateFrom": "2026-01-01"}))
+    def test_a_v36_payload_equals_the_derived_request(self):
+        derived = {"startRow": 0, "endRow": 100, "filterModel": None, "sortModel": [{"colId": "id", "sort": "asc"}]}
+        captured = {"startRow": 0, "endRow": 100, "filterModel": {}, "sortModel": [{"colId": "id", "sort": "asc", "type": "default"}]}
+        self.assertEqual(oracle.canonical(derived), oracle.canonical(captured))
+
+    def test_midnight_on_a_date_is_the_same_value(self):
+        self.assertEqual(
+            oracle.canonical({"filterModel": {"d": {"dateFrom": "2026-01-01 00:00:00"}}}),
+            oracle.canonical({"filterModel": {"d": {"dateFrom": "2026-01-01"}}}))
+        self.assertNotEqual(
+            oracle.canonical({"filterModel": {"d": {"dateFrom": "2026-01-01 05:00:00"}}}),
+            oracle.canonical({"filterModel": {"d": {"dateFrom": "2026-01-01"}}}))
+
+    def test_a_folder_without_a_mapping_is_reported(self):
+        (oracle.CATEGORY / "002-new").mkdir()
+        self.assertEqual(2, max(code for code, _ in oracle.check(self.mapping)))
 
 
 class Normalise(unittest.TestCase):
     def test_legacy_two_conditions_become_the_conditions_array(self):
         legacy = {"operator": "OR", "condition1": {"type": "a"}, "condition2": {"type": "b"}}
-        self.assertEqual({"operator": "OR", "conditions": [{"type": "a"}, {"type": "b"}]}, oracle.normalise(legacy))
+        self.assertEqual({"x": 1, "operator": "OR", "conditions": [{"type": "a"}, {"type": "b"}], "filterModel": {}}, oracle.canonical({"x": 1, **legacy}))
 
 
 if __name__ == "__main__":

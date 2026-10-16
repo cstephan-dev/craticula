@@ -5,7 +5,7 @@
     "birthDate": {
       "filterType": "date",
       "type": "greaterThan",
-      "dateFrom": "1990-01-01 00:00:00",
+      "dateFrom": "1990-01-01",
       "dateTo": null
     }
   },
