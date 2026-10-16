@@ -14,7 +14,11 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<ref>\S+)")
 SHA_PIN = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 PERMISSIONS = re.compile(r"^permissions:", re.MULTILINE)
-SECRET = re.compile(r"\bsecrets\.", re.IGNORECASE)
+SECRET = re.compile(r"\bsecrets\b", re.IGNORECASE)
+READ_ONLY_PERMISSIONS = re.compile(r"^permissions:\n  contents: read\n(?!  )", re.MULTILINE)
+JOB_PERMISSIONS = re.compile(r"^    permissions:", re.MULTILINE)
+PIPED_RUN = re.compile(r"^\s*run:\s.*\|", re.MULTILINE)
+EXPLICIT_BASH = re.compile(r"^\s*shell:\s*bash\s*$", re.MULTILINE)
 
 
 def unpinned_uses(text: str) -> list[str]:
@@ -36,8 +40,18 @@ def has_top_level_permissions(text: str) -> bool:
     return PERMISSIONS.search(text) is not None
 
 
+def is_read_only(text: str) -> bool:
+    """Top-level permissions are exactly `contents: read` and no job raises them."""
+    return READ_ONLY_PERMISSIONS.search(text) is not None and JOB_PERMISSIONS.search(text) is None
+
+
+def pipe_hides_failure(text: str) -> bool:
+    """A single-line `run:` with a pipe and no explicit `shell: bash` (default `bash -e` has no pipefail)."""
+    return PIPED_RUN.search(text) is not None and EXPLICIT_BASH.search(text) is None
+
+
 def secret_references(text: str) -> list[str]:
-    """Lines that mention `secrets.` outside a comment."""
+    """Lines that mention `secrets` outside a comment."""
     return [line.strip() for line in text.splitlines() if SECRET.search(line) and not line.lstrip().startswith("#")]
 
 
@@ -71,6 +85,25 @@ class RuleFunctionTests(unittest.TestCase):
     def test_secret_reference_fails(self):
         self.assertEqual(["token: ${{ secrets.TOKEN }}"], secret_references("        token: ${{ secrets.TOKEN }}\n"))
 
+    def test_bracket_and_json_secret_forms_fail(self):
+        self.assertEqual(2, len(secret_references("a: ${{ secrets['X'] }}\nb: ${{ toJSON(secrets) }}\n")))
+
+    def test_read_only_permissions_pass(self):
+        self.assertTrue(is_read_only("name: x\npermissions:\n  contents: read\n\njobs: {}\n"))
+
+    def test_write_permissions_fail(self):
+        self.assertFalse(is_read_only("name: x\npermissions: write-all\n"))
+        self.assertFalse(is_read_only("name: x\npermissions:\n  contents: write\n"))
+
+    def test_job_level_permissions_fail(self):
+        self.assertFalse(is_read_only("permissions:\n  contents: read\njobs:\n  a:\n    permissions:\n      contents: write\n"))
+
+    def test_pipe_without_shell_fails(self):
+        self.assertTrue(pipe_hides_failure("        run: bash x.sh 2>&1 | tee log\n"))
+
+    def test_pipe_with_explicit_bash_passes(self):
+        self.assertFalse(pipe_hides_failure("        shell: bash\n        run: bash x.sh | tee log\n"))
+
     def test_secret_in_comment_is_ignored(self):
         self.assertEqual([], secret_references("# No secret: nothing reads secrets.X here\n"))
 
@@ -95,6 +128,12 @@ class RealWorkflowTests(unittest.TestCase):
         ci = WORKFLOWS / "ci.yml"
         self.assertTrue(ci.exists(), "ci.yml is missing")
         self.assertEqual([], secret_references(ci.read_text(encoding="utf-8")))
+
+    def test_public_ci_is_read_only(self):
+        self.assertTrue(is_read_only((WORKFLOWS / "ci.yml").read_text(encoding="utf-8")))
+
+    def test_public_ci_pipes_run_under_explicit_bash(self):
+        self.assertFalse(pipe_hides_failure((WORKFLOWS / "ci.yml").read_text(encoding="utf-8")))
 
     def test_public_ci_has_the_two_required_checks(self):
         text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")

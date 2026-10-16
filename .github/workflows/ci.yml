@@ -63,9 +63,11 @@ jobs:
           python-version: '3.12'
 
       # The offline suite (no Docker, no live databases) under coverage, then the per-assembly 90% line gate. A failing
-      # test or a coverage drop fails this step. The log is kept for the job summary.
+      # test or a coverage drop fails this step. The log is kept for the job summary. `shell: bash` is what sets
+      # pipefail: without it the pipe to tee would hide coverage.sh's exit code.
       - name: Offline tests and coverage gate
-        run: bash scripts/coverage.sh 2>&1 | tee "$RUNNER_TEMP/coverage.log"
+        shell: bash
+        run:bash scripts/coverage.sh 2>&1 | tee "$RUNNER_TEMP/coverage.log"
 
       - name: Coverage summary
         if: always()
