@@ -10,17 +10,21 @@
 #      2: usage or environment problem (no curl/python3, API unreachable, a provider missing, a database down).
 #
 # Equality is exact (numbers by value: 12877.0 equals 12877), except avg: PostgreSQL averages decimals with 16 digits and MongoDB with 28, so keys ending in
-# "_avg" are compared with a relative tolerance of 1e-6.
+# "_avg" are compared with a relative tolerance of 1e-6. CSV exports are compared line by line, cell by cell, in full,
+# after line endings are normalised: header and every data row must be identical on both providers, with the same
+# by-value rule for plain decimals (PostgreSQL writes an amount as 20568.00, MongoDB as 20568).
 #
-# Test-only: DEMO_SMOKE_SABOTAGE=1 changes one value on the mongo side before comparing, to prove the script can fail
+# Test-only: DEMO_SMOKE_SABOTAGE changes one value on the mongo side before comparing, to prove the script can fail
 # (it must then exit 1). Never set it otherwise.
+#   DEMO_SMOKE_SABOTAGE=1     the first data row of the second rows scenario
+#   DEMO_SMOKE_SABOTAGE=csv   the first data row of the first CSV export
 set -euo pipefail
 
 api="http://127.0.0.1:5080"
 while [ $# -gt 0 ]; do
   case "$1" in
     --api) [ $# -ge 2 ] || { echo "smoke.sh: --api needs a URL" >&2; exit 2; }; api="${2%/}"; shift 2 ;;
-    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "smoke.sh: unknown argument '$1' (usage: bash smoke.sh [--api URL])" >&2; exit 2 ;;
   esac
 done
@@ -79,13 +83,19 @@ done
 
 set +e
 python3 - "$work" <<'PY'
+import csv
+import decimal
+import io
 import json
 import math
 import os
+import re
 import sys
 
 work = sys.argv[1]
 sabotage = os.environ.get("DEMO_SMOKE_SABOTAGE") == "1"
+sabotage_csv = os.environ.get("DEMO_SMOKE_SABOTAGE") == "csv"
+csv_seen = 0
 PROVIDERS = ("postgres", "mongo")
 ENV_ERROR, DIFFERENT = 2, 1
 
@@ -119,6 +129,27 @@ def first_difference(a, b):
             what = ", ".join(f"{k}: {x[k]!r} vs {y.get(k)!r}" for k in keys[:2]) or "different shape"
             return f"row {i} ({what})"
     return f"lengths {len(a)} vs {len(b)}"
+
+
+def csv_records(body):
+    """The CSV as a list of lines, each a list of cells; line endings are normalised first."""
+    text = body.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return list(csv.reader(io.StringIO(text, newline=""))) if text else []
+
+
+DECIMAL = re.compile(r"-?\d+(\.\d+)?")
+
+
+def csv_cell_same(a, b):
+    """Exact text, except two plain decimals that are the same number: PostgreSQL writes numeric(12,2) as 20568.00, MongoDB as 20568."""
+    if a == b:
+        return True
+    return bool(DECIMAL.fullmatch(a) and DECIMAL.fullmatch(b) and decimal.Decimal(a) == decimal.Decimal(b))
+
+
+def csv_same(a, b):
+    return len(a) == len(b) and all(
+        len(x) == len(y) and all(csv_cell_same(c, d) for c, d in zip(x, y)) for x, y in zip(a, b))
 
 
 rows_scenarios_seen = 0
@@ -173,13 +204,23 @@ for line in open(os.path.join(work, "index.tsv"), encoding="utf-8").read().split
         table.append((name, f"{len(pg)} values", f"{len(mg)} values", "equal" if ok else "DIFFERENT"))
         failures += 0 if ok else 1
     elif kind in ("csv", "csv-formula"):
-        pg_lines = pg_body.decode("utf-8").splitlines()
-        mg_lines = mg_body.decode("utf-8").splitlines()
-        ok = len(pg_lines) == len(mg_lines) and len(pg_lines) > 1 and pg_lines[0] == mg_lines[0]
+        pg_lines = csv_records(pg_body)
+        mg_lines = csv_records(mg_body)
+        if sabotage_csv and csv_seen == 0 and len(mg_lines) > 1:
+            # test-only: pretend mongo wrote a different first data row
+            mg_lines[1] = mg_lines[1] + ["sabotaged"]
+        csv_seen += 1
+        ok = len(pg_lines) > 1 and csv_same(pg_lines, mg_lines)
         detail = ""
+        if not ok and len(pg_lines) > 1:
+            if len(pg_lines) != len(mg_lines):
+                detail = f": {len(pg_lines)} vs {len(mg_lines)} lines"
+            else:
+                i = next(i for i, (x, y) in enumerate(zip(pg_lines, mg_lines)) if not csv_same([x], [y]))
+                detail = f": line {i} differs"
         if kind == "csv-formula":
             marker = "'=SUM(A1)"
-            has = [any(marker in line for line in lines) for lines in (pg_lines, mg_lines)]
+            has = [any(marker in cell for line in lines for cell in line) for lines in (pg_lines, mg_lines)]
             if not all(has):
                 ok, detail = False, f": no '=SUM(A1) row (postgres {has[0]}, mongo {has[1]})"
         table.append((name, f"{len(pg_lines) - 1} data rows", f"{len(mg_lines) - 1} data rows",

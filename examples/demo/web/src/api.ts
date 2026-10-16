@@ -7,8 +7,18 @@ export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'mongo', label: 'MongoDB' },
 ];
 
-/** The body the grid builds for a block; the API parses it with the library, so it is sent as is. */
+/** The request the grid builds for a block. */
 export type GridRequest = IServerSideGetRowsRequest;
+
+/** A group key as the API parses it: a typed value, not the plain string the grid holds. */
+export type WireGroupKey = { type: 'string'; value: string } | { type: 'null' };
+
+/**
+ * What the page posts: the grid request with one change, `groupKeys` as typed values. The API parses it with the
+ * library. (The other adaptation is on the way back: aggregate result keys `<colId>_<aggFunc>` are renamed to the
+ * column id; see datasource.ts.) Anyone copying this demo must reproduce both.
+ */
+export type WireRequest = Omit<GridRequest, 'groupKeys'> & { groupKeys: WireGroupKey[] };
 
 export interface RowsResponse {
   rows: Record<string, unknown>[];
@@ -77,11 +87,11 @@ function post(provider: Provider, route: string, body: unknown): Promise<Respons
   });
 }
 
-export async function fetchRows(provider: Provider, request: GridRequest): Promise<RowsResponse> {
+export async function fetchRows(provider: Provider, request: WireRequest): Promise<RowsResponse> {
   return (await post(provider, 'rows', request)).json() as Promise<RowsResponse>;
 }
 
-export async function fetchQuery(provider: Provider, request: GridRequest): Promise<QueryView> {
+export async function fetchQuery(provider: Provider, request: WireRequest): Promise<QueryView> {
   return (await post(provider, 'query', request)).json() as Promise<QueryView>;
 }
 

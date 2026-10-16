@@ -5,7 +5,7 @@
     <AssemblyName>Demo.Api</AssemblyName>
   </PropertyGroup>
 
-  <!-- The library is not published yet, so the demo references its projects. After the first release these six
+  <!-- The library is not published yet, so the demo references its projects. After the first release these seven
        lines become PackageReference items (Craticula.Core, .AgGrid, .Sql, .Dapper, .Mongo, .MongoDB.Driver,
        .Export.Csv) and the demo no longer needs a checkout of csharp/. -->
   <ItemGroup>

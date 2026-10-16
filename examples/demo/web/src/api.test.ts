@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, fetchHealth, fetchRows, fetchValues, type GridRequest } from './api';
+import { ApiError, fetchHealth, fetchRows, fetchValues, type WireRequest } from './api';
 
-const request = { startRow: 0, endRow: 100 } as GridRequest;
+const request = { startRow: 0, endRow: 100 } as WireRequest;
 
 function stubFetch(impl: () => Promise<Response>) {
   const mock = vi.fn(impl);

@@ -35,6 +35,8 @@ function serverSetFilter(colId: string, context: ColumnContext): Partial<ColDef>
   return {
     filter: 'agSetColumnFilter',
     filterParams: {
+      // Load the values again each time the filter opens: a failed load or a provider switch must not leave a stale list.
+      refreshValuesOnOpen: true,
       values: (params: { context: GridContext; success: (values: string[]) => void }) => {
         fetchValues(params.context.provider, colId).then(
           (values) => params.success(values.filter((v): v is string => typeof v === 'string')),

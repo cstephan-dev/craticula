@@ -17,6 +17,7 @@ describe('column definitions', () => {
       expect(column?.filter).toBe('agSetColumnFilter');
       expect(column?.enableRowGroup).toBe(true);
       expect(typeof (column?.filterParams as { values: unknown }).values).toBe('function');
+      expect((column?.filterParams as { refreshValuesOnOpen: unknown }).refreshValuesOnOpen).toBe(true);
     }
   });
 

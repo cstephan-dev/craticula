@@ -1,5 +1,5 @@
 import type { IServerSideDatasource } from 'ag-grid-enterprise';
-import { ApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView } from './api';
+import { ApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView, type WireGroupKey, type WireRequest } from './api';
 
 /** What the page wants to hear about while the grid loads blocks. */
 export interface DatasourceListener {
@@ -16,18 +16,15 @@ export function asApiError(error: unknown): ApiError {
 }
 
 /**
- * Two differences between what the grid sends and what the library parses (found against the running API):
+ * One difference between what the grid sends and what the library parses (found against the running API):
  * `groupKeys` are plain strings in the grid but typed values (`{type, value}`) on the wire. Every groupable column of the
  * schema is a string, so a key is a string value (a null key a null value).
  */
-export function toWireRequest(request: GridRequest): GridRequest {
-  if (request.groupKeys.length === 0) {
-    return request;
-  }
-  const groupKeys = request.groupKeys.map((key) =>
-    key == null ? { type: 'null' } : { type: 'string', value: key },
+export function toWireRequest(request: GridRequest): WireRequest {
+  const groupKeys = request.groupKeys.map(
+    (key): WireGroupKey => (key == null ? { type: 'null' } : { type: 'string', value: key }),
   );
-  return { ...request, groupKeys } as unknown as GridRequest;
+  return { ...request, groupKeys };
 }
 
 /**
@@ -51,8 +48,29 @@ export function toGridRows(request: GridRequest, rows: Record<string, unknown>[]
   });
 }
 
-/** The server-side datasource for one provider: the grid's request goes out, the API's answer goes back. */
-export function createDatasource(provider: Provider, listener: DatasourceListener): IServerSideDatasource {
+/** Which provider is on screen. Datasources of any other provider ask it before reporting a late answer. */
+export function createProviderGate(initial: Provider) {
+  let current = initial;
+  return {
+    select(next: Provider) {
+      current = next;
+    },
+    isCurrent(candidate: Provider) {
+      return current === candidate;
+    },
+  };
+}
+
+/**
+ * The server-side datasource for one provider: the grid's request goes out, the API's answer goes back.
+ * `isCurrent` tells whether this datasource's provider is still the one on screen; a late answer from a provider the
+ * user has switched away from must not touch the banner or the query panel (the grid drops its own stale rows).
+ */
+export function createDatasource(
+  provider: Provider,
+  listener: DatasourceListener,
+  isCurrent: () => boolean = () => true,
+): IServerSideDatasource {
   return {
     getRows(params) {
       const request = params.request;
@@ -68,13 +86,15 @@ export function createDatasource(provider: Provider, listener: DatasourceListene
         },
         (error: unknown) => {
           params.fail();
-          listener.onRowsError(asApiError(error));
+          if (isCurrent()) {
+            listener.onRowsError(asApiError(error));
+          }
         },
       );
 
       fetchQuery(provider, wire).then(
-        (view) => listener.onQuery(request, view),
-        (error: unknown) => listener.onQuery(request, asApiError(error)),
+        (view) => isCurrent() && listener.onQuery(request, view),
+        (error: unknown) => isCurrent() && listener.onQuery(request, asApiError(error)),
       );
     },
   };

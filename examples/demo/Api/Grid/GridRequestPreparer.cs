@@ -64,10 +64,20 @@ public sealed class GridRequestPreparer(GridSchema schema, ResourceLimits limits
             throw new AgGridRequestParseException("malformed-request", "The request root must be a JSON object.");
         }
 
-        body["exportFormat"] ??= "csv";
-        body["exportScope"] = "all";
+        string forced;
+        try
+        {
+            body["exportFormat"] ??= "csv";
+            body["exportScope"] = "all";
+            forced = body.ToJsonString();
+        }
+        catch (ArgumentException e)
+        {
+            // JsonNode.Parse is lazy: a duplicate property name only throws here, on first access, as ArgumentException.
+            throw new AgGridRequestParseException("malformed-request", "The request body has a duplicate property name.", e);
+        }
 
-        return Process(AgGridRequestParser.Parse(body.ToJsonString(), parseOptions));
+        return Process(AgGridRequestParser.Parse(forced, parseOptions));
     }
 
     public PreparedSetValues PrepareSetValues(string requestJson)

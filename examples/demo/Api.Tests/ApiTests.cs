@@ -251,6 +251,35 @@ public sealed class ApiTests(ApiHostFixture api)
         Assert.Equal("malformed-request", json.GetProperty("error").GetProperty("kind").GetString());
     }
 
+    [Theory]
+    [InlineData("rows")]
+    [InlineData("values")]
+    [InlineData("export.csv")]
+    [InlineData("query")]
+    public async Task DuplicatePropertyName_Is400MalformedRequest(string route)
+    {
+        const string body = """{ "startRow": 0, "endRow": 10, "endRow": 20, "filterModel": null }""";
+
+        var (status, json) = await api.PostJsonAsync("postgres", route, body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal("malformed-request", json.GetProperty("error").GetProperty("kind").GetString());
+        Assert.DoesNotContain("   at ", json.ToString());
+    }
+
+    [Fact]
+    public async Task BodyOverOneMiB_Is413WithATypedKindAndNoStackText()
+    {
+        var body = $$"""{ "startRow": 0, "endRow": 10, "pad": "{{new string('x', 1_100_000)}}" }""";
+
+        var (status, json) = await api.PostJsonAsync("postgres", "rows", body);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, status);
+        Assert.Equal("request-too-large", json.GetProperty("error").GetProperty("kind").GetString());
+        Assert.DoesNotContain("   at ", json.ToString());
+        Assert.DoesNotContain("Kestrel", json.ToString());
+    }
+
     [Fact]
     public async Task RowsRequestWithoutAWindow_Is400()
     {

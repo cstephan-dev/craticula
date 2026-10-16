@@ -15,7 +15,7 @@ namespace Demo.Api.Errors;
 /// <summary>
 /// One place that turns the library's exceptions into <c>{ "error": { "kind", "message" } }</c>. Client mistakes are 400
 /// with the library's own message (it names columns and limits, never values or stack traces), an unreachable database
-/// is 503, anything else is a logged 500 with a generic message.
+/// is 503, a body the host itself refuses (too large, unreadable) is 413 or 400, anything else is a logged 500 with a generic message.
 /// </summary>
 public sealed class ApiErrorMiddleware(RequestDelegate next, ILogger<ApiErrorMiddleware> logger)
 {
@@ -75,6 +75,10 @@ public sealed class ApiErrorMiddleware(RequestDelegate next, ILogger<ApiErrorMid
             SqlCompilationException or MongoCompilationException or DapperCompilationException
                 or MongoDriverCompilationException => (bad, "compilation-failed", exception.Message),
             CsvWriterException e => (bad, "export-failed", e.Message),
+            // Raised by Kestrel/ASP.NET itself: a body over the 1 MiB limit (413) or a body that cannot be read (400).
+            BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (
+                StatusCodes.Status413PayloadTooLarge, "request-too-large", "The request body is larger than the 1 MiB limit."),
+            BadHttpRequestException => (bad, "bad-request", "The request could not be read."),
             PostgresException => Internal(),
             NpgsqlException or MongoException or TimeoutException or SocketException => (
                 StatusCodes.Status503ServiceUnavailable, "backend-unavailable", "The database is not reachable."),

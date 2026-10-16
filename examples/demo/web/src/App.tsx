@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import type { GridApi, GridReadyEvent } from 'ag-grid-enterprise';
+import type { ColDef, GridApi, GridReadyEvent } from 'ag-grid-enterprise';
 import { ApiError, fetchExport, fetchHealth, type Provider } from './api';
 import { buildColumnDefs, type GridContext } from './columns';
-import { asApiError, createDatasource } from './datasource';
+import { asApiError, createDatasource, createProviderGate } from './datasource';
 import { buildExportRequest } from './exportRequest';
 import { ErrorBanner } from './components/ErrorBanner';
 import { ProviderSwitch } from './components/ProviderSwitch';
 import { QueryPanel, type CompiledQuery } from './components/QueryPanel';
 
 type Health = 'checking' | 'ok' | 'down';
+
+// Module-level: ag-grid-react compares props by reference, so an inline object or array would be re-applied on every
+// render (the side bar would jump back to its first panel).
+const DEFAULT_COL_DEF: ColDef = { sortable: true, filter: true, resizable: true };
+const AUTO_GROUP_COLUMN_DEF: ColDef = { minWidth: 220, headerName: 'Group' };
+const SIDE_BAR = ['columns', 'filters'];
 
 export function App() {
   const [provider, setProvider] = useState<Provider>('postgres');
@@ -20,6 +26,8 @@ export function App() {
   const [exporting, setExporting] = useState(false);
 
   const apiRef = useRef<GridApi | null>(null);
+  // The provider on screen, for the datasources to ask (switchProvider is the only writer).
+  const [gate] = useState(() => createProviderGate('postgres'));
   useEffect(() => {
     let cancelled = false;
     fetchHealth().then(
@@ -36,20 +44,26 @@ export function App() {
   const gridContext = useMemo<GridContext>(() => ({ provider }), [provider]);
   const fieldIds = useMemo(() => new Set(columnDefs.flatMap((c) => ('field' in c && c.field ? [c.field] : []))), [columnDefs]);
 
-  // A new datasource object per provider makes the grid reload; filters, sort and grouping stay as they are.
+  // A new datasource object per provider makes the grid reload; filters, sort and grouping stay as they are. Each one
+  // knows its own provider: once the user switches, its late answers are ignored.
   const datasource = useMemo(
     () =>
-      createDatasource(provider, {
-        onRowsError: setError,
-        onQuery: (request, view) => setQuery({ request, view }),
-      }),
-    [provider],
+      createDatasource(
+        provider,
+        {
+          onRowsError: setError,
+          onQuery: (request, view) => setQuery({ request, view }),
+        },
+        () => gate.isCurrent(provider),
+      ),
+    [provider, gate],
   );
 
   const switchProvider = useCallback((next: Provider) => {
+    gate.select(next);
     setError(null);
     setProvider(next);
-  }, []);
+  }, [gate]);
 
   const onGridReady = useCallback((event: GridReadyEvent) => {
     apiRef.current = event.api;
@@ -105,10 +119,10 @@ export function App() {
             serverSideDatasource={datasource}
             columnDefs={columnDefs}
             context={gridContext}
-            defaultColDef={{ sortable: true, filter: true, resizable: true }}
-            autoGroupColumnDef={{ minWidth: 220, headerName: 'Group' }}
+            defaultColDef={DEFAULT_COL_DEF}
+            autoGroupColumnDef={AUTO_GROUP_COLUMN_DEF}
             rowGroupPanelShow="always"
-            sideBar={['columns', 'filters']}
+            sideBar={SIDE_BAR}
             cacheBlockSize={100}
             maxBlocksInCache={10}
             serverSideInitialRowCount={100}
