@@ -45,7 +45,7 @@ The driver's first stdout line declares what it is and what it can compile:
 
 - `impl` — a free label shown in the report.
 - `specVersion` — the version of this spec the implementation claims (TRD P-2). Echoed in the report, not validated:
-  the suite has no version number yet.
+  the suite has no version number yet. The version of this spec lives in `spec/VERSION`, and that is the value implementations claim.
 - `backends` — a non-empty subset of the closed set `postgres`, `mssql`, `mysql`, `oracle`, `sqlite`, `mongo`, `search`
   (the file stems under `expected/`). `search` is the one shared OpenSearch/Elasticsearch artifact (OQ-7).
 

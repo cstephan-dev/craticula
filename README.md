@@ -61,9 +61,21 @@ examples/     demo app (React + AG Grid + one sample backend)
 
 The C# implementation is split into ten NuGet packages: `Craticula.Core`, `Craticula.AgGrid`, `Craticula.Sql`,
 `Craticula.Mongo`, `Craticula.Search`, `Craticula.Export.Csv`, `Craticula.EntityFrameworkCore`, `Craticula.Dapper`,
-`Craticula.MongoDB.Driver` and `Craticula.OpenSearch.Client`. Version 1.0.0 is prepared but **not published yet**: they
-are not on nuget.org. To check that the packages build and a clean consumer compiles against them, run
+`Craticula.MongoDB.Driver` and `Craticula.OpenSearch.Client`. Nothing is published to nuget.org until the release routine has run; the `Latest release:` line in the
+[Compatibility](#compatibility) section shows the last published version. To check that the packages build and a clean consumer compiles against them, run
 `bash scripts/pack-smoke.sh` (Python 3.10+ and the .NET 10 SDK; about 3 minutes).
+
+## Compatibility
+
+| Spec version | .NET target |
+|---|---|
+| 0.1.0 | net10.0 |
+
+The spec version is the one in [`spec/VERSION`](spec/VERSION); every package states it in its own README.
+How versions are chosen is written in [VERSIONING.md](VERSIONING.md).
+The packages declare version ranges for the libraries they wrap, never one exact version.
+
+Latest release: 1.0.0 <!-- x-release-please-version -->
 
 ## License
 
