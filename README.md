@@ -32,7 +32,9 @@ separate, optional per-ecosystem adapter packages.
 
 ## Scope (v1)
 
-- **Frontend adapter:** AG Grid SSRM (v31–v36).
+- **Frontend adapter:** AG Grid SSRM (v31–v36). AG Grid Community's Infinite Row Model is supported for flat grids
+  (sort, text, number and date filters, paging; see [`spec/fixtures/community-infinite`](spec/fixtures/community-infinite/README.md)).
+  Row grouping, aggregation, pivot and the set filter are Enterprise features and are not part of that promise.
 - **Backends:** PostgreSQL, SQL Server, MySQL/MariaDB, SQLite, MongoDB, OpenSearch,
   Elasticsearch. Oracle is open (see the TRD's open questions).
 - **Reference implementation:** C#/.NET, ported to TypeScript, Python, and Go after the spec
