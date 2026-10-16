@@ -51,9 +51,9 @@ public class SearchConformanceFixtureTests
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
-        ("operators", 56),
+        ("operators", 62),
         ("date-presets", 26),
-        ("dialect-parity", 18),
+        ("dialect-parity", 19),
         ("group-aggregation", 22),
         ("filter-tree", 15),
         ("sort-paging", 12),
@@ -133,7 +133,7 @@ public class SearchConformanceFixtureTests
 
     /// <summary>
     /// SEM-3, asserted independently of the artifact text: <b>every</b> sort key carries an explicit
-    /// <c>missing</c>, on all 169 fixtures.
+    /// <c>missing</c>, on all 175 fixtures.
     ///
     /// <para>SEM-3's first Must-NOT forbids relying on the engine's own default even when it happens
     /// to match, and SEM-6's fourth forbids "the stable key is probably never null" as a licence to
@@ -261,7 +261,7 @@ public class SearchConformanceFixtureTests
         // arm and no excluded fixture at all. It last moved when #1650's review pass authored
         // page-export/024; before that #1650 itself released page-export (13, now 14) and
         // sort-paging/012 from exclusion and authored page-export/023.
-        Assert.Equal(169, InScopeFixtures.Count);
+        Assert.Equal(176, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -286,7 +286,7 @@ public class SearchConformanceFixtureTests
     [Fact]
     public void Every_Search_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "169 in scope": every search.artifact.json in the repo is
+        // The count that closes the loop on "176 in scope": every search.artifact.json in the repo is
         // either exercised above, or inside a category/fixture this class excludes BY NAME. Since
         // #1650 nothing is excluded, so the two numbers are equal — the arithmetic is kept rather
         // than simplified away, because it is what would catch a future exclusion being added
@@ -301,7 +301,7 @@ public class SearchConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "search.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(169, onDisk);
+        Assert.Equal(176, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }

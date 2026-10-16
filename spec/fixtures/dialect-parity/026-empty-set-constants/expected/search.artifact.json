@@ -1,0 +1,25 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "match_none": {}
+        },
+        {
+          "match_all": {}
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

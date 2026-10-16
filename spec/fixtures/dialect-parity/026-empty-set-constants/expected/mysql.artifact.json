@@ -1,0 +1,8 @@
+{
+  "dialect": "mysql",
+  "sql": "SELECT * FROM `items` WHERE (1 = 0 OR 1 = 1) ORDER BY ISNULL(`id`) ASC, `id` ASC LIMIT ? OFFSET ?",
+  "params": [
+    100,
+    0
+  ]
+}

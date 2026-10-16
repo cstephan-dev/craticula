@@ -1,0 +1,27 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "match_none": {}
+        },
+        {
+          "term": {
+            "age": 30
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

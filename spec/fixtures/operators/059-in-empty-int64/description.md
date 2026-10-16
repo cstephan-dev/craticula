@@ -1,0 +1,1 @@
+Proves SEM-8 on an `int64` field through the native Set Filter wire form `{filterType: set, values: []}`: no row matches. Same artifacts as 057 on a numeric field; nothing is bound, so no array parameter reaches the driver.

@@ -1,0 +1,15 @@
+{
+  "query": {
+    "match_none": {}
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

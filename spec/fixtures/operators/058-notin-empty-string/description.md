@@ -1,0 +1,1 @@
+Proves SEM-8: an empty `notIn` list matches every row, null rows included (SEM-2: negative operators include NULL). No native `filterModel` shape expresses `notIn` (see 036), so the IR fragment arrives through `customFilters`. SQL renders the constant `1 = 1` with no `IS NULL` disjunct (the constant already matches null rows), Mongo `$nin: []`, Search `match_all`.

@@ -671,4 +671,35 @@ public class SqlQueryBuilderOperatorTests
 
         Assert.Contains("not declared in the GridSchema", ex.Message, StringComparison.Ordinal);
     }
+
+    // ---- SEM-8: an empty set is a constant -------------------------------------------------------
+
+    [Fact]
+    public void An_Empty_In_Renders_The_False_Constant_And_Binds_Nothing()
+    {
+        var (where, parameters) = Where(new ComparisonNode { Field = "status", Op = ComparisonOperator.In, Values = [] });
+
+        Assert.Equal("1 = 0", where);
+        Assert.Empty(parameters);
+    }
+
+    [Fact]
+    public void An_Empty_NotIn_Renders_The_True_Constant_With_No_Null_Disjunct()
+    {
+        var (where, parameters) = Where(new ComparisonNode { Field = "status", Op = ComparisonOperator.NotIn, Values = [] });
+
+        Assert.Equal("1 = 1", where);
+        Assert.Empty(parameters);
+    }
+
+    [Fact]
+    public void A_Not_Around_An_Empty_In_Keeps_SEM_2s_Null_Fan_Out()
+    {
+        var (where, _) = Where(new NotNode
+        {
+            Node = new ComparisonNode { Field = "status", Op = ComparisonOperator.In, Values = [] }
+        });
+
+        Assert.Equal("(NOT (1 = 0) OR \"status\" IS NULL)", where);
+    }
 }

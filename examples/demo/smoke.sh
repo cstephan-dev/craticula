@@ -56,6 +56,8 @@ scenarios=(
   "datetime in range (customFilters)|rows|datetime-in-range.json|rows"
   "boolean equals|rows|boolean-eq.json|rows"
   "set filter on status|rows|set-filter-status.json|rows"
+  "set filter with nothing selected (SEM-8)|rows|set-filter-empty.json|rows"
+  "notIn with no values, every row (SEM-8)|rows|notin-empty.json|rows"
   "group by country: sum, avg, count|rows|group-by-country.json|rows"
   "page past the end|rows|past-the-end.json|rows"
   "set values for country|values|set-values-country.json|values"

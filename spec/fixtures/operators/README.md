@@ -23,7 +23,7 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
   own "must NOT omit the null-ordering marker on the theory that the field is probably never null"
   rule: every artifact's `id ASC` sort still carries its adapter-default `nullsPosition: "last"`
   marker — `NULLS LAST` in Postgres, an `__idNullBucket` null-bucket `$addFields`/`$sort`/`$unset`
-  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 56 cases,
+  **trio** in Mongo, `missing: "_last"` in Search — unconditionally, on every one of the 62 cases,
   exactly as `filter-tree/` and `sort-paging/` already do for their own bare `id` sort.
 
   *Corrected in #1643, on all 47.* This bullet used to say "`$addFields`/`$sort` **pair**", and the
@@ -148,11 +148,17 @@ General/structural fixtures per the suite-wide policy (`../README.md`): `postgre
 | 054 | `054-in-datetime-zoneless/` | AR-6 `in` on `datetime` via the Set Filter wire shape with zone-less `YYYY-MM-DD HH:mm:ss` values (SEM-4, SEM-5; Bug #2319); `requestContext.zone` UTC; artifacts equal 052's. |
 | 055 | `055-in-datetime-zoneless-zone/` | Same as 054 under `America/New_York` (UTC-05:00 in winter): `2026-01-15 09:30:00` is `14:30:00Z`, `2026-02-10 20:00:00` is `2026-02-11T01:00:00Z`; a row holding the wall clock read as UTC must not match. |
 | 056 | `056-in-date-zoneless/` | AR-6 `in` on `date` via the Set Filter wire shape with `YYYY-MM-DD 00:00:00` values (SEM-4, SEM-5; Bug #2319); artifacts equal 050's. |
+| 057 | `057-in-empty-string/` | SEM-8 `in []` via the Set Filter wire form: matches no row; SQL `1 = 0`, Mongo `$in: []`, Search `match_none`. |
+| 058 | `058-notin-empty-string/` | SEM-8 `notIn []` via `customFilters`: matches every row, null rows included; SQL `1 = 1`, Mongo `$nin: []`, Search `match_all`. |
+| 059 | `059-in-empty-int64/` | SEM-8 `in []` on `int64`: no row, nothing bound. |
+| 060 | `060-in-empty-inside-or/` | SEM-8 composition: `(in [] OR age = 30)` matches what `age = 30` matches. |
+| 061 | `061-notin-empty-inside-and/` | SEM-8 composition: `(notIn [] AND age > 30)` matches what `age > 30` matches. |
+| 062 | `062-not-notin-empty/` | SEM-8 under a tree-level `not`: `not(notIn [])` matches only the NULL rows (SEM-2 fan-out outside the negation). |
 
 ## Execution equality (T-1b)
 
-All 56 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
-[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-056 follow it. Every fixture has an oracle-free
+All 62 fixtures in this category carry the `dataset.json` + `expectedRows.json` pair (XEQ-1..XEQ-4 in
+[`spec/semantics.md`](../../semantics.md)): 001 is the worked example, 002-062 follow it. Every fixture has an oracle-free
 backend set (`postgres`, `mongo`, `search`), so a seeded `''` is allowed and is used where SEM-2 gives it a meaning
 (`blank` / `notBlank`, `neq`, `notIn`). Out of scope: none, because this category has no rejection-only fixture.
 Each seed is 4-9 rows keyed by logical colId, with boundary values just inside and outside, nulls, case variants and

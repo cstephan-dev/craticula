@@ -1,0 +1,6 @@
+{
+  "startRow": 0, "endRow": 100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": null,
+  "customFilters": { "type": "comparison", "field": "status", "op": "notIn", "values": [] },
+  "sortModel": [ { "colId": "id", "sort": "asc" } ]
+}

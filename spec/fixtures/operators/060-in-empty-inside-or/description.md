@@ -1,0 +1,1 @@
+Proves SEM-8 composes by ordinary Boolean logic: `(in [] OR age = 30)` matches exactly the rows `age = 30` matches. The empty `in` is a constant false inside the disjunction; the compilers do not fold it away, so the structure of the tree stays visible in the artifacts.

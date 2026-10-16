@@ -1,0 +1,36 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ],
+  "customFilters": {
+    "type": "and",
+    "nodes": [
+      {
+        "type": "comparison",
+        "field": "age",
+        "op": "notIn",
+        "values": []
+      },
+      {
+        "type": "comparison",
+        "field": "age",
+        "op": "gt",
+        "value": {
+          "type": "int64",
+          "value": 30
+        }
+      }
+    ]
+  }
+}
