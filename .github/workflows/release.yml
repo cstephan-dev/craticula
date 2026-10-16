@@ -51,7 +51,7 @@ jobs:
       - name: Only from main
         run: |
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-            echo "::error::The release runs only from refs/heads/main; this run is on '$GITHUB_REF'. Dispatch it on main."
+            echo "::error::The release runs only from refs/heads/main; this run is on '$GITHUB_REF'. Run it from main."
             exit 1
           fi
 

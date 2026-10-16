@@ -5,8 +5,9 @@
 # `nuget` (the maker approves each run there); this file adds no approval of its own.
 # Known deviations, in plain words: a tag made with the default token starts no other workflow, so the release job
 # below calls release.yml directly instead of waiting for a tag trigger; the pull request is merged on the public
-# repository and its release commit is copied back to the private repository by hand; the repository setting "Allow
-# GitHub Actions to create and approve pull requests" must be on, or the action cannot open the release pull request.
+# repository and its release commit is synced back to the private repository by the maintainer with a script; the
+# repository setting "Allow GitHub Actions to create and approve pull requests" must be on, or the action cannot open
+# the release pull request.
 # Concurrency: this file uses its own group name. A called workflow that shares the caller's group name is cancelled as
 # a deadlock, and release.yml keeps the group `release`, which still serializes the publishes.
 name: release-please

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Pins the private-to-public mirror (scripts/publish_mirror.py, publish-github.sh, sync-release-commit.sh), story #1659.
+"""Pins the private-to-public mirror (scripts/publish_mirror.py and the publish and sync scripts), story #1659.
 
 Scratch repositories and a scratch bare remote only: the real `github` remote is never contacted. The pure tests (message
-mapping, Release Please's rule) always run; the script tests need bash, git, git-filter-repo and node, and the two private
-scripts, which the public mirror does not carry, so they skip there. Run: python3 scripts/test_publish_mirror.py
+mapping, Release Please's rule) always run; the script tests need bash, git, git-filter-repo and node, the scripts absent
+from the public mirror and the secret-pattern detector (SECRET_PATTERNS_JS names it; else it is looked up under the
+repository root), and skip where one is missing. Run: python3 scripts/test_publish_mirror.py
 (also run by Craticula.Conformance.Tests/PublishMirrorTests.cs on every `dotnet test`).
 """
 import os
@@ -19,17 +20,24 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import publish_mirror as mirror  # noqa: E402
 
+
+def _find_secret_patterns():
+    given = os.environ.get("SECRET_PATTERNS_JS")
+    if given:
+        return Path(given)
+    found = sorted(ROOT.glob("*/skills/*/scripts/secret-patterns.js"))
+    return found[0] if found else None
+
+
 PUBLISH = HERE / "publish-github.sh"
 SYNC = HERE / "sync-release-commit.sh"
-SECRETS = ROOT / ".claude" / "skills" / "cst-g-commit" / "scripts" / "secret-patterns.js"
-REAL_BOUNDARY = "5cf28d5ace979797b1cd21c8c844677c58bd4dc9"   # private commit the public tip 6d1b260 was filtered from
-REAL_PUBLIC_TIP = "6d1b260a1e94186c85d1d2dd6b3ce1e43322d848"
+SECRETS = _find_secret_patterns()
 PROPS = "csharp/src/Directory.Build.props"
 TOOLS = all(shutil.which(t) for t in ("bash", "git", "node")) and subprocess.run(
     ["git", "filter-repo", "--version"], capture_output=True).returncode == 0
 NEED_SCRIPTS = unittest.skipUnless(
-    TOOLS and PUBLISH.exists() and SYNC.exists() and SECRETS.exists(),
-    "needs bash, git, git-filter-repo, node and the private scripts (absent from the public mirror)")
+    TOOLS and PUBLISH.exists() and SYNC.exists() and SECRETS is not None and SECRETS.exists(),
+    "needs bash, git, git-filter-repo, node, the scripts absent from the public mirror and the secret-pattern detector")
 
 
 class MappingTests(unittest.TestCase):
@@ -64,7 +72,17 @@ class MappingTests(unittest.TestCase):
     def test_release_please_rule(self):
         table = [("feat: x (#1)", "minor"), ("fix: x (#1)", "patch"), ("feat!: x", "major"), ("fix(core)!: x", "major"),
                  ("feat: x\n\nBREAKING CHANGE: y", "major"), ("chore: merge x (#3)", None), ("docs: x", None),
-                 ("Merge #3: x", None), ("FIX #3 x", None), ("chore: merge the private history into the public mirror", None)]
+                 ("Merge #3: x", None), ("FIX #3 x", None), ("chore: merge the private history into the public mirror", None),
+                 # one message, several entries: split at a blank line followed by `type: ` (release-please splitMessages)
+                 ("chore: merge\n\nfeat: a (#1)\n\nfix: b (#2)", "minor"),
+                 ("chore: merge\n\nfix: b (#2)\n\nchore: c (#3)", "patch"),
+                 ("chore: merge\n\nchore: c (#3)\n\ndocs: d", None),
+                 ("chore: merge\n\nfeat: a (#1)\n\nBREAKING CHANGE: y\n\nfix: b", "major"),
+                 # `!` is not in the split pattern: a `feat!:` paragraph stays inside the previous entry (the merge message
+                 # therefore states a break as a footer, see publish_mirror.merge_message)
+                 ("chore: merge\n\nfeat!: a (#1)", None),
+                 # no blank line before the type: not split, so only the first line counts
+                 ("chore: merge\nfeat: a (#1)", None)]
         for message, expected in table:
             with self.subTest(message=message):
                 self.assertEqual(mirror.release_type(message), expected)
@@ -86,6 +104,8 @@ def run(cwd, *cmd, env=None, check=True):
 
 @NEED_SCRIPTS
 class ScriptTests(unittest.TestCase):
+    CLOCK = 1_700_000_000
+
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
@@ -94,9 +114,12 @@ class ScriptTests(unittest.TestCase):
         self.env = {**os.environ, "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0"}
         self.priv = self.tmp / "priv"
         self.pub = self.tmp / "public.git"
+        self.origin = self.tmp / "origin.git"
         run(self.tmp, "git", "init", "-q", str(self.priv), env=self.env)
         run(self.tmp, "git", "init", "-q", "--bare", str(self.pub), env=self.env)
+        run(self.tmp, "git", "init", "-q", "--bare", str(self.origin), env=self.env)
         run(self.pub, "git", "config", "receive.denyNonFastForwards", "true", env=self.env)   # a force push would fail
+        self.git("remote", "add", "origin", str(self.origin))
         self.write(".claude/rules.md", "private\n")
         self.write("docs/d.md", "private\n")
         self.write("README.md", "# scratch\n")
@@ -104,6 +127,7 @@ class ScriptTests(unittest.TestCase):
         self.commit("Initial commit")
         self.write("a.txt", "a\n")
         self.boundary = self.commit("TECHNICAL #1 the published boundary")
+        self.git("push", "-q", "origin", "main")
 
     def git(self, *args, cwd=None, check=True):
         return run(cwd or self.priv, "git", *args, env=self.env, check=check)
@@ -114,9 +138,13 @@ class ScriptTests(unittest.TestCase):
         path.write_text(text)
 
     def commit(self, message, root=None):
+        """Commits carry a scripted clock, one minute apart, so the date order Release Please walks is deterministic."""
         root = root or self.priv
+        ScriptTests.CLOCK += 60
+        stamp = f"{ScriptTests.CLOCK} +0000"
+        env = {**self.env, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
         self.git("add", "-A", cwd=root)
-        self.git("commit", "-q", "-m", message, cwd=root)
+        run(root, "git", "commit", "-q", "-m", message, env=env)
         return self.git("rev-parse", "HEAD", cwd=root).stdout.strip()
 
     def publish(self, check=True, dry=False):
@@ -134,21 +162,53 @@ class ScriptTests(unittest.TestCase):
     def public_subjects(self, rev="main"):
         return self.git("log", "--topo-order", "--format=%s", rev, cwd=self.pub).stdout.splitlines()
 
-    def release_commit(self, version, extra_path=None):
-        """What Release Please does on the public repository: bump the version, write the changelog and the manifest."""
+    def public_clone(self):
         work = self.tmp / "work"
         if work.exists():
             shutil.rmtree(work)
         self.git("clone", "-q", str(self.pub), str(work), cwd=self.tmp)
+        return work
+
+    def release_commit(self, version, extra_path=None, props_suffix="", changelog=None, link=False, push=True):
+        """What Release Please does on the public repository: bump the version, write the changelog and the manifest."""
+        work = self.public_clone()
         props = (work / PROPS).read_text().replace("<Version>1.0.0</Version>", f"<Version>{version}</Version>")
-        (work / PROPS).write_text(props)
-        self.write("CHANGELOG.md", f"# Changelog\n\n## {version}\n", root=work)
+        (work / PROPS).write_text(props.replace("</PropertyGroup>", props_suffix + "</PropertyGroup>"))
+        if link:
+            (work / "CHANGELOG.md").unlink(missing_ok=True)
+            (work / "CHANGELOG.md").symlink_to("README.md")
+        else:
+            (work / "CHANGELOG.md").write_bytes(changelog if changelog is not None else f"# Changelog\n\n## {version}\n".encode())
         self.write(".release-please-manifest.json", f'{{".": "{version}"}}\n', root=work)
         if extra_path:
             self.write(extra_path, "changed on the public side\n", root=work)
         sha = self.commit(f"chore: release dotnet {version}", root=work)
+        if push:
+            self.git("push", "-q", "origin", "HEAD:refs/heads/main", cwd=work)
+        return sha
+
+    def public_commit(self, path, text, message="docs: public fix"):
+        work = self.public_clone()
+        self.write(path, text, root=work)
+        sha = self.commit(message, root=work)
         self.git("push", "-q", "origin", "HEAD:refs/heads/main", cwd=work)
         return sha
+
+    def released_and_published(self, version="1.0.1"):
+        """Publish, one feature, a public release commit, its sync, and the publish that follows (the merge commit)."""
+        self.publish()
+        self.write("b.txt", "b\n")
+        self.commit("FEATURE #2 add thing")
+        release = self.release_commit(version)
+        self.sync(release)
+        self.publish()
+        return release
+
+    def assert_fast_forward(self, before_tip):
+        tip = self.public_tip()
+        self.assertNotEqual(tip, before_tip)
+        self.assertTrue(mirror._is_ancestor(str(self.pub), before_tip, tip))
+        return tip
 
     def test_published_history_keeps_its_hashes_and_later_commits_are_mapped(self):
         first = self.publish()
@@ -190,14 +250,16 @@ class ScriptTests(unittest.TestCase):
         self.commit("FEATURE #2 add thing")
         release = self.release_commit("1.0.1")
 
-        blocked = self.publish(check=False)                          # the release commit is not in private main yet
+        blocked = self.publish(check=False)                          # the release commit is not recorded in private main yet
         self.assertEqual(blocked.returncode, 1)
         self.assertIn("scripts/sync-release-commit.sh " + release, blocked.stderr)
+        self.assertIn("is not recorded in private main", blocked.stderr)
         self.assertEqual(self.public_tip(), release)                 # nothing was pushed
 
         synced = self.sync(release)
         self.assertIn("sync release 1.0.1", synced.stdout)
         self.assertEqual(self.git("log", "-1", "--format=%s").stdout.strip(), "TECHNICAL #9 sync release 1.0.1")
+        self.assertEqual(self.git("log", "-1", "--format=%(trailers:key=Public-Sync,valueonly)").stdout.strip(), release)
         self.assertEqual(self.sync(release).returncode, 0)           # idempotent: already in sync, no second commit
         self.assertEqual(self.git("rev-list", "--count", "HEAD").stdout.strip(), "4")
         self.write("e.txt", "e\n")
@@ -218,7 +280,7 @@ class ScriptTests(unittest.TestCase):
                          self.git("rev-parse", f"{parents[1]}^{{tree}}", cwd=self.pub).stdout)   # the filtered head's tree
         self.assertEqual(self.git("show", f"{tip}:CHANGELOG.md", cwd=self.pub).stdout, "# Changelog\n\n## 1.0.1\n")
         self.assertIn("<Version>1.0.1</Version>", self.git("show", f"{tip}:{PROPS}", cwd=self.pub).stdout)
-        self.assertEqual(self.public_subjects()[0], "chore: merge the private history into the public mirror")
+        self.assertEqual(self.public_subjects()[0], mirror.MERGE_SUBJECT)
         self.assertIsNone(mirror.release_type(self.public_subjects()[0]))
 
         # Our own merge is accepted on the next round, with new private work and with none.
@@ -228,7 +290,51 @@ class ScriptTests(unittest.TestCase):
         self.commit("FEATURE #7 next")
         self.publish()
         self.assertIn("feat: next (#7)", self.public_subjects())
-        self.assertEqual(self.public_subjects()[0], "chore: merge the private history into the public mirror")
+        self.assertEqual(self.public_subjects()[0], mirror.MERGE_SUBJECT)
+
+    def test_merge_message_lists_the_commits_and_release_please_counts_them(self):
+        self.publish()
+        self.write("b.txt", "b\n")
+        self.commit("FEATURE #2 add thing")
+        self.write("t.txt", "t\n")
+        self.commit("TECHNICAL #3 tidy")
+        release = self.release_commit("1.0.1")
+        self.sync(release)
+        self.write("e.txt", "e\n")
+        self.commit("FIX #6 after the release")        # dated after the release commit: Release Please counts it itself
+        self.publish()
+        message = self.git("log", "-1", "--format=%B", "main", cwd=self.pub).stdout
+        self.assertEqual(message.split("\n")[0], mirror.MERGE_SUBJECT)
+        self.assertEqual(message.strip().split("\n\n")[1:], ["feat: add thing (#2)", "chore: tidy (#3)"])   # strongest first
+        self.assertEqual(mirror.release_type(message), "minor")        # the feature behind the merge opens a release
+
+    def test_a_merge_bringing_only_chores_opens_no_release(self):
+        self.publish()
+        self.write("t.txt", "t\n")
+        self.commit("TECHNICAL #3 tidy")
+        self.write("u.txt", "u\n")
+        self.commit("Merge #4: housekeeping")
+        release = self.release_commit("1.0.1")
+        self.sync(release)
+        self.publish()
+        message = self.git("log", "-1", "--format=%B", "main", cwd=self.pub).stdout
+        self.assertIn("chore: tidy (#3)", message)
+        self.assertIsNone(mirror.release_type(message))
+
+    def test_merge_message_orders_by_strength_and_is_bounded(self):
+        self.write("base.txt", "base\n")
+        base = self.commit("TECHNICAL #1 base")
+        for subject in ("chore: c1", "fix: f1", "feat: a1", "feat!: breaking one", "chore: c2",
+                        "fix: f2\n\nBREAKING CHANGE: shape", "Merge branch 'x'", "#12: not conventional"):
+            self.write("f.txt", subject)
+            self.commit(subject)
+        full = mirror.merge_message(str(self.priv), base, "HEAD")
+        self.assertEqual(full.strip().split("\n\n"), [mirror.MERGE_SUBJECT, "fix: f2", "BREAKING CHANGE: shape", "feat: breaking one", "BREAKING CHANGE: breaking one",
+                                                       "feat: a1", "fix: f1", "chore: c2", "chore: c1"])
+        capped = mirror.merge_message(str(self.priv), base, "HEAD", cap=2)
+        self.assertEqual(capped.strip().split("\n\n"), [mirror.MERGE_SUBJECT, "fix: f2", "BREAKING CHANGE: shape", "feat: breaking one", "BREAKING CHANGE: breaking one",
+                                                         "... and 4 more commits not listed"])
+        self.assertEqual(mirror.release_type(capped), "major")
 
     def test_a_foreign_public_change_is_refused(self):
         self.publish()
@@ -244,28 +350,142 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(refused.returncode, 1)
         self.assertIn("README.md", refused.stderr)
 
-    def test_sync_refuses_a_dirty_tree_and_a_private_edit_it_would_overwrite(self):
+    def test_sync_refuses_a_dirty_tree_and_a_private_version_edit_it_would_overwrite(self):
         self.publish()
         release = self.release_commit("1.0.1")
         self.write(PROPS, "<Project><PropertyGroup>\n<Version>1.0.0</Version>\n<Other/>\n</PropertyGroup></Project>\n")
         self.assertIn("not clean", self.sync(release, check=False).stderr)
-        self.commit("TECHNICAL #8 edit the props in private")
+        self.git("checkout", "--", PROPS)
+        self.write(PROPS, "<Project><PropertyGroup>\n<Version>1.0.5</Version>\n</PropertyGroup></Project>\n")
+        self.commit("TECHNICAL #8 bump the version in private")
         refused = self.sync(release, check=False)
         self.assertEqual(refused.returncode, 1)
+        self.assertIn("<Version>", refused.stderr)
         self.assertIn("merge it by hand", refused.stderr)
 
-    @unittest.skipUnless(TOOLS and PUBLISH.exists() and SECRETS.exists(), "private scripts or tools absent")
-    def test_real_boundary_filters_to_the_published_tip(self):
-        probe = subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", f"{REAL_BOUNDARY}^{{commit}}"], capture_output=True)
-        if probe.returncode != 0 or subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", REAL_PUBLIC_TIP],
-                                                    capture_output=True).returncode != 0:
-            self.skipTest("this checkout lacks the private boundary commit or the public tip object")
-        run(ROOT, "git", "push", "-q", str(self.pub), f"{REAL_PUBLIC_TIP}:refs/heads/main", env=self.env)   # into the scratch bare repo
-        env = {**self.env, "SRC": str(ROOT), "PUBLIC_REMOTE": str(self.pub), "PUBLISH_DRY_RUN": "1"}
-        env.pop("PUBLISH_BOUNDARY", None)
-        result = run(ROOT, "bash", str(PUBLISH), env=env)
-        self.assertIn(f"boundary {REAL_BOUNDARY} filters to {REAL_PUBLIC_TIP[:7]}", result.stdout)
-        self.assertIn("dry run: would push", result.stdout)
+    def test_sync_leaves_a_private_edit_of_the_props_file_alone(self):
+        self.publish()
+        release = self.release_commit("1.0.1")
+        self.write(PROPS, "<Project><PropertyGroup>\n<Version>1.0.0</Version>\n<Other/>\n</PropertyGroup></Project>\n")
+        self.commit("TECHNICAL #8 edit the props in private")
+        self.sync(release)
+        self.assertEqual((self.priv / PROPS).read_text(),
+                         "<Project><PropertyGroup>\n<Version>1.0.1</Version>\n<Other/>\n</PropertyGroup></Project>\n")
+
+    def test_sync_takes_only_the_version_from_the_public_props_file(self):
+        self.publish()
+        release = self.release_commit("1.0.1", props_suffix="<Injected>$(Foo)</Injected>\n")
+        refused = self.sync(release, check=False)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("beyond the <Version> value", refused.stderr)
+        self.assertIn("Injected", refused.stderr)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=no").stdout, "")   # nothing was written
+
+    def test_sync_refuses_a_changelog_with_a_nul_and_a_symlink(self):
+        self.publish()
+        nul = self.release_commit("1.0.1", changelog=b"# Changelog\n\x00\n")
+        refused = self.sync(nul, check=False)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("NUL", refused.stderr)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=no").stdout, "")
+        link = self.release_commit("1.0.1", link=True)
+        refused = self.sync(link, check=False)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("not a regular file", refused.stderr)
+
+    def test_sync_runs_from_a_work_branch_that_contains_origin_main(self):
+        self.publish()
+        release = self.release_commit("1.0.1")
+        self.git("checkout", "-q", "-b", "csn/9-sync-release")
+        self.assertIn("sync release 1.0.1", self.sync(release).stdout)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip(), "csn/9-sync-release")
+
+    def test_sync_refuses_a_head_that_lacks_origin_main(self):
+        self.publish()
+        release = self.release_commit("1.0.1")
+        self.write("z.txt", "z\n")
+        self.commit("TECHNICAL #5 something already on origin")
+        self.git("push", "-q", "origin", "main")
+        self.git("reset", "-q", "--hard", "HEAD~1")
+        refused = self.sync(release, check=False)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("does not contain origin/main", refused.stderr)
+
+    # --- the probes of the review: the publish must not stay blocked after the first release ---------------------------
+
+    def test_probe_a_private_edit_of_the_props_after_a_synced_release_does_not_block(self):
+        self.released_and_published()
+        before = self.public_tip()
+        self.write(PROPS, "<Project><PropertyGroup>\n<Version>1.0.1</Version>\n<Other/>\n</PropertyGroup></Project>\n")
+        self.commit("TECHNICAL #8 edit the props in private")
+        self.publish()                                               # the bare remote refuses anything but a fast-forward
+        tip = self.assert_fast_forward(before)
+        self.assertEqual(self.git("rev-list", "--parents", "-n", "1", tip, cwd=self.pub).stdout.split()[1], before)
+        self.assertIn("<Other/>", self.git("show", f"{tip}:{PROPS}", cwd=self.pub).stdout)
+
+    def test_probe_b_bumping_version_and_manifest_in_private_after_a_release_does_not_block(self):
+        self.released_and_published()
+        before = self.public_tip()
+        self.write(PROPS, "<Project><PropertyGroup>\n<Version>1.0.2</Version>\n</PropertyGroup></Project>\n")
+        self.write(".release-please-manifest.json", '{".": "1.0.2"}\n')
+        self.commit("TECHNICAL #8 bump the version after a failed release")
+        self.publish()
+        tip = self.assert_fast_forward(before)
+        self.assertEqual(self.git("show", f"{tip}:.release-please-manifest.json", cwd=self.pub).stdout, '{".": "1.0.2"}\n')
+
+    def test_probe_c_a_public_readme_fix_copied_with_a_trailer_does_not_block(self):
+        self.publish()
+        before = self.public_tip()
+        fix = self.public_commit("README.md", "# scratch\nfixed on GitHub\n")
+        blocked = self.publish(check=False)
+        self.assertEqual(blocked.returncode, 1)
+        self.assertIn(fix, blocked.stderr)
+        self.assertIn("README.md", blocked.stderr)
+        self.assertIn(f"Public-Sync: {fix}", blocked.stderr)
+        self.write("README.md", "# scratch\nfixed on GitHub\n")
+        self.commit(f"TECHNICAL #10 copy the public README fix\n\nPublic-Sync: {fix}")
+        self.publish()
+        tip = self.assert_fast_forward(before)
+        self.assertEqual(self.git("show", f"{tip}:README.md", cwd=self.pub).stdout, "# scratch\nfixed on GitHub\n")
+        self.publish()                                               # and the next round is accepted again
+
+    def test_a_release_pr_merged_with_a_merge_commit_is_accepted_once_its_commit_is_synced(self):
+        self.publish()
+        self.write("b.txt", "b\n")
+        self.commit("FEATURE #2 add thing")
+        self.publish()
+        work = self.public_clone()
+        self.git("checkout", "-q", "-b", "release-please--branches--main", cwd=work)
+        props = (work / PROPS).read_text().replace("<Version>1.0.0</Version>", "<Version>1.0.1</Version>")
+        (work / PROPS).write_text(props)
+        self.write("CHANGELOG.md", "# Changelog\n\n## 1.0.1\n", root=work)
+        self.write(".release-please-manifest.json", '{".": "1.0.1"}\n', root=work)
+        commit = self.commit("chore: release dotnet 1.0.1", root=work)
+        self.git("checkout", "-q", "main", cwd=work)
+        run(work, "git", "merge", "--no-ff", "-q", "-m", "Merge pull request #1 from x/release", "release-please--branches--main", env=self.env)
+        self.git("push", "-q", "origin", "HEAD:refs/heads/main", cwd=work)
+        blocked = self.publish(check=False)
+        self.assertEqual(blocked.returncode, 1)
+        self.assertIn(commit, blocked.stderr)                        # the merge itself is accepted; its commit has to be synced
+        self.sync(commit)
+        self.publish()
+        self.assertIn("<Version>1.0.1</Version>", self.git("show", f"main:{PROPS}", cwd=self.pub).stdout)
+
+    def test_a_public_merge_touching_another_path_is_refused(self):
+        self.publish()
+        work = self.public_clone()
+        self.git("checkout", "-q", "-b", "side", cwd=work)
+        self.write("README.md", "# edited\n", root=work)
+        side = self.commit("docs: edit", root=work)
+        self.git("checkout", "-q", "main", cwd=work)
+        self.write("x.txt", "x\n", root=work)
+        self.commit("docs: x", root=work)
+        run(work, "git", "merge", "--no-ff", "-q", "-m", "Merge side", "side", env=self.env)
+        self.git("push", "-q", "origin", "HEAD:refs/heads/main", cwd=work)
+        blocked = self.publish(check=False)
+        self.assertEqual(blocked.returncode, 1)
+        self.assertTrue("README.md" in blocked.stderr or "x.txt" in blocked.stderr)
+        self.assertTrue(side in blocked.stderr or "touches" in blocked.stderr)
 
 
 if __name__ == "__main__":
