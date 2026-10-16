@@ -102,19 +102,20 @@ public class EfCoreQueryBuilderTests
     }
 
     /// <summary>
-    /// An empty <c>in</c> list is refused by the shared <see cref="FilterNodeValidator"/> this adapter
-    /// re-runs, and that matters MORE here than on the SQL path: EF compiles an empty
-    /// <c>Contains</c> to <c>WHERE 0</c>, a statement that runs and returns nothing, where the SQL
-    /// compiler's <c>IN ()</c> is a syntax error the engine reports. Same malformed request; without the
-    /// validator, one silent empty grid and one loud failure.
+    /// SEM-8: an empty <c>in</c> list is a constant false and an empty <c>notIn</c> a constant true; EF never
+    /// sees an empty <c>Contains</c>, and no NULL disjunct is added next to the constants.
     /// </summary>
-    [Fact]
-    public void An_Empty_In_List_Is_Rejected_By_The_Shared_Validator()
+    [Theory]
+    [InlineData(ComparisonOperator.In, true)]
+    [InlineData(ComparisonOperator.NotIn, false)]
+    public void An_Empty_Set_Compiles_To_A_Constant(ComparisonOperator op, bool hasWhere)
     {
-        var node = new ComparisonNode { Field = "name", Op = ComparisonOperator.In, Values = [] };
+        var sql = Sql(Request(new ComparisonNode { Field = "name", Op = op, Values = [] }));
 
-        var exception = Assert.Throws<FilterNodeValidationException>(() => Sql(Request(node)));
-        Assert.Contains("values", exception.Message, StringComparison.OrdinalIgnoreCase);
+        // false: EF keeps a constant `WHERE 0`; true: EF drops the always-true predicate altogether.
+        Assert.Equal(hasWhere, sql.Contains("WHERE 0", StringComparison.Ordinal));
+        Assert.DoesNotContain("IS NULL", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain(" IN ", sql, StringComparison.Ordinal);
     }
 
     /// <summary>

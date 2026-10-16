@@ -55,9 +55,9 @@ public class PostgresConformanceFixtureTests
     /// </summary>
     private static readonly (string Category, int Expected)[] InScopeCategories =
     [
-        ("operators", 56),
+        ("operators", 61),
         ("date-presets", 26),
-        ("dialect-parity", 20),
+        ("dialect-parity", 21),
         ("group-aggregation", 23),
         ("filter-tree", 15),
         ("sort-paging", 12),
@@ -196,7 +196,7 @@ public class PostgresConformanceFixtureTests
         // and authored page-export/023, and #1644's review pass added group-aggregation/023 — the one
         // case carrying both a consumed groupKeys and a filterModel, which pins GRP-5's
         // drill-down-leads clause order in `params`.
-        Assert.Equal(184, InScopeFixtures.Count);
+        Assert.Equal(190, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -221,7 +221,7 @@ public class PostgresConformanceFixtureTests
     [Fact]
     public void Every_Postgres_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "184 in scope": every postgres.artifact.json in the repo
+        // The count that closes the loop on "190 in scope": every postgres.artifact.json in the repo
         // is either exercised above, or inside a category/fixture this class excludes BY NAME. The
         // category table plus Every_Fixture_Category_On_Disk_… does not close it — an artifact added
         // under an EXCLUDED category (adversarial/) would leave every count untouched and go silently
@@ -237,7 +237,7 @@ public class PostgresConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "postgres.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(184, onDisk);
+        Assert.Equal(190, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }

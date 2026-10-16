@@ -100,9 +100,10 @@ public static class FilterNodeValidator
                 break;
 
             case OperatorCategory.Set:
-                if (node.Values is null || node.Values.Count == 0)
+                // SEM-8: an empty list is valid (in [] matches no row, notIn [] every row); only a missing array is not.
+                if (node.Values is null)
                 {
-                    errors.Add($"op '{node.Op}' requires a non-empty 'values' array (ir.schema.json minItems:1).");
+                    errors.Add($"op '{node.Op}' requires a 'values' array.");
                 }
                 else
                 {

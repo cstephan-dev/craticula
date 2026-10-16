@@ -494,6 +494,11 @@ public static class SqlQueryBuilder
                 or ComparisonOperator.StartsWith or ComparisonOperator.EndsWith =>
                 NullInclusive(RenderSubstring(column, field, node, context), node.Op, column),
 
+            // SEM-8: an empty list is a constant, never `IN ()` and never a bound array; the constant is already
+            // true for NULL rows (notIn) or false for them (in), so no null disjunct is added.
+            ComparisonOperator.In or ComparisonOperator.NotIn when node.Values is { Count: 0 } =>
+                node.Op == ComparisonOperator.NotIn ? "1 = 1" : "1 = 0",
+
             ComparisonOperator.In or ComparisonOperator.NotIn =>
                 NullInclusive(RenderSet(column, field, node, context), node.Op, column),
 

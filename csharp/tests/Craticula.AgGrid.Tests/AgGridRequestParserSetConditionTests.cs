@@ -78,15 +78,13 @@ public class AgGridRequestParserSetConditionTests
     }
 
     [Fact]
-    public void Empty_Values_Array_Passes_Parsing_But_Fails_The_Defense_In_Depth_FilterNodeValidator_Check()
+    public void Empty_Values_Array_Parses_To_An_Empty_In_Which_Matches_No_Row()
     {
-        // The parser itself does not special-case an empty 'values' array — it flows through as a
-        // ComparisonNode with Values=[] and is caught by the FilterNodeValidator.Validate call
-        // AgGridRequestParser.Parse itself runs as defense in depth (mirrors every other public IR
-        // entry point in this codebase), giving a more specific downstream error than a bespoke
-        // parser-level check would.
-        var request = string.Format(Envelope, """{ "filterType": "set", "values": [] }""");
+        // SEM-8: the user cleared every value of the Set Filter; the request is valid and the empty list flows
+        // through as a ComparisonNode with Values=[] (the validator no longer rejects it).
+        var comparison = ParseSingleComparison("""{ "filterType": "set", "values": [] }""");
 
-        Assert.Throws<FilterNodeValidationException>(() => AgGridRequestParser.Parse(request));
+        Assert.Equal(ComparisonOperator.In, comparison.Op);
+        Assert.Empty(comparison.Values!);
     }
 }

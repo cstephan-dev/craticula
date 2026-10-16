@@ -410,6 +410,13 @@ public static class SearchQueryBuilder
                 or ComparisonOperator.StartsWith or ComparisonOperator.EndsWith =>
                 NullInclusive(RenderSubstring(target, node, context), node.Op, target),
 
+            // SEM-8: empty list = constant. `match_none` / `match_all`; the constant already covers NULL rows.
+            ComparisonOperator.In or ComparisonOperator.NotIn when node.Values is { Count: 0 } =>
+                new JsonObject
+                {
+                    [node.Op == ComparisonOperator.NotIn ? "match_all" : "match_none"] = new JsonObject()
+                },
+
             ComparisonOperator.In or ComparisonOperator.NotIn =>
                 NullInclusive(RenderSet(target, node, context), node.Op, target),
 

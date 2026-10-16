@@ -68,12 +68,7 @@ public static class EfCoreQueryBuilder
     /// <see cref="ResourceLimitsValidator.Validate"/>,
     /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>,
     /// <c>SqlQueryBuilder.Build</c>), since a caller can reach this method with a hand-built tree that
-    /// never went through <see cref="GridFilterPipeline"/>. On this path one of those validators is
-    /// doing more than it looks: <see cref="FilterNodeValidator"/> is what rejects an <c>in</c> with an
-    /// empty <c>values</c> array, and EF compiles an empty <c>Contains</c> to <c>WHERE 0</c> — a query
-    /// that runs and returns nothing, where the SQL compiler's <c>IN ()</c> is a syntax error the
-    /// engine reports. Same malformed request, one silent answer and one loud one; the validator is
-    /// what makes both loud.</para>
+    /// never went through <see cref="GridFilterPipeline"/>.</para>
     /// </summary>
     /// <exception cref="EfCoreCompilationException">Row-group state (out of scope, #1622), a field the
     /// schema does not declare, an unsupported <c>physical.sql</c> form, a value whose variant
@@ -485,6 +480,10 @@ public static class EfCoreQueryBuilder
             ComparisonOperator.Contains or ComparisonOperator.NotContains
                 or ComparisonOperator.StartsWith or ComparisonOperator.EndsWith =>
                 NullInclusive(Substring(property, field, node, context), node.Op, property),
+
+            // SEM-8: an empty list is a constant that already covers NULL rows, so no null disjunct.
+            ComparisonOperator.In or ComparisonOperator.NotIn when node.Values is { Count: 0 } =>
+                Expression.Constant(node.Op == ComparisonOperator.NotIn),
 
             ComparisonOperator.In or ComparisonOperator.NotIn =>
                 NullInclusive(SetMembership(property, field, node, context), node.Op, property),

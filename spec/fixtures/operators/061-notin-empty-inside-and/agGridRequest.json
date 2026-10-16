@@ -15,7 +15,7 @@
   ],
   "customFilters": {
     "type": "and",
-    "children": [
+    "nodes": [
       {
         "type": "comparison",
         "field": "age",

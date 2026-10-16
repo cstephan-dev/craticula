@@ -554,6 +554,18 @@ public static class MongoPipelineBuilder
                 or ComparisonOperator.StartsWith or ComparisonOperator.EndsWith =>
                 NullInclusive(RenderSubstring(path, field, node, context), node.Op, path),
 
+            // SEM-8: empty list = constant. `$in: []` matches nothing, `$nin: []` matches every document,
+            // missing field included, so neither needs the null disjunct; no string comparison happens, so
+            // no collation is requested.
+            ComparisonOperator.In or ComparisonOperator.NotIn when node.Values is { Count: 0 } =>
+                new JsonObject
+                {
+                    [path] = new JsonObject
+                    {
+                        [node.Op == ComparisonOperator.NotIn ? "$nin" : "$in"] = new JsonArray()
+                    }
+                },
+
             ComparisonOperator.In or ComparisonOperator.NotIn =>
                 NullInclusive(RenderSet(path, field, node, context), node.Op, path),
 
