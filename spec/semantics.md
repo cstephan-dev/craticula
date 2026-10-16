@@ -1,4 +1,4 @@
-# `spec/semantics.md` — Semantics specification (SEM-1..SEM-7)
+# `spec/semantics.md` — Semantics specification (SEM-1..SEM-8)
 
 Normative per **AR-1** ([TRD](../docs/TRD-grid-query-compiler.md) §7): this document, not any single
 compiler, is where these seven behaviors are decided. A backend compiler that disagrees with a rule
@@ -877,6 +877,33 @@ deliberately, per field, instead of getting it by accident.
 
 **Cross-links.** `$defs/binaryOperator` (`contains`, `notContains`), `$defs/stringValue` (the value
 being substring-matched), `$defs/fieldName`.
+
+---
+
+## SEM-8. Empty set membership
+
+**Rule.** A `$defs/setComparisonNode` whose `values` array is empty is valid. `in` with no values
+matches **no** row; `notIn` with no values matches **every** row. Both answers hold for rows whose
+field is NULL or missing: `in []` never matches one (SEM-2: `in` never matches null), and `notIn []`
+matches it, the constant being true for every row, so no `IS NULL` disjunct is added next to it.
+The empty list is a constant, so it composes by ordinary Boolean logic inside `and`, `or` and `not`
+(`in [] OR p` matches what `p` matches; `notIn [] AND p` matches what `p` matches; the null
+fan-out of SEM-2 applies at a `notNode` as ever). Compilers do not fold the constant out of the
+tree.
+
+**Rendering.** The empty list is never sent to the engine as a list.
+- SQL: `in []` → `1 = 0`, `notIn []` → `1 = 1`, in every dialect (SQL Server and Oracle have no
+  boolean literal in predicate position). Never `IN ()` (a syntax error) and never a bound empty array.
+- MongoDB: `{field: {$in: []}}` and `{field: {$nin: []}}`. No string comparison happens, so no
+  collation is attached for them.
+- OpenSearch/Elasticsearch: `match_none` and `match_all`.
+
+**Origin.** AG Grid's Set Filter sends `{filterType: "set", values: []}` when the user clears every
+value, and its own client-side row model then shows no rows. Rejecting the request would make every
+host re-implement that rule. A null "(Blanks)" element inside `values` is a different matter and
+stays rejected.
+
+**Fixtures.** `operators/057`-`061`, `dialect-parity/026`.
 
 ---
 

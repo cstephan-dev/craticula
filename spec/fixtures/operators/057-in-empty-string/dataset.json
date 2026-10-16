@@ -1,0 +1,12 @@
+{
+  "rows": [
+    { "row": { "id": 1, "status": "active" }, "why": "member, exact case" },
+    { "row": { "id": 2, "status": "ACTIVE" }, "why": "SEM-1: member only if folded" },
+    { "row": { "id": 3, "status": "Pending" }, "why": "SEM-1: mixed-case member" },
+    { "row": { "id": 4, "status": "inactive" }, "why": "contains a member as a substring: rejected" },
+    { "row": { "id": 5, "status": "activ" }, "why": "prefix of a member: rejected" },
+    { "row": { "id": 6, "status": null }, "why": "SEM-2: in never matches null" },
+    { "row": { "id": 7, "status": "" }, "why": "the empty string is not a member" },
+    { "row": { "id": 8, "status": "archived" }, "why": "not a member" }
+  ]
+}

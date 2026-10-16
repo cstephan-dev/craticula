@@ -124,7 +124,7 @@
     },
 
     "setComparisonNode": {
-      "description": "Set-membership operators (AR-6: in, notIn) — a typed-value array. No maxItems here: SEC-3's max-in-values limit is host-configurable, so a fixed schema bound would reject a legitimately higher-configured host's IR; the runtime validator is the sole enforcement point.",
+      "description": "Set-membership operators (AR-6: in, notIn) — a typed-value array that MAY be empty (SEM-8: `in []` matches no row, `notIn []` matches every row). No maxItems here: SEC-3's max-in-values limit is host-configurable, so a fixed schema bound would reject a legitimately higher-configured host's IR; the runtime validator is the sole enforcement point.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -133,8 +133,7 @@
         "op": { "$ref": "#/$defs/setOperator" },
         "values": {
           "type": "array",
-          "items": { "$ref": "#/$defs/typedValue" },
-          "minItems": 1
+          "items": { "$ref": "#/$defs/typedValue" }
         }
       },
       "required": ["type", "field", "op", "values"]
