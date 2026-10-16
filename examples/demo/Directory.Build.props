@@ -1,0 +1,13 @@
+<Project>
+
+  <!-- examples/demo is an isolated tree: it does NOT import csharp/Directory.Build.props, is not part of
+       csharp/Craticula.sln, and is never seen by the library's build, tests, coverage gate or pack smoke. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
