@@ -18,8 +18,11 @@ FILES = ("schema.json", "dataset.json", "expectedRows.json")
 
 
 def normalise(value):
-    """The source request with Community's date spelling ('YYYY-MM-DD' -> 'YYYY-MM-DD 00:00:00')."""
+    """The source request in the shape AG Grid 36 Community sends: dates as 'YYYY-MM-DD 00:00:00', two conditions as conditions[]."""
     if isinstance(value, dict):
+        if "condition1" in value and "condition2" in value:
+            value = {k: v for k, v in value.items() if k not in ("condition1", "condition2")} | {
+                "conditions": [value["condition1"], value["condition2"]]}
         return {k: (v + " 00:00:00" if k in ("dateFrom", "dateTo") and isinstance(v, str) and re.fullmatch(r"\d{4}-\d\d-\d\d", v)
                     else normalise(v)) for k, v in value.items()}
     if isinstance(value, list):

@@ -21,8 +21,8 @@ http://localhost:5173/community.html is the same data on the **free AG Grid Comm
 license key, no watermark, no grouping, aggregation or set filter (those are Enterprise features). It sends the flat request
 Community sends (`startRow`, `endRow`, `sortModel`, `filterModel`) and the API compiles it like any other. The native "in range"
 option is left out of the number and date filters, because the library rejects it (it carries no inclusivity); the main page does
-the same. **Copy request** puts the exact request body on the clipboard: that is how a real payload becomes a fixture (see
-`spec/fixtures/community-infinite/README.md`).
+the same. **Copy request** puts the exact request body on the clipboard: that is the first step of turning a real payload into a fixture (the columns are the demo's, so the steps in
+`spec/fixtures/community-infinite/README.md` say how to map them).
 
 ## Prerequisites
 

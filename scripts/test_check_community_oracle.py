@@ -66,5 +66,11 @@ class Mutations(unittest.TestCase):
         self.assertEqual({"dateFrom": "2026-01-01 00:00:00"}, oracle.normalise({"dateFrom": "2026-01-01"}))
 
 
+class Normalise(unittest.TestCase):
+    def test_legacy_two_conditions_become_the_conditions_array(self):
+        legacy = {"operator": "OR", "condition1": {"type": "a"}, "condition2": {"type": "b"}}
+        self.assertEqual({"operator": "OR", "conditions": [{"type": "a"}, {"type": "b"}]}, oracle.normalise(legacy))
+
+
 if __name__ == "__main__":
     sys.exit(unittest.main())

@@ -1,6 +1,6 @@
 import type { IServerSideDatasource } from 'ag-grid-enterprise';
 import { createProviderGate } from './providerGate';
-import { ApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView, type WireGroupKey, type WireRequest } from './api';
+import { ApiError, asApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView, type WireGroupKey, type WireRequest } from './api';
 
 /** What the page wants to hear about while the grid loads blocks. */
 export interface DatasourceListener {
@@ -8,12 +8,6 @@ export interface DatasourceListener {
   onRowsError(error: ApiError): void;
   /** The compiled query of the latest request, or why it could not be compiled. */
   onQuery(request: GridRequest, view: QueryView | ApiError): void;
-}
-
-export function asApiError(error: unknown): ApiError {
-  return error instanceof ApiError
-    ? error
-    : new ApiError(0, 'unexpected-error', error instanceof Error ? error.message : 'Unexpected error.');
 }
 
 /**
@@ -88,4 +82,4 @@ export function createDatasource(
   };
 }
 
-export { createProviderGate };
+export { asApiError, createProviderGate };

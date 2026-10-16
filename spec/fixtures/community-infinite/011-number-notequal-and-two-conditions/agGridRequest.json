@@ -5,16 +5,18 @@
     "age": {
       "filterType": "number",
       "operator": "AND",
-      "condition1": {
-        "filterType": "number",
-        "type": "notEqual",
-        "filter": 30
-      },
-      "condition2": {
-        "filterType": "number",
-        "type": "notEqual",
-        "filter": 40
-      }
+      "conditions": [
+        {
+          "filterType": "number",
+          "type": "notEqual",
+          "filter": 30
+        },
+        {
+          "filterType": "number",
+          "type": "notEqual",
+          "filter": 40
+        }
+      ]
     }
   },
   "sortModel": [

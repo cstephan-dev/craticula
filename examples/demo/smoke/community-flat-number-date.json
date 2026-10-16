@@ -1,10 +1,34 @@
 {
-  "startRow": 100, "endRow": 200,
+  "startRow": 100,
+  "endRow": 200,
   "filterModel": {
-    "amount": { "filterType": "number", "operator": "AND",
-      "condition1": { "filterType": "number", "type": "greaterThan", "filter": 100 },
-      "condition2": { "filterType": "number", "type": "lessThanOrEqual", "filter": 5000 } },
-    "orderedAt": { "filterType": "date", "type": "greaterThan", "dateFrom": "2025-01-01 00:00:00", "dateTo": null }
+    "amount": {
+      "filterType": "number",
+      "operator": "AND",
+      "conditions": [
+        {
+          "filterType": "number",
+          "type": "greaterThan",
+          "filter": 100
+        },
+        {
+          "filterType": "number",
+          "type": "lessThanOrEqual",
+          "filter": 5000
+        }
+      ]
+    },
+    "orderedAt": {
+      "filterType": "date",
+      "type": "greaterThan",
+      "dateFrom": "2025-01-01 00:00:00",
+      "dateTo": null
+    }
   },
-  "sortModel": [ { "colId": "id", "sort": "asc" } ]
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
 }

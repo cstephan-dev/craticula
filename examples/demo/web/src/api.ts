@@ -87,11 +87,21 @@ function post(provider: Provider, route: string, body: unknown): Promise<Respons
   });
 }
 
-export async function fetchRows(provider: Provider, request: WireRequest): Promise<RowsResponse> {
+/** A request body as posted: the server-side page's `WireRequest` or the Community page's flat request (both are plain JSON objects). */
+export type RequestBody = WireRequest | object;
+
+/** Anything thrown while talking to the API, as an ApiError the pages can show. */
+export function asApiError(error: unknown): ApiError {
+  return error instanceof ApiError
+    ? error
+    : new ApiError(0, 'unexpected-error', error instanceof Error ? error.message : 'Unexpected error.');
+}
+
+export async function fetchRows(provider: Provider, request: RequestBody): Promise<RowsResponse> {
   return (await post(provider, 'rows', request)).json() as Promise<RowsResponse>;
 }
 
-export async function fetchQuery(provider: Provider, request: WireRequest): Promise<QueryView> {
+export async function fetchQuery(provider: Provider, request: RequestBody): Promise<QueryView> {
   return (await post(provider, 'query', request)).json() as Promise<QueryView>;
 }
 

@@ -13,8 +13,8 @@ resolves on `AgGridParseOptions.DefaultZone` (UTC unless the host sets another) 
 
 The filter model follows AG Grid's own filter classes: `{filterType: "text", type, filter}`, `{filterType: "number", type, filter}`,
 `{filterType: "date", type, dateFrom}` (with `dateFrom` spelled `YYYY-MM-DD HH:mm:ss`, as the date filter sends it), and two
-conditions as `{filterType, operator: "AND" | "OR", condition1, condition2}` (the legacy form Community's filters send) or
-`conditions: []`.
+conditions as `{filterType, operator: "AND" | "OR", conditions: [..]}` (the form AG Grid 36 sends; majors before it sent
+`condition1`/`condition2`, which the parser also accepts and `filter-tree/003` and `ag-grid-majors/` pin).
 
 ## Provenance: `derived` or `captured`
 
@@ -25,10 +25,13 @@ Every `description.md` carries one of two labels in its first line:
 - **`captured`** — the request is a payload recorded from a real Community grid (version noted in the description).
 
 All cases start as `derived` (maker's decision 2026-10-16: derived now, real capture later). To capture one: run the demo's
-Community page (`examples/demo`, `/community.html`), set the filter, press **Copy request**, replace the case's
-`agGridRequest.json` with the clipboard contents (keep the case's `schema.json`), run `bash scripts/conformance.sh`; if the expected
-artifacts still match, change the label to `captured` and name the AG Grid version; if they differ, the difference is a finding
-about the derivation and is handled as a bug or a spec question first.
+Community page (`examples/demo`, `/community.html`), set the filter, press **Copy request**. The copied body uses the demo's
+column names (`orders.schema.json`: `customer`, `amount`, `orderedAt`, ...), which are not the fixtures' (`productName`, `age`,
+`birthDate`, ...), so a captured payload does not drop into an existing case. Either (a) rename its columns to the case's
+schema by hand and keep the case's other files, or (b) add it as a new case with the demo's `orders.schema.json` as its
+`schema.json` and its own dataset and expected artifacts. Then run `bash scripts/conformance.sh`; if the artifacts match (case
+a) change the label to `captured` and name the AG Grid version; if they differ, the difference is a finding about the
+derivation and is handled as a bug or a spec question first.
 
 ## Oracle
 

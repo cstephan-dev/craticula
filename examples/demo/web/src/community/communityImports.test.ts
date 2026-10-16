@@ -5,7 +5,7 @@ const sources = import.meta.glob<string>('/src/**/*.{ts,tsx}', { query: '?raw', 
 
 /** Every module specifier of the static imports and re-exports in a source file (type-only ones included). */
 function specifiers(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)\s[^;]*?from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]/g)].map((m) => m[1] ?? m[2]);
+  return [...source.matchAll(/(?:import|export)\s[^;]*?from\s+['"]([^'"]+)['"]|import\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1] ?? m[2]);
 }
 
 /** '/src/community/main.tsx' + '../api' -> '/src/api' */
@@ -27,7 +27,8 @@ function resolveLocal(from: string, specifier: string): string | undefined {
 }
 
 /** Everything reachable from an entry through relative imports, and every package it names. */
-function reachable(entry: string): { files: string[]; packages: string[] } {
+function reachable(entry: string): { files: string[]; packages: string[]; unresolved: string[] } {
+  const unresolved: string[] = [];
   const files = new Set<string>();
   const packages = new Set<string>();
   const queue = [entry];
@@ -42,20 +43,27 @@ function reachable(entry: string): { files: string[]; packages: string[] } {
         const next = resolveLocal(file, specifier);
         if (next) {
           queue.push(next);
+        } else if (!specifier.endsWith('.css')) {
+          // A relative import the scan cannot follow could hide an Enterprise import: fail instead of skipping it.
+          unresolved.push(`${file} -> ${specifier}`);
         }
       } else {
         packages.add(specifier);
       }
     }
   }
-  return { files: [...files], packages: [...packages] };
+  return { files: [...files], packages: [...packages], unresolved };
 }
 
 describe('the Community entry', () => {
-  const { files, packages } = reachable('/src/community/main.tsx');
+  const { files, packages, unresolved } = reachable('/src/community/main.tsx');
 
   it('reaches no ag-grid-enterprise module (AG-7: the page runs without a license)', () => {
     expect(packages.filter((name) => name.startsWith('ag-grid-enterprise'))).toEqual([]);
+  });
+
+  it('follows every relative import it meets', () => {
+    expect(unresolved).toEqual([]);
   });
 
   it('uses the Community packages and walks the files it should', () => {
@@ -70,6 +78,7 @@ describe('the Community entry', () => {
       'ag-grid-enterprise',
       './y',
     ]);
+    expect(specifiers("const A = lazy(() => import('ag-grid-enterprise'));")).toEqual(['ag-grid-enterprise']);
     expect(reachable('/src/main.tsx').packages).toContain('ag-grid-enterprise');
   });
 });

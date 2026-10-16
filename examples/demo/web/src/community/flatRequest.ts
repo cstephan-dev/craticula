@@ -1,6 +1,5 @@
 import type { IDatasource, IGetRowsParams } from 'ag-grid-community';
-import { fetchQuery, fetchRows, type Provider, type QueryView, type WireRequest } from '../api';
-import { asApiErrorOf, type DatasourceListenerLike } from './errors';
+import { ApiError, asApiError, fetchQuery, fetchRows, type Provider, type QueryView } from '../api';
 
 /**
  * What AG Grid Community's Infinite Row Model sends: `startRow`, `endRow`, `sortModel`, `filterModel` and nothing else (no
@@ -27,9 +26,11 @@ export function requestToClipboardText(request: FlatRequest): string {
   return `${JSON.stringify(request, null, 2)}\n`;
 }
 
-export interface FlatListener extends DatasourceListenerLike {
+export interface FlatListener {
+  /** A rows request failed (the grid also gets `failCallback()`). */
+  onRowsError(error: ApiError): void;
   /** The compiled query of the latest request, or why it could not be compiled. */
-  onQuery(request: FlatRequest, view: QueryView | Error): void;
+  onQuery(request: FlatRequest, view: QueryView | ApiError): void;
 }
 
 /**
@@ -45,22 +46,19 @@ export function createFlatDatasource(
   return {
     getRows(params) {
       const request = toFlatRequest(params);
-      // The API's request type has group fields the flat request does not carry; the wire is just JSON.
-      const wire = request as unknown as WireRequest;
-
-      fetchRows(provider, wire).then(
+      fetchRows(provider, request).then(
         (result) => params.successCallback(result.rows, result.lastRow ?? undefined),
         (error: unknown) => {
           params.failCallback();
           if (isCurrent()) {
-            listener.onRowsError(asApiErrorOf(error));
+            listener.onRowsError(asApiError(error));
           }
         },
       );
 
-      fetchQuery(provider, wire).then(
+      fetchQuery(provider, request).then(
         (view) => isCurrent() && listener.onQuery(request, view),
-        (error: unknown) => isCurrent() && listener.onQuery(request, asApiErrorOf(error)),
+        (error: unknown) => isCurrent() && listener.onQuery(request, asApiError(error)),
       );
     },
   };

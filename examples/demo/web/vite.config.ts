@@ -11,7 +11,7 @@ export default defineConfig({
   },
   // Two entries: the Enterprise page (index.html) and the Community-only page (community.html).
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       input: {
         main: 'index.html',
         community: 'community.html',

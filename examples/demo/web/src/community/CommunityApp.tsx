@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import type { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
+import type { ColDef } from 'ag-grid-community';
 import { ApiError, fetchHealth, type Provider } from '../api';
 import { createProviderGate } from '../providerGate';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -22,7 +22,6 @@ export function CommunityApp() {
   const [query, setQuery] = useState<CompiledQuery | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const apiRef = useRef<GridApi | null>(null);
   const [gate] = useState(() => createProviderGate('postgres'));
 
   useEffect(() => {
@@ -42,7 +41,7 @@ export function CommunityApp() {
         provider,
         {
           onRowsError: setError,
-          onQuery: (request, view) => setQuery({ request, view: view as CompiledQuery['view'] }),
+          onQuery: (request, view) => setQuery({ request, view }),
         },
         () => gate.isCurrent(provider),
       ),
@@ -54,10 +53,6 @@ export function CommunityApp() {
     setError(null);
     setProvider(next);
   }, [gate]);
-
-  const onGridReady = useCallback((event: GridReadyEvent) => {
-    apiRef.current = event.api;
-  }, []);
 
   const copyRequest = useCallback(async () => {
     const request = query?.request as FlatRequest | undefined;
@@ -106,7 +101,6 @@ export function CommunityApp() {
             cacheBlockSize={100}
             maxBlocksInCache={10}
             infiniteInitialRowCount={100}
-            onGridReady={onGridReady}
           />
         </div>
         {panelOpen && <QueryPanel query={query} />}
