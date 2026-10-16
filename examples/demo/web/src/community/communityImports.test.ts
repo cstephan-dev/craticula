@@ -54,7 +54,7 @@ function reachable(entry: string): { files: string[]; packages: string[] } {
 describe('the Community entry', () => {
   const { files, packages } = reachable('/src/community/main.tsx');
 
-  it('reaches no ag-grid-enterprise module (AG-6: the page runs without a license)', () => {
+  it('reaches no ag-grid-enterprise module (AG-7: the page runs without a license)', () => {
     expect(packages.filter((name) => name.startsWith('ag-grid-enterprise'))).toEqual([]);
   });
 

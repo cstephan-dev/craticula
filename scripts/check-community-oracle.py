@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Oracle check for spec/fixtures/community-infinite (AG-6).
+"""Oracle check for spec/fixtures/community-infinite (AG-7).
 
 oracle.json maps each case to the existing fixture whose IR it equals (or null for a hand-derived case). For every mapped case
 the expected artifacts, the schema, the dataset and the expected rows must be byte-identical to the source's, and the request

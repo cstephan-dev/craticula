@@ -3,7 +3,7 @@ using Craticula.Core.Ir;
 namespace Craticula.AgGrid.Tests;
 
 /// <summary>
-/// AG-6 (story #2454): the exact shape AG Grid Community's Infinite Row Model sends — <c>startRow</c>, <c>endRow</c>,
+/// AG-7 (story #2454): the exact shape AG Grid Community's Infinite Row Model sends — <c>startRow</c>, <c>endRow</c>,
 /// <c>sortModel</c>, <c>filterModel</c>, and nothing else — parses to a flat request, and the native in-range option a
 /// Community number or date filter offers is rejected exactly as it is for the SSRM (SEM-4; <c>customFilters</c> is the
 /// way). The compile side of the same shape is graded by <c>spec/fixtures/community-infinite/</c>.

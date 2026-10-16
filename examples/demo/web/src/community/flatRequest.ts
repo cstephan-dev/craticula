@@ -4,7 +4,7 @@ import { asApiErrorOf, type DatasourceListenerLike } from './errors';
 
 /**
  * What AG Grid Community's Infinite Row Model sends: `startRow`, `endRow`, `sortModel`, `filterModel` and nothing else (no
- * group, value or pivot fields). The API parses it as it is (AG-6); nothing is added on the way out.
+ * group, value or pivot fields). The API parses it as it is (AG-7); nothing is added on the way out.
  */
 export interface FlatRequest {
   startRow: number;

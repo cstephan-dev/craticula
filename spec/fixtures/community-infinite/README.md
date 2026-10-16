@@ -1,6 +1,6 @@
 # `spec/fixtures/community-infinite/` — AG Grid Community (Infinite Row Model) flat requests
 
-Proves **AG-6** ([TRD](../../../docs/TRD-grid-query-compiler.md) §6): a request in the shape AG Grid Community's Infinite Row
+Proves **AG-7** ([TRD](../../../docs/TRD-grid-query-compiler.md) §6): a request in the shape AG Grid Community's Infinite Row
 Model sends compiles on every backend with the same semantics as the Server-Side Row Model. Community has no row grouping,
 aggregation, pivot or set filter (all Enterprise), so every case is a **flat** request.
 
