@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "productName": {
+      "filterType": "text",
+      "type": "startsWith",
+      "filter": "Smart"
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

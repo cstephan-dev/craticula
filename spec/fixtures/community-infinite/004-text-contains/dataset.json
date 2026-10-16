@@ -1,0 +1,13 @@
+{
+  "rows": [
+    { "row": { "id": 1, "productName": "Smartphone" }, "why": "substring in the middle" },
+    { "row": { "id": 2, "productName": "SMART TV" }, "why": "SEM-1: upper-case variant matches only if folded" },
+    { "row": { "id": 3, "productName": "Cart" }, "why": "substring at the end" },
+    { "row": { "id": 4, "productName": "Party" }, "why": "substring in the middle of a short word" },
+    { "row": { "id": 5, "productName": "Gadget" }, "why": "no substring: rejected" },
+    { "row": { "id": 6, "productName": "a_r_t" }, "why": "characters separated by underscores: not the substring, rejected (also guards LIKE wildcard handling)" },
+    { "row": { "id": 7, "productName": "Ar t" }, "why": "a space splits the substring: rejected" },
+    { "row": { "id": 8, "productName": null }, "why": "SEM-2: contains never matches null" },
+    { "row": { "id": 9, "productName": "" }, "why": "the empty string contains nothing: rejected" }
+  ]
+}

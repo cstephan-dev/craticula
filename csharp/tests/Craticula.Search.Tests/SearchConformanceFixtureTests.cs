@@ -53,6 +53,7 @@ public class SearchConformanceFixtureTests
     [
         ("operators", 62),
         ("date-presets", 26),
+        ("community-infinite", 27),
         ("dialect-parity", 19),
         ("group-aggregation", 22),
         ("filter-tree", 15),
@@ -261,7 +262,7 @@ public class SearchConformanceFixtureTests
         // arm and no excluded fixture at all. It last moved when #1650's review pass authored
         // page-export/024; before that #1650 itself released page-export (13, now 14) and
         // sort-paging/012 from exclusion and authored page-export/023.
-        Assert.Equal(176, InScopeFixtures.Count);
+        Assert.Equal(203, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -286,7 +287,7 @@ public class SearchConformanceFixtureTests
     [Fact]
     public void Every_Search_Artifact_On_Disk_Is_Compiled_Or_Accounted_For()
     {
-        // The count that closes the loop on "176 in scope": every search.artifact.json in the repo is
+        // The count that closes the loop on "203 in scope": every search.artifact.json in the repo is
         // either exercised above, or inside a category/fixture this class excludes BY NAME. Since
         // #1650 nothing is excluded, so the two numbers are equal — the arithmetic is kept rather
         // than simplified away, because it is what would catch a future exclusion being added
@@ -301,7 +302,7 @@ public class SearchConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "search.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(176, onDisk);
+        Assert.Equal(203, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }

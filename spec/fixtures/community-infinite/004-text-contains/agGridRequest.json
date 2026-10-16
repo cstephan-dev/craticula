@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "productName": {
+      "filterType": "text",
+      "type": "contains",
+      "filter": "art"
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

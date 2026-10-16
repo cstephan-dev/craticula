@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "age": {
+      "filterType": "number",
+      "type": "lessThan",
+      "filter": 65
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "columns": ["amount", "customerName", "id", "isActive", "status"],
+  "rows": [
+    [150.5, "Acme Corp", 1, true, "active"],
+    [200, "ACME inc", 3, true, "ACTIVE"],
+    [300, "xacmex", 5, true, "Active"],
+    [100.25, "acme", 12, true, "active"]
+  ]
+}

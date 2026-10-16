@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "age": 30 }, "why": "exact match" },
+    { "row": { "id": 2, "age": 29 }, "why": "just below" },
+    { "row": { "id": 3, "age": 31 }, "why": "just above" },
+    { "row": { "id": 4, "age": null }, "why": "SEM-2: eq never matches null" },
+    { "row": { "id": 5, "age": 300 }, "why": "contains the digits 30 but is not 30" },
+    { "row": { "id": 6, "age": -30 }, "why": "sign differs" },
+    { "row": { "id": 7, "age": 0 }, "why": "zero is a value, not null" }
+  ]
+}

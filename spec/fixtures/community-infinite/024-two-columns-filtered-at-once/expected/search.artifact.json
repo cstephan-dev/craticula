@@ -1,0 +1,46 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "wildcard": {
+            "customerName.keyword": {
+              "value": "*acme*",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "range": {
+            "amount": {
+              "gt": 100
+            }
+          }
+        },
+        {
+          "term": {
+            "status.keyword": {
+              "value": "active",
+              "case_insensitive": true
+            }
+          }
+        },
+        {
+          "term": {
+            "isActive": true
+          }
+        }
+      ]
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": { "id": 1, "birthDate": "1990-05-12" }, "why": "exact: excluded" },
+    { "row": { "id": 2, "birthDate": "1990-05-11" }, "why": "one day before: returned" },
+    { "row": { "id": 3, "birthDate": "1990-05-13" }, "why": "one day after: returned" },
+    { "row": { "id": 4, "birthDate": null }, "why": "SEM-2: neq is null-inclusive" },
+    { "row": { "id": 5, "birthDate": "1991-05-12" }, "why": "same day and month, other year: returned" },
+    { "row": { "id": 6, "birthDate": "1990-12-05" }, "why": "month and day swapped: returned" }
+  ]
+}

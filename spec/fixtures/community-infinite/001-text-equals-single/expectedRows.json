@@ -1,0 +1,4 @@
+{
+  "columns": ["id", "status"],
+  "rows": [[1, "active"], [2, "ACTIVE"]]
+}

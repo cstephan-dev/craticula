@@ -1,0 +1,89 @@
+{
+  "mode": "strict",
+  "source": "orders",
+  "stableKey": "id",
+  "fields": {
+    "amount": {
+      "type": "double",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "amount"
+        },
+        "mongo": {
+          "path": "amount"
+        },
+        "search": {
+          "field": "amount"
+        }
+      }
+    },
+    "customerName": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "customer_name"
+        },
+        "mongo": {
+          "path": "customerName"
+        },
+        "search": {
+          "field": "customerName",
+          "keywordSubField": "customerName.keyword"
+        }
+      }
+    },
+    "id": {
+      "type": "int64",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "isActive": {
+      "type": "boolean",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "is_active"
+        },
+        "mongo": {
+          "path": "isActive"
+        },
+        "search": {
+          "field": "isActive"
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "status"
+        },
+        "mongo": {
+          "path": "status"
+        },
+        "search": {
+          "field": "status",
+          "keywordSubField": "status.keyword"
+        }
+      }
+    }
+  }
+}

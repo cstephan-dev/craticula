@@ -1,0 +1,12 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM \"orders\" WHERE (\"customer_name\" ILIKE '%' || $1 || '%' ESCAPE '\\' AND \"amount\" > $2 AND \"status\" COLLATE craticula_ci = $3 AND \"is_active\" = $4) ORDER BY \"id\" ASC NULLS LAST LIMIT $5 OFFSET $6",
+  "params": [
+    "acme",
+    100,
+    "active",
+    true,
+    100,
+    0
+  ]
+}

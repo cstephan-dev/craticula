@@ -1,0 +1,18 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "birthDate": {
+      "filterType": "date",
+      "type": "blank",
+      "dateFrom": null,
+      "dateTo": null
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

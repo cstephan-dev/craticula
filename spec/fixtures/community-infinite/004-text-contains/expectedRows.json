@@ -1,0 +1,9 @@
+{
+  "columns": ["id", "productName"],
+  "rows": [
+    [1, "Smartphone"],
+    [2, "SMART TV"],
+    [3, "Cart"],
+    [4, "Party"]
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "row": { "id": 1, "birthDate": "2000-01-01" }, "why": "boundary day: excluded by lt" },
+    { "row": { "id": 2, "birthDate": "1999-12-31" }, "why": "previous day: returned" },
+    { "row": { "id": 3, "birthDate": "2000-01-02" }, "why": "next day" },
+    { "row": { "id": 4, "birthDate": null }, "why": "SEM-2: an ordering comparison never matches null" },
+    { "row": { "id": 5, "birthDate": "1900-01-01" }, "why": "far below" },
+    { "row": { "id": 6, "birthDate": "2024-02-29" }, "why": "leap day, far above" }
+  ]
+}
