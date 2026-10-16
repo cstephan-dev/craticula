@@ -21,6 +21,10 @@
           "type": "xml",
           "path": "csharp/src/Directory.Build.props",
           "xpath": "//Project/PropertyGroup/Version"
+        },
+        {
+          "type": "generic",
+          "path": "README.md"
         }
       ]
     }

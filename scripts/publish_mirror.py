@@ -16,8 +16,11 @@ import sys
 
 # The only paths a public (Release Please) commit may touch; they are brought back to private main by
 # scripts/sync-release-commit.sh. Keep in step with release-please-config.json (task #2407).
-ALLOWED_PATHS = ("csharp/src/Directory.Build.props", "CHANGELOG.md", ".release-please-manifest.json")
+# README.md is allowed for one line only: the marked `Latest release:` line (story #1661, readme_problem below).
+ALLOWED_PATHS = ("csharp/src/Directory.Build.props", "CHANGELOG.md", ".release-please-manifest.json", "README.md")
 PROPS_PATH = ALLOWED_PATHS[0]
+PLAIN_PATHS = ALLOWED_PATHS[1:3]     # copied whole
+README_PATH = ALLOWED_PATHS[3]       # edited on the marked line only
 
 _TYPES = {b"FEATURE": b"feat", b"FIX": b"fix", b"TECHNICAL": b"chore"}
 _SUBJECT = re.compile(rb"^(FEATURE|FIX|TECHNICAL) #(\d+) (\S.*)$")
@@ -126,6 +129,68 @@ def _paths(repo, *args):
     return [p for p in _git(repo, "diff-tree", "-r", "--name-only", "--root", "--no-commit-id", *args).stdout.split("\n") if p]
 
 
+README_MARKER = "x-release-please-version"
+README_LINE_PREFIX = "Latest release: "
+_SEMVER = re.compile(r"(?<![\w.])\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?![\w.+-])")
+
+
+def _marked_line(line):
+    """The semver match of a `Latest release: <semver> <!-- x-release-please-version -->` line, else None (also None
+    when the line holds no semver or more than one)."""
+    if README_MARKER not in line or not line.startswith(README_LINE_PREFIX):
+        return None
+    found = list(_SEMVER.finditer(line))
+    return found[0] if len(found) == 1 else None
+
+
+def _marked_lines(text):
+    return [n for n, line in enumerate(text.split("\n")) if README_MARKER in line]
+
+
+def readme_problem(old_text, new_text):
+    """None when the README change from `old_text` to `new_text` is exactly one changed line, the marked `Latest release:`
+    line holding one semver before and after and nothing else different; else the reason it is refused."""
+    old_lines, new_lines = old_text.split("\n"), new_text.split("\n")
+    if len(old_lines) != len(new_lines):
+        return "it changes the number of lines; only the marked 'Latest release:' line may change"
+    changed = [n for n, (a, b) in enumerate(zip(old_lines, new_lines)) if a != b]
+    if len(changed) != 1:
+        return f"it changes {len(changed)} lines; only the one marked 'Latest release:' line may change"
+    old_line, new_line = old_lines[changed[0]], new_lines[changed[0]]
+    if len(_marked_lines(old_text)) != 1 or _marked_line(old_line) is None:
+        return f"line {changed[0] + 1} is not the single marked 'Latest release:' line holding one semantic version"
+    if _marked_line(new_line) is None:
+        return f"line {changed[0] + 1} must keep the 'Latest release:' marker line with exactly one semantic version, has {new_line.strip()!r}"
+    old_match, new_match = _marked_line(old_line), _marked_line(new_line)
+    if old_line[:old_match.start()] + old_line[old_match.end():] != new_line[:new_match.start()] + new_line[new_match.end():]:
+        return f"line {changed[0] + 1} changes more than the version ({old_line.strip()!r} to {new_line.strip()!r})"
+    return None
+
+
+def _readme_texts(repo, base, sha):
+    old, new = _blob(repo, base, README_PATH) if base else None, _blob(repo, sha, README_PATH)
+    if old is None or new is None:
+        return None, None, f"{README_PATH} is added or deleted; only its marked 'Latest release:' line may change"
+    for rev in (base, sha):
+        mode = _entry(repo, rev, README_PATH)[0]
+        if mode not in ("100644", "100755"):
+            return None, None, f"{README_PATH} at {rev} is not a regular file (mode {mode})"
+    old_data, new_data = _cat(repo, old), _cat(repo, new)
+    if b"\x00" in old_data or b"\x00" in new_data:
+        return None, None, f"{README_PATH} contains a NUL byte"
+    try:
+        return old_data.decode("utf-8"), new_data.decode("utf-8"), None
+    except UnicodeDecodeError:
+        return None, None, f"{README_PATH} is not UTF-8"
+
+
+def readme_commit_problem(repo, sha):
+    """Why the public commit `sha` may not change README.md, or None when its change is the marked line only."""
+    parents = _git(repo, "rev-list", "--parents", "-n", "1", sha).stdout.split()[1:]
+    old, new, problem = _readme_texts(repo, parents[0] if parents else None, sha)
+    return problem or readme_problem(old, new)
+
+
 def check_extra(repo, public, head):
     """Sync-back gate of the publish, run on the filtered clone. The commits on the public side that the filtered head
     does not contain are examined oldest first:
@@ -151,8 +216,15 @@ def check_extra(repo, public, head):
                 return EXIT_REFUSED, f"public commit {sha} is a merge this publish did not make and it touches {outside[0]} (only {', '.join(ALLOWED_PATHS)} may change on the public side)", None
             continue
         for path in _paths(repo, sha):
+            problem = None
             if path not in ALLOWED_PATHS:
-                return EXIT_REFUSED, (f"public commit {sha} touches {path}; only {', '.join(ALLOWED_PATHS)} may change on the public side "
+                problem = f"touches {path}; only {', '.join(ALLOWED_PATHS)} may change on the public side"
+            elif path == README_PATH:
+                why = readme_commit_problem(repo, sha)
+                if why:
+                    problem = f"touches {path} beyond the marked 'Latest release:' line ({why})"
+            if problem:
+                return EXIT_REFUSED, (f"public commit {sha} {problem} "
                                       f"(copy the change into private main with a '{TRAILER}: {sha}' trailer in its commit message)"), None
         if pending is None:
             pending = sha
@@ -251,7 +323,7 @@ def apply_release(repo, sha):
             writes.append((PROPS_PATH, _VERSION_ELEMENT.sub(lambda _m: f"<Version>{new_version}</Version>", private_text, count=1).encode("utf-8")))
 
     # The two plain-text files, copied whole.
-    for path in ALLOWED_PATHS[1:]:
+    for path in PLAIN_PATHS:
         entry = _entry(repo, sha, path)
         if entry is None:
             if _entry(repo, base, path) is None:
@@ -271,6 +343,31 @@ def apply_release(repo, sha):
         if have != _blob(repo, base, path):
             raise RuntimeError(f"{path} was edited in private main since the public commit's parent; merge it by hand")
         writes.append((path, data))
+
+    # The README: the marked line only, edited in the private copy in place (never the public file copied).
+    if _blob(repo, sha, README_PATH) != _blob(repo, base, README_PATH):
+        old_text, new_text, problem = _readme_texts(repo, base, sha)
+        problem = problem or readme_problem(old_text, new_text)
+        if problem:
+            raise RuntimeError(f"{sha} changes {README_PATH} beyond the marked 'Latest release:' line: {problem}; merge it by hand")
+        pub_line = next(line for line in new_text.split("\n") if README_MARKER in line)
+        old_line = next(line for line in old_text.split("\n") if README_MARKER in line)
+        new_version, old_version = _marked_line(pub_line).group(0), _marked_line(old_line).group(0)
+        current = _read_private(repo, README_PATH)
+        if current is None:
+            raise RuntimeError(f"{README_PATH} is missing in the private working tree")
+        private_text = current.decode("utf-8")
+        marked = _marked_lines(private_text)
+        private_lines = private_text.split("\n")
+        if len(marked) != 1 or _marked_line(private_lines[marked[0]]) is None:
+            raise RuntimeError(f"{README_PATH} in private main has no single marked 'Latest release:' line with one semantic version; merge it by hand")
+        match = _marked_line(private_lines[marked[0]])
+        if match.group(0) != new_version:
+            if match.group(0) != old_version:
+                raise RuntimeError(f"the 'Latest release:' line in {README_PATH} was edited in private main ({match.group(0)}) since the public commit's parent ({old_version}); merge it by hand")
+            line = private_lines[marked[0]]
+            private_lines[marked[0]] = line[:match.start()] + new_version + line[match.end():]
+            writes.append((README_PATH, "\n".join(private_lines).encode("utf-8")))
     for path, data in writes:      # every check passed: nothing is written before this point
         _write(repo, path, data)
     return [path for path, _data in writes]

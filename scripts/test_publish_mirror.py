@@ -169,7 +169,7 @@ class ScriptTests(unittest.TestCase):
         self.git("clone", "-q", str(self.pub), str(work), cwd=self.tmp)
         return work
 
-    def release_commit(self, version, extra_path=None, props_suffix="", changelog=None, link=False, push=True):
+    def release_commit(self, version, extra_path=None, props_suffix="", changelog=None, link=False, push=True, readme_edit=None):
         """What Release Please does on the public repository: bump the version, write the changelog and the manifest."""
         work = self.public_clone()
         props = (work / PROPS).read_text().replace("<Version>1.0.0</Version>", f"<Version>{version}</Version>")
@@ -180,6 +180,8 @@ class ScriptTests(unittest.TestCase):
         else:
             (work / "CHANGELOG.md").write_bytes(changelog if changelog is not None else f"# Changelog\n\n## {version}\n".encode())
         self.write(".release-please-manifest.json", f'{{".": "{version}"}}\n', root=work)
+        if readme_edit:
+            (work / "README.md").write_text(readme_edit((work / "README.md").read_text()))
         if extra_path:
             self.write(extra_path, "changed on the public side\n", root=work)
         sha = self.commit(f"chore: release dotnet {version}", root=work)
@@ -203,6 +205,17 @@ class ScriptTests(unittest.TestCase):
         self.sync(release)
         self.publish()
         return release
+
+    MARKED = "Latest release: 1.0.0 <!-- x-release-please-version -->"
+    README_WITH_MARKER = f"# scratch\n\nSpec 0.1.0 stays.\n\n{MARKED}\n\nMore text.\n"
+
+    def published_with_marked_readme(self):
+        """A private README with the marked line, published, plus one feature, so a release commit has something to release."""
+        self.write("README.md", self.README_WITH_MARKER)
+        self.commit("TECHNICAL #11 add the marked line")
+        self.publish()
+        self.write("b.txt", "b\n")
+        self.commit("FEATURE #2 add thing")
 
     def assert_fast_forward(self, before_tip):
         tip = self.public_tip()
@@ -349,6 +362,86 @@ class ScriptTests(unittest.TestCase):
         refused = self.sync(foreign, check=False)
         self.assertEqual(refused.returncode, 1)
         self.assertIn("README.md", refused.stderr)
+
+    def test_sync_takes_the_readme_marker_line_and_the_next_publish_fast_forwards(self):
+        self.published_with_marked_readme()
+        before = self.public_tip()
+        release = self.release_commit("1.0.1", readme_edit=lambda t: t.replace("Latest release: 1.0.0", "Latest release: 1.0.1"))
+        synced = self.sync(release)
+        self.assertIn("sync release 1.0.1", synced.stdout)
+        self.assertIn("README.md", self.git("log", "-1", "--format=%B").stdout)
+        self.assertEqual((self.priv / "README.md").read_text(), self.README_WITH_MARKER.replace("1.0.0", "1.0.1"))
+        self.assertIn("<Version>1.0.1</Version>", (self.priv / PROPS).read_text())
+        self.assertEqual((self.priv / ".release-please-manifest.json").read_text(), '{".": "1.0.1"}\n')
+        self.assertEqual(self.git("log", "-1", "--format=%(trailers:key=Public-Sync,valueonly)").stdout.strip(), release)
+        self.publish()                                               # the bare remote refuses anything but a fast-forward
+        tip = self.assert_fast_forward(before)
+        self.assertIn("Latest release: 1.0.1", self.git("show", f"{tip}:README.md", cwd=self.pub).stdout)
+        self.assertIn("nothing to publish", self.publish().stdout)
+
+    def test_sync_edits_only_the_marked_line_of_the_private_readme(self):
+        self.published_with_marked_readme()
+        release = self.release_commit("1.0.1", readme_edit=lambda t: t.replace("Latest release: 1.0.0", "Latest release: 1.0.1"))
+        private = self.README_WITH_MARKER.replace("Spec 0.1.0 stays.", "Edited in private only.")
+        self.write("README.md", private)
+        self.commit("TECHNICAL #12 edit the README in private")
+        self.sync(release)
+        self.assertEqual((self.priv / "README.md").read_text(), private.replace("1.0.0", "1.0.1"))
+
+    def test_a_readme_change_beyond_the_marked_line_is_refused(self):
+        self.published_with_marked_readme()
+        cases = {
+            "an extra line": lambda t: t.replace("Latest release: 1.0.0", "Latest release: 1.0.1") + "Injected line.\n",
+            "another line only": lambda t: t.replace("More text.", "Other text."),
+            "marker line and another line": lambda t: t.replace("Latest release: 1.0.0", "Latest release: 1.0.1").replace("More text.", "Other text."),
+            "text on the marked line": lambda t: t.replace("Latest release: 1.0.0", "Latest release: 1.0.1 and more"),
+        }
+        for name, edit in cases.items():
+            with self.subTest(name):
+                before = self.public_tip()
+                foreign = self.release_commit("1.0.1", readme_edit=edit)
+                blocked = self.publish(check=False)
+                self.assertEqual(blocked.returncode, 1, blocked.stdout)
+                self.assertIn(foreign, blocked.stderr)
+                self.assertIn("README.md", blocked.stderr)
+                self.assertEqual(self.public_tip(), foreign)
+                refused = self.sync(foreign, check=False)
+                self.assertEqual(refused.returncode, 1)
+                self.assertIn("README.md", refused.stderr)
+                self.assertEqual(self.git("status", "--porcelain", "--untracked-files=no").stdout, "")   # nothing was written
+                run(self.pub, "git", "config", "receive.denyNonFastForwards", "false", env=self.env)
+                run(self.pub, "git", "update-ref", "refs/heads/main", before, env=self.env)
+                run(self.pub, "git", "config", "receive.denyNonFastForwards", "true", env=self.env)
+
+    def test_a_marked_line_with_two_semvers_or_a_non_semver_is_refused(self):
+        self.published_with_marked_readme()
+        for name, new in {"two semvers": "Latest release: 1.0.1 and 1.0.2 <!-- x-release-please-version -->",
+                          "not a semver": "Latest release: one-point-oh <!-- x-release-please-version -->",
+                          "short version": "Latest release: 1.1 <!-- x-release-please-version -->",
+                          "marker removed": "Latest release: 1.0.1"}.items():
+            with self.subTest(name):
+                before = self.public_tip()
+                foreign = self.release_commit("1.0.1", readme_edit=lambda t, new=new: t.replace(self.MARKED, new))
+                blocked = self.publish(check=False)
+                self.assertEqual(blocked.returncode, 1, blocked.stdout)
+                self.assertIn("README.md", blocked.stderr)
+                self.assertIn(foreign, blocked.stderr)
+                refused = self.sync(foreign, check=False)
+                self.assertEqual(refused.returncode, 1)
+                self.assertIn("README.md", refused.stderr)
+                run(self.pub, "git", "config", "receive.denyNonFastForwards", "false", env=self.env)
+                run(self.pub, "git", "update-ref", "refs/heads/main", before, env=self.env)
+                run(self.pub, "git", "config", "receive.denyNonFastForwards", "true", env=self.env)
+
+    def test_sync_refuses_a_marked_line_edited_in_private_since_the_public_parent(self):
+        self.published_with_marked_readme()
+        release = self.release_commit("1.0.2", readme_edit=lambda t: t.replace("Latest release: 1.0.0", "Latest release: 1.0.2"))
+        self.write("README.md", self.README_WITH_MARKER.replace("1.0.0", "1.0.1"))
+        self.commit("TECHNICAL #13 bump the marked line in private")
+        refused = self.sync(release, check=False)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("Latest release", refused.stderr)
+        self.assertIn("merge it by hand", refused.stderr)
 
     def test_sync_refuses_a_dirty_tree_and_a_private_version_edit_it_would_overwrite(self):
         self.publish()
