@@ -30,12 +30,15 @@ inclusivity, and guessing one would be silently wrong at the boundary (SEM-4). S
 `customFilters` form before it sends the request:
 
 - **Both bounds are exclusive**, `from < value < to`. That is AG Grid's own client-side default (`inRangeInclusive: false`), so
-  the demo shows what a client-side grid would show on the same data.
-- **Only one bound filled in:** `value > from`, or `value < to`. No bound at all: the condition is dropped.
+  the demo shows what a client-side grid would show on the same data. (On the date-time column the page reads the date as UTC
+  midnight, the zone the API uses; a client-side grid compares with the browser's local midnight, so the two agree in a UTC browser.)
+- **One bound or none:** AG Grid itself applies "In range" only when both bounds are filled in (a half-filled range is not sent at all).
+  For a filter model set through the grid's API with only one bound, the page sends `value > from` or `value < to`; with no bound
+  it drops the condition.
 - **Combined with other conditions:** joined by AND, the other conditions stay in the normal filter and only the range is translated.
   Joined by **OR**, the page shows an `unsupported-filter` message instead of guessing; use AND.
 - **Types:** the bound is typed from the column. A whole-number column (`quantity`, `id`) needs whole numbers; `amount` takes plain
-  decimals; a `datetime` column reads the date as UTC, the zone the demo API uses.
+  decimals; a `date` column takes `YYYY-MM-DD` (or a midnight time; any other time is refused, never cut off); a `datetime` column reads the date as UTC, the zone the demo API uses.
 - A native in-range request sent straight to the API (without the page's translation) is refused with `unknown-operator`; `smoke.sh` shows it.
 
 The translation is in `web/src/inRange.ts`, shared by both pages and the CSV export.

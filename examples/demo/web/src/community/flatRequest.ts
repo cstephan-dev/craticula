@@ -54,7 +54,9 @@ export function createFlatDatasource(
       } catch (error: unknown) {
         params.failCallback();
         if (isCurrent()) {
-          listener.onRowsError(asApiError(error));
+          const failure = asApiError(error);
+          listener.onRowsError(failure);
+          listener.onQuery(request, failure); // the panel and Copy request must not keep the previous request
         }
         return;
       }

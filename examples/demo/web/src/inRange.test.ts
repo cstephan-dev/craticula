@@ -8,6 +8,7 @@ const both = { filterType: 'number', type: 'inRange', filter: 100, filterTo: 500
 describe('translateInRange: a number column', () => {
   it('turns both bounds into an exclusive range and removes the column from the filter model', () => {
     expect(translateInRange({ quantity: both })).toEqual({
+      found: true,
       filterModel: {},
       customFilters: {
         type: 'comparison',
@@ -40,7 +41,7 @@ describe('translateInRange: a number column', () => {
   });
 
   it('drops a range with no bound at all', () => {
-    expect(translateInRange({ quantity: { ...both, filter: null, filterTo: null } })).toEqual({ filterModel: {} });
+    expect(translateInRange({ quantity: { ...both, filter: null, filterTo: null } })).toEqual({ found: true, filterModel: {} });
   });
 
   it('keeps a zero bound: zero is a value', () => {
@@ -50,6 +51,12 @@ describe('translateInRange: a number column', () => {
   it('writes a decimal column bound as the schema wants it, a plain decimal string', () => {
     const node = translateInRange({ amount: { ...both, filter: 12.5, filterTo: 100 } }).customFilters;
     expect(node).toMatchObject({ from: { type: 'decimal', value: '12.5' }, to: { type: 'decimal', value: '100' } });
+  });
+
+  it('reports that a range was found even when it is empty and produces no node', () => {
+    const empty = translateInRange({ quantity: { ...both, filter: null, filterTo: null } });
+    expect(empty.found).toBe(true);
+    expect(translateInRange({ customer: { filterType: 'text', type: 'contains', filter: 'x' } }).found).toBe(false);
   });
 
   it('refuses a fraction on a whole-number column and an exponent form on a decimal column', () => {
@@ -88,6 +95,10 @@ describe('translateInRange: a date column', () => {
     });
   });
 
+  it('refuses a time other than midnight on a date column instead of cutting it off', () => {
+    expect(() => translateInRange({ shippedOn: date('2025-01-01 05:00:00', '2025-02-01') })).toThrow(/midnight/);
+  });
+
   it('refuses a bound that is not a date', () => {
     expect(() => translateInRange({ shippedOn: date('soon', '2025-03-01') })).toThrow(/YYYY-MM-DD/);
   });
@@ -106,7 +117,7 @@ describe('translateInRange: other models', () => {
     const model = { quantity: both };
     translateInRange(model);
     expect(model).toEqual({ quantity: both });
-    expect(translateInRange(null)).toEqual({ filterModel: {} });
+    expect(translateInRange(null)).toEqual({ found: false, filterModel: {} });
   });
 
   it('keeps the other conditions of an AND column in the filter model and moves only the range', () => {

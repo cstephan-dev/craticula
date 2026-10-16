@@ -65,7 +65,9 @@ export function createDatasource(
         // A filter the demo cannot translate (an in-range joined by OR, a bound the column cannot hold): say so, send nothing.
         params.fail();
         if (isCurrent()) {
-          listener.onRowsError(asApiError(error));
+          const failure = asApiError(error);
+          listener.onRowsError(failure);
+          listener.onQuery(request, failure); // the panel must not keep showing the previous filter's query
         }
         return;
       }

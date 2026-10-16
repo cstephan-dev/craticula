@@ -35,6 +35,8 @@ type Condition = Record<string, unknown>;
 export type CustomFilterNode = Record<string, unknown>;
 
 export interface Translated {
+  /** True when the model held at least one in-range condition (even an empty one, which is dropped). */
+  found: boolean;
   /** The grid's filter model without the in-range conditions (a new object; the input is never changed). */
   filterModel: FilterModel;
   /** The in-range conditions as IR, or undefined when there were none. */
@@ -68,20 +70,26 @@ function typedValue(field: string, type: FieldType | undefined, raw: unknown): R
       if (typeof raw === 'number' && Number.isSafeInteger(raw)) {
         return { type: 'int64', value: raw };
       }
-      throw unsupported(`'${field}' is a whole-number column: a range bound must be a whole number (got ${String(raw)}).`);
+      throw unsupported(`'${field}' is a whole-number column: a range bound must be a whole number the page can hold exactly (up to 9007199254740991) (got ${String(raw)}).`);
+    case 'double':
+      if (typeof raw === 'number' && Number.isFinite(raw)) {
+        return { type: 'double', value: raw };
+      }
+      throw unsupported(`'${field}' is a number column: a range bound must be a finite number (got ${String(raw)}).`);
     case 'decimal': {
       const text = typeof raw === 'number' ? String(raw) : typeof raw === 'string' ? raw.trim() : '';
       if (/^-?[0-9]+(\.[0-9]+)?$/.test(text)) {
         return { type: 'decimal', value: text };
       }
-      throw unsupported(`'${field}' is a decimal column: a range bound must be a plain decimal number (got ${String(raw)}).`);
+      throw unsupported(`'${field}' is a decimal column: a range bound must be a plain decimal number such as 12.5, without an exponent and between about 0.000001 and 1e21 (got ${String(raw)}).`);
     }
     case 'date': {
-      const match = typeof raw === 'string' ? /^(\d{4}-\d{2}-\d{2})/.exec(raw) : null;
+      // The library accepts only a midnight time on a date field (SEM-4); anything else is refused here too, never truncated.
+      const match = typeof raw === 'string' ? /^(\d{4}-\d{2}-\d{2})(?: 00:00(?::00)?)?$/.exec(raw) : null;
       if (match) {
         return { type: 'date', value: match[1] };
       }
-      throw unsupported(`'${field}' is a date column: a range bound must start with YYYY-MM-DD (got ${String(raw)}).`);
+      throw unsupported(`'${field}' is a date column: a range bound must be YYYY-MM-DD, optionally with a midnight time (got ${String(raw)}).`);
     }
     case 'datetime': {
       const match = typeof raw === 'string' ? /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::(\d{2}))?)?/.exec(raw) : null;
@@ -138,6 +146,7 @@ function rangeNode(field: string, condition: Condition): CustomFilterNode | unde
 export function translateInRange(filterModel: FilterModel | null | undefined): Translated {
   const kept: FilterModel = {};
   const nodes: CustomFilterNode[] = [];
+  let found = false;
 
   for (const [field, raw] of Object.entries(filterModel ?? {})) {
     const model = raw as Condition;
@@ -149,6 +158,7 @@ export function translateInRange(filterModel: FilterModel | null | undefined): T
     if (list.length > 1 && operator !== 'AND') {
       throw unsupported(`'${field}': "In range" cannot be combined with another condition by OR in this demo; use AND.`);
     }
+    found = true;
     const rest: Condition[] = [];
     for (const condition of list) {
       if (isInRange(condition)) {
@@ -168,9 +178,9 @@ export function translateInRange(filterModel: FilterModel | null | undefined): T
   }
 
   if (nodes.length === 0) {
-    return { filterModel: kept };
+    return { found, filterModel: kept };
   }
-  return { filterModel: kept, customFilters: nodes.length === 1 ? nodes[0] : { type: 'and', nodes } };
+  return { found, filterModel: kept, customFilters: nodes.length === 1 ? nodes[0] : { type: 'and', nodes } };
 }
 
 /**
@@ -178,6 +188,10 @@ export function translateInRange(filterModel: FilterModel | null | undefined): T
  * ranges taken out and whose `customFilters` carries them. Throws the `unsupported-filter` ApiError of translateInRange.
  */
 export function withTranslatedRanges<T extends { filterModel?: unknown }>(request: T): T & { customFilters?: CustomFilterNode } {
-  const { filterModel, customFilters } = translateInRange(request.filterModel as FilterModel | null | undefined);
-  return customFilters ? { ...request, filterModel, customFilters } : request;
+  const { found, filterModel, customFilters } = translateInRange(request.filterModel as FilterModel | null | undefined);
+  if (!found) {
+    return request;
+  }
+  // Copy whenever a range was found, even an empty one that produced no node: the native condition must not go out.
+  return customFilters ? { ...request, filterModel, customFilters } : { ...request, filterModel };
 }

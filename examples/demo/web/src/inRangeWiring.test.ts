@@ -66,6 +66,14 @@ describe('the server-side page', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(fail).toHaveBeenCalled();
     expect(listener.onRowsError.mock.calls[0][0]).toMatchObject({ kind: 'unsupported-filter' });
+    expect(listener.onQuery.mock.calls[0][1]).toMatchObject({ kind: 'unsupported-filter' });
+  });
+
+  it('never lets a native in-range condition go out, even an empty one that produces no custom filter', () => {
+    const empty = { quantity: { ...range, filter: null, filterTo: null }, customer };
+    const wire = toWireRequest(request(empty));
+    expect(wire.filterModel).toEqual({ customer });
+    expect(wire.customFilters).toBeUndefined();
   });
 
   it('keeps a request without a range exactly as it was', () => {
@@ -110,5 +118,8 @@ describe('the Community page', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(params.failCallback).toHaveBeenCalled();
     expect(listener.onRowsError.mock.calls[0][0]).toMatchObject({ kind: 'unsupported-filter' });
+    // the query panel (and Copy request) move to the refused request instead of keeping the previous one
+    expect(listener.onQuery.mock.calls[0][0]).toEqual(toFlatRequest(params));
+    expect(listener.onQuery.mock.calls[0][1]).toMatchObject({ kind: 'unsupported-filter' });
   });
 });
