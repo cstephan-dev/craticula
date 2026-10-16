@@ -115,8 +115,8 @@ Do these in the browser. Each should work on both providers.
   so the grid runs in evaluation mode: a watermark and console warnings are normal. To use your own key, create
   `web/.env.local` (git ignores it) with `VITE_AG_GRID_LICENSE=<your key>`.
 - **No tree data, master/detail or pivot.** The library does not support them, so the page does not offer them.
-- **No "in range" option for numbers and dates.** The library takes ranges through its `customFilters` extension and not
-  through AG Grid's own filter model, so the page offers the single-value operators only.
+- **"In range" with OR.** "In range" works (see the section above), but a range joined to another condition by OR is refused with
+  an `unsupported-filter` message; join them with AND.
 
 ## Stop and reset
 
