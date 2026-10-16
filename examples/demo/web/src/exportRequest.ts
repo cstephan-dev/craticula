@@ -1,5 +1,6 @@
 import type { ColumnState } from 'ag-grid-enterprise';
 import type { SortModelItem } from 'ag-grid-enterprise';
+import { translateInRange, type CustomFilterNode } from './inRange';
 
 /**
  * The body of `POST /api/<provider>/export.csv`: a rows request with no page (the whole result), no grouping (the export
@@ -14,6 +15,8 @@ export interface ExportRequest {
   pivotMode: false;
   groupKeys: [];
   filterModel: Record<string, unknown> | null;
+  /** The grid's in-range filters, translated (inRange.ts); absent when there are none. */
+  customFilters?: CustomFilterNode;
   sortModel: SortModelItem[];
   exportFormat: 'csv';
   exportScope: 'all';
@@ -32,7 +35,8 @@ export function buildExportRequest(
   state: ColumnState[],
   fieldIds: ReadonlySet<string>,
 ): ExportRequest {
-  const hasFilter = filterModel != null && Object.keys(filterModel).length > 0;
+  const translated = translateInRange(filterModel);
+  const hasFilter = Object.keys(translated.filterModel).length > 0;
   return {
     startRow: null,
     endRow: null,
@@ -41,7 +45,8 @@ export function buildExportRequest(
     pivotCols: [],
     pivotMode: false,
     groupKeys: [],
-    filterModel: hasFilter ? filterModel : null,
+    filterModel: hasFilter ? translated.filterModel : null,
+    ...(translated.customFilters ? { customFilters: translated.customFilters } : {}),
     sortModel: sortModelFrom(state, fieldIds),
     exportFormat: 'csv',
     exportScope: 'all',

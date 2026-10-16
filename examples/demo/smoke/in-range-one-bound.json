@@ -1,0 +1,6 @@
+{
+  "startRow": 0, "endRow": 100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": {},
+  "customFilters": { "type": "comparison", "field": "quantity", "op": "gt", "value": { "type": "int64", "value": 40 } },
+  "sortModel": [ { "colId": "id", "sort": "asc" } ]
+}

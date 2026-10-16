@@ -10,7 +10,7 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 19 scenarios are equal on both providers`.
+is up) ends with `all 24 scenarios are equal on both providers`.
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -19,10 +19,29 @@ the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
 
 http://localhost:5173/community.html is the same data on the **free AG Grid Community** edition (Infinite Row Model): no
 license key, no watermark, no grouping, aggregation or set filter (those are Enterprise features). It sends the flat request
-Community sends (`startRow`, `endRow`, `sortModel`, `filterModel`) and the API compiles it like any other. The native "in range"
-option is left out of the number and date filters, because the library rejects it (it carries no inclusivity); the main page does
-the same. **Copy request** puts the exact request body on the clipboard: that is the first step of turning a real payload into a fixture (the columns are the demo's, so the steps in
-`spec/fixtures/community-infinite/README.md` say how to map them).
+Community sends (`startRow`, `endRow`, `sortModel`, `filterModel`) and the API compiles it like any other. **Copy request** puts
+the exact request body the grid sent on the clipboard: that is the first step of turning a real payload into a fixture (the columns
+are the demo's, so the steps in `spec/fixtures/community-infinite/README.md` say how to map them).
+
+## The "In range" filter
+
+Both pages offer AG Grid's "In range" option on the number and date columns. The library does not accept a native range: it carries no
+inclusivity, and guessing one would be silently wrong at the boundary (SEM-4). So the page translates it into the library's
+`customFilters` form before it sends the request:
+
+- **Both bounds are exclusive**, `from < value < to`. That is AG Grid's own client-side default (`inRangeInclusive: false`), so
+  the demo shows what a client-side grid would show on the same data. (On the date-time column the page reads the date as UTC
+  midnight, the zone the API uses; a client-side grid compares with the browser's local midnight, so the two agree in a UTC browser.)
+- **One bound or none:** AG Grid itself applies "In range" only when both bounds are filled in (a half-filled range is not sent at all).
+  For a filter model set through the grid's API with only one bound, the page sends `value > from` or `value < to`; with no bound
+  it drops the condition.
+- **Combined with other conditions:** joined by AND, the other conditions stay in the normal filter and only the range is translated.
+  Joined by **OR**, the page shows an `unsupported-filter` message instead of guessing; use AND.
+- **Types:** the bound is typed from the column. A whole-number column (`quantity`, `id`) needs whole numbers; `amount` takes plain
+  decimals; a `date` column takes `YYYY-MM-DD` (or a midnight time; any other time is refused, never cut off); a `datetime` column reads the date as UTC, the zone the demo API uses.
+- A native in-range request sent straight to the API (without the page's translation) is refused with `unknown-operator`; `smoke.sh` shows it.
+
+The translation is in `web/src/inRange.ts`, shared by both pages and the CSV export.
 
 ## Prerequisites
 
@@ -99,8 +118,8 @@ Do these in the browser. Each should work on both providers.
   so the grid runs in evaluation mode: a watermark and console warnings are normal. To use your own key, create
   `web/.env.local` (git ignores it) with `VITE_AG_GRID_LICENSE=<your key>`.
 - **No tree data, master/detail or pivot.** The library does not support them, so the page does not offer them.
-- **No "in range" option for numbers and dates.** The library takes ranges through its `customFilters` extension and not
-  through AG Grid's own filter model, so the page offers the single-value operators only.
+- **"In range" with OR.** "In range" works (see the section above), but a range joined to another condition by OR is refused with
+  an `unsupported-filter` message; join them with AND.
 
 ## Stop and reset
 

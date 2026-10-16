@@ -1,9 +1,9 @@
 import type { ColDef, ValueFormatterParams } from 'ag-grid-community';
 
 /**
- * The operators the library parses for numbers and dates. Native in-range is left out on purpose: it carries no
- * inclusivity, so the library rejects it (SEM-4); a host that wants ranges sends them through customFilters. Community has
- * no set filter, so every filterable column here uses the text, number or date filter.
+ * The operators of the number and date filters. Native in-range is offered: the page translates it into customFilters with
+ * exclusive bounds before sending (../inRange.ts), because the library does not parse it (it carries no inclusivity, SEM-4).
+ * Community has no set filter, so every filterable column here uses the text, number or date filter.
  */
 const NUMBER_OPTIONS = [
   'equals',
@@ -12,10 +12,11 @@ const NUMBER_OPTIONS = [
   'lessThanOrEqual',
   'greaterThan',
   'greaterThanOrEqual',
+  'inRange',
   'blank',
   'notBlank',
 ];
-const DATE_OPTIONS = ['equals', 'notEqual', 'lessThan', 'greaterThan', 'blank', 'notBlank'];
+const DATE_OPTIONS = ['equals', 'notEqual', 'lessThan', 'greaterThan', 'inRange', 'blank', 'notBlank'];
 
 const twoDecimals = (params: ValueFormatterParams) =>
   typeof params.value === 'number' ? params.value.toFixed(2) : '';

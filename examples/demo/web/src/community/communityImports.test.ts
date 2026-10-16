@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-// Every source file of the page, read as text (Vite's glob import; no Node types needed).
-const sources = import.meta.glob<string>('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true });
+// Every source file of the page except the tests, read as text (Vite glob import; no Node types needed). The tests are left out: an eager glob that includes its own file imports itself and sees a half-built object.
+const sources = import.meta.glob<string>(['/src/**/*.{ts,tsx}', '!/src/**/*.test.ts'], { query: '?raw', import: 'default', eager: true });
 
 /** Every module specifier of the static imports and re-exports in a source file (type-only ones included). */
 function specifiers(source: string): string[] {

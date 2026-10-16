@@ -11,7 +11,10 @@ export interface ColumnContext {
   onError(error: ApiError): void;
 }
 
-/** The filter operators the library parses for numbers and dates (inRange is not on the wire). */
+/**
+ * The filter operators of the number and date filters. A native inRange is not parsed by the library (it carries no inclusivity,
+ * SEM-4); the page translates it into customFilters with exclusive bounds before sending (inRange.ts).
+ */
 const NUMBER_OPTIONS = [
   'equals',
   'notEqual',
@@ -19,10 +22,11 @@ const NUMBER_OPTIONS = [
   'lessThanOrEqual',
   'greaterThan',
   'greaterThanOrEqual',
+  'inRange',
   'blank',
   'notBlank',
 ];
-const DATE_OPTIONS = ['equals', 'notEqual', 'lessThan', 'greaterThan', 'blank', 'notBlank'];
+const DATE_OPTIONS = ['equals', 'notEqual', 'lessThan', 'greaterThan', 'inRange', 'blank', 'notBlank'];
 
 /** The aggregations orders.schema.json allows on amount and quantity. */
 const AGG_FUNCS = ['sum', 'avg', 'min', 'max', 'count'];

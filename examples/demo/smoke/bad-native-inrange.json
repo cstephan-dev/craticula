@@ -1,0 +1,5 @@
+{
+  "startRow": 0, "endRow": 100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": { "amount": { "filterType": "number", "type": "inRange", "filter": 100, "filterTo": 500 } },
+  "sortModel": [ { "colId": "id", "sort": "asc" } ]
+}

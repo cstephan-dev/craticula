@@ -1,4 +1,5 @@
 import type { IDatasource, IGetRowsParams } from 'ag-grid-community';
+import { withTranslatedRanges } from '../inRange';
 import { ApiError, asApiError, fetchQuery, fetchRows, type Provider, type QueryView } from '../api';
 
 /**
@@ -46,7 +47,20 @@ export function createFlatDatasource(
   return {
     getRows(params) {
       const request = toFlatRequest(params);
-      fetchRows(provider, request).then(
+      // What the grid sent stays the request shown and copied; what is posted has any native in-range filter translated (inRange.ts).
+      let wire: object;
+      try {
+        wire = withTranslatedRanges(request);
+      } catch (error: unknown) {
+        params.failCallback();
+        if (isCurrent()) {
+          const failure = asApiError(error);
+          listener.onRowsError(failure);
+          listener.onQuery(request, failure); // the panel and Copy request must not keep the previous request
+        }
+        return;
+      }
+      fetchRows(provider, wire).then(
         (result) => params.successCallback(result.rows, result.lastRow ?? undefined),
         (error: unknown) => {
           params.failCallback();
@@ -56,7 +70,7 @@ export function createFlatDatasource(
         },
       );
 
-      fetchQuery(provider, request).then(
+      fetchQuery(provider, wire).then(
         (view) => isCurrent() && listener.onQuery(request, view),
         (error: unknown) => isCurrent() && listener.onQuery(request, asApiError(error)),
       );

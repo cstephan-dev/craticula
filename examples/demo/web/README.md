@@ -40,6 +40,6 @@ reproduce both:
 - Coming back, aggregate result keys `<colId>_<aggFunc>` (`amount_sum`) are renamed to the column id (`amount`), because
   the grid reads an aggregate from the column's field.
 
-Number and date filters offer only the operators the library parses (no `inRange`). The boolean column is a set filter on
+Number and date filters offer "In range" too: `src/inRange.ts` translates it into `customFilters` with exclusive bounds before the request is sent (see the demo README, section "The In range filter"). The boolean column is a set filter on
 `"true"` / `"false"`. Set-filter values come from `/api/<provider>/values` and are loaded again each time a filter opens.
  The CSV button posts the current filter and sort to `/api/<provider>/export.csv`.
