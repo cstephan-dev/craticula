@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ApiError, type GridRequest, type QueryView } from '../api';
+import { ApiError, type QueryView } from '../api';
 
 export interface CompiledQuery {
-  request: GridRequest;
+  /** What the grid sent (the server-side page and the Community page send different shapes); the panel does not read it. */
+  request: unknown;
   view: QueryView | ApiError;
 }
 

@@ -9,6 +9,15 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:5080',
     },
   },
+  // Two entries: the Enterprise page (index.html) and the Community-only page (community.html).
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        community: 'community.html',
+      },
+    },
+  },
   test: {
     environment: 'node',
   },

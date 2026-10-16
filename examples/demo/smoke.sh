@@ -58,6 +58,8 @@ scenarios=(
   "set filter on status|rows|set-filter-status.json|rows"
   "set filter with nothing selected (SEM-8)|rows|set-filter-empty.json|rows"
   "notIn with no values, every row (SEM-8)|rows|notin-empty.json|rows"
+  "community flat request: text filter, two sorts|rows|community-flat-text.json|rows"
+  "community flat request: number AND, date, page 2|rows|community-flat-number-date.json|rows"
   "group by country: sum, avg, count|rows|group-by-country.json|rows"
   "page past the end|rows|past-the-end.json|rows"
   "set values for country|values|set-values-country.json|values"

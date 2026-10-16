@@ -1,4 +1,5 @@
 import type { IServerSideDatasource } from 'ag-grid-enterprise';
+import { createProviderGate } from './providerGate';
 import { ApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView, type WireGroupKey, type WireRequest } from './api';
 
 /** What the page wants to hear about while the grid loads blocks. */
@@ -48,19 +49,6 @@ export function toGridRows(request: GridRequest, rows: Record<string, unknown>[]
   });
 }
 
-/** Which provider is on screen. Datasources of any other provider ask it before reporting a late answer. */
-export function createProviderGate(initial: Provider) {
-  let current = initial;
-  return {
-    select(next: Provider) {
-      current = next;
-    },
-    isCurrent(candidate: Provider) {
-      return current === candidate;
-    },
-  };
-}
-
 /**
  * The server-side datasource for one provider: the grid's request goes out, the API's answer goes back.
  * `isCurrent` tells whether this datasource's provider is still the one on screen; a late answer from a provider the
@@ -99,3 +87,5 @@ export function createDatasource(
     },
   };
 }
+
+export { createProviderGate };
