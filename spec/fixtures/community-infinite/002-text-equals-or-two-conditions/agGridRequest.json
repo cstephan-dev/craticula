@@ -1,0 +1,28 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "status": {
+      "filterType": "text",
+      "operator": "OR",
+      "conditions": [
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "active"
+        },
+        {
+          "filterType": "text",
+          "type": "equals",
+          "filter": "approved"
+        }
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

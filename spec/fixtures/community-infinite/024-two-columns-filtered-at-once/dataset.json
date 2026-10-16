@@ -1,0 +1,124 @@
+{
+  "rows": [
+    {
+      "row": {
+        "amount": 150.5,
+        "customerName": "Acme Corp",
+        "id": 1,
+        "isActive": true,
+        "status": "active"
+      },
+      "why": "matches all four filters"
+    },
+    {
+      "row": {
+        "amount": 100,
+        "customerName": "acme ltd",
+        "id": 2,
+        "isActive": true,
+        "status": "active"
+      },
+      "why": "amount = 100 sits on the gt boundary: excluded"
+    },
+    {
+      "row": {
+        "amount": 200,
+        "customerName": "ACME inc",
+        "id": 3,
+        "isActive": true,
+        "status": "ACTIVE"
+      },
+      "why": "SEM-1: contains and eq fold case; matches"
+    },
+    {
+      "row": {
+        "amount": 250,
+        "customerName": "Globex",
+        "id": 4,
+        "isActive": true,
+        "status": "active"
+      },
+      "why": "fails only the contains arm"
+    },
+    {
+      "row": {
+        "amount": 300,
+        "customerName": "xacmex",
+        "id": 5,
+        "isActive": true,
+        "status": "Active"
+      },
+      "why": "contains is a substring match anywhere; matches"
+    },
+    {
+      "row": {
+        "amount": 400,
+        "customerName": "Acme",
+        "id": 6,
+        "isActive": false,
+        "status": "active"
+      },
+      "why": "fails only the boolean arm"
+    },
+    {
+      "row": {
+        "amount": 500,
+        "customerName": "Acme",
+        "id": 7,
+        "isActive": true,
+        "status": "pending"
+      },
+      "why": "fails only the status arm"
+    },
+    {
+      "row": {
+        "amount": null,
+        "customerName": "Acme",
+        "id": 8,
+        "isActive": true,
+        "status": "active"
+      },
+      "why": "null amount never satisfies gt"
+    },
+    {
+      "row": {
+        "amount": 600,
+        "customerName": null,
+        "id": 9,
+        "isActive": true,
+        "status": "active"
+      },
+      "why": "null name never satisfies contains"
+    },
+    {
+      "row": {
+        "amount": 700,
+        "customerName": "Acme",
+        "id": 10,
+        "isActive": null,
+        "status": "active"
+      },
+      "why": "null boolean never satisfies isActive = true"
+    },
+    {
+      "row": {
+        "amount": 800,
+        "customerName": "Acme Two",
+        "id": 11,
+        "isActive": true,
+        "status": null
+      },
+      "why": "null status never satisfies eq"
+    },
+    {
+      "row": {
+        "amount": 100.25,
+        "customerName": "acme",
+        "id": 12,
+        "isActive": true,
+        "status": "active"
+      },
+      "why": "just above the gt boundary; matches"
+    }
+  ]
+}

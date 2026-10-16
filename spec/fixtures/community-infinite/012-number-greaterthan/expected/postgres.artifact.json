@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM \"items\" WHERE \"age\" > $1 ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    18,
+    100,
+    0
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "status": "active" }, "why": "exact match for the first OR arm" },
+    { "row": { "id": 2, "status": "ACTIVE" }, "why": "SEM-1: matches only if the comparison folds case" },
+    { "row": { "id": 3, "status": "Approved" }, "why": "the second OR arm, also case-folded" },
+    { "row": { "id": 4, "status": "pending" }, "why": "rejected: neither arm" },
+    { "row": { "id": 5, "status": null }, "why": "rejected: eq is not null-inclusive (SEM-2)" },
+    { "row": { "id": 6, "status": "" }, "why": "rejected: the empty string is not 'active'" },
+    { "row": { "id": 7, "status": "activex" }, "why": "rejected: eq, not startsWith, so the extra character matters" }
+  ]
+}

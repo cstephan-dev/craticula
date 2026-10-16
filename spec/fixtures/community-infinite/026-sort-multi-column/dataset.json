@@ -1,0 +1,92 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 1,
+        "department": "Eng",
+        "salary": "90000.00"
+      },
+      "why": "Eng high"
+    },
+    {
+      "row": {
+        "id": 2,
+        "department": "Eng",
+        "salary": "75000.50"
+      },
+      "why": "Eng mid"
+    },
+    {
+      "row": {
+        "id": 3,
+        "department": "Ops",
+        "salary": "60000.00"
+      },
+      "why": "Ops"
+    },
+    {
+      "row": {
+        "id": 4,
+        "department": "eng",
+        "salary": "90000.0"
+      },
+      "why": "case variant of Eng (SEM-1 tie); salary equals id 1 as a number, so the tiebreaker decides"
+    },
+    {
+      "row": {
+        "id": 5,
+        "department": "Ops",
+        "salary": null
+      },
+      "why": "null salary on a desc key sorts first within Ops"
+    },
+    {
+      "row": {
+        "id": 6,
+        "department": null,
+        "salary": "50000.00"
+      },
+      "why": "null department sorts last on asc"
+    },
+    {
+      "row": {
+        "id": 7,
+        "department": "Eng",
+        "salary": null
+      },
+      "why": "null salary sorts first within Eng"
+    },
+    {
+      "row": {
+        "id": 8,
+        "department": "Ops",
+        "salary": "60000.00"
+      },
+      "why": "ties with id 3 on both keys: tiebreaker"
+    },
+    {
+      "row": {
+        "id": 9,
+        "department": "Sales",
+        "salary": "45000.25"
+      },
+      "why": "single-row department"
+    },
+    {
+      "row": {
+        "id": 10,
+        "department": "Ops",
+        "salary": "80000.00"
+      },
+      "why": "highest Ops salary"
+    },
+    {
+      "row": {
+        "id": 11,
+        "department": null,
+        "salary": null
+      },
+      "why": "null on both keys"
+    }
+  ]
+}

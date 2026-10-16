@@ -1,0 +1,9 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT * FROM \"items\" WHERE \"birth_date\" > $1::date ORDER BY \"id\" ASC NULLS LAST LIMIT $2 OFFSET $3",
+  "params": [
+    "1990-01-01",
+    100,
+    0
+  ]
+}

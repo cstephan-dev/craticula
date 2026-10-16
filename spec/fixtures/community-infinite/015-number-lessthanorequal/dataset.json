@@ -1,0 +1,11 @@
+{
+  "rows": [
+    { "row": { "id": 1, "age": 65 }, "why": "boundary: included by lte" },
+    { "row": { "id": 2, "age": 64 }, "why": "just below" },
+    { "row": { "id": 3, "age": 66 }, "why": "just above: excluded" },
+    { "row": { "id": 4, "age": null }, "why": "SEM-2: an ordering comparison never matches null" },
+    { "row": { "id": 5, "age": 0 }, "why": "zero is a value" },
+    { "row": { "id": 6, "age": -1 }, "why": "negative" },
+    { "row": { "id": 7, "age": 100 }, "why": "far above" }
+  ]
+}

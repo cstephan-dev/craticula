@@ -1,0 +1,17 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "status": {
+      "filterType": "text",
+      "type": "equals",
+      "filter": "active"
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

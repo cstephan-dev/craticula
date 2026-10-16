@@ -31,6 +31,13 @@ One rule decides the bump. A change is breaking, and needs a new major version, 
 A spec change that alters the generated text or the semantics without changing the shape (for example a typed cast or a
 rendering fix) is a minor version. A change is a patch only when the output for every valid request is unchanged.
 
+## What the public contract covers
+
+Besides the types and the compiled artifacts, the contract includes the request shapes the adapter accepts: the Server-Side
+Row Model requests of AG Grid v31 to v36 and the flat requests AG Grid Community's Infinite Row Model sends (sort, text,
+number and date filters, paging). Dropping support for one of those shapes is a breaking change, like any other
+accepted request that becomes rejected.
+
 ## Adapters and provider majors
 
 Each adapter package declares a version range for the library it wraps: the current major, with the lowest version

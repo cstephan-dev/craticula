@@ -1,0 +1,30 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "birthDate": {
+      "filterType": "date",
+      "operator": "OR",
+      "conditions": [
+        {
+          "filterType": "date",
+          "type": "equals",
+          "dateFrom": "1990-05-12",
+          "dateTo": null
+        },
+        {
+          "filterType": "date",
+          "type": "equals",
+          "dateFrom": "1991-07-04",
+          "dateTo": null
+        }
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

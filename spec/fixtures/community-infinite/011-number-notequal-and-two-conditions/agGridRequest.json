@@ -1,0 +1,28 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "age": {
+      "filterType": "number",
+      "operator": "AND",
+      "conditions": [
+        {
+          "filterType": "number",
+          "type": "notEqual",
+          "filter": 30
+        },
+        {
+          "filterType": "number",
+          "type": "notEqual",
+          "filter": 40
+        }
+      ]
+    }
+  },
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

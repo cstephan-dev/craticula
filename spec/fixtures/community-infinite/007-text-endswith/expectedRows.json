@@ -1,0 +1,8 @@
+{
+  "columns": ["id", "productName"],
+  "rows": [
+    [1, "Smartwatch"],
+    [2, "WATCH"],
+    [3, "Stopwatch"]
+  ]
+}

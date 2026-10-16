@@ -117,7 +117,7 @@ comparison rule and how an accepted divergence is declared. In short:
 **Worked example: `operators/001-eq-string`.** Its seed holds seven rows chosen to sit on each side of every boundary
 (`"active"`, `"ACTIVE"`, `"Approved"`, `"pending"`, a null, `""`, `"activex"`), and its expected result is the three rows
 that match case-insensitively, in `id` order: `[[1,"active"],[2,"ACTIVE"],[3,"Approved"]]`. Without the collation only
-id 1 would match; as a `startsWith`, id 7 would join. 189 fixtures carry the pair today, in every category that can
+id 1 would match; as a `startsWith`, id 7 would join. 223 fixtures carry the pair today, in every category that can
 be executed; the rule lives in `semantics.md` XEQ-1..XEQ-4.
 
 ## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
@@ -668,6 +668,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits, duplicate aggregation output names | ~20 |
 | `dialect-parity/` | Dialect-specific mechanics + cross-backend parity showcases (SEM-1/2/3/7/8, SQL-5/6/7, MDB-9) + AGG-6's five-SQL-dialect aggregate case | ~26 |
 | `ag-grid-majors/` | AG-4: one SSRM payload per supported AG Grid major (v31-v36), plus the two rejections any major can emit (AG-5 Advanced Filter, SEM-4 native `inRange`) — **derived from each release tag's published types, not captured from a running grid** (see its README) | 8 |
+| `community-infinite/` | AG-7: flat requests in the shape AG Grid Community's Infinite Row Model sends — text, number and date filter operators, both join operators, sort and paging — compiled with the same semantics as the SSRM; every case labelled `derived` or `captured` | 27 |
 
 Each category directory has its own `README.md` enumerating its cases and the specific requirement
 each one backs.

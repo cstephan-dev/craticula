@@ -10,10 +10,19 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 17 scenarios are equal on both providers`.
+is up) ends with `all 19 scenarios are equal on both providers`.
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
+
+## A second page: AG Grid Community
+
+http://localhost:5173/community.html is the same data on the **free AG Grid Community** edition (Infinite Row Model): no
+license key, no watermark, no grouping, aggregation or set filter (those are Enterprise features). It sends the flat request
+Community sends (`startRow`, `endRow`, `sortModel`, `filterModel`) and the API compiles it like any other. The native "in range"
+option is left out of the number and date filters, because the library rejects it (it carries no inclusivity); the main page does
+the same. **Copy request** puts the exact request body on the clipboard: that is the first step of turning a real payload into a fixture (the columns are the demo's, so the steps in
+`spec/fixtures/community-infinite/README.md` say how to map them).
 
 ## Prerequisites
 

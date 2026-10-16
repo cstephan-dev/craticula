@@ -1,0 +1,44 @@
+{
+  "mode": "strict",
+  "source": "items",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": false,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "id"
+        },
+        "mongo": {
+          "path": "id"
+        },
+        "search": {
+          "field": "id"
+        }
+      }
+    },
+    "productName": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "physical": {
+        "sql": {
+          "column": "product_name"
+        },
+        "mongo": {
+          "path": "productName"
+        },
+        "search": {
+          "field": "productName",
+          "keywordSubField": "productName.keyword"
+        }
+      },
+      "text": {
+        "caseSensitivity": "insensitive",
+        "searchMode": "substring"
+      }
+    }
+  }
+}

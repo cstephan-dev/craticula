@@ -1,0 +1,7 @@
+{
+  "columns": ["id", "birthDate"],
+  "rows": [
+    [1, null],
+    [4, null]
+  ]
+}

@@ -1,5 +1,6 @@
 import type { IServerSideDatasource } from 'ag-grid-enterprise';
-import { ApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView, type WireGroupKey, type WireRequest } from './api';
+import { createProviderGate } from './providerGate';
+import { ApiError, asApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView, type WireGroupKey, type WireRequest } from './api';
 
 /** What the page wants to hear about while the grid loads blocks. */
 export interface DatasourceListener {
@@ -7,12 +8,6 @@ export interface DatasourceListener {
   onRowsError(error: ApiError): void;
   /** The compiled query of the latest request, or why it could not be compiled. */
   onQuery(request: GridRequest, view: QueryView | ApiError): void;
-}
-
-export function asApiError(error: unknown): ApiError {
-  return error instanceof ApiError
-    ? error
-    : new ApiError(0, 'unexpected-error', error instanceof Error ? error.message : 'Unexpected error.');
 }
 
 /**
@@ -46,19 +41,6 @@ export function toGridRows(request: GridRequest, rows: Record<string, unknown>[]
     }
     return mapped;
   });
-}
-
-/** Which provider is on screen. Datasources of any other provider ask it before reporting a late answer. */
-export function createProviderGate(initial: Provider) {
-  let current = initial;
-  return {
-    select(next: Provider) {
-      current = next;
-    },
-    isCurrent(candidate: Provider) {
-      return current === candidate;
-    },
-  };
 }
 
 /**
@@ -99,3 +81,5 @@ export function createDatasource(
     },
   };
 }
+
+export { asApiError, createProviderGate };

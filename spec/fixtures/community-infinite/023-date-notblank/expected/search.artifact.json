@@ -1,0 +1,25 @@
+{
+  "query": {
+    "bool": {
+      "must_not": {
+        "bool": {
+          "must_not": {
+            "exists": {
+              "field": "birthDate"
+            }
+          }
+        }
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

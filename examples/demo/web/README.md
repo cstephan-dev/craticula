@@ -10,6 +10,14 @@ npm run dev        # http://localhost:5173, /api is proxied to the API
 npm run lint && npm run test -- --run && npm run build
 ```
 
+## The Community page
+
+`community.html` is a second Vite entry (`src/community/`) that imports only `ag-grid-community` and `ag-grid-react`: the
+Infinite Row Model, text, number and date filters, no set filter, no grouping, no license key. A test
+(`communityImports.test.ts`) walks its imports and fails if anything reaches `ag-grid-enterprise`. The built Community entry
+shares one chunk with the main page that holds the Community core; the Enterprise code is only in the main page's chunk.
+`npm run build` builds both entries.
+
 ## AG Grid version and license
 
 - AG Grid 36.2.0, pinned exactly: `ag-grid-community`, `ag-grid-enterprise` and `ag-grid-react` (the React wrapper is a

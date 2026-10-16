@@ -1,0 +1,28 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": {
+    "customerName": {
+      "filterType": "text",
+      "type": "contains",
+      "filter": "acme"
+    },
+    "amount": {
+      "filterType": "number",
+      "type": "greaterThan",
+      "filter": 100
+    },
+    "status": {
+      "filterType": "text",
+      "type": "equals",
+      "filter": "active"
+    },
+    "isActive": {
+      "filterType": "set",
+      "values": [
+        "true"
+      ]
+    }
+  },
+  "sortModel": []
+}

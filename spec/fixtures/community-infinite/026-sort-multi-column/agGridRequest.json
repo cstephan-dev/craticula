@@ -1,0 +1,15 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "filterModel": null,
+  "sortModel": [
+    {
+      "colId": "department",
+      "sort": "asc"
+    },
+    {
+      "colId": "salary",
+      "sort": "desc"
+    }
+  ]
+}

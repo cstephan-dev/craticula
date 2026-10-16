@@ -1,0 +1,186 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 17,
+        "lastName": "Moore"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 3,
+        "lastName": "Moore"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 22,
+        "lastName": "Moore"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 9,
+        "lastName": "Nash"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 14,
+        "lastName": "Nash"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 1,
+        "lastName": "Ortiz"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 25,
+        "lastName": "Ortiz"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 6,
+        "lastName": "Ortiz"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 11,
+        "lastName": "ORTIZ"
+      },
+      "why": "case variant of Ortiz: folds into the Ortiz tie"
+    },
+    {
+      "row": {
+        "id": 19,
+        "lastName": "Patel"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 4,
+        "lastName": "Patel"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 23,
+        "lastName": "Quinn"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 8,
+        "lastName": "Quinn"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 15,
+        "lastName": "Quinn"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 2,
+        "lastName": "Reed"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 20,
+        "lastName": "Reed"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 12,
+        "lastName": "Shaw"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 7,
+        "lastName": "Shaw"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 24,
+        "lastName": "Shaw"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 10,
+        "lastName": "Shaw"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 18,
+        "lastName": "Tran"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 5,
+        "lastName": "Tran"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 21,
+        "lastName": "Tran"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 13,
+        "lastName": "Vega"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 16,
+        "lastName": "Vega"
+      },
+      "why": "tied name; position by tiebreaker"
+    },
+    {
+      "row": {
+        "id": 26,
+        "lastName": null
+      },
+      "why": "null last_name sorts after every name on asc, so it is the final row of the window"
+    }
+  ]
+}

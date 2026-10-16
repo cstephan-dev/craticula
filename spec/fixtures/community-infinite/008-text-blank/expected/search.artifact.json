@@ -1,0 +1,35 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "bool": {
+            "must_not": {
+              "exists": {
+                "field": "status"
+              }
+            }
+          }
+        },
+        {
+          "term": {
+            "status.keyword": {
+              "value": ""
+            }
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}

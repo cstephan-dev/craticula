@@ -1,0 +1,20 @@
+{
+  "query": {
+    "term": {
+      "status.keyword": {
+        "value": "active",
+        "case_insensitive": true
+      }
+    }
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "asc",
+        "missing": "_last"
+      }
+    }
+  ],
+  "size": 100,
+  "from": 0
+}
