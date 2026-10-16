@@ -23,6 +23,9 @@ WORKFLOW = ROOT / ".github/workflows/release-please.yml"
 RELEASE_YML = "./.github/workflows/release.yml"
 RELEASE_FILE = ROOT / ".github/workflows/release.yml"
 XPATH = "//Project/PropertyGroup/Version"
+README = ROOT / "README.md"
+MARKER = "x-release-please-version"
+SEMVER = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?")
 
 
 def props_version() -> str:
@@ -52,6 +55,25 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(1, len(root.findall("./PropertyGroup/Version")),
                          "exactly one <Version> under Project/PropertyGroup, or the xml updater edits the wrong one")
         self.assertEqual(1, len(root.findall(".//Version")), "no other <Version> element anywhere in the file")
+
+    def test_extra_files_are_the_props_xml_and_the_readme_generic(self):
+        entries = {f["path"]: f for f in self.package["extra-files"]}
+        self.assertEqual({"csharp/src/Directory.Build.props", "README.md"}, set(entries), "extra-files entries")
+        self.assertEqual(2, len(self.package["extra-files"]))
+        self.assertEqual("xml", entries["csharp/src/Directory.Build.props"]["type"])
+        self.assertEqual("generic", entries["README.md"]["type"])
+
+    def test_readme_marker_is_one_line_with_one_semver_equal_to_the_manifest(self):
+        lines = [ln for ln in README.read_text(encoding="utf-8").splitlines() if MARKER in ln]
+        self.assertEqual(1, len(lines), f"README.md: the {MARKER} marker must be on exactly one line, found {len(lines)}")
+        line = lines[0]
+        self.assertTrue(line.startswith("Latest release: "), f"README.md: marked line is {line!r}")
+        self.assertFalse(line.lstrip().startswith("|"), "README.md: the marked line must not be a table row")
+        found = SEMVER.findall(line.split("<!--")[0])
+        self.assertEqual(1, len(found), f"README.md: the marked line must hold exactly one semver, found {found}")
+        self.assertEqual(1, len(SEMVER.findall(line)), "README.md: the comment part must not hold a version either")
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))["."]
+        self.assertEqual(manifest, found[0], "README.md: the 'Latest release' version must equal .release-please-manifest.json")
 
     def test_tag_format_is_dotnet_v_semver(self):
         merged = {**self.config, **self.package}
@@ -150,6 +172,33 @@ class ReleaseWorkflowTests(unittest.TestCase):
         conds = {s["name"]: s.get("if") for s in wf["jobs"]["publish"]["steps"] if "name" in s}
         self.assertEqual("github.event_name == 'workflow_dispatch'", conds["GitHub release (manual dispatch)"])
         self.assertEqual("github.event_name != 'workflow_dispatch'", conds["Attach packages to the Release Please release"])
+
+    def test_spec_version_step_is_last_tolerant_env_only_and_checkout_is_sparse(self):
+        if yaml is None:
+            self.skipTest("PyYAML is not installed")
+        wf = yaml.safe_load(self.text)
+        steps = wf["jobs"]["publish"]["steps"]
+        names = [s.get("name") for s in steps]
+        step_name = "Add the spec version to the release notes"
+        self.assertEqual(1, names.count(step_name))
+        index = names.index(step_name)
+        step = steps[index]
+        self.assertIn("Attach packages to the Release Please release", names[:index], "after the nupkg upload")
+        attest = [i for i, s in enumerate(steps) if str(s.get("uses", "")).startswith("actions/attest-build-provenance@")]
+        self.assertEqual(1, len(attest))
+        self.assertLess(attest[0], index, "after the attestation")
+        self.assertIs(True, step["continue-on-error"])
+        self.assertEqual({"GH_TOKEN": "${{ github.token }}", "VERSION": "${{ inputs.version }}"}, step["env"])
+        self.assertNotIn("${{", step["run"], "values reach the script through env only")
+        self.assertIn("::warning::", step["run"])
+        self.assertNotIn("secrets.", step["run"])
+        checkout = steps[index - 1]
+        self.assertTrue(checkout["uses"].startswith("actions/checkout@"))
+        self.assertIs(False, checkout["with"]["persist-credentials"])
+        self.assertEqual(["spec", "scripts/release_notes.py"], checkout["with"]["sparse-checkout"].split())
+        self.assertEqual({"id-token": "write", "attestations": "write", "contents": "write"},
+                         wf["jobs"]["publish"]["permissions"])
+        self.assertEqual({"contents": "read"}, wf["permissions"])
 
 
 if __name__ == "__main__":

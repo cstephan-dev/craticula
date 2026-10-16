@@ -179,3 +179,32 @@ jobs:
         run: >
           gh release upload "dotnet-v$VERSION" nupkgs/*.nupkg
           --repo "$GITHUB_REPOSITORY"
+
+      # The spec version and the size of the fixture suite go into the release notes (story #1661). This runs after
+      # the packages are on nuget.org and attached to the release, so it must never fail a release that already
+      # published: continue-on-error keeps the job green and the script prints a warning annotation instead. A missing
+      # line is fixed by hand with `gh release edit`. The checkout takes only `spec` and the one script from the
+      # dispatched commit, with no stored token; `contents: write` (already on this job) covers `gh release edit`.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            spec
+            scripts/release_notes.py
+          sparse-checkout-cone-mode: false
+
+      - name: Add the spec version to the release notes
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          notes="$RUNNER_TEMP/release-notes.md"
+          if gh release view "dotnet-v$VERSION" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$notes" \
+            && python3 scripts/release_notes.py --spec-version-file spec/VERSION --fixtures spec/fixtures --append-to "$notes" \
+            && gh release edit "dotnet-v$VERSION" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"; then
+            echo "Release notes of dotnet-v$VERSION carry the spec version line"
+          else
+            echo "::warning::Could not add the spec version line to the notes of dotnet-v$VERSION; the release itself is published. Add it by hand: gh release edit."
+            exit 1
+          fi
