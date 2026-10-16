@@ -1,0 +1,5 @@
+{
+  "startRow": 30000, "endRow": 30100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": { "customer": { "filterType": "text", "type": "contains", "filter": "GmbH" } },
+  "sortModel": [ { "colId": "id", "sort": "asc" } ]
+}

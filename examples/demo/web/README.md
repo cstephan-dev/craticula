@@ -1,7 +1,8 @@
 # Craticula demo: web page
 
 A Vite + React + TypeScript page with one AG Grid (server-side row model) that reads the same orders from PostgreSQL or
-MongoDB through the demo API. Needs Node 20.19+ and the API on `http://127.0.0.1:5080`.
+MongoDB through the demo API. Needs Node 20.19+ and the API on `http://127.0.0.1:5080`. The full quickstart (databases, seed,
+API, click-through checklist, troubleshooting) is in [../README.md](../README.md); this file covers the page only.
 
 ```bash
 npm install

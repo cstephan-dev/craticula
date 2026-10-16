@@ -1,0 +1,10 @@
+{
+  "startRow": 0, "endRow": 200, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [ { "colId": "id", "sort": "asc" } ],
+  "customFilters": {
+    "type": "comparison", "field": "shippedOn", "op": "inRange",
+    "from": { "type": "date", "value": "2025-03-01" }, "to": { "type": "date", "value": "2025-03-15" },
+    "fromInclusive": true, "toInclusive": false
+  }
+}

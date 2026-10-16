@@ -1,0 +1,6 @@
+{
+  "startRow": 0, "endRow": 100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [ { "colId": "id", "sort": "asc" } ],
+  "customFilters": { "type": "comparison", "field": "isPriority", "op": "eq", "value": { "type": "boolean", "value": true } }
+}

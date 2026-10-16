@@ -1,0 +1,6 @@
+{
+  "startRow": null, "endRow": null, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": { "customer": { "filterType": "text", "type": "equals", "filter": "=SUM(A1)" } },
+  "sortModel": [],
+  "exportFormat": "csv"
+}
