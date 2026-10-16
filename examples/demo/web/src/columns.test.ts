@@ -28,10 +28,10 @@ describe('column definitions', () => {
     }
   });
 
-  it('keeps unsupported operators (inRange) out of the number and date filters', () => {
+  it('offers "In range" on the number and date filters (the page translates it, inRange.ts)', () => {
     for (const id of ['id', 'amount', 'quantity', 'orderedAt', 'shippedOn']) {
       const options = (byField.get(id)?.filterParams as { filterOptions: string[] }).filterOptions;
-      expect(options).not.toContain('inRange');
+      expect(options).toContain('inRange');
     }
   });
 

@@ -1,0 +1,6 @@
+{
+  "startRow": 0, "endRow": 100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": {},
+  "customFilters": { "type": "comparison", "field": "orderedAt", "op": "inRange", "from": { "type": "datetime", "value": "2025-03-01T00:00:00Z", "zone": "UTC" }, "to": { "type": "datetime", "value": "2025-06-01T00:00:00Z", "zone": "UTC" }, "fromInclusive": false, "toInclusive": false },
+  "sortModel": [ { "colId": "id", "sort": "asc" } ]
+}

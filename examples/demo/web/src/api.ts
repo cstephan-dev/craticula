@@ -18,7 +18,7 @@ export type WireGroupKey = { type: 'string'; value: string } | { type: 'null' };
  * library. (The other adaptation is on the way back: aggregate result keys `<colId>_<aggFunc>` are renamed to the
  * column id; see datasource.ts.) Anyone copying this demo must reproduce both.
  */
-export type WireRequest = Omit<GridRequest, 'groupKeys'> & { groupKeys: WireGroupKey[] };
+export type WireRequest = Omit<GridRequest, 'groupKeys'> & { groupKeys: WireGroupKey[]; customFilters?: Record<string, unknown> };
 
 export interface RowsResponse {
   rows: Record<string, unknown>[];

@@ -172,3 +172,12 @@ export function translateInRange(filterModel: FilterModel | null | undefined): T
   }
   return { filterModel: kept, customFilters: nodes.length === 1 ? nodes[0] : { type: 'and', nodes } };
 }
+
+/**
+ * A request ready to post: the same object when it holds no in-range condition, otherwise a copy whose `filterModel` has the
+ * ranges taken out and whose `customFilters` carries them. Throws the `unsupported-filter` ApiError of translateInRange.
+ */
+export function withTranslatedRanges<T extends { filterModel?: unknown }>(request: T): T & { customFilters?: CustomFilterNode } {
+  const { filterModel, customFilters } = translateInRange(request.filterModel as FilterModel | null | undefined);
+  return customFilters ? { ...request, filterModel, customFilters } : request;
+}

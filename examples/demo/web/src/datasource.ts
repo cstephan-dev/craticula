@@ -1,4 +1,5 @@
 import type { IServerSideDatasource } from 'ag-grid-enterprise';
+import { withTranslatedRanges } from './inRange';
 import { createProviderGate } from './providerGate';
 import { ApiError, asApiError, fetchQuery, fetchRows, type GridRequest, type Provider, type QueryView, type WireGroupKey, type WireRequest } from './api';
 
@@ -19,7 +20,8 @@ export function toWireRequest(request: GridRequest): WireRequest {
   const groupKeys = request.groupKeys.map(
     (key): WireGroupKey => (key == null ? { type: 'null' } : { type: 'string', value: key }),
   );
-  return { ...request, groupKeys };
+  // A native in-range filter is not accepted by the library (SEM-4): it goes out as customFilters with exclusive bounds (inRange.ts).
+  return withTranslatedRanges({ ...request, groupKeys });
 }
 
 /**
@@ -56,7 +58,17 @@ export function createDatasource(
   return {
     getRows(params) {
       const request = params.request;
-      const wire = toWireRequest(request);
+      let wire: WireRequest;
+      try {
+        wire = toWireRequest(request);
+      } catch (error: unknown) {
+        // A filter the demo cannot translate (an in-range joined by OR, a bound the column cannot hold): say so, send nothing.
+        params.fail();
+        if (isCurrent()) {
+          listener.onRowsError(asApiError(error));
+        }
+        return;
+      }
 
       fetchRows(provider, wire).then(
         (result) => {

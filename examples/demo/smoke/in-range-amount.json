@@ -1,0 +1,6 @@
+{
+  "startRow": 0, "endRow": 100, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": {},
+  "customFilters": { "type": "comparison", "field": "amount", "op": "inRange", "from": { "type": "decimal", "value": "100" }, "to": { "type": "decimal", "value": "500" }, "fromInclusive": false, "toInclusive": false },
+  "sortModel": [ { "colId": "id", "sort": "asc" } ]
+}
