@@ -1,0 +1,89 @@
+{
+  "mode": "strict",
+  "source": "orders",
+  "stableKey": "id",
+  "fields": {
+    "id": {
+      "type": "int64",
+      "filterable": true,
+      "sortable": true,
+      "label": "Id",
+      "physical": { "sql": { "column": "id" }, "mongo": { "path": "_id" } }
+    },
+    "orderNo": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "label": "Order no",
+      "physical": { "sql": { "column": "order_no" }, "mongo": { "path": "orderNo" } }
+    },
+    "customer": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "label": "Customer",
+      "physical": { "sql": { "column": "customer" }, "mongo": { "path": "customer" } }
+    },
+    "country": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "groupable": true,
+      "label": "Country",
+      "physical": { "sql": { "column": "country" }, "mongo": { "path": "country" } }
+    },
+    "category": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "groupable": true,
+      "label": "Category",
+      "physical": { "sql": { "column": "category" }, "mongo": { "path": "category" } }
+    },
+    "status": {
+      "type": "string",
+      "filterable": true,
+      "sortable": true,
+      "groupable": true,
+      "label": "Status",
+      "physical": { "sql": { "column": "status" }, "mongo": { "path": "status" } }
+    },
+    "amount": {
+      "type": "decimal",
+      "filterable": true,
+      "sortable": true,
+      "aggregatable": ["sum", "avg", "min", "max", "count"],
+      "label": "Amount",
+      "physical": { "sql": { "column": "amount" }, "mongo": { "path": "amount" } }
+    },
+    "quantity": {
+      "type": "int64",
+      "filterable": true,
+      "sortable": true,
+      "aggregatable": ["sum", "avg", "min", "max", "count"],
+      "label": "Quantity",
+      "physical": { "sql": { "column": "quantity" }, "mongo": { "path": "quantity" } }
+    },
+    "orderedAt": {
+      "type": "datetime",
+      "filterable": true,
+      "sortable": true,
+      "label": "Ordered at",
+      "physical": { "sql": { "column": "ordered_at" }, "mongo": { "path": "orderedAt" } }
+    },
+    "shippedOn": {
+      "type": "date",
+      "filterable": true,
+      "sortable": true,
+      "label": "Shipped on",
+      "physical": { "sql": { "column": "shipped_on" }, "mongo": { "path": "shippedOn" } }
+    },
+    "isPriority": {
+      "type": "boolean",
+      "filterable": true,
+      "sortable": true,
+      "label": "Priority",
+      "physical": { "sql": { "column": "is_priority" }, "mongo": { "path": "isPriority" } }
+    }
+  }
+}

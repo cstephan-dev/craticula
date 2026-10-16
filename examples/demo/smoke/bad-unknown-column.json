@@ -1,0 +1,5 @@
+{
+  "startRow": 0, "endRow": 50, "rowGroupCols": [], "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": { "passwordHash": { "filterType": "text", "type": "equals", "filter": "x" } },
+  "sortModel": []
+}

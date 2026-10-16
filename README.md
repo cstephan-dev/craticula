@@ -65,6 +65,12 @@ The C# implementation is split into ten NuGet packages: `Craticula.Core`, `Crati
 [Compatibility](#compatibility) section shows the last published version. To check that the packages build and a clean consumer compiles against them, run
 `bash scripts/pack-smoke.sh` (Python 3.10+ and the .NET 10 SDK; about 3 minutes).
 
+## Demo
+
+[`examples/demo`](examples/demo/README.md) is a small app: one AG Grid page that reads the same orders from PostgreSQL or
+MongoDB through a C# API built on the library. It needs Docker, the .NET 10 SDK and Node 20.19 or newer. It is a showcase
+that references the library by project reference, not a published package.
+
 ## Compatibility
 
 | Spec version | .NET target |

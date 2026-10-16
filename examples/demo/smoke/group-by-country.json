@@ -1,0 +1,12 @@
+{
+  "startRow": 0, "endRow": 100,
+  "rowGroupCols": [ { "id": "country", "displayName": "Country", "field": "country" } ],
+  "valueCols": [
+    { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "sum" },
+    { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "avg" },
+    { "id": "quantity", "displayName": "Quantity", "field": "quantity", "aggFunc": "count" }
+  ],
+  "pivotCols": [], "pivotMode": false, "groupKeys": [],
+  "filterModel": null,
+  "sortModel": [ { "colId": "country", "sort": "asc" } ]
+}
