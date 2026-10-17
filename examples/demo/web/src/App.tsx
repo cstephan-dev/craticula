@@ -119,7 +119,6 @@ export function App() {
       <main className="content">
         <div className="grid">
           <AgGridReact
-            key={paged ? 'pages' : 'scroll'}
             rowModelType="serverSide"
             serverSideDatasource={datasource}
             columnDefs={columnDefs}

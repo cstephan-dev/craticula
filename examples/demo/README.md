@@ -108,7 +108,7 @@ Do these in the browser. Each should work on both providers.
    area and choose sum, avg and count. Open a group to see its children.
 6. **Scroll or pages.** Scroll down in a long list. Blocks of 100 rows load as you go; the row count stays right. Click Pages
    to switch to numbered pages instead (100 rows each, with the total count and the page bar at the bottom). A filter or a
-   sort returns to page 1. Click Pages again to go back to scrolling.
+   sort returns to page 1. Click Pages again to go back to scrolling; your filters, sort and groups stay as they are.
 7. **CSV export.** With a filter and sort active, click Export CSV. The file holds the filtered, sorted rows. A cell that
    starts with `=` is saved with a leading `'` so a spreadsheet does not run it as a formula.
 8. **Query panel.** Click Query panel. It shows the SQL (PostgreSQL) or the aggregation pipeline (MongoDB) with its
