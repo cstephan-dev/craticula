@@ -106,7 +106,9 @@ Do these in the browser. Each should work on both providers.
 4. **Set filter.** Open the Country filter. The values come from the database. Untick some and see the grid narrow.
 5. **Group.** Drag Country, then Category, into the row group bar above the grid. Drag Amount and Quantity into the values
    area and choose sum, avg and count. Open a group to see its children.
-6. **Scroll.** Scroll down in a long list. Pages load as you go; the row count stays right.
+6. **Scroll or pages.** Scroll down in a long list. Blocks of 100 rows load as you go; the row count stays right. Click Pages
+   to switch to numbered pages instead (100 rows each, with the total count and the page bar at the bottom). A filter or a
+   sort returns to page 1. Click Pages again to go back to scrolling.
 7. **CSV export.** With a filter and sort active, click Export CSV. The file holds the filtered, sorted rows. A cell that
    starts with `=` is saved with a leading `'` so a spreadsheet does not run it as a formula.
 8. **Query panel.** Click Query panel. It shows the SQL (PostgreSQL) or the aggregation pipeline (MongoDB) with its

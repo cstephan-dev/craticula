@@ -15,3 +15,6 @@ export const SIDE_BAR: SideBarDef = {
     'filters',
   ],
 };
+
+// One page is one block: with pagination on, AG Grid asks the datasource for exactly one page of rows at a time.
+export const PAGE_SIZE = 100;

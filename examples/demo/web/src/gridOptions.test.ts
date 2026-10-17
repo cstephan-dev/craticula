@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SIDE_BAR } from './gridOptions';
+import { PAGE_SIZE, SIDE_BAR } from './gridOptions';
 
 describe('the side bar', () => {
   const columns = SIDE_BAR.toolPanels?.find((panel) => typeof panel !== 'string' && panel.id === 'columns');
@@ -14,5 +14,11 @@ describe('the side bar', () => {
 
   it('keeps the Filters panel', () => {
     expect(SIDE_BAR.toolPanels).toContain('filters');
+  });
+});
+
+describe('the page size', () => {
+  it('is a positive whole number, used as the page size and the block size', () => {
+    expect(Number.isInteger(PAGE_SIZE) && PAGE_SIZE > 0).toBe(true);
   });
 });
