@@ -106,7 +106,9 @@ Do these in the browser. Each should work on both providers.
 4. **Set filter.** Open the Country filter. The values come from the database. Untick some and see the grid narrow.
 5. **Group.** Drag Country, then Category, into the row group bar above the grid. Drag Amount and Quantity into the values
    area and choose sum, avg and count. Open a group to see its children.
-6. **Scroll.** Scroll down in a long list. Pages load as you go; the row count stays right.
+6. **Scroll or pages.** Scroll down in a long list. Blocks of 100 rows load as you go; the row count stays right. Click Pages
+   to switch to numbered pages instead (100 rows each, with the total count and the page bar at the bottom). A filter or a
+   sort returns to page 1. Click Pages again to go back to scrolling; your filters, sort and groups stay as they are.
 7. **CSV export.** With a filter and sort active, click Export CSV. The file holds the filtered, sorted rows. A cell that
    starts with `=` is saved with a leading `'` so a spreadsheet does not run it as a formula.
 8. **Query panel.** Click Query panel. It shows the SQL (PostgreSQL) or the aggregation pipeline (MongoDB) with its
@@ -117,7 +119,8 @@ Do these in the browser. Each should work on both providers.
 - **A watermark.** The server-side row model is an AG Grid Enterprise feature. There is no license key in this repository,
   so the grid runs in evaluation mode: a watermark and console warnings are normal. To use your own key, create
   `web/.env.local` (git ignores it) with `VITE_AG_GRID_LICENSE=<your key>`.
-- **No tree data, master/detail or pivot.** The library does not support them, so the page does not offer them.
+- **No tree data, master/detail or pivot.** The library does not support them, so the page does not offer them: the Columns
+  panel has no Pivot Mode switch. A pivot request sent straight to the API is refused with `malformed-request`.
 - **"In range" with OR.** "In range" works (see the section above), but a range joined to another condition by OR is refused with
   an `unsupported-filter` message; join them with AND.
 

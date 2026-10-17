@@ -5,6 +5,7 @@ import { ApiError, fetchExport, fetchHealth, type Provider } from './api';
 import { buildColumnDefs, type GridContext } from './columns';
 import { asApiError, createDatasource, createProviderGate } from './datasource';
 import { buildExportRequest } from './exportRequest';
+import { PAGE_SIZE, SIDE_BAR } from './gridOptions';
 import { ErrorBanner } from './components/ErrorBanner';
 import { ProviderSwitch } from './components/ProviderSwitch';
 import { QueryPanel, type CompiledQuery } from './components/QueryPanel';
@@ -15,13 +16,13 @@ type Health = 'checking' | 'ok' | 'down';
 // render (the side bar would jump back to its first panel).
 const DEFAULT_COL_DEF: ColDef = { sortable: true, filter: true, resizable: true };
 const AUTO_GROUP_COLUMN_DEF: ColDef = { minWidth: 220, headerName: 'Group' };
-const SIDE_BAR = ['columns', 'filters'];
 
 export function App() {
   const [provider, setProvider] = useState<Provider>('postgres');
   const [health, setHealth] = useState<Health>('checking');
   const [error, setError] = useState<ApiError | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [paged, setPaged] = useState(false);
   const [query, setQuery] = useState<CompiledQuery | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -106,6 +107,9 @@ export function App() {
           <button type="button" onClick={() => void exportCsv()} disabled={exporting}>
             {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
+          <button type="button" aria-pressed={paged} onClick={() => setPaged((on) => !on)} title="Numbered pages instead of infinite scroll">
+            Pages
+          </button>
           <button type="button" aria-pressed={panelOpen} onClick={() => setPanelOpen((open) => !open)}>
             Query panel
           </button>
@@ -123,7 +127,10 @@ export function App() {
             autoGroupColumnDef={AUTO_GROUP_COLUMN_DEF}
             rowGroupPanelShow="always"
             sideBar={SIDE_BAR}
-            cacheBlockSize={100}
+            pagination={paged}
+            paginationPageSize={PAGE_SIZE}
+            paginationPageSizeSelector={false}
+            cacheBlockSize={PAGE_SIZE}
             maxBlocksInCache={10}
             serverSideInitialRowCount={100}
             onGridReady={onGridReady}
