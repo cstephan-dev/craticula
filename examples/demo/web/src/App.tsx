@@ -5,6 +5,7 @@ import { ApiError, fetchExport, fetchHealth, type Provider } from './api';
 import { buildColumnDefs, type GridContext } from './columns';
 import { asApiError, createDatasource, createProviderGate } from './datasource';
 import { buildExportRequest } from './exportRequest';
+import { SIDE_BAR } from './gridOptions';
 import { ErrorBanner } from './components/ErrorBanner';
 import { ProviderSwitch } from './components/ProviderSwitch';
 import { QueryPanel, type CompiledQuery } from './components/QueryPanel';
@@ -15,7 +16,6 @@ type Health = 'checking' | 'ok' | 'down';
 // render (the side bar would jump back to its first panel).
 const DEFAULT_COL_DEF: ColDef = { sortable: true, filter: true, resizable: true };
 const AUTO_GROUP_COLUMN_DEF: ColDef = { minWidth: 220, headerName: 'Group' };
-const SIDE_BAR = ['columns', 'filters'];
 
 export function App() {
   const [provider, setProvider] = useState<Provider>('postgres');

@@ -117,7 +117,8 @@ Do these in the browser. Each should work on both providers.
 - **A watermark.** The server-side row model is an AG Grid Enterprise feature. There is no license key in this repository,
   so the grid runs in evaluation mode: a watermark and console warnings are normal. To use your own key, create
   `web/.env.local` (git ignores it) with `VITE_AG_GRID_LICENSE=<your key>`.
-- **No tree data, master/detail or pivot.** The library does not support them, so the page does not offer them.
+- **No tree data, master/detail or pivot.** The library does not support them, so the page does not offer them: the Columns
+  panel has no Pivot Mode switch. A pivot request sent straight to the API is refused with `malformed-request`.
 - **"In range" with OR.** "In range" works (see the section above), but a range joined to another condition by OR is refused with
   an `unsupported-filter` message; join them with AND.
 
