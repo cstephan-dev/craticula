@@ -1,0 +1,81 @@
+# Public CI (story #2467, TRD OS-1 / OS-7, spec FR-13): what an outside pull request and every publish to main must pass.
+# Two checks, named `build` and `test`, so the branch ruleset on main can require them. It mirrors the C# part of the
+# Azure PR gate (.azuredevops/pipeline-pr.yml): the 0-warning build with the NuGet audit, then the offline suite under
+# coverage with the 90% line gate (scripts/coverage.sh). Conformance, the SEC-2 lint and the pack smoke stay in the
+# Azure pipeline. The `test` job is also what the README coverage badge reads: a gate-status badge ("coverage gate
+# 90%"), not a percentage; the per-assembly numbers go to the job summary.
+# No secret, read-only token, every action pinned to a commit SHA (scripts/test_workflows.py checks that).
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The newest .NET 10 SDK, as in the Azure pipeline; csharp/global.json (10.0.100, rollForward latestFeature) still applies.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # NuGetAudit runs here (csharp/Directory.Build.props): a high or critical advisory (NU1903, NU1904) fails the restore.
+      - name: Restore and audit dependencies
+        working-directory: csharp
+        run: dotnet restore Craticula.sln
+
+      # The 0-warning bar, and the Security analyzers of csharp/src/.editorconfig as errors.
+      - name: Build (0 warnings, security rules)
+        working-directory: csharp
+        run: dotnet build Craticula.sln -c Release --no-restore -v q -warnaserror "-p:WarningsNotAsErrors=NU1900%3BNU1901%3BNU1902"
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # Craticula.Conformance.Tests runs the Python conformance runner, and the coverage merge needs Python 3.10+.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # The offline suite (no Docker, no live databases) under coverage, then the per-assembly 90% line gate. A failing
+      # test or a coverage drop fails this step. The log is kept for the job summary. `shell: bash` is what sets
+      # pipefail: without it the pipe to tee would hide coverage.sh's exit code.
+      - name: Offline tests and coverage gate
+        shell: bash
+        run:bash scripts/coverage.sh 2>&1 | tee "$RUNNER_TEMP/coverage.log"
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo '### Offline tests and coverage gate'
+            echo
+            echo '```'
+            tail -n 40 "$RUNNER_TEMP/coverage.log" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
