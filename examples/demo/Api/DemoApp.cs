@@ -61,6 +61,11 @@ public static class DemoApp
         builder.Services.AddSingleton<IGridService, PostgresGridService>();
         builder.Services.AddSingleton<IGridService, EfGridService>();
         builder.Services.AddSingleton<IGridService, MongoGridService>();
+        // SQLite is a file, so it is always on. The path is read when the service is first built, after `configure` ran:
+        // DEMO_SQLITE from the configuration (the environment is part of it), else data/demo.sqlite under the demo folder.
+        builder.Services.AddSingleton<IGridService>(services => new SqliteGridService(
+            DemoSettings.ResolveSqlitePath(services.GetRequiredService<IConfiguration>()[DemoSettings.SqliteEnvVar]),
+            services.GetRequiredService<GridRequestPreparer>()));
         builder.Services.AddSingleton<ProviderRegistry>();
 
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>

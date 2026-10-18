@@ -58,12 +58,19 @@ describe('api error mapping', () => {
 });
 
 describe('provider list', () => {
-  it('offers PostgreSQL, MongoDB and EF Core in that order', () => {
+  it('offers PostgreSQL, MongoDB, EF Core and SQLite in that order', () => {
     expect(PROVIDERS).toEqual([
       { id: 'postgres', label: 'PostgreSQL' },
       { id: 'mongo', label: 'MongoDB' },
       { id: 'ef', label: 'EF Core' },
+      { id: 'sqlite', label: 'SQLite' },
     ]);
+  });
+
+  it('posts to the sqlite routes', async () => {
+    const mock = stubFetch(async () => Response.json({ kind: 'sql', dialect: 'sqlite', text: '', parameters: [] }));
+    await fetchQuery('sqlite', request);
+    expect((mock.mock.calls[0] as unknown as [string])[0]).toBe('/api/sqlite/query');
   });
 
   it('posts to the ef routes', async () => {
@@ -85,7 +92,7 @@ describe('visible providers', () => {
   });
 
   it('ignores a provider the page does not know', () => {
-    expect(ids(visibleProviders({ status: 'ok', providers: ['sqlite', 'postgres'] }))).toEqual(['postgres']);
+    expect(ids(visibleProviders({ status: 'ok', providers: ['oracle', 'postgres'] }))).toEqual(['postgres']);
   });
 
   it('keeps the catalogue order whatever order the API reports', () => {
@@ -100,7 +107,7 @@ describe('visible providers', () => {
   it('offers the default three when the answer is not ok or lists nothing the page knows', () => {
     expect(ids(visibleProviders({ status: 'degraded', providers: ['mongo'] }))).toEqual(['postgres', 'mongo', 'ef']);
     expect(ids(visibleProviders({ status: 'ok', providers: [] }))).toEqual(['postgres', 'mongo', 'ef']);
-    expect(ids(visibleProviders({ status: 'ok', providers: ['sqlite'] }))).toEqual(['postgres', 'mongo', 'ef']);
+    expect(ids(visibleProviders({ status: 'ok', providers: ['oracle'] }))).toEqual(['postgres', 'mongo', 'ef']);
   });
 
   it('keeps the selected provider while it is offered', () => {

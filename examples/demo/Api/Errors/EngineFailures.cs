@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using System.Net.Sockets;
+using Demo.Api.Seed;
+using Microsoft.Data.Sqlite;
 using MongoDB.Driver;
 using Npgsql;
 
@@ -17,6 +19,10 @@ public static class EngineFailures
     [
         exception => exception is NpgsqlException,
         exception => exception is MongoException,
+        // SQLite: the file cannot be opened (missing, no permission) or another connection holds the lock (primary result
+        // codes 14 SQLITE_CANTOPEN, 5 SQLITE_BUSY, 6 SQLITE_LOCKED). Any other SqliteException is a bug and stays a 500.
+        exception => exception is SqliteException { SqliteErrorCode: 14 or 5 or 6 },
+        exception => exception is SqliteVersionException,
         exception => exception is TimeoutException,
         exception => exception is SocketException
     ];

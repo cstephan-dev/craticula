@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Demo.Api;
 using Demo.Api.Grid;
+using Demo.Api.Seed;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -18,9 +19,18 @@ public sealed class ApiHostFixture : IAsyncLifetime
 
     public HttpClient Client { get; private set; } = null!;
 
+    /// <summary>The temporary SQLite file this host serves as <c>sqlite</c>; seeded before the host starts, deleted on dispose.</summary>
+    public string SqlitePath { get; } = Path.Combine(Path.GetTempPath(), $"craticula-demo-test-{Guid.NewGuid():N}.sqlite");
+
     public async Task InitializeAsync()
     {
-        app = DemoApp.Build([], builder => builder.Configuration["Urls"] = "http://127.0.0.1:0");
+        // SQLite needs no server, so every test run has the sqlite provider; the file never touches the demo's data/ folder.
+        await SqliteSeeder.SeedAsync(SqlitePath, OrderGenerator.Generate());
+        app = DemoApp.Build([], builder =>
+        {
+            builder.Configuration["Urls"] = "http://127.0.0.1:0";
+            builder.Configuration[DemoSettings.SqliteEnvVar] = SqlitePath;
+        });
         await app.StartAsync();
         Client = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
     }
@@ -30,6 +40,7 @@ public sealed class ApiHostFixture : IAsyncLifetime
         Client.Dispose();
         await app!.StopAsync();
         await app.DisposeAsync();
+        File.Delete(SqlitePath);
     }
 
     /// <summary>A second API whose PostgreSQL data source points at a port nothing listens on.</summary>

@@ -1,11 +1,12 @@
 import type { IServerSideGetRowsRequest } from 'ag-grid-community';
 
-export type Provider = 'postgres' | 'mongo' | 'ef';
+export type Provider = 'postgres' | 'mongo' | 'ef' | 'sqlite';
 
 export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'postgres', label: 'PostgreSQL' },
   { id: 'mongo', label: 'MongoDB' },
   { id: 'ef', label: 'EF Core' },
+  { id: 'sqlite', label: 'SQLite' },
 ];
 
 /** What the switch offers while the API's provider list is unknown (loading, down) and in a plain setup. */

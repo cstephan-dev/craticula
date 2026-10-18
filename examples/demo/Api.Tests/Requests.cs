@@ -79,6 +79,9 @@ internal static class Requests
         }
         """;
 
+    /// <summary>The same grouping on another column (country or category), ordered by that column.</summary>
+    public static string GroupBy(string column) => GroupByCountry.Replace("country", column);
+
     /// <summary>group-aggregation drill-down: groupKeys [{"type":"string","value":"Germany"}] under a country grouping returns the leaf rows.</summary>
     public const string DrillDownGermany = """
         {
@@ -96,6 +99,14 @@ internal static class Requests
 
     /// <summary>group-aggregation/022 shape: the set-filter values request.</summary>
     public static string CountryValues => """{ "setValuesRequest": { "colId": "country", "filterModel": {} } }""";
+
+    /// <summary>The set-filter values request with a filter on another column: the compiled statement carries a parameter.</summary>
+    public const string FilteredCountryValues =
+        """{ "setValuesRequest": { "colId": "country", "filterModel": { "status": { "filterType": "text", "type": "equals", "filter": "shipped" } } } }""";
+
+    /// <summary>The same contains filter in lower case: the only non-ASCII letter keeps its case, so SQLite's ASCII-only NOCASE matches.</summary>
+    public static string NonAsciiContainsLower => FirstPage(
+        """{ "customer": { "filterType": "text", "type": "contains", "filter": "söhne" } }""");
 
     /// <summary>A window far beyond the data (sort-paging/002 shape), filtered so every provider shares one total.</summary>
     public static string PastTheEnd => $$"""

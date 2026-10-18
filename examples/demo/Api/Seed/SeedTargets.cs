@@ -26,6 +26,11 @@ public static class SeedTargets
             "mongo",
             rows => MongoSeeder.SeedAsync(DemoSettings.Mongo, rows),
             count => $"MongoDB: {count} documents in collection orders.",
-            "Is `docker compose up -d` running? Override DEMO_MONGO if you changed the port.")
+            "Is `docker compose up -d` running? Override DEMO_MONGO if you changed the port."),
+        new SeedTarget(
+            "sqlite",
+            rows => SqliteSeeder.SeedAsync(DemoSettings.SqlitePath, rows),
+            count => $"SQLite: {count} rows in table orders ({DemoSettings.SqlitePath}).",
+            "SQLite needs no server. Is the file writable and not locked by another process? Set DEMO_SQLITE to use another path.")
     ];
 }

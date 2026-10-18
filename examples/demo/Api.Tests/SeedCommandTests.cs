@@ -23,9 +23,9 @@ public sealed class SeedCommandTests
     }
 
     [Fact]
-    public void Parse_TheRealTargets_AreTodaysDefaultPostgresThenMongo()
+    public void Parse_TheRealTargets_AreTodaysDefaultPostgresMongoThenSqlite()
     {
-        Assert.Equal(["postgres", "mongo"], SeedCommand.Parse([], SeedTargets.All).Targets.Select(t => t.Name));
+        Assert.Equal(["postgres", "mongo", "sqlite"], SeedCommand.Parse([], SeedTargets.All).Targets.Select(t => t.Name));
     }
 
     [Fact]

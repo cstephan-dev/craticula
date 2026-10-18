@@ -37,7 +37,7 @@ public sealed class OptionalProviderTests
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "mongo", "postgres"], await HealthAsync(client));
+            Assert.Equal(["ef", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 
@@ -48,7 +48,7 @@ public sealed class OptionalProviderTests
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "mongo", "postgres"], await HealthAsync(client));
+            Assert.Equal(["ef", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 
@@ -59,20 +59,20 @@ public sealed class OptionalProviderTests
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "fake", "mongo", "postgres"], await HealthAsync(client));
+            Assert.Equal(["ef", "fake", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 
     [Fact]
     public async Task TheRealOptionalList_IsEmptyUntilAnEngineTaskAddsOne()
     {
-        // Documents the extension point: the shipped list has no entry, so a default host serves exactly the three always-on providers.
+        // Documents the extension point: the shipped list has no entry, so a default host serves exactly the four always-on providers.
         Assert.Empty(OptionalProviders.All);
         var (app, client) = await ApiHostFixture.StartAsync();
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "mongo", "postgres"], await HealthAsync(client));
+            Assert.Equal(["ef", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 
