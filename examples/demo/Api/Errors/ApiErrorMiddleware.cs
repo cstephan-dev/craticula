@@ -3,6 +3,7 @@ using Craticula.AgGrid;
 using Craticula.Core.Ir;
 using Craticula.Core.Schema;
 using Craticula.Dapper;
+using Craticula.EntityFrameworkCore;
 using Craticula.Export.Csv;
 using Craticula.Mongo;
 using Craticula.MongoDB.Driver;
@@ -73,7 +74,7 @@ public sealed class ApiErrorMiddleware(RequestDelegate next, ILogger<ApiErrorMid
             SetValuesSpecValidationException e => (bad, "invalid-set-values", e.Message),
             PageSpecValidationException e => (bad, "invalid-page", e.Message),
             SqlCompilationException or MongoCompilationException or DapperCompilationException
-                or MongoDriverCompilationException => (bad, "compilation-failed", exception.Message),
+                or EfCoreCompilationException or MongoDriverCompilationException => (bad, "compilation-failed", exception.Message),
             CsvWriterException e => (bad, "export-failed", e.Message),
             // Raised by Kestrel/ASP.NET itself: a body over the 1 MiB limit (413) or a body that cannot be read (400).
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (

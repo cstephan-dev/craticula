@@ -1,8 +1,11 @@
 using Craticula.Core.Schema;
+using Craticula.EntityFrameworkCore;
 using Demo.Api.Errors;
 using Demo.Api.Grid;
 using Demo.Api.Routes;
 using Demo.Api.Seed;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using MongoDB.Driver;
 using Npgsql;
 
@@ -38,7 +41,14 @@ public static class DemoApp
         builder.Services.AddSingleton(NpgsqlDataSource.Create(postgres.ConnectionString));
         builder.Services.AddSingleton<IMongoDatabase>(
             new MongoClient(mongoSettings).GetDatabase(DemoSettings.MongoDatabase));
+        builder.Services.AddSingleton(schema);
+        // One context per call from a factory: the services are singletons. The same NpgsqlDataSource as the Dapper
+        // provider; no EnableRetryOnFailure, so a down database stays an NpgsqlException (503) instead of a wrapped one.
+        builder.Services.AddDbContextFactory<OrdersDbContext>((services, options) => options
+            .UseNpgsql(services.GetRequiredService<NpgsqlDataSource>())
+            .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>());
         builder.Services.AddSingleton<IGridService, PostgresGridService>();
+        builder.Services.AddSingleton<IGridService, EfGridService>();
         builder.Services.AddSingleton<IGridService, MongoGridService>();
         builder.Services.AddSingleton<ProviderRegistry>();
 
