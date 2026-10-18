@@ -8,6 +8,9 @@ export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'ef', label: 'EF Core' },
 ];
 
+/** What the switch offers while the API's provider list is unknown (loading, down) and in a plain setup. */
+export const DEFAULT_PROVIDER_IDS: readonly Provider[] = ['postgres', 'mongo', 'ef'];
+
 /** The request the grid builds for a block. */
 export type GridRequest = IServerSideGetRowsRequest;
 
@@ -37,6 +40,30 @@ export interface QueryView {
 export interface HealthResponse {
   status: string;
   providers: string[];
+}
+
+function catalogue(ids: readonly string[]): readonly { id: Provider; label: string }[] {
+  return PROVIDERS.filter((item) => ids.includes(item.id));
+}
+
+/**
+ * The providers the page offers. With a health answer (status ok and a list): the catalogue entries the API reports, in
+ * catalogue order; an id the page does not know is ignored. Without one (not fetched yet, API down), or when the API
+ * reports none the page knows: the default three, so the switch stays usable and "API: unreachable" still renders.
+ */
+export function visibleProviders(health: HealthResponse | null | undefined): readonly { id: Provider; label: string }[] {
+  if (health?.status === 'ok' && Array.isArray(health.providers)) {
+    const reported = catalogue(health.providers);
+    if (reported.length > 0) {
+      return reported;
+    }
+  }
+  return catalogue(DEFAULT_PROVIDER_IDS);
+}
+
+/** The provider to be on: the current one while it is offered, else the first offered one. */
+export function providerToSelect(current: Provider, visible: readonly { id: Provider }[]): Provider {
+  return visible.some((item) => item.id === current) ? current : (visible[0]?.id ?? current);
 }
 
 /** Every failure the page can show: the API's `{ error: { kind, message } }`, or a transport failure (status 0). */

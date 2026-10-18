@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, PROVIDERS, fetchHealth, fetchQuery, fetchRows, fetchValues, type WireRequest } from './api';
+import {
+  ApiError,
+  PROVIDERS,
+  fetchHealth,
+  fetchQuery,
+  fetchRows,
+  fetchValues,
+  providerToSelect,
+  visibleProviders,
+  type WireRequest,
+} from './api';
 
 const request = { startRow: 0, endRow: 100 } as WireRequest;
 
@@ -60,5 +70,44 @@ describe('provider list', () => {
     const mock = stubFetch(async () => Response.json({ kind: 'sql', dialect: 'ef-npgsql', text: '', parameters: [] }));
     await fetchQuery('ef', request);
     expect((mock.mock.calls[0] as unknown as [string])[0]).toBe('/api/ef/query');
+  });
+});
+
+describe('visible providers', () => {
+  const ids = (list: readonly { id: string }[]) => list.map((item) => item.id);
+
+  it('offers all three when the API reports all three', () => {
+    expect(ids(visibleProviders({ status: 'ok', providers: ['ef', 'mongo', 'postgres'] }))).toEqual(['postgres', 'mongo', 'ef']);
+  });
+
+  it('offers only what the API reports', () => {
+    expect(ids(visibleProviders({ status: 'ok', providers: ['mongo', 'postgres'] }))).toEqual(['postgres', 'mongo']);
+  });
+
+  it('ignores a provider the page does not know', () => {
+    expect(ids(visibleProviders({ status: 'ok', providers: ['sqlite', 'postgres'] }))).toEqual(['postgres']);
+  });
+
+  it('keeps the catalogue order whatever order the API reports', () => {
+    expect(ids(visibleProviders({ status: 'ok', providers: ['ef', 'postgres', 'mongo'] }))).toEqual(['postgres', 'mongo', 'ef']);
+  });
+
+  it('offers the default three while health is unknown or the API is down', () => {
+    expect(ids(visibleProviders(null))).toEqual(['postgres', 'mongo', 'ef']);
+    expect(ids(visibleProviders(undefined))).toEqual(['postgres', 'mongo', 'ef']);
+  });
+
+  it('offers the default three when the answer is not ok or lists nothing the page knows', () => {
+    expect(ids(visibleProviders({ status: 'degraded', providers: ['mongo'] }))).toEqual(['postgres', 'mongo', 'ef']);
+    expect(ids(visibleProviders({ status: 'ok', providers: [] }))).toEqual(['postgres', 'mongo', 'ef']);
+    expect(ids(visibleProviders({ status: 'ok', providers: ['sqlite'] }))).toEqual(['postgres', 'mongo', 'ef']);
+  });
+
+  it('keeps the selected provider while it is offered', () => {
+    expect(providerToSelect('mongo', visibleProviders({ status: 'ok', providers: ['mongo', 'postgres'] }))).toBe('mongo');
+  });
+
+  it('selects the first offered provider when the selected one is hidden', () => {
+    expect(providerToSelect('postgres', visibleProviders({ status: 'ok', providers: ['ef', 'mongo'] }))).toBe('mongo');
   });
 });

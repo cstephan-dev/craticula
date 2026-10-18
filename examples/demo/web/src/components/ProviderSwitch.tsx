@@ -3,12 +3,13 @@ import { PROVIDERS, type Provider } from '../api';
 interface Props {
   provider: Provider;
   onChange(provider: Provider): void;
+  providers?: readonly { id: Provider; label: string }[];
 }
 
-export function ProviderSwitch({ provider, onChange }: Props) {
+export function ProviderSwitch({ provider, onChange, providers = PROVIDERS }: Props) {
   return (
     <div className="segmented" role="group" aria-label="Database provider">
-      {PROVIDERS.map((item) => (
+      {providers.map((item) => (
         <button
           key={item.id}
           type="button"

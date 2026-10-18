@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef } from 'ag-grid-community';
-import { ApiError, fetchHealth, type Provider } from '../api';
+import { ApiError, fetchHealth, providerToSelect, visibleProviders, type HealthResponse, type Provider } from '../api';
 import { createProviderGate } from '../providerGate';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ProviderSwitch } from '../components/ProviderSwitch';
@@ -17,6 +17,7 @@ const DEFAULT_COL_DEF: ColDef = { sortable: true, filter: true, resizable: true 
 export function CommunityApp() {
   const [provider, setProvider] = useState<Provider>('postgres');
   const [health, setHealth] = useState<Health>('checking');
+  const [reported, setReported] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [query, setQuery] = useState<CompiledQuery | null>(null);
@@ -24,16 +25,6 @@ export function CommunityApp() {
 
   const [gate] = useState(() => createProviderGate('postgres'));
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchHealth().then(
-      () => !cancelled && setHealth('ok'),
-      () => !cancelled && setHealth('down'),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const datasource = useMemo(
     () =>
@@ -53,6 +44,29 @@ export function CommunityApp() {
     setError(null);
     setProvider(next);
   }, [gate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchHealth().then(
+      (answer) => {
+        if (!cancelled) {
+          setReported(answer);
+          // The API may serve fewer providers than the page knows: never stay on one that is not offered.
+          const target = providerToSelect(gate.current(), visibleProviders(answer));
+          if (target !== gate.current()) {
+            switchProvider(target);
+          }
+          setHealth('ok');
+        }
+      },
+      () => !cancelled && setHealth('down'),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [gate, switchProvider]);
+
+  const visible = useMemo(() => visibleProviders(reported), [reported]);
 
   const copyRequest = useCallback(async () => {
     const request = query?.request as FlatRequest | undefined;
@@ -78,7 +92,7 @@ export function CommunityApp() {
           </p>
         </div>
         <div className="controls">
-          <ProviderSwitch provider={provider} onChange={switchProvider} />
+          <ProviderSwitch provider={provider} onChange={switchProvider} providers={visible} />
           <span className={`health ${health}`} title="GET /api/health">
             API: {health === 'ok' ? 'up' : health === 'down' ? 'unreachable' : 'checking'}
           </span>

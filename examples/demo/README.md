@@ -10,7 +10,7 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 24 scenarios are equal on all 3 providers (postgres, mongo, ef)`.
+is up) ends with `all 24 scenarios are equal on all 3 providers (postgres, ef, mongo)`.
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -182,6 +182,28 @@ CSV export uses `EfCoreExportStream.StreamAsync` the same way.
 
 **Package.** The demo adds `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (central version in `Directory.Packages.props`). It is a new library and
 needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
+
+## Optional providers and seeding a subset
+
+PostgreSQL, MongoDB and EF Core are always on. Further engines are optional: an engine is switched on by its connection setting
+(an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
+page does not offer it. This lets you run the demo with any subset of its databases. No optional engine ships yet; the later
+provider sections of this README name each one's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
+start the heavy engines only on request; the umbrella profile name is `engines`.
+
+`seed` takes an optional list of providers:
+
+```bash
+dotnet run --project Api -- seed                  # the default: postgres and mongo
+dotnet run --project Api -- seed mongo            # only MongoDB
+dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
+```
+
+Each provider is seeded on its own: a database that is down prints its error and the others still run. The exit code is 0 when
+everything requested was seeded, 1 when a count is wrong, and 2 when a provider failed or the name is unknown.
+
+`bash smoke.sh` compares every provider the API lists with the postgres baseline. To compare a chosen list, set
+`DEMO_SMOKE_PROVIDERS=postgres,ef` (postgres is always required); a name the API does not list stops it with exit 2 and a clear message.
 
 ## Stop and reset
 

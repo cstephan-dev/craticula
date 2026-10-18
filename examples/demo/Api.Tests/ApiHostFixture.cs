@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Demo.Api;
+using Demo.Api.Grid;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -46,7 +47,21 @@ public sealed class ApiHostFixture : IAsyncLifetime
         return (app, new HttpClient { BaseAddress = new Uri(app.Urls.First()) });
     }
 
-    private static int FreePort()
+    /// <summary>A host with extra optional providers and any configuration the test sets (for example a provider's setting),
+    /// without touching the real environment variables. No database is needed to start it.</summary>
+    public static async Task<(WebApplication App, HttpClient Client)> StartAsync(
+        IReadOnlyList<OptionalProvider>? optionalProviders = null, Action<WebApplicationBuilder>? configure = null)
+    {
+        var app = DemoApp.Build([], builder =>
+        {
+            builder.Configuration["Urls"] = "http://127.0.0.1:0";
+            configure?.Invoke(builder);
+        }, optionalProviders);
+        await app.StartAsync();
+        return (app, new HttpClient { BaseAddress = new Uri(app.Urls.First()) });
+    }
+
+    public static int FreePort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();

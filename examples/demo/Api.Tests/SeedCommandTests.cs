@@ -1,0 +1,107 @@
+using Demo.Api.Seed;
+
+namespace Demo.Api.Tests;
+
+/// <summary>The seed command's argument parsing and orchestration, with fake seeders: no database is needed.</summary>
+public sealed class SeedCommandTests
+{
+    private static SeedTarget Target(string name, Func<IReadOnlyList<OrderRow>, Task<long>> seed, bool isDefault = true) =>
+        new(name, seed, count => $"{name}: {count} rows.", $"hint for {name}", isDefault);
+
+    private static SeedTarget Ok(string name, bool isDefault = true) => Target(name, rows => Task.FromResult((long)rows.Count), isDefault);
+
+    private static SeedTarget Down(string name) =>
+        Target(name, _ => throw new TimeoutException($"{name} is down"));
+
+    [Fact]
+    public void Parse_WithNoArgument_GivesTheDefaultTargetsOnly()
+    {
+        var plan = SeedCommand.Parse([], [Ok("postgres"), Ok("mongo"), Ok("later", isDefault: false)]);
+
+        Assert.Equal(["postgres", "mongo"], plan.Targets.Select(t => t.Name));
+        Assert.Empty(plan.Unknown);
+    }
+
+    [Fact]
+    public void Parse_TheRealTargets_AreTodaysDefaultPostgresThenMongo()
+    {
+        Assert.Equal(["postgres", "mongo"], SeedCommand.Parse([], SeedTargets.All).Targets.Select(t => t.Name));
+    }
+
+    [Fact]
+    public void Parse_WithNames_GivesThatSubsetInTheOrderGivenWithoutRepeats()
+    {
+        var plan = SeedCommand.Parse(["mongo", "Later", "mongo"], [Ok("postgres"), Ok("mongo"), Ok("later", isDefault: false)]);
+
+        Assert.Equal(["mongo", "later"], plan.Targets.Select(t => t.Name));
+        Assert.Empty(plan.Unknown);
+    }
+
+    [Fact]
+    public async Task Run_WithAnUnknownName_Exits2ListingTheKnownNamesAndSeedsNothing()
+    {
+        var seeded = false;
+        var known = new[] { Target("postgres", _ => { seeded = true; return Task.FromResult(0L); }), Ok("mongo") };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = await SeedCommand.RunAsync(["postgres", "nosuch"], known, output, error);
+
+        Assert.Equal(2, exit);
+        Assert.False(seeded);
+        Assert.Contains("nosuch", error.ToString());
+        Assert.Contains("postgres, mongo", error.ToString());
+        Assert.Equal("", output.ToString());
+    }
+
+    [Fact]
+    public async Task Run_WhenOneSeederFails_TheNextStillRunsAndTheExitIs2()
+    {
+        var second = 0;
+        var known = new[] { Down("postgres"), Target("mongo", rows => { second++; return Task.FromResult((long)rows.Count); }) };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = await SeedCommand.RunAsync([], known, output, error);
+
+        Assert.Equal(2, exit);
+        Assert.Equal(1, second);
+        Assert.Contains("mongo: 20000 rows.", output.ToString());
+        Assert.Contains("Seed failed for postgres: postgres is down", error.ToString());
+        Assert.Contains("hint for postgres", error.ToString());
+    }
+
+    [Fact]
+    public async Task Run_WhenAllSeededWithTheRightCounts_Exits0AndPrintsEachLine()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = await SeedCommand.RunAsync([], [Ok("postgres"), Ok("mongo")], output, error);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("Generated 20000 orders", output.ToString());
+        Assert.Contains("postgres: 20000 rows.", output.ToString());
+        Assert.Equal("", error.ToString());
+    }
+
+    [Fact]
+    public async Task Run_WhenACountDiffers_Exits1()
+    {
+        var known = new[] { Ok("postgres"), Target("mongo", _ => Task.FromResult(5L)) };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.Equal(1, await SeedCommand.RunAsync([], known, output, error));
+    }
+
+    [Fact]
+    public async Task Run_AFailureOutranksACountMismatch()
+    {
+        var known = new[] { Target("postgres", _ => Task.FromResult(5L)), Down("mongo") };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.Equal(2, await SeedCommand.RunAsync([], known, output, error));
+    }
+}

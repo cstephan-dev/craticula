@@ -1,4 +1,3 @@
-using System.Net.Sockets;
 using Craticula.AgGrid;
 using Craticula.Core.Ir;
 using Craticula.Core.Schema;
@@ -8,7 +7,6 @@ using Craticula.Export.Csv;
 using Craticula.Mongo;
 using Craticula.MongoDB.Driver;
 using Craticula.Sql;
-using MongoDB.Driver;
 using Npgsql;
 
 namespace Demo.Api.Errors;
@@ -81,7 +79,8 @@ public sealed class ApiErrorMiddleware(RequestDelegate next, ILogger<ApiErrorMid
                 StatusCodes.Status413PayloadTooLarge, "request-too-large", "The request body is larger than the 1 MiB limit."),
             BadHttpRequestException => (bad, "bad-request", "The request could not be read."),
             PostgresException => Internal(),
-            NpgsqlException or MongoException or TimeoutException or SocketException => (
+            // Which exceptions are connection failures is declared once, in EngineFailures.
+            _ when EngineFailures.IsUnavailable(exception) => (
                 StatusCodes.Status503ServiceUnavailable, "backend-unavailable", "The database is not reachable."),
             _ => Internal()
         };
