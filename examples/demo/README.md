@@ -1,6 +1,6 @@
 # Craticula demo
 
-One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL or MongoDB. A small C# API turns each grid
+One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL (through Dapper or through Entity Framework Core) or MongoDB. A small C# API turns each grid
 request into a native query with the Craticula library. To run it (three terminals, from this folder):
 
 ```bash
@@ -10,7 +10,7 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 24 scenarios are equal on both providers`.
+is up) ends with `all 24 scenarios are equal on all 3 providers (postgres, mongo, ef)`.
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -90,15 +90,15 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
    npm run dev
    ```
 
-5. Optional check without a browser: `bash smoke.sh` posts 15 fixed requests (`smoke/*.json`) to both providers and prints
+5. Optional check without a browser: `bash smoke.sh` posts 24 fixed requests (`smoke/*.json`) to all three providers and prints
    one row per scenario. Exit code 0 means every answer is equal; 1 means a difference or a missing `400`; 2 means the
    environment is wrong (API down, a database down). `bash smoke.sh --api URL` points it at another API.
 
 ## Click-through checklist
 
-Do these in the browser. Each should work on both providers.
+Do these in the browser. Each should work on all three providers (PostgreSQL is the Dapper route, EF Core is the Entity Framework route).
 
-1. **Switch provider.** Use the PostgreSQL / MongoDB switch in the header. Apply a filter and a sort, then switch: the same
+1. **Switch provider.** Use the PostgreSQL / MongoDB / EF Core switch in the header. Apply a filter and a sort, then switch: the same
    rows appear.
 2. **Sort.** Click a column header (Amount, Ordered at). Shift-click a second column to sort by both.
 3. **Filters, one per type.** Text (Customer contains `GmbH`), number (Quantity greater than 8), date (Shipped on, Ordered
@@ -123,6 +123,63 @@ Do these in the browser. Each should work on both providers.
   panel has no Pivot Mode switch. A pivot request sent straight to the API is refused with `malformed-request`.
 - **"In range" with OR.** "In range" works (see the section above), but a range joined to another condition by OR is refused with
   an `unsupported-filter` message; join them with AND.
+
+## Using Entity Framework Core (the `ef` provider)
+
+The third provider runs the same grid through `Craticula.EntityFrameworkCore`: the library turns the request into an
+`IQueryable` over your `DbContext`, and the Npgsql EF provider writes the SQL. This is the route to take if your code
+already works with a `DbContext` (as it would with OData). The code is `Api/Grid/OrdersDbContext.cs` and `Api/Grid/EfGridService.cs`.
+
+**1. The context.** The demo builds its EF model from the grid schema (`orders.schema.json`) with `GridSchemaPropertyBag`, so there is
+no entity class: columns come from each field's `physical.sql.column`. The context implements `IGridSchemaModel`, and the
+registration replaces EF's model-cache key factory so the cache is keyed by the schema:
+
+```csharp
+services.AddDbContextFactory<OrdersDbContext>((sp, o) => o
+    .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
+    .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>());
+```
+
+Use a factory, not a scoped context: the grid services are singletons. Do not turn on `EnableRetryOnFailure`; it wraps the Npgsql
+exception, so a database that is down would no longer answer 503.
+
+**2. The engine facts.** The adapter cannot read these from EF, so you declare them once for PostgreSQL
+(`OrdersDbContext.PostgresSemantics`; the library ships only a SQLite preset):
+
+| Setting | Value on PostgreSQL | Why |
+|---|---|---|
+| `CaseInsensitiveCollation` | `craticula_ci` | the ICU collation the seed creates (`CREATE COLLATION IF NOT EXISTS craticula_ci ...`) |
+| `CaseSensitiveCollation` | none | PostgreSQL's default collation already distinguishes case |
+| `PatternMatchFoldsCase` | `false` | PostgreSQL `LIKE` never folds case; the adapter emits `lower(column) LIKE` |
+| `PatternMatchTreatsLeftBracketAsMetacharacter` | `false` | only SQL Server does |
+| `EmptyStringIsNull` | `false` | only Oracle does |
+
+**3. The call.**
+
+```csharp
+await using var context = await contexts.CreateDbContextAsync(ct);
+var page = await EfCoreGridQuery.FetchPageAsync(
+    GridSchemaPropertyBag.Query(context, schema),   // the IQueryable
+    new EfCoreQueryRequest { Schema = schema, Filter = filter, Sort = sort, Page = page, Group = group, Aggregations = aggregations },
+    OrdersDbContext.PostgresSemantics, includeRowCount: true, ct);
+```
+
+CSV export uses `EfCoreExportStream.StreamAsync` the same way.
+
+**What differs from the Dapper (PostgreSQL) route**
+
+- **Query panel.** The adapter builds expression trees, not SQL text, so the panel shows EF's `ToQueryString()`. EF writes parameter values
+  into that text, so it is not a parameterized statement like the PostgreSQL and MongoDB views, and the panel says so. Grouped
+  and drill-down requests are composed inside the adapter, and the panel shows only a one-line comment for them.
+- **Set filter.** The EF adapter has no distinct-values call, so the set filter on `ef` reuses the compiled statement of the Dapper route and
+  runs it through Npgsql (`Api/Grid/PostgresSetValues.cs`).
+- **Case-insensitive search.** "Contains", "starts with" and "ends with" use `lower(column) LIKE` on `ef` and `ILIKE` on the Dapper route.
+  They agree on ASCII and on ordinary Unicode case pairs (the smoke test and the API tests cover a non-ASCII case) and can differ under an exotic collation.
+- **Library version.** The EF adapter is new and, apart from this demo, has only been run against SQLite in the library's tests. The demo's
+  smoke test is what shows EF and Dapper return the same rows, groups and CSV on this data.
+
+**Package.** The demo adds `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (central version in `Directory.Packages.props`). It is a new library and
+needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
 
 ## Stop and reset
 
@@ -150,7 +207,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 
 | Path | What |
 |---|---|
-| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls, the seed (`Api/Seed/`) |
+| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`), the seed (`Api/Seed/`) |
 | `Api.Tests/` | xUnit tests that start the real API against both databases (they skip when the databases are down) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
 | `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL and MongoDB mappings |
