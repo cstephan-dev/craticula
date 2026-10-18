@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Demo smoke test: sends the same fixed requests (smoke/*.json) to the running demo API for PostgreSQL and for MongoDB
-# and checks that both providers answer the same. It starts nothing; run the quickstart in README.md first.
+# Demo smoke test: sends the same fixed requests (smoke/*.json) to the running demo API for PostgreSQL, MongoDB and the Entity Framework Core provider
+# (ef, on PostgreSQL) and checks that every provider answers the same as the postgres baseline. It starts nothing; run the quickstart in README.md first.
 # Needs only bash, curl and python3 (3.8+).
 #
 #   bash smoke.sh [--api URL]        default URL: http://127.0.0.1:5080
 #
-# Exit 0: every scenario is equal on both providers and every hostile request got a 400 with an error kind.
+# Exit 0: every scenario is equal on all providers and every hostile request got a 400 with an error kind.
 #      1: a difference, or a missing 400.
 #      2: usage or environment problem (no curl/python3, API unreachable, a provider missing, a database down).
 #
-# Equality is exact (numbers by value: 12877.0 equals 12877), except avg: PostgreSQL averages decimals with 16 digits and MongoDB with 28, so keys ending in
+# Every other provider is compared with postgres, the baseline. Equality is exact (numbers by value: 12877.0 equals 12877), except avg: PostgreSQL averages decimals with 16 digits and MongoDB with 28, so keys ending in
 # "_avg" are compared with a relative tolerance of 1e-6. CSV exports are compared line by line, cell by cell, in full,
-# after line endings are normalised: header and every data row must be identical on both providers, with the same
+# after line endings are normalised: header and every data row must be identical on every provider, with the same
 # by-value rule for plain decimals (PostgreSQL writes an amount as 20568.00, MongoDB as 20568).
 #
-# Test-only: DEMO_SMOKE_SABOTAGE changes one value on the mongo side before comparing, to prove the script can fail
+# Test-only: DEMO_SMOKE_SABOTAGE changes one value on the mongo side (the ef side is never touched) before comparing, to prove the script can fail
 # (it must then exit 1). Never set it otherwise.
 #   DEMO_SMOKE_SABOTAGE=1     the first data row of the second rows scenario
 #   DEMO_SMOKE_SABOTAGE=csv   the first data row of the first CSV export
@@ -43,10 +43,13 @@ if ! curl -sSf --max-time 5 -o "$health" "$api/api/health" 2>"$work/health.err";
   echo "  Start it first: dotnet run --project Api (see README.md)." >&2
   exit 2
 fi
-if ! python3 -c 'import json,sys; p=json.load(open(sys.argv[1]))["providers"]; sys.exit(0 if {"postgres","mongo"} <= set(p) else 1)' "$health" 2>/dev/null; then
-  echo "smoke.sh: /api/health does not list both providers (postgres, mongo): $(cat "$health")" >&2
+if ! python3 -c 'import json,sys; p=json.load(open(sys.argv[1]))["providers"]; sys.exit(0 if {"postgres","mongo","ef"} <= set(p) else 1)' "$health" 2>/dev/null; then
+  echo "smoke.sh: /api/health does not list all three providers (postgres, mongo, ef): $(cat "$health")" >&2
   exit 2
 fi
+
+# postgres first: it is the baseline every other provider is compared with
+providers=(postgres mongo ef)
 
 # name|route|request file|kind
 scenarios=(
@@ -81,7 +84,7 @@ n=0
 for entry in "${scenarios[@]}"; do
   IFS='|' read -r name route file kind <<<"$entry"
   n=$((n + 1))
-  for provider in postgres mongo; do
+  for provider in "${providers[@]}"; do
     out="$work/$n.$provider"
     code="$(curl -sS --max-time 120 -o "$out.body" -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
       --data-binary "@$here/smoke/$file" "$api/api/$provider/$route" 2>"$out.err")" || code=000
@@ -91,7 +94,7 @@ for entry in "${scenarios[@]}"; do
 done
 
 set +e
-python3 - "$work" <<'PY'
+python3 - "$work" "${providers[@]}" <<'PY'
 import csv
 import decimal
 import io
@@ -105,7 +108,9 @@ work = sys.argv[1]
 sabotage = os.environ.get("DEMO_SMOKE_SABOTAGE") == "1"
 sabotage_csv = os.environ.get("DEMO_SMOKE_SABOTAGE") == "csv"
 csv_seen = 0
-PROVIDERS = ("postgres", "mongo")
+rows_scenarios_seen = 0
+PROVIDERS = tuple(sys.argv[2:])
+BASE, OTHERS = PROVIDERS[0], PROVIDERS[1:]
 ENV_ERROR, DIFFERENT = 2, 1
 
 
@@ -161,85 +166,116 @@ def csv_same(a, b):
         len(x) == len(y) and all(csv_cell_same(c, d) for c, d in zip(x, y)) for x, y in zip(a, b))
 
 
-rows_scenarios_seen = 0
+def error_kind(status, body):
+    try:
+        return json.loads(body)["error"]["kind"] if status == 400 else None
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def compare(kind, base_status, base_body, other, status, body):
+    """Compare one provider's answer with the baseline. Returns (cell, ok, detail)."""
+    global rows_scenarios_seen, csv_seen
+    if kind == "bad":
+        bk, ok_kind = error_kind(base_status, base_body), error_kind(status, body)
+        ok = bk is not None and bk == ok_kind
+        return f"{status} {ok_kind or '-'}", ok, "" if ok else f": want 400 + the same error kind as {BASE} ({bk or '-'})"
+    if status != 200:
+        return f"HTTP {status}", False, ": expected 200"
+    if kind == "rows":
+        pg, ot = json.loads(base_body), json.loads(body)
+        if sabotage and other == "mongo" and ot["rows"] and rows_scenarios_seen == 1:
+            # test-only: pretend mongo returned a different first row
+            first = ot["rows"][0]
+            key = "id" if "id" in first else next(iter(first))
+            first[key] = (first[key] + 1) if isinstance(first[key], int) else f"{first[key]}-sabotaged"
+        cell = f"{len(ot['rows'])} rows, lastRow {ot['lastRow']}"
+        ok = pg.get("lastRow") == ot.get("lastRow") and same(pg["rows"], ot["rows"])
+        detail = "" if ok else ": " + (
+            f"lastRow {pg.get('lastRow')} vs {ot.get('lastRow')}"
+            if pg.get("lastRow") != ot.get("lastRow") else first_difference(pg["rows"], ot["rows"]))
+        return cell, ok, detail
+    if kind == "values":
+        pg, ot = json.loads(base_body)["values"], json.loads(body)["values"]
+        canon = lambda values: sorted(json.dumps(v) for v in values)
+        return f"{len(ot)} values", canon(pg) == canon(ot), ""
+    if kind in ("csv", "csv-formula"):
+        pg_lines, ot_lines = csv_records(base_body), csv_records(body)
+        if sabotage_csv and other == "mongo" and csv_seen == 0 and len(ot_lines) > 1:
+            # test-only: pretend mongo wrote a different first data row
+            ot_lines[1] = ot_lines[1] + ["sabotaged"]
+        ok = len(pg_lines) > 1 and csv_same(pg_lines, ot_lines)
+        detail = ""
+        if not ok and len(pg_lines) > 1:
+            if len(pg_lines) != len(ot_lines):
+                detail = f": {len(pg_lines)} vs {len(ot_lines)} lines"
+            else:
+                i = next(i for i, (x, y) in enumerate(zip(pg_lines, ot_lines)) if not csv_same([x], [y]))
+                detail = f": line {i} differs"
+        if kind == "csv-formula":
+            has = any("'=SUM(A1)" in cell for line in ot_lines for cell in line)
+            if not has:
+                ok, detail = False, f": no '=SUM(A1) row ({other})"
+        return f"{len(ot_lines) - 1} data rows", ok, detail
+    if kind == "query":
+        ot = json.loads(body)
+        if other == "mongo":
+            ok = ot.get("kind") == "mongo" and bool(ot.get("text"))
+        elif other == "ef":
+            # EF Core inlines parameter values in its text (shown as comment lines), so only the shape is asserted
+            ok = ot.get("kind") == "sql" and ot.get("dialect") == "ef-npgsql" and bool(ot.get("text"))
+        else:
+            ok = ot.get("kind") == "sql" and bool(ot.get("text"))
+        return f"kind {ot.get('kind')}" + (f", {ot.get('dialect')}" if other == "ef" else ""), ok, ""
+    raise ValueError(kind)
+
+
 table, failures, env_problems = [], 0, []
 for line in open(os.path.join(work, "index.tsv"), encoding="utf-8").read().splitlines():
     n, name, kind = line.split("\t")
-    pg_status, pg_body, pg_err = read(n, "postgres")
-    mg_status, mg_body, mg_err = read(n, "mongo")
+    answers = {p: read(n, p) for p in PROVIDERS}
 
-    if 0 in (pg_status, mg_status) or pg_status == 503 or mg_status == 503:
-        env_problems.append(f"{name}: postgres HTTP {pg_status} {pg_err}, mongo HTTP {mg_status} {mg_err}".strip())
-        table.append((name, f"HTTP {pg_status}", f"HTTP {mg_status}", "ENVIRONMENT"))
+    if any(a[0] == 0 or a[0] == 503 for a in answers.values()):
+        env_problems.append(name + ": " + ", ".join(f"{p} HTTP {a[0]} {a[2]}".strip() for p, a in answers.items()))
+        table.append((name, *[f"HTTP {answers[p][0]}" for p in PROVIDERS], "ENVIRONMENT"))
         continue
 
-    if kind == "bad":
-        def error_kind(status, body):
-            try:
-                return json.loads(body)["error"]["kind"] if status == 400 else None
-            except (ValueError, KeyError, TypeError):
-                return None
-        pk, mk = error_kind(pg_status, pg_body), error_kind(mg_status, mg_body)
-        cells = [f"{pg_status} {pk or '-'}", f"{mg_status} {mk or '-'}"]
-        ok = pk is not None and pk == mk
-        table.append((name, cells[0], cells[1], "equal" if ok else "DIFFERENT: want 400 + the same error kind"))
-        failures += 0 if ok else 1
-        continue
-
-    if pg_status != 200 or mg_status != 200:
-        table.append((name, f"HTTP {pg_status}", f"HTTP {mg_status}", "DIFFERENT: expected 200 on both"))
-        failures += 1
-        continue
-
-    if kind == "rows":
-        pg, mg = json.loads(pg_body), json.loads(mg_body)
-        if sabotage and mg["rows"] and rows_scenarios_seen == 1:
-            # test-only: pretend mongo returned a different first row
-            first = mg["rows"][0]
-            key = "id" if "id" in first else next(iter(first))
-            first[key] = (first[key] + 1) if isinstance(first[key], int) else f"{first[key]}-sabotaged"
-        rows_scenarios_seen += 1
-        cells = [f"{len(r['rows'])} rows, lastRow {r['lastRow']}" for r in (pg, mg)]
-        ok = pg.get("lastRow") == mg.get("lastRow") and same(pg["rows"], mg["rows"])
-        detail = "" if ok else ": " + (
-            f"lastRow {pg.get('lastRow')} vs {mg.get('lastRow')}"
-            if pg.get("lastRow") != mg.get("lastRow") else first_difference(pg["rows"], mg["rows"]))
-        table.append((name, cells[0], cells[1], "equal" if ok else "DIFFERENT" + detail))
-        failures += 0 if ok else 1
-    elif kind == "values":
-        pg, mg = json.loads(pg_body)["values"], json.loads(mg_body)["values"]
-        canon = lambda values: sorted(json.dumps(v) for v in values)
-        ok = canon(pg) == canon(mg)
-        table.append((name, f"{len(pg)} values", f"{len(mg)} values", "equal" if ok else "DIFFERENT"))
-        failures += 0 if ok else 1
-    elif kind in ("csv", "csv-formula"):
-        pg_lines = csv_records(pg_body)
-        mg_lines = csv_records(mg_body)
-        if sabotage_csv and csv_seen == 0 and len(mg_lines) > 1:
-            # test-only: pretend mongo wrote a different first data row
-            mg_lines[1] = mg_lines[1] + ["sabotaged"]
-        csv_seen += 1
-        ok = len(pg_lines) > 1 and csv_same(pg_lines, mg_lines)
-        detail = ""
-        if not ok and len(pg_lines) > 1:
-            if len(pg_lines) != len(mg_lines):
-                detail = f": {len(pg_lines)} vs {len(mg_lines)} lines"
+    base_status, base_body, _ = answers[BASE]
+    cells = {}
+    if kind == "query":
+        # the baseline answers its own shape: parameterised SQL whose values never appear inline
+        b = json.loads(base_body) if base_status == 200 else {}
+        base_ok = base_status == 200 and b.get("kind") == "sql" and bool(b.get("text"))
+        cells[BASE] = f"kind {b.get('kind')}"
+    elif kind == "bad":
+        k = error_kind(base_status, base_body)
+        base_ok = k is not None
+        cells[BASE] = f"{base_status} {k or '-'}"
+    else:
+        base_ok = base_status == 200
+        if base_ok:
+            if kind == "rows":
+                r = json.loads(base_body)
+                cells[BASE] = f"{len(r['rows'])} rows, lastRow {r['lastRow']}"
+            elif kind == "values":
+                cells[BASE] = f"{len(json.loads(base_body)['values'])} values"
             else:
-                i = next(i for i, (x, y) in enumerate(zip(pg_lines, mg_lines)) if not csv_same([x], [y]))
-                detail = f": line {i} differs"
-        if kind == "csv-formula":
-            marker = "'=SUM(A1)"
-            has = [any(marker in cell for line in lines for cell in line) for lines in (pg_lines, mg_lines)]
-            if not all(has):
-                ok, detail = False, f": no '=SUM(A1) row (postgres {has[0]}, mongo {has[1]})"
-        table.append((name, f"{len(pg_lines) - 1} data rows", f"{len(mg_lines) - 1} data rows",
-                      "equal" if ok else "DIFFERENT" + detail))
-        failures += 0 if ok else 1
-    elif kind == "query":
-        pg, mg = json.loads(pg_body), json.loads(mg_body)
-        ok = pg.get("kind") == "sql" and mg.get("kind") == "mongo" and pg.get("text") and mg.get("text")
-        table.append((name, f"kind {pg.get('kind')}", f"kind {mg.get('kind')}", "equal" if ok else "DIFFERENT"))
-        failures += 0 if ok else 1
+                cells[BASE] = f"{len(csv_records(base_body)) - 1} data rows"
+        else:
+            cells[BASE] = f"HTTP {base_status}"
+    problems = [] if base_ok else [f"{BASE} did not answer as expected"]
+    for other in OTHERS:
+        status, body, _ = answers[other]
+        cell, ok, detail = compare(kind, base_status, base_body, other, status, body) if base_ok else (f"HTTP {status}", False, "")
+        cells[other] = cell
+        if not ok:
+            problems.append(f"{other}{detail}")
+    if kind == "rows":
+        rows_scenarios_seen += 1
+    elif kind in ("csv", "csv-formula"):
+        csv_seen += 1
+    failures += 1 if problems else 0
+    table.append((name, *[cells[p] for p in PROVIDERS], "equal" if not problems else "DIFFERENT: " + "; ".join(problems)))
 
 if env_problems:
     print("smoke.sh: environment problem (a database is down, or the API failed):", file=sys.stderr)
@@ -248,16 +284,17 @@ if env_problems:
     print("  Check `docker compose ps` and that `dotnet run --project Api -- seed` has run.", file=sys.stderr)
     sys.exit(ENV_ERROR)
 
-widths = [max(len(r[i]) for r in table + [("scenario", "postgres", "mongo", "result")]) for i in range(3)]
-fmt = "{:<%d}  {:<%d}  {:<%d}  {}" % tuple(widths)
-print(fmt.format("scenario", "postgres", "mongo", "result"))
-print(fmt.format("-" * widths[0], "-" * widths[1], "-" * widths[2], "------"))
+header = ("scenario", *PROVIDERS, "result")
+widths = [max(len(r[i]) for r in table + [header]) for i in range(len(PROVIDERS) + 1)]
+fmt = "  ".join("{:<%d}" % w for w in widths) + "  {}"
+print(fmt.format(*header[:-1], header[-1]))
+print(fmt.format(*["-" * w for w in widths[:-1]], "-" * widths[-1], "------"))
 for row in table:
     print(fmt.format(*row))
 print()
 if failures:
     print(f"smoke.sh: {failures} of {len(table)} scenarios differ or lack the expected 400.")
     sys.exit(DIFFERENT)
-print(f"smoke.sh: all {len(table)} scenarios are equal on both providers.")
+print(f"smoke.sh: all {len(table)} scenarios are equal on all {len(PROVIDERS)} providers ({', '.join(PROVIDERS)}).")
 PY
 exit $?

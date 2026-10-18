@@ -8,6 +8,7 @@
        Craticula adapters; the demo references them directly because it owns the real connections. -->
   <ItemGroup>
     <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Dapper" Version="2.1.79" />
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />

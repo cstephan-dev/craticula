@@ -18,7 +18,7 @@ public static class GridRoutes
         {
             if (!TryProvider(providers, provider, out var service))
             {
-                return UnknownProvider(provider);
+                return UnknownProvider(provider, providers);
             }
 
             var request = preparer.PrepareRows(await ReadBodyAsync(http));
@@ -33,7 +33,7 @@ public static class GridRoutes
         {
             if (!TryProvider(providers, provider, out var service))
             {
-                return UnknownProvider(provider);
+                return UnknownProvider(provider, providers);
             }
 
             var request = preparer.PrepareSetValues(await ReadBodyAsync(http));
@@ -46,7 +46,7 @@ public static class GridRoutes
         {
             if (!TryProvider(providers, provider, out var service))
             {
-                return UnknownProvider(provider);
+                return UnknownProvider(provider, providers);
             }
 
             var request = preparer.PrepareExport(await ReadBodyAsync(http));
@@ -73,7 +73,7 @@ public static class GridRoutes
         {
             if (!TryProvider(providers, provider, out var service))
             {
-                return UnknownProvider(provider);
+                return UnknownProvider(provider, providers);
             }
 
             // Compile only: this route never opens a database connection.
@@ -86,9 +86,16 @@ public static class GridRoutes
     private static bool TryProvider(ProviderRegistry providers, string name, out IGridService service) =>
         providers.TryGet(name, out service);
 
-    private static IResult UnknownProvider(string name) =>
+    private static IResult UnknownProvider(string name, ProviderRegistry providers) =>
         Results.Json(
-            new { error = new { kind = "unknown-provider", message = $"Unknown provider '{name}'. Use one of: postgres, mongo." } },
+            new
+            {
+                error = new
+                {
+                    kind = "unknown-provider",
+                    message = $"Unknown provider '{name}'. Use one of: {string.Join(", ", providers.Names.Order())}."
+                }
+            },
             statusCode: StatusCodes.Status404NotFound);
 
     /// <summary>The raw body text: the library parses it, so the host never deserializes the grid request itself.</summary>

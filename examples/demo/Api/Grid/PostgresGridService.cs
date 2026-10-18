@@ -19,40 +19,9 @@ public sealed class PostgresGridService(NpgsqlDataSource dataSource, GridRequest
         return page.ToGridPageResult();
     }
 
-    /// <summary>
-    /// The Dapper adapter has no entry point for BM-3's distinct values, so this compiles with
-    /// <c>SqlQueryBuilder.BuildSetValues</c> and executes ONLY that artifact (its text and its ordered parameters).
-    /// The binding is the same one the adapter does for the postgres dialect: unnamed positional parameters for the
-    /// <c>$n</c> placeholders, a list value becoming a typed array.
-    /// </summary>
-    public async Task<IReadOnlyList<object?>> FetchSetValuesAsync(PreparedSetValues request, CancellationToken cancellationToken)
-    {
-        var query = SqlQueryBuilder.BuildSetValues(
-            new SqlSetValuesRequest
-            {
-                Schema = preparer.Schema,
-                ColId = request.ColId,
-                Filter = request.Filter,
-                RowLimit = request.RowLimit
-            },
-            PostgresDialect.Instance);
-
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var command = new NpgsqlCommand(query.Sql, connection);
-        foreach (var value in query.Parameters)
-        {
-            command.Parameters.Add(new NpgsqlParameter { Value = Bind(value) });
-        }
-
-        var values = new List<object?>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            values.Add(await reader.IsDBNullAsync(0, cancellationToken) ? null : reader.GetValue(0));
-        }
-
-        return values;
-    }
+    /// <summary>The Dapper adapter has no entry point for BM-3's distinct values; see <see cref="PostgresSetValues"/>.</summary>
+    public Task<IReadOnlyList<object?>> FetchSetValuesAsync(PreparedSetValues request, CancellationToken cancellationToken) =>
+        PostgresSetValues.FetchAsync(dataSource, preparer.Schema, request, cancellationToken);
 
     public async IAsyncEnumerable<ExportRow> StreamExportAsync(
         PreparedRows request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
@@ -88,26 +57,4 @@ public sealed class PostgresGridService(NpgsqlDataSource dataSource, GridRequest
         Aggregations = request.Parsed.Aggregations,
         Projection = request.Parsed.Export?.ProjectionColumns
     };
-
-    private static object Bind(object? value) => value switch
-    {
-        null => DBNull.Value,
-        IReadOnlyList<object?> set => ToTypedArray(set),
-        _ => value
-    };
-
-    private static Array ToTypedArray(IReadOnlyList<object?> values)
-    {
-        var elementType = values.FirstOrDefault(v => v is not null)?.GetType() ?? typeof(string);
-        var arrayType = elementType.IsValueType && values.Any(v => v is null)
-            ? typeof(Nullable<>).MakeGenericType(elementType)
-            : elementType;
-        var typed = Array.CreateInstance(arrayType, values.Count);
-        for (var i = 0; i < values.Count; i++)
-        {
-            typed.SetValue(values[i], i);
-        }
-
-        return typed;
-    }
 }

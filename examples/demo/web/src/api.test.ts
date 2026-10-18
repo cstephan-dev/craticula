@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, fetchHealth, fetchRows, fetchValues, type WireRequest } from './api';
+import { ApiError, PROVIDERS, fetchHealth, fetchQuery, fetchRows, fetchValues, type WireRequest } from './api';
 
 const request = { startRow: 0, endRow: 100 } as WireRequest;
 
@@ -44,5 +44,21 @@ describe('api error mapping', () => {
     const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/api/mongo/values');
     expect(JSON.parse(init.body as string)).toEqual({ setValuesRequest: { colId: 'country', filterModel: {} } });
+  });
+});
+
+describe('provider list', () => {
+  it('offers PostgreSQL, MongoDB and EF Core in that order', () => {
+    expect(PROVIDERS).toEqual([
+      { id: 'postgres', label: 'PostgreSQL' },
+      { id: 'mongo', label: 'MongoDB' },
+      { id: 'ef', label: 'EF Core' },
+    ]);
+  });
+
+  it('posts to the ef routes', async () => {
+    const mock = stubFetch(async () => Response.json({ kind: 'sql', dialect: 'ef-npgsql', text: '', parameters: [] }));
+    await fetchQuery('ef', request);
+    expect((mock.mock.calls[0] as unknown as [string])[0]).toBe('/api/ef/query');
   });
 });

@@ -6,12 +6,13 @@ namespace Demo.Api.Tests;
 
 /// <summary>
 /// The API end to end: real HTTP, real PostgreSQL and MongoDB. Every database test runs the same request through
-/// <c>/api/postgres/...</c> and <c>/api/mongo/...</c> and expects the same answer.
+/// <c>/api/postgres/...</c>, <c>/api/mongo/...</c> and <c>/api/ef/...</c> (the Entity Framework Core adapter on PostgreSQL)
+/// and expects the same answer; <c>postgres</c> is the baseline.
 /// </summary>
 [Collection("api")]
 public sealed class ApiTests(ApiHostFixture api)
 {
-    private static readonly string[] Providers = ["postgres", "mongo"];
+    private static readonly string[] Providers = ["postgres", "mongo", "ef"];
 
     // ---- helpers -----------------------------------------------------------------------------------
 
@@ -29,7 +30,10 @@ public sealed class ApiTests(ApiHostFixture api)
     {
         var pg = await RowsOk("postgres", body);
         var mongo = await RowsOk("mongo", body);
+        var ef = await RowsOk("ef", body);
         Assert.Equal(pg.GetProperty("lastRow").GetInt64(), mongo.GetProperty("lastRow").GetInt64());
+        Assert.Equal(pg.GetProperty("lastRow").GetInt64(), ef.GetProperty("lastRow").GetInt64());
+        Assert.Equal(Ids(pg), Ids(ef));
         return (Ids(pg), Ids(mongo));
     }
 
@@ -84,23 +88,38 @@ public sealed class ApiTests(ApiHostFixture api)
     public async Task GroupByCountry_SumAndCountAreEqualAndAvgIsWithinTheSpecTolerance()
     {
         var pg = (await RowsOk("postgres", Requests.GroupByCountry)).GetProperty("rows").EnumerateArray().ToArray();
-        var mongo = (await RowsOk("mongo", Requests.GroupByCountry)).GetProperty("rows").EnumerateArray().ToArray();
-
         Assert.True(pg.Length >= 10);
-        Assert.Equal(pg.Length, mongo.Length);
 
-        for (var i = 0; i < pg.Length; i++)
+        foreach (var provider in new[] { "mongo", "ef" })
         {
-            Assert.Equal(Key(pg[i]), Key(mongo[i]));
-            Assert.Equal(pg[i].GetProperty("amount_sum").GetDecimal(), mongo[i].GetProperty("amount_sum").GetDecimal());
-            Assert.Equal(pg[i].GetProperty("quantity_count").GetInt64(), mongo[i].GetProperty("quantity_count").GetInt64());
+            var other = (await RowsOk(provider, Requests.GroupByCountry)).GetProperty("rows").EnumerateArray().ToArray();
+            Assert.Equal(pg.Length, other.Length);
 
-            var a = pg[i].GetProperty("amount_avg").GetDouble();
-            var b = mongo[i].GetProperty("amount_avg").GetDouble();
-            Assert.True(Math.Abs(a - b) <= 1e-6 * Math.Max(Math.Abs(a), Math.Abs(b)), $"avg {a} vs {b} for {Key(pg[i])}");
+            for (var i = 0; i < pg.Length; i++)
+            {
+                Assert.Equal(Key(pg[i]), Key(other[i]));
+                Assert.Equal(pg[i].GetProperty("amount_sum").GetDecimal(), other[i].GetProperty("amount_sum").GetDecimal());
+                Assert.Equal(pg[i].GetProperty("quantity_count").GetInt64(), other[i].GetProperty("quantity_count").GetInt64());
+
+                var a = pg[i].GetProperty("amount_avg").GetDouble();
+                var b = other[i].GetProperty("amount_avg").GetDouble();
+                Assert.True(Math.Abs(a - b) <= 1e-6 * Math.Max(Math.Abs(a), Math.Abs(b)), $"{provider}: avg {a} vs {b} for {Key(pg[i])}");
+            }
         }
 
         static string? Key(JsonElement row) => row.GetProperty("country").GetString();
+    }
+
+    /// <summary>Drill-down into one group (groupKeys): the leaf rows of Germany, equal on all three providers.</summary>
+    [RequiresDatabasesFact]
+    public async Task DrillDownIntoACountry_GivesEqualRowsOnAllProviders()
+    {
+        var (postgres, mongo) = await IdsOnBoth(Requests.DrillDownGermany);
+
+        Assert.NotEmpty(postgres);
+        Assert.Equal(postgres, mongo);
+        var page = await RowsOk("ef", Requests.DrillDownGermany);
+        Assert.All(page.GetProperty("rows").EnumerateArray(), row => Assert.Equal("Germany", row.GetProperty("country").GetString()));
     }
 
     // ---- (d) paging --------------------------------------------------------------------------------
@@ -110,13 +129,16 @@ public sealed class ApiTests(ApiHostFixture api)
     {
         var pg = await RowsOk("postgres", Requests.PastTheEnd);
         var mongo = await RowsOk("mongo", Requests.PastTheEnd);
+        var ef = await RowsOk("ef", Requests.PastTheEnd);
 
         Assert.Empty(pg.GetProperty("rows").EnumerateArray());
         Assert.Empty(mongo.GetProperty("rows").EnumerateArray());
+        Assert.Empty(ef.GetProperty("rows").EnumerateArray());
 
         var total = pg.GetProperty("lastRow").GetInt64();
         Assert.True(total > 0);
         Assert.Equal(total, mongo.GetProperty("lastRow").GetInt64());
+        Assert.Equal(total, ef.GetProperty("lastRow").GetInt64());
 
         // The same filter's own first page reports the same total: the count does not depend on the window.
         var first = await RowsOk("postgres", Requests.FirstPage(
@@ -138,6 +160,7 @@ public sealed class ApiTests(ApiHostFixture api)
         }
 
         Assert.Equal(values[0], values[1]);
+        Assert.Equal(values[0], values[2]);
         Assert.Contains("Germany", values[0]);
         Assert.Equal(values[0].Distinct().Count(), values[0].Length);
     }
@@ -185,6 +208,20 @@ public sealed class ApiTests(ApiHostFixture api)
         }
     }
 
+    // ---- non-ASCII text filter ---------------------------------------------------------------------
+
+    /// <summary>A contains filter is case-insensitive beyond ASCII: "SÖHNE" matches "Müller, Söhne &amp; Co".</summary>
+    [RequiresDatabasesFact]
+    public async Task TextContains_IsCaseInsensitiveForNonAsciiLetters_OnPostgresAndEf()
+    {
+        var pg = await RowsOk("postgres", Requests.NonAsciiContains);
+        var ef = await RowsOk("ef", Requests.NonAsciiContains);
+
+        Assert.Contains(pg.GetProperty("rows").EnumerateArray(), row => row.GetProperty("customer").GetString() == "Müller, Söhne & Co");
+        Assert.Equal(pg.GetProperty("lastRow").GetInt64(), ef.GetProperty("lastRow").GetInt64());
+        Assert.Equal(Ids(pg), Ids(ef));
+    }
+
     // ---- (g) compile only --------------------------------------------------------------------------
 
     [Fact]
@@ -198,6 +235,20 @@ public sealed class ApiTests(ApiHostFixture api)
         Assert.Contains("$1", sql);
         Assert.DoesNotContain(Requests.UnlikelyValue, sql);
         Assert.Contains(json.GetProperty("parameters").EnumerateArray(), p => p.ValueKind == JsonValueKind.String && p.GetString() == Requests.UnlikelyValue);
+    }
+
+    /// <summary>The EF adapter composes the query itself: the text is <c>ToQueryString()</c>, which shows parameter values as
+    /// comment lines, so unlike the Dapper route this view is not parameterized text and the parameters list is empty.</summary>
+    [Fact]
+    public async Task Query_Ef_ReturnsTheEfDialectText()
+    {
+        var (status, json) = await api.PostJsonAsync("ef", "query", Requests.NeedleFilter);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("sql", json.GetProperty("kind").GetString());
+        Assert.Equal("ef-npgsql", json.GetProperty("dialect").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("text").GetString()));
+        Assert.Empty(json.GetProperty("parameters").EnumerateArray());
     }
 
     [Fact]
@@ -218,6 +269,7 @@ public sealed class ApiTests(ApiHostFixture api)
     [Theory]
     [InlineData("postgres")]
     [InlineData("mongo")]
+    [InlineData("ef")]
     public async Task UnknownColumnFilter_Is400WithTheKind(string provider)
     {
         var (status, json) = await api.PostJsonAsync(provider, "rows", Requests.UnknownColumn);
@@ -230,6 +282,7 @@ public sealed class ApiTests(ApiHostFixture api)
     [Theory]
     [InlineData("postgres")]
     [InlineData("mongo")]
+    [InlineData("ef")]
     public async Task PageSizeOver500_Is400WithTheLimitsKind(string provider)
     {
         var (status, json) = await api.PostJsonAsync(provider, "rows", Requests.PageSize(100_000));
@@ -321,7 +374,7 @@ public sealed class ApiTests(ApiHostFixture api)
         var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(new[] { "mongo", "postgres" }, json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()!).ToArray());
+        Assert.Equal(new[] { "ef", "mongo", "postgres" }, json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()!).ToArray());
     }
 
     [Theory]

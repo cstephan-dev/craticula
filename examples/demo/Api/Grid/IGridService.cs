@@ -9,7 +9,7 @@ public sealed record CompiledQueryView(string Kind, string Dialect, string Text,
 /// <summary>One implementation per provider, so the routes stay provider-neutral.</summary>
 public interface IGridService
 {
-    /// <summary>The route segment: <c>postgres</c> or <c>mongo</c>.</summary>
+    /// <summary>The route segment: <c>postgres</c>, <c>ef</c> or <c>mongo</c>.</summary>
     string Name { get; }
 
     Task<GridPageResult> FetchRowsAsync(PreparedRows request, CancellationToken cancellationToken);

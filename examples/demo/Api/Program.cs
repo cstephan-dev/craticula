@@ -4,7 +4,7 @@
 //   dotnet run --project Api -- seed      (fills both databases with 20,000 synthetic orders, then exits)
 //   dotnet run --project Api              (the API on http://127.0.0.1:5080; override the databases with DEMO_PG / DEMO_MONGO)
 //
-// Routes: POST /api/{postgres|mongo}/rows | values | export.csv | query, and GET /api/health.
+// Routes: POST /api/{postgres|ef|mongo}/rows | values | export.csv | query, and GET /api/health.
 using Demo.Api;
 using Demo.Api.Seed;
 
