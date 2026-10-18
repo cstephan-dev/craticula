@@ -1,10 +1,11 @@
 import type { IServerSideGetRowsRequest } from 'ag-grid-community';
 
-export type Provider = 'postgres' | 'mongo';
+export type Provider = 'postgres' | 'mongo' | 'ef';
 
 export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'postgres', label: 'PostgreSQL' },
   { id: 'mongo', label: 'MongoDB' },
+  { id: 'ef', label: 'EF Core' },
 ];
 
 /** The request the grid builds for a block. */
