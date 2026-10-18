@@ -99,7 +99,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
 
 Do these in the browser. Each should work on all the providers the API lists (PostgreSQL is the Dapper route, EF Core is the Entity Framework route).
 
-1. **Switch provider.** Use the PostgreSQL / MongoDB / EF Core switch in the header. Apply a filter and a sort, then switch: the same
+1. **Switch provider.** Use the provider switch in the header (PostgreSQL, MongoDB, EF Core, SQLite). Apply a filter and a sort, then switch: the same
    rows appear.
 2. **Sort.** Click a column header (Amount, Ordered at). Shift-click a second column to sort by both.
 3. **Filters, one per type.** Text (Customer contains `GmbH`), number (Quantity greater than 8), date (Shipped on, Ordered

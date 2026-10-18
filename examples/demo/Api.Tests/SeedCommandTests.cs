@@ -1,4 +1,5 @@
 using Demo.Api.Seed;
+using Microsoft.Data.Sqlite;
 
 namespace Demo.Api.Tests;
 
@@ -69,6 +70,50 @@ public sealed class SeedCommandTests
         Assert.Contains("mongo: 20000 rows.", output.ToString());
         Assert.Contains("Seed failed for postgres: postgres is down", error.ToString());
         Assert.Contains("hint for postgres", error.ToString());
+    }
+
+    [Fact]
+    public async Task Run_WhenASqliteFileIsReadOnly_ReportsThatProviderAndTheNextStillRuns()
+    {
+        var next = 0;
+        var known = new[]
+        {
+            Target("sqlite", _ => throw new SqliteException("attempt to write a readonly database", 8)),
+            Target("postgres", rows => { next++; return Task.FromResult((long)rows.Count); })
+        };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = await SeedCommand.RunAsync(["sqlite", "postgres"], known, output, error);
+
+        Assert.Equal(2, exit);
+        Assert.Equal(1, next);
+        Assert.Contains("Seed failed for sqlite:", error.ToString());
+        Assert.Contains("hint for sqlite", error.ToString());
+    }
+
+    [Fact]
+    public async Task Run_WhenTheDataFolderCannotBeWritten_ReportsThatProviderAndExits2()
+    {
+        var known = new[] { Target("sqlite", _ => throw new UnauthorizedAccessException("Access to the path is denied.")), Ok("postgres") };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = await SeedCommand.RunAsync(["sqlite", "postgres"], known, output, error);
+
+        Assert.Equal(2, exit);
+        Assert.Contains("postgres: 20000 rows.", output.ToString());
+        Assert.Contains("Seed failed for sqlite: Access to the path is denied.", error.ToString());
+    }
+
+    [Fact]
+    public async Task Run_AnUnexpectedExceptionStillEndsTheCommand()
+    {
+        var known = new[] { Target("sqlite", _ => throw new InvalidCastException("a bug")), Ok("postgres") };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        await Assert.ThrowsAsync<InvalidCastException>(() => SeedCommand.RunAsync(["sqlite", "postgres"], known, output, error));
     }
 
     [Fact]

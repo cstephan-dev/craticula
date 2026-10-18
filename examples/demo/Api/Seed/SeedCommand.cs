@@ -1,4 +1,5 @@
 using Demo.Api.Errors;
+using Microsoft.Data.Sqlite;
 
 namespace Demo.Api.Seed;
 
@@ -64,7 +65,7 @@ public static class SeedCommand
                 output.WriteLine(target.Describe(count));
                 mismatch |= count != rows.Count;
             }
-            catch (Exception ex) when (EngineFailures.IsUnavailable(ex))
+            catch (Exception ex) when (IsSeedFailure(ex))
             {
                 failed = true;
                 error.WriteLine($"Seed failed for {target.Name}: {ex.Message}");
@@ -74,4 +75,12 @@ public static class SeedCommand
 
         return failed ? 2 : mismatch ? 1 : 0;
     }
+
+    /// <summary>
+    /// What counts as that provider failing (printed with its hint, exit 2, the others still run): an engine that is down, plus the
+    /// ordinary setup failures of a file database: any SQLite error (a read-only or not-a-database file) and the file system's own
+    /// (a folder that cannot be created or written). Anything else is a bug and still ends the command.
+    /// </summary>
+    private static bool IsSeedFailure(Exception ex) =>
+        EngineFailures.IsUnavailable(ex) || ex is SqliteException or IOException or UnauthorizedAccessException;
 }
