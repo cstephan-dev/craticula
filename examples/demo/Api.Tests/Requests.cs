@@ -97,7 +97,7 @@ internal static class Requests
     /// <summary>group-aggregation/022 shape: the set-filter values request.</summary>
     public static string CountryValues => """{ "setValuesRequest": { "colId": "country", "filterModel": {} } }""";
 
-    /// <summary>A window far beyond the data (sort-paging/002 shape), filtered so both providers share one total.</summary>
+    /// <summary>A window far beyond the data (sort-paging/002 shape), filtered so every provider shares one total.</summary>
     public static string PastTheEnd => $$"""
         {
           "startRow": 30000, "endRow": 30100, {{NoGrouping}}

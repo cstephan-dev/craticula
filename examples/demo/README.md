@@ -140,8 +140,10 @@ services.AddDbContextFactory<OrdersDbContext>((sp, o) => o
     .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>());
 ```
 
-Use a factory, not a scoped context: the grid services are singletons. Do not turn on `EnableRetryOnFailure`; it wraps the Npgsql
-exception, so a database that is down would no longer answer 503.
+Use a factory, not a scoped context: the grid services are singletons. Also set `NonRetryingExecutionStrategy`
+(`o.UseNpgsql(dataSource, n => n.ExecutionStrategy(d => new NonRetryingExecutionStrategy(d)))`): the Npgsql provider's default strategy
+wraps a connection failure in an `InvalidOperationException` even without `EnableRetryOnFailure`, and a database that is down would then
+answer 500 instead of 503.
 
 **2. The engine facts.** The adapter cannot read these from EF, so you declare them once for PostgreSQL
 (`OrdersDbContext.PostgresSemantics`; the library ships only a SQLite preset):
@@ -174,7 +176,7 @@ CSV export uses `EfCoreExportStream.StreamAsync` the same way.
 - **Set filter.** The EF adapter has no distinct-values call, so the set filter on `ef` reuses the compiled statement of the Dapper route and
   runs it through Npgsql (`Api/Grid/PostgresSetValues.cs`).
 - **Case-insensitive search.** "Contains", "starts with" and "ends with" use `lower(column) LIKE` on `ef` and `ILIKE` on the Dapper route.
-  They agree on ASCII and on ordinary Unicode case pairs (the smoke test and the API tests cover a non-ASCII case) and can differ under an exotic collation.
+  They agree on ASCII and on ordinary Unicode case pairs (the API tests cover a non-ASCII case; the smoke scenarios are ASCII) and can differ under an exotic collation.
 - **Library version.** The EF adapter is new and, apart from this demo, has only been run against SQLite in the library's tests. The demo's
   smoke test is what shows EF and Dapper return the same rows, groups and CSV on this data.
 

@@ -6,6 +6,7 @@ using Demo.Api.Routes;
 using Demo.Api.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using MongoDB.Driver;
 using Npgsql;
 
@@ -43,9 +44,12 @@ public static class DemoApp
             new MongoClient(mongoSettings).GetDatabase(DemoSettings.MongoDatabase));
         builder.Services.AddSingleton(schema);
         // One context per call from a factory: the services are singletons. The same NpgsqlDataSource as the Dapper
-        // provider; no EnableRetryOnFailure, so a down database stays an NpgsqlException (503) instead of a wrapped one.
+        // provider. The Npgsql provider's default execution strategy wraps a connection failure in an InvalidOperationException
+        // even without EnableRetryOnFailure, which would answer 500; NonRetryingExecutionStrategy lets the NpgsqlException
+        // through, so a down database answers 503 like the other providers.
         builder.Services.AddDbContextFactory<OrdersDbContext>((services, options) => options
-            .UseNpgsql(services.GetRequiredService<NpgsqlDataSource>())
+            .UseNpgsql(services.GetRequiredService<NpgsqlDataSource>(),
+                npgsql => npgsql.ExecutionStrategy(dependencies => new NonRetryingExecutionStrategy(dependencies)))
             .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>());
         builder.Services.AddSingleton<IGridService, PostgresGridService>();
         builder.Services.AddSingleton<IGridService, EfGridService>();
