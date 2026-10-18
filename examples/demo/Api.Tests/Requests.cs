@@ -79,6 +79,21 @@ internal static class Requests
         }
         """;
 
+    /// <summary>group-aggregation drill-down: groupKeys [{"type":"string","value":"Germany"}] under a country grouping returns the leaf rows.</summary>
+    public const string DrillDownGermany = """
+        {
+          "startRow": 0, "endRow": 100,
+          "rowGroupCols": [ { "id": "country", "displayName": "Country", "field": "country" } ],
+          "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [ { "type": "string", "value": "Germany" } ],
+          "filterModel": null,
+          "sortModel": [ { "colId": "id", "sort": "asc" } ]
+        }
+        """;
+
+    /// <summary>A contains filter in capitals with a non-ASCII letter; the seed has "Müller, Söhne &amp; Co".</summary>
+    public static string NonAsciiContains => FirstPage(
+        """{ "customer": { "filterType": "text", "type": "contains", "filter": "SÖHNE" } }""");
+
     /// <summary>group-aggregation/022 shape: the set-filter values request.</summary>
     public static string CountryValues => """{ "setValuesRequest": { "colId": "country", "filterModel": {} } }""";
 
