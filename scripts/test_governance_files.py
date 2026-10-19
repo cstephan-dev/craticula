@@ -14,20 +14,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CODEOWNERS = ROOT / ".github" / "CODEOWNERS"
 SECURITY = ROOT / "SECURITY.md"
-PRIVATE_PREFIXES = ("docs/", ".claude", "CLAUDE.md", ".mcp.json", ".githooks", ".azuredevops", ".sonarlint", ".vscode")
+# The private paths of scripts/publish-github.sh (its PRIVATE array), spelled so that a prose mention is not a false positive
+# (`docs/`, not `docs`). A test pins this tuple to the real array where the publish script exists (the private repository).
+PRIVATE_PREFIXES = ("docs/", ".claude", "CLAUDE.md", ".mcp.json", ".githooks", ".azuredevops", ".sonarlint", ".vscode",
+                    "scripts/publish-github.sh", "scripts/sync-release-commit.sh", "scripts/apply-public-change.sh",
+                    "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py")
+PRIVATE_HOSTS = re.compile(r"dev\.azure\.com|visualstudio\.com", re.IGNORECASE)
+PUBLISH_SCRIPT = ROOT / "scripts" / "publish-github.sh"
 OWNER = re.compile(r"^(?:@[A-Za-z0-9][A-Za-z0-9-]*(?:/[A-Za-z0-9._-]+)?|[^@\s]+@[^@\s]+\.[A-Za-z]+)$")
 GATE_COPIES = (".claude/rules/git-branch-naming.md", "docs/compliance/isms-change-pr-pipeline.md", "docs/compliance/pipelines-craticula.md")
 # What the governance stories add to the gate: a pull request touching these validates its own copy of the checks or changes
 # what the publish accepts, so the agent never completes it (the maker does).
 GATE_GOVERNANCE = (".github/CODEOWNERS", "scripts/check-dco*", "scripts/test_check_dco*", "scripts/apply-public-change*",
-                   "scripts/test_apply_public_change*", "scripts/test_governance_files*", ".githooks/", ".github/workflows/")
+                   "scripts/test_apply_public_change*", "scripts/test_governance_files*", ".githooks/", ".github/workflows/",
+                   # what makes the lints run: the workflow and security-script tests, and the wrappers that run them in `dotnet test`
+                   "scripts/test_workflows*", "scripts/test_lint_sec2*", "scripts/test_coverage*", "csharp/tests/Craticula.Conformance.Tests/")
 
 
 def codeowners_rules(text: str) -> list[tuple[str, list[str]]]:
     """(pattern, owners) per rule line; comments and blank lines are skipped."""
     rules = []
     for line in text.splitlines():
-        line = line.strip()
+        line = re.split(r"\s#", line.strip(), maxsplit=1)[0].strip()   # an inline comment ends the rule
         if not line or line.startswith("#"):
             continue
         parts = line.split()
@@ -45,6 +53,9 @@ def codeowners_problems(text: str, root: Path) -> list[str]:
         return ["no rule"]
     if rules[0][0] != "*":
         problems.append("the catch-all `*` must be the first rule (the last matching pattern wins)")
+    for index, (pattern, _) in enumerate(rules):
+        if index > 0 and pattern in ("*", "**", "/**"):
+            problems.append(f"{pattern}: a catch-all after the first rule overrides every specific rule above it (the last matching pattern wins)")
     if not any(pattern.strip("/") == "csharp/src" for pattern, _ in rules):
         problems.append("no rule for /csharp/src/")
     for pattern, owners in rules:
@@ -55,31 +66,45 @@ def codeowners_problems(text: str, root: Path) -> list[str]:
                 problems.append(f"{pattern}: '{owner}' is not an @user, @org/team or e-mail owner")
         if pattern != "*":
             target = pattern.lstrip("/").rstrip("/")
-            exists = any(root.glob(target)) if any(c in target for c in "*?[") else (root / target).exists()
+            if ".." in Path(target).parts:
+                problems.append(f"{pattern}: leaves the repository")
+                continue
+            globbed = any(c in target for c in "*?[")
+            if "/" not in pattern.strip("/") and not pattern.startswith("/"):
+                exists = any(root.rglob(target))      # an unanchored pattern matches at any depth
+            elif globbed:
+                exists = any(root.glob(target))
+            else:
+                exists = (root / target).exists()
             if not exists:
                 problems.append(f"{pattern}: matches nothing in the tree")
     return problems
 
 
+LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)|^\s{0,3}\[[^\]]+\]:\s*<?(\S+?)>?(?:\s+.*)?$", re.MULTILINE)
+
+
 def security_problems(text: str, root: Path) -> list[str]:
-    """What is wrong with SECURITY.md: no private-report path (Security tab, Report a vulnerability), no response time in days,
-    no supported-versions table with a supported row, a public issue or mailbox offered instead, a link that does not resolve
-    inside the repository or points at a private path, an e-mail address."""
+    """What is wrong with SECURITY.md: no private-report path (the **Security** tab and **Report a vulnerability**, both in bold as
+    the steps), fewer than two response times in days, no supported-versions table with a supported row, an e-mail address, a
+    private host anywhere, a link (inline, with a title, or a reference definition) that does not resolve inside the repository
+    or points at a private path."""
     problems = []
-    if not re.search(r"\*\*Security\*\* tab", text) or "Report a vulnerability" not in text:
-        problems.append("no private-report path (the Security tab, 'Report a vulnerability')")
+    if "**Security** tab" not in text or "**Report a vulnerability**" not in text:
+        problems.append("no private-report path (the **Security** tab, **Report a vulnerability**)")
     if len(re.findall(r"within \*\*\d+ (?:calendar )?days\*\*", text)) < 2:
         problems.append("fewer than two response times in days (acknowledgement and first assessment)")
-    if not re.search(r"\|\s*Version\s*\|\s*Supported\s*\|", text) or not re.search(r"\|[^|\n]+\|\s*Yes\b", text):
+    if not supported_row(text):
         problems.append("no supported-versions table with a supported row")
     if re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text):
         problems.append("an e-mail address (the policy names the Security tab only)")
-    for target in re.findall(r"\]\(([^)\s]+)\)", text):
+    if PRIVATE_HOSTS.search(text):
+        problems.append("a private host (dev.azure.com, visualstudio.com)")
+    for match in LINK.finditer(text):
+        target = match.group(1) or match.group(2)
         if re.match(r"^[a-z][a-z0-9+.-]*:", target):
-            if "dev.azure.com" in target or "visualstudio.com" in target:
-                problems.append(f"link to a private host: {target}")
             continue
-        path = target.split("#")[0]
+        path = target.split("#")[0].lstrip("/")      # a root-relative link is read against the repository root
         if path.startswith(PRIVATE_PREFIXES):
             problems.append(f"link into a private path: {target}")
         elif path and not (root / path).exists():
@@ -87,12 +112,36 @@ def security_problems(text: str, root: Path) -> list[str]:
     return problems
 
 
+def supported_row(text: str) -> bool:
+    """True when a `| Version | Supported |` table has a row whose second cell starts with Yes."""
+    lines = text.splitlines()
+    for number, line in enumerate(lines):
+        if re.match(r"^\|\s*Version\s*\|\s*Supported\s*\|", line):
+            for row in lines[number + 1:]:
+                if not row.startswith("|"):
+                    break
+                cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+                if len(cells) >= 2 and cells[1].lower().startswith("yes"):
+                    return True
+    return False
+
+
 def private_references(text: str) -> list[str]:
-    """Lines of a public file that name a private path (`docs/`, `.claude`, `CLAUDE.md`, `.mcp.json`, `.githooks`, ...): the
-    mirror strips them, so an outsider could not follow the reference (NFR-01)."""
+    """Lines of a public file that name a private path (`docs/`, `.claude`, `CLAUDE.md`, `.mcp.json`, `.githooks`, the private
+    scripts, ...), also when written root-anchored (`/docs/`, `./.githooks/x`, `../docs/x`) as CODEOWNERS and shell lines do, or
+    that name a private host: the mirror strips them, so an outsider could not follow the reference (NFR-01). A nested directory
+    that merely shares the name (`csharp/docs/x`) is not the private root path."""
     found = []
     for line in text.splitlines():
-        if any(re.search(rf"(?<![\w./-]){re.escape(prefix)}", line) for prefix in PRIVATE_PREFIXES):
+        hit = bool(PRIVATE_HOSTS.search(line))
+        for prefix in PRIVATE_PREFIXES:
+            for match in re.finditer(re.escape(prefix), line):
+                before = line[:match.start()]
+                if not before or before[-1] not in "/.-_" and not before[-1].isalnum():
+                    hit = True
+                elif re.search(r"(?:^|[^\w./-])(?:\.{1,2}/|/)+$", before):
+                    hit = True
+        if hit:
             found.append(line.strip())
     return found
 
@@ -182,16 +231,70 @@ class SecurityRuleTests(unittest.TestCase):
         self.assertEqual([], security_problems(self.GOOD + "\n[x](https://developercertificate.org)\n", ROOT))
 
 
+class MoreRuleTests(unittest.TestCase):
+    """Cases added after the review: the catch-all anywhere, inline comments, globs, links, the host, the supported row."""
+
+    def test_fr03_a_catch_all_added_later_fails(self):
+        for extra in ("*  @other", "**  @other", "/**  @other"):
+            with self.subTest(extra=extra):
+                self.assertTrue(any("catch-all after" in p for p in
+                                codeowners_problems(f"*  @pluries\n/csharp/src/  @pluries\n{extra}\n", ROOT)), extra)
+
+    def test_fr03_an_inline_comment_is_not_an_owner(self):
+        self.assertEqual([], codeowners_problems("*  @pluries  # everything\n/csharp/src/  @pluries # the code\n", ROOT))
+
+    def test_fr03_a_pattern_that_leaves_the_repository_fails(self):
+        self.assertTrue(any("leaves the repository" in p for p in codeowners_problems("*  @p\n/csharp/src/  @p\n/../*  @p\n", ROOT)))
+
+    def test_fr03_an_unanchored_pattern_matches_at_any_depth(self):
+        self.assertEqual([], codeowners_problems("*  @p\n/csharp/src/  @p\n*.cs  @p\n", ROOT))
+        self.assertTrue(codeowners_problems("*  @p\n/csharp/src/  @p\n*.nosuchext  @p\n", ROOT))
+
+    def test_fr04_the_report_path_needs_both_steps_in_bold(self):
+        text = SecurityRuleTests.GOOD
+        self.assertTrue(security_problems(text.replace("**Security** tab", "Security tab"), ROOT))
+        self.assertTrue(security_problems(text.replace("**Report a vulnerability**", "Report a vulnerability"), ROOT))
+
+    def test_fr04_a_yes_outside_the_versions_table_does_not_count(self):
+        text = SecurityRuleTests.GOOD.replace("| The latest release | Yes |", "| The latest release | No |") + "\nYes, we read every report.\n| a | Yes |\n"
+        self.assertTrue(security_problems(text, ROOT))
+
+    def test_fr04_links_with_a_title_or_by_reference_are_checked(self):
+        good = SecurityRuleTests.GOOD
+        self.assertTrue(any("does not resolve" in p for p in security_problems(good + '\n[x](NOSUCH.md "a title")\n', ROOT)))
+        self.assertTrue(any("does not resolve" in p for p in security_problems(good + "\n[x][1]\n\n[1]: NOSUCH.md\n", ROOT)))
+        self.assertTrue(any("private path" in p for p in security_problems(good + "\n[1]: docs/x.md\n", ROOT)))
+        self.assertEqual([], security_problems(good + '\n[v](VERSIONING.md "versions")\n[w](/VERSIONING.md)\n', ROOT))
+        self.assertTrue(any("does not resolve" in p for p in security_problems(good + "\n[x](/etc/passwd)\n", ROOT)))
+
+    def test_nfr01_a_private_host_anywhere_in_security_md_fails(self):
+        for form in ("https://dev.azure.com/o/p", "<https://dev.azure.com/o/p>", "[1]: https://org.visualstudio.com/x", "dev.azure.com/o"):
+            with self.subTest(form=form):
+                self.assertTrue(any("private host" in p for p in security_problems(SecurityRuleTests.GOOD + f"\n{form}\n", ROOT)), form)
+
+    def test_nfr01_the_prefix_tuple_matches_the_publish_script_where_it_exists(self):
+        if not PUBLISH_SCRIPT.exists():
+            self.skipTest("the publish script is private (absent from the public mirror)")
+        match = re.search(r"(?m)^PRIVATE=\((.*)\)\s*$", PUBLISH_SCRIPT.read_text(encoding="utf-8"))
+        self.assertIsNotNone(match, "no PRIVATE array in the publish script")
+        real = {entry.rstrip("/") for entry in match.group(1).split()}
+        ours = {prefix.rstrip("/") for prefix in PRIVATE_PREFIXES}
+        self.assertEqual(real, ours, "PRIVATE_PREFIXES differs from the PRIVATE array of scripts/publish-github.sh")
+
+
 class PrivateReferenceRuleTests(unittest.TestCase):
     def test_nfr01_private_names_are_found(self):
         for line in ("see docs/adr/0001.md", "run .claude/hooks/x.js", "read CLAUDE.md", "the .mcp.json file", "in .githooks/commit-msg",
-                     "the .azuredevops/pipeline-pr.yml pipeline"):
+                     "the .azuredevops/pipeline-pr.yml pipeline", "the .sonarlint/x file", "the .vscode/settings.json",
+                     "/docs/  @pluries", "/.claude/  @p", "/.githooks/ @p", "/.azuredevops/ @p", "run: bash ./.githooks/x", "see ../docs/x.md",
+                     "[1]: ./docs/x.md", "(scripts/apply-public-change.sh)", "/scripts/sync-release-commit.sh @p",
+                     "scripts/test_publish_mirror_real.py", "see https://dev.azure.com/org/project", "https://org.visualstudio.com/x"):
             with self.subTest(line=line):
                 self.assertEqual([line], private_references(line))
 
     def test_nfr01_public_names_are_not_flagged(self):
         for line in ("see README.md and spec/semantics.md", "scripts/check-dco.sh", "csharp/src/Core", "the .github/workflows folder",
-                     "mydocs/readme", "subdocs/x"):
+                     "mydocs/readme", "subdocs/x", "csharp/docs/x", "src/docs/x", "scripts/check-dco.sh and scripts/test_check_dco.py"):
             with self.subTest(line=line):
                 self.assertEqual([], private_references(line))
 
@@ -238,12 +341,13 @@ class RealFileTests(unittest.TestCase):
                 self.assertEqual([], private_references(path.read_text(encoding="utf-8")))
 
     def test_the_gate_lists_name_the_governance_files_and_agree(self):
-        present = {name: ROOT / name for name in GATE_COPIES if (ROOT / name).exists()}
-        if not present:
+        if not PUBLISH_SCRIPT.exists():
             self.skipTest("the private documents are absent (the public mirror)")
         reference = None
-        for name, path in present.items():
+        for name in GATE_COPIES:
             with self.subTest(file=name):
+                path = ROOT / name
+                self.assertTrue(path.exists(), f"{name} is missing: the gate list is copied there (renamed or moved?)")
                 paths = gate_paths(path.read_text(encoding="utf-8"))
                 self.assertTrue(paths, "no gate list found")
                 self.assertEqual([], sorted(set(GATE_GOVERNANCE) - paths), "governance entries missing from the gate list")
