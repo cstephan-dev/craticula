@@ -64,10 +64,13 @@ public sealed class OptionalProviderTests
     }
 
     [Fact]
-    public async Task TheRealOptionalList_IsEmptyUntilAnEngineTaskAddsOne()
+    public async Task TheRealOptionalList_HoldsSqlServerAndMySql_AndADefaultHostDoesNotListThem()
     {
-        // Documents the extension point: the shipped list has no entry, so a default host serves exactly the four always-on providers.
-        Assert.Empty(OptionalProviders.All);
+        // Documents the extension point: the shipped list names each optional engine (the OpenSearch task adds its own),
+        // and without its setting a default host serves exactly the four always-on providers.
+        Assert.Equal(["sqlserver", "mysql"], OptionalProviders.All.Select(provider => provider.Name));
+        Assert.Equal("DEMO_SQLSERVER", OptionalProviders.All[0].EnvVar);
+        Assert.Equal("DEMO_MYSQL", OptionalProviders.All[1].EnvVar);
         var (app, client) = await ApiHostFixture.StartAsync();
         await using (app)
         using (client)

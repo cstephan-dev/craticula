@@ -4,12 +4,13 @@
 #
 # Optional engines use compose profiles. A service with `profiles: [...]` is NOT started by a plain `docker compose up -d`;
 # it starts only when one of its profiles is asked for:
-#   docker compose --profile mysql up -d       one engine, by its own profile
+#   docker compose --profile sqlserver up -d   one engine, by its own profile
 #   docker compose --profile engines up -d     every optional engine at once (the umbrella profile)
+#   docker compose --profile mysql up -d       the same for MySQL
 # Every optional service lists its own profile AND `engines`. postgres and mongo have no profile: they always start.
 # The API lists an optional engine only when its connection variable is set (see README.md), and
-# `dotnet run --project Api -- seed <provider>` fills just the named provider. Example block (commented out; the real
-# services arrive with the SQL Server, MySQL and OpenSearch tasks):
+# `dotnet run --project Api -- seed <provider>` fills just the named provider. Today `sqlserver` and `mysql` are the two
+# real optional services (`engines` starts both); the OpenSearch task adds its own. Example block (commented out):
 #
 #   example-engine:
 #     image: example/engine:1
@@ -50,6 +51,54 @@ services:
       timeout: 5s
       retries: 20
 
+  # SQL Server 2022 (the image the library's Docker tier uses). RUNNING THIS PROFILE ACCEPTS MICROSOFT'S SQL SERVER LICENCE:
+  # ACCEPT_EULA=Y below is that acceptance (Developer edition, free for development and testing, never for production).
+  # The `sa` password is a local throw-away credential like the demo/demo ones above, only reachable on 127.0.0.1; it
+  # satisfies SQL Server's complexity rules. The container needs about 2 GB of RAM; it is ready in seconds on a fast machine, and the healthcheck allows a slow one about three minutes.
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
+    profiles: ["sqlserver", "engines"]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "Demo-Local-2499"
+    ports:
+      - "127.0.0.1:${DEMO_SQLSERVER_PORT:-51433}:1433"
+    volumes:
+      - demo-sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  # MySQL 8.4 (the image the library's Docker tier uses). MySQL Community needs no licence acceptance. MariaDB is not covered:
+  # its collations and some behaviour differ, and the library has no fixtures for it. User demo / password demo / database demo
+  # are local throw-away credentials like the PostgreSQL ones, only reachable on 127.0.0.1; the root password is random and never
+  # needed (the root account is not used). The first start initialises the data directory (tens of seconds on a slow disk), so the
+  # healthcheck waits before it counts failures.
+  mysql:
+    image: mysql:8.4.11
+    profiles: ["mysql", "engines"]
+    environment:
+      MYSQL_DATABASE: demo
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: demo
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    ports:
+      - "127.0.0.1:${DEMO_MYSQL_PORT:-53306}:3306"
+    volumes:
+      - demo-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u demo -pdemo --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
 volumes:
   demo-pg-data:
   demo-mongo-data:
+  demo-sqlserver-data:
+  demo-mysql-data:

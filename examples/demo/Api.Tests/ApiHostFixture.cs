@@ -30,6 +30,9 @@ public sealed class ApiHostFixture : IAsyncLifetime
         {
             builder.Configuration["Urls"] = "http://127.0.0.1:0";
             builder.Configuration[DemoSettings.SqliteEnvVar] = SqlitePath;
+            // The default host serves the always-on providers whatever the machine's environment holds; the engine fixtures own the engines.
+            builder.Configuration[DemoSettings.SqlServerEnvVar] = "";
+            builder.Configuration[DemoSettings.MySqlEnvVar] = "";
         });
         await app.StartAsync();
         Client = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
@@ -50,6 +53,8 @@ public sealed class ApiHostFixture : IAsyncLifetime
         var app = DemoApp.Build([], builder =>
         {
             builder.Configuration["Urls"] = "http://127.0.0.1:0";
+            builder.Configuration[DemoSettings.SqlServerEnvVar] = "";
+            builder.Configuration[DemoSettings.MySqlEnvVar] = "";
             // The last NpgsqlDataSource registration is the one PostgresGridService receives.
             builder.Services.AddSingleton(NpgsqlDataSource.Create(
                 $"Host=127.0.0.1;Port={closedPort};Username=demo;Password=demo;Database=demo;Timeout=2"));
@@ -66,6 +71,9 @@ public sealed class ApiHostFixture : IAsyncLifetime
         var app = DemoApp.Build([], builder =>
         {
             builder.Configuration["Urls"] = "http://127.0.0.1:0";
+            // Blank unless the test sets it: a DEMO_SQLSERVER or DEMO_MYSQL in the machine's environment must not change what a host lists.
+            builder.Configuration[DemoSettings.SqlServerEnvVar] = "";
+            builder.Configuration[DemoSettings.MySqlEnvVar] = "";
             configure?.Invoke(builder);
         }, optionalProviders);
         await app.StartAsync();
@@ -81,18 +89,26 @@ public sealed class ApiHostFixture : IAsyncLifetime
         return port;
     }
 
-    public async Task<(HttpStatusCode Status, JsonElement Body)> PostJsonAsync(string provider, string route, string body)
+    public Task<(HttpStatusCode Status, JsonElement Body)> PostJsonAsync(string provider, string route, string body) =>
+        PostJsonAsync(Client, provider, route, body);
+
+    public Task<(HttpStatusCode Status, string ContentType, string? Disposition, byte[] Bytes)> PostRawAsync(
+        string provider, string route, string body) =>
+        PostRawAsync(Client, provider, route, body);
+
+    public static async Task<(HttpStatusCode Status, JsonElement Body)> PostJsonAsync(
+        HttpClient client, string provider, string route, string body)
     {
-        using var response = await Client.PostAsync(
+        using var response = await client.PostAsync(
             $"/api/{provider}/{route}", new StringContent(body, Encoding.UTF8, "application/json"));
         var text = await response.Content.ReadAsStringAsync();
         return (response.StatusCode, JsonDocument.Parse(text).RootElement.Clone());
     }
 
-    public async Task<(HttpStatusCode Status, string ContentType, string? Disposition, byte[] Bytes)> PostRawAsync(
-        string provider, string route, string body)
+    public static async Task<(HttpStatusCode Status, string ContentType, string? Disposition, byte[] Bytes)> PostRawAsync(
+        HttpClient client, string provider, string route, string body)
     {
-        using var response = await Client.PostAsync(
+        using var response = await client.PostAsync(
             $"/api/{provider}/{route}", new StringContent(body, Encoding.UTF8, "application/json"));
         return (
             response.StatusCode,

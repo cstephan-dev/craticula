@@ -1,8 +1,10 @@
 using System.Collections.Immutable;
 using System.Net.Sockets;
 using Demo.Api.Seed;
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using MongoDB.Driver;
+using MySqlConnector;
 using Npgsql;
 
 namespace Demo.Api.Errors;
@@ -14,6 +16,27 @@ namespace Demo.Api.Errors;
 /// </summary>
 public static class EngineFailures
 {
+    /// <summary>
+    /// The <c>SqlException.Number</c> values that mean "the engine cannot be reached": 2 and 53 (the server or instance was not
+    /// found or not accessible), -1 (a connection-level failure: refused, reset), 258 (the wait operation timed out),
+    /// -2 (the driver's own timeout, connect or command) and 4060 (the database cannot be opened: not created yet), plus 11001
+    /// (the host name does not resolve). 18456 (the login failed) is not listed: a refused login is a setting error and answers 500,
+    /// like MySQL 1045 and PostgreSQL 28P01. A refused connection is not a number at all on Linux:
+    /// SqlClient 7.1.0 reports Number 0 with an inner <see cref="SocketException"/> (measured), so that case is recognised by its
+    /// inner exception; see <see cref="IsSqlServerUnavailable"/>.
+    /// </summary>
+    public static readonly ImmutableHashSet<int> SqlServerConnectionFailureNumbers = [2, 53, -1, -2, 258, 4060, 11001];
+
+    /// <summary>
+    /// MySqlConnector reports every failure to reach the server as <c>MySqlException.Number</c> 1042
+    /// (<see cref="MySqlErrorCode.UnableToConnectToHost"/>), measured against MySQL 8.4.11 with 2.6.2: a refused port, a stopped
+    /// container, a host name that does not resolve, an unroutable address and a server that accepts the connection and never
+    /// answers (message "Connect Timeout expired.", inner MySqlException). None has an inner <see cref="SocketException"/>.
+    /// A refused login (1045 access denied, 1044 no access to the database) is a setting error, and any statement error is a bug:
+    /// both stay a 500.
+    /// </summary>
+    public static readonly ImmutableHashSet<int> MySqlConnectionFailureNumbers = [(int)MySqlErrorCode.UnableToConnectToHost];
+
     // Order does not matter: the first predicate that matches wins and every match means the same thing.
     private static ImmutableArray<Func<Exception, bool>> declared =
     [
@@ -23,9 +46,20 @@ public static class EngineFailures
         // codes 14 SQLITE_CANTOPEN, 5 SQLITE_BUSY, 6 SQLITE_LOCKED). Any other SqliteException is a bug and stays a 500.
         exception => exception is SqliteException { SqliteErrorCode: 14 or 5 or 6 },
         exception => exception is SqliteVersionException,
+        // SQL Server: the server cannot be reached, see SqlServerConnectionFailureNumbers. Any other
+        // SqlException (a bad statement, a missing table) is a bug and stays a 500.
+        exception => exception is SqlException sql && IsSqlServerUnavailable(sql),
+        // MySQL: the server cannot be reached, see MySqlConnectionFailureNumbers. Any other MySqlException (a refused login, a bad
+        // statement, a missing table) stays a 500.
+        exception => exception is MySqlException mysql && MySqlConnectionFailureNumbers.Contains(mysql.Number),
         exception => exception is TimeoutException,
         exception => exception is SocketException
     ];
+
+    /// <summary>A <see cref="SqlException"/> that is a connection failure: a declared error number, or a refused/unreachable socket.
+    /// Anything else (a bad statement, a missing table, an untrusted certificate: a configuration error) is not.</summary>
+    public static bool IsSqlServerUnavailable(SqlException exception) =>
+        SqlServerConnectionFailureNumbers.Contains(exception.Number) || exception.InnerException is SocketException;
 
     /// <summary>True when the exception is a connection failure of an engine.</summary>
     public static bool IsUnavailable(Exception exception)
