@@ -1,0 +1,49 @@
+# DCO check (story #1662, TRD OS-1, spec FR-02): every commit of an outside pull request carries a `Signed-off-by` line, instead
+# of a contributor license agreement. One job named `dco`: that is the check name the branch ruleset on main requires.
+# The logic is scripts/check-dco.sh (tested offline by scripts/test_check_dco.py). No third-party action, no secret, a read-only
+# token, `pull_request` (never `pull_request_target`: a fork's code must not run with write access), every action pinned to a
+# commit SHA (scripts/test_workflows.py checks that, and that no `run:` block holds an event expression).
+# Exempt: the pull requests that the Release Please action (author `github-actions[bot]`) and Dependabot (`dependabot[bot]`)
+# open in THIS repository. The exemption reads the pull request author's login, which a contributor cannot choose; a commit's
+# author e-mail is never an exemption, because anyone can write any e-mail into a commit. Merge commits are exempt in the script.
+name: dco
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dco-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dco:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The head commit and the full history, so that <base>..<head> is exactly the pull request's commits.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Event data comes in through env, never spliced into the script text.
+      - name: Signed-off-by on every commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          exempt=""
+          if [ "$PR_FROM_FORK" = "false" ]; then
+            case "$PR_AUTHOR" in
+              'github-actions[bot]') exempt="pull request opened by the Release Please action (github-actions[bot])" ;;
+              'dependabot[bot]') exempt="pull request opened by Dependabot (dependabot[bot])" ;;
+            esac
+          fi
+          DCO_EXEMPT="$exempt" bash scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"

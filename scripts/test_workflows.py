@@ -22,6 +22,8 @@ JOB_PERMISSIONS = re.compile(r"^    permissions:", re.MULTILINE)
 PIPED_RUN = re.compile(r"^\s*run:\s.*\|", re.MULTILINE)
 EXPLICIT_BASH = re.compile(r"^\s*shell:\s*bash\s*$", re.MULTILINE)
 KEY_WITHOUT_SPACE = re.compile(r"^(?P<key>[A-Za-z_][\w.-]*):(?P<rest>(?!//)[^ ].*)$")
+RUN_KEY = re.compile(r"^(?P<indent>\s*)(?:-\s+)*run:\s*(?P<value>.*)$")
+UNTRUSTED_EXPRESSION = re.compile(r"\$\{\{[^}]*\b(?:github\.event\.|github\.head_ref|github\.ref_name)")
 BLOCK_SCALAR = re.compile(r":\s+[|>](?:[+-]?\d*|\d*[+-]?)\s*(?:#.*)?$")
 
 
@@ -83,6 +85,34 @@ def key_without_space(text: str) -> list[str]:
             # `- vol:/path` (a volume or port mapping) is a legitimate list string: a leading slash only counts on a mapping key.
             if match and not (stripped.startswith("- ") and match.group("rest").startswith("/")):
                 bad.append(stripped)
+    return bad
+
+
+def event_expression_in_run(text: str) -> list[str]:
+    """Lines of a `run:` value (one line, or the body of a `run: |` block) that splice an event expression such as
+    `${{ github.event.pull_request.title }}`, `github.head_ref` or `github.ref_name` into the shell text: a contributor chooses
+    those strings (script injection). They belong in `env:`, where the shell reads them as data. Line scan, stdlib only."""
+    bad = []
+    block_column = None
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if block_column is not None:
+            if indent > block_column:
+                if UNTRUSTED_EXPRESSION.search(line):
+                    bad.append(line.strip())
+                continue
+            block_column = None
+        match = RUN_KEY.match(line)
+        if not match:
+            continue
+        value = match.group("value")
+        key_column = len(match.group("indent")) + (2 if line.lstrip().startswith("- ") else 0)
+        if re.match(r"^[|>][+-]?\d*[+-]?\s*(?:#.*)?$", value):
+            block_column = key_column
+        elif UNTRUSTED_EXPRESSION.search(value):
+            bad.append(line.strip())
     return bad
 
 
@@ -184,6 +214,27 @@ class RuleFunctionTests(unittest.TestCase):
         text = "# note a:b\n  https://example.org/x\n  if: ${{ github.event_name == 'push' }}\n  cron: '0 3 * * 1'\n"
         self.assertEqual([], key_without_space(text))
 
+    def test_event_expression_in_a_run_line_fails(self):
+        self.assertEqual(['- run: echo "${{ github.event.pull_request.title }}"'],
+                         event_expression_in_run('      - run: echo "${{ github.event.pull_request.title }}"\n'))
+
+    def test_event_expression_in_a_run_block_fails(self):
+        text = "      - name: x\n        run: |\n          echo start\n          git checkout ${{ github.head_ref }}\n          echo ${{ github.ref_name }}\n"
+        self.assertEqual(["git checkout ${{ github.head_ref }}", "echo ${{ github.ref_name }}"], event_expression_in_run(text))
+
+    def test_event_expression_in_env_with_a_clean_run_passes(self):
+        text = ("      - name: x\n        env:\n          TITLE: ${{ github.event.pull_request.title }}\n"
+                "        run: |\n          echo \"$TITLE\"\n")
+        self.assertEqual([], event_expression_in_run(text))
+
+    def test_event_expression_outside_a_run_passes(self):
+        text = "concurrency:\n  group: ci-${{ github.ref }}\n      - uses: a/b@" + "a" * 40 + "\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n"
+        self.assertEqual([], event_expression_in_run(text))
+
+    def test_run_block_ends_at_the_next_key(self):
+        text = "        run: |\n          echo ok\n        env:\n          X: ${{ github.event.number }}\n"
+        self.assertEqual([], event_expression_in_run(text))
+
     def test_secret_in_comment_is_ignored(self):
         self.assertEqual([], secret_references("# No secret: nothing reads secrets.X here\n"))
 
@@ -214,6 +265,20 @@ class RealWorkflowTests(unittest.TestCase):
         for path in self.workflows():
             with self.subTest(workflow=path.name):
                 self.assertIsInstance(yaml.safe_load(path.read_text(encoding="utf-8")), dict)
+
+    def test_no_workflow_splices_an_event_expression_into_a_run_block(self):
+        for path in self.workflows():
+            with self.subTest(workflow=path.name):
+                self.assertEqual([], event_expression_in_run(path.read_text(encoding="utf-8")))
+
+    def test_dco_workflow_is_a_read_only_pull_request_check_named_dco(self):
+        text = (WORKFLOWS / "dco.yml").read_text(encoding="utf-8")
+        self.assertTrue(is_read_only(text))
+        self.assertRegex(text, r"(?m)^  dco:$")
+        self.assertRegex(text, r"(?m)^  pull_request:$")
+        self.assertNotIn("pull_request_target", re.sub(r"(?m)^\s*#.*$", "", text))
+        self.assertIn("persist-credentials: false", text)
+        self.assertIn("scripts/check-dco.sh", text)
 
     def test_every_workflow_declares_permissions(self):
         for path in self.workflows():
