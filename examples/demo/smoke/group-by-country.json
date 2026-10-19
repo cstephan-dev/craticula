@@ -4,6 +4,7 @@
   "valueCols": [
     { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "sum" },
     { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "avg" },
+    { "id": "quantity", "displayName": "Quantity", "field": "quantity", "aggFunc": "avg" },
     { "id": "quantity", "displayName": "Quantity", "field": "quantity", "aggFunc": "count" }
   ],
   "pivotCols": [], "pivotMode": false, "groupKeys": [],

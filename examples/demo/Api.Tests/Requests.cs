@@ -79,6 +79,43 @@ internal static class Requests
         }
         """;
 
+    /// <summary>A grouping with the average of a whole-number column (quantity, BIGINT): SQL Server returns an integer for it.</summary>
+    public static string GroupByWithQuantityAvg(string column) => $$"""
+        {
+          "startRow": 0, "endRow": 100,
+          "rowGroupCols": [ { "id": "{{column}}", "displayName": "{{column}}", "field": "{{column}}" } ],
+          "valueCols": [
+            { "id": "quantity", "displayName": "Quantity", "field": "quantity", "aggFunc": "avg" },
+            { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "avg" },
+            { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "sum" },
+            { "id": "quantity", "displayName": "Quantity", "field": "quantity", "aggFunc": "count" }
+          ],
+          "pivotCols": [], "pivotMode": false, "groupKeys": [],
+          "filterModel": null,
+          "sortModel": [ { "colId": "{{column}}", "sort": "asc" } ]
+        }
+        """;
+
+    /// <summary>The set-filter values request with a native date filter and a customFilters date range (inside the envelope): the
+    /// compiled statement binds date and datetime values as strings.</summary>
+    public const string DateFilteredCountryValues = """
+        { "setValuesRequest": { "colId": "country",
+          "filterModel": { "orderedAt": { "filterType": "date", "type": "greaterThan", "dateFrom": "2026-05-01 00:00:00", "dateTo": null } },
+          "customFilters": { "type": "comparison", "field": "shippedOn", "op": "inRange",
+            "from": { "type": "date", "value": "2026-05-10" }, "to": { "type": "date", "value": "2026-05-12" },
+            "fromInclusive": true, "toInclusive": false } } }
+        """;
+
+    /// <summary>The same with a datetime range of 90 minutes (zone UTC): few rows, so few countries.</summary>
+    public const string DatetimeFilteredCountryValues = """
+        { "setValuesRequest": { "colId": "country", "filterModel": {},
+          "customFilters": { "type": "comparison", "field": "orderedAt", "op": "inRange",
+            "from": { "type": "datetime", "value": "2025-06-01T00:00:00Z", "zone": "UTC" },
+            "to": { "type": "datetime", "value": "2025-06-01T01:30:00Z", "zone": "UTC" },
+            "fromInclusive": false, "toInclusive": true },
+          "requestContext": { "zone": "UTC" } } }
+        """;
+
     /// <summary>The same grouping on another column (country or category), ordered by that column.</summary>
     public static string GroupBy(string column) => GroupByCountry.Replace("country", column);
 
@@ -131,6 +168,16 @@ internal static class Requests
           "startRow": null, "endRow": null, {{NoGrouping}}
           "filterModel": { "status": { "filterType": "text", "type": "equals", "filter": "shipped" } },
           "sortModel": [ { "colId": "id", "sort": "desc" } ],
+          "exportFormat": "csv", "exportScope": "all"
+        }
+        """;
+
+    /// <summary>The whole table as CSV, ordered by id: more than one chunk of the export walk.</summary>
+    public static string FullExport => $$"""
+        {
+          "startRow": null, "endRow": null, {{NoGrouping}}
+          "filterModel": null,
+          "sortModel": [ { "colId": "id", "sort": "asc" } ],
           "exportFormat": "csv", "exportScope": "all"
         }
         """;

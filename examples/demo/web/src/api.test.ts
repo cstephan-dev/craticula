@@ -58,13 +58,20 @@ describe('api error mapping', () => {
 });
 
 describe('provider list', () => {
-  it('offers PostgreSQL, MongoDB, EF Core and SQLite in that order', () => {
+  it('offers PostgreSQL, MongoDB, EF Core, SQLite and SQL Server in that order', () => {
     expect(PROVIDERS).toEqual([
       { id: 'postgres', label: 'PostgreSQL' },
       { id: 'mongo', label: 'MongoDB' },
       { id: 'ef', label: 'EF Core' },
       { id: 'sqlite', label: 'SQLite' },
+      { id: 'sqlserver', label: 'SQL Server' },
     ]);
+  });
+
+  it('posts to the sqlserver routes', async () => {
+    const mock = stubFetch(async () => Response.json({ kind: 'sql', dialect: 'mssql', text: '', parameters: [] }));
+    await fetchQuery('sqlserver', request);
+    expect((mock.mock.calls[0] as unknown as [string])[0]).toBe('/api/sqlserver/query');
   });
 
   it('posts to the sqlite routes', async () => {

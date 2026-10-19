@@ -79,8 +79,8 @@ public static class SeedCommand
     /// <summary>
     /// What counts as that provider failing (printed with its hint, exit 2, the others still run): an engine that is down, plus the
     /// ordinary setup failures of a file database: any SQLite error (a read-only or not-a-database file) and the file system's own
-    /// (a folder that cannot be created or written). Anything else is a bug and still ends the command.
+    /// (a folder that cannot be created or written), and an optional engine whose setting is missing. Anything else is a bug and still ends the command.
     /// </summary>
     private static bool IsSeedFailure(Exception ex) =>
-        EngineFailures.IsUnavailable(ex) || ex is SqliteException or IOException or UnauthorizedAccessException;
+        EngineFailures.IsUnavailable(ex) || ex is SqliteException or IOException or UnauthorizedAccessException or SeedSettingException;
 }

@@ -11,7 +11,8 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
 is up) ends with `all 24 scenarios are equal on all 4 providers (postgres, ef, mongo, sqlite)`. (SQLite is a file the seed creates; see
-[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.)
+[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.) SQL Server is an optional fifth provider that starts only on request:
+see [SQL Server](#sql-server-the-sqlserver-provider).
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -49,7 +50,7 @@ The translation is in `web/src/inRange.ts`, shared by both pages and the CSV exp
 - Docker with the Compose plugin
 - .NET 10 SDK
 - Node 20.19 or newer
-- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page)
+- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page); 51433 (SQL Server) only when you start that profile
 
 All connection values have defaults that match `docker-compose.yml`, so no environment variable is needed. The databases
 use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
@@ -59,6 +60,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
 | Port | How |
 |---|---|
 | PostgreSQL, MongoDB | `DEMO_PG_PORT=55434 DEMO_MONGO_PORT=57018 docker compose up -d`, then give the same ports to the seed and the API with `DEMO_PG="Host=127.0.0.1;Port=55434;Username=demo;Password=demo;Database=demo"` and `DEMO_MONGO="mongodb://127.0.0.1:57018"` |
+| SQL Server | `DEMO_SQLSERVER_PORT=51434 docker compose --profile sqlserver up -d`, then use the same port in `DEMO_SQLSERVER` (see [SQL Server](#sql-server-the-sqlserver-provider)) |
 | API | `dotnet run --project Api --urls http://127.0.0.1:5081`, then change the `/api` target in `web/vite.config.ts` and pass `--api http://127.0.0.1:5081` to `smoke.sh` |
 | Page | `npm run dev -- --port 5174` (the API's CORS list only matters if you skip the dev proxy) |
 
@@ -211,12 +213,62 @@ compose profile: SQLite is always on, and `/api/health` always lists `sqlite`. T
 **Package.** The demo adds `Microsoft.Data.Sqlite` 10.0.11 (the version the library's tests use; central version in `Directory.Packages.props`). It is a
 new library, not named in the approved stack, and needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
 
+## SQL Server (the `sqlserver` provider)
+
+The fifth provider reads the same orders from **SQL Server 2022** through `Craticula.Dapper` and `MssqlDialect`. It is optional and heavy, so
+it starts only on request and the API lists it only when `DEMO_SQLSERVER` is set. The code is `Api/Grid/SqlServerGridService.cs`,
+`Api/Grid/SqlServerBinding.cs` (the `@p1..@pn` binding for the set-values call) and `Api/Seed/SqlServerSeeder.cs`.
+
+**Licence.** `docker-compose.yml` sets `ACCEPT_EULA=Y`. **Running this profile accepts Microsoft's SQL Server licence** (Developer edition, free for
+development and testing, not for production). If you do not accept it, do not start the profile. The `sa` password in the compose file
+(`MSSQL_SA_PASSWORD`) is a local throw-away credential like the `demo` / `demo` ones; the port listens on `127.0.0.1` only.
+
+**Cost.** The image is `mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04` (2.2 GB on disk, about 580 MB compressed to pull), the container wants about 2 GB of RAM, and it is ready a few seconds after it starts on a fast machine
+(measured: 5 seconds from `up -d` to healthy; the healthcheck allows about three minutes for a slow one). Do not start it on a machine that is short of memory.
+
+```bash
+docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine; SQL Server is the only one so far)
+export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"
+dotnet run --project Api -- seed sqlserver               # SQL Server: 20000 rows in table orders.
+dotnet run --project Api                                 # /api/health now lists sqlserver
+docker compose --profile sqlserver stop                  # when done: stops it, keeps the volume
+```
+
+- **The connection string.** `DEMO_SQLSERVER` has no default in code. `TrustServerCertificate=true` is needed because the container's certificate is
+  self-signed and the driver encrypts by default (without it the login fails in the pre-login handshake, and the API answers 500, not 503, since it is a setting error). `Database=demo` is created by the seed.
+  Change the port with `DEMO_SQLSERVER_PORT` on `docker compose` and in the string.
+- **Seed.** `seed sqlserver` creates database `demo` if it is missing, drops and recreates table `orders` and loads the same rows with `SqlBulkCopy` in one transaction. It is not a default target:
+  plain `seed` still fills PostgreSQL, MongoDB and the SQLite file.
+- **Types.** `BIGINT`, `NVARCHAR(450)`, `DECIMAL(12,2)`, `DATETIME2(3)` (never the coarse `DATETIME`), `DATE`, `BIT`. The groupable columns (country, category, status) carry the binary collation
+  `Latin1_General_100_BIN2` so group buckets and drill-down are exact (GRP-2); the other text keeps the server's case-insensitive default.
+- **Stopped container.** The API answers 503 `backend-unavailable` after about 5 seconds (the connect timeout; a refused connection is retried until it expires).
+  Only connection failures count (error numbers 2, 53, -1, -2, 258, 4060, 11001, 18456 and a refused socket); any other SQL Server error is a 500.
+
+**Differences from PostgreSQL, measured on SQL Server 2022 CU14 and handled in the open**
+
+1. **`AVG` over a whole-number column returns an integer.** The library renders `AVG` bare, and SQL Server's `AVG(BIGINT)` is a `BIGINT`: the grouped `quantity` average is 25
+   where PostgreSQL gives 25.418... `smoke.sh` (rule for `sqlserver` only, key `quantity_avg`) and `Api.Tests` require the baseline value truncated toward zero, exactly; the
+   scenario "group by country" carries that average for this reason, and the line after the table names where the rule was used.
+2. **`AVG` over the decimal column has six decimals** (12428.503751 against 12428.503751987...), inside the 1e-6 relative tolerance every provider's `_avg` already has.
+3. **Datetimes need a stated kind.** `DATETIME2` has no zone, so the driver returns a `DateTime` of kind Unspecified and the JSON would lose the trailing `Z`.
+   `SqlServerGridService` marks them UTC (the seed stores UTC instants), so the answer equals the others to the millisecond.
+4. **CSV is walked a page at a time.** `DapperExportStream`'s keyset query selects the sort key twice when it is also an export column (`SELECT [id], ..., [id] ... ORDER BY [id]`) and SQL Server
+   answers error 209 "Ambiguous column name" for every export that includes `id`. This is a defect in the library's Dapper adapter on SQL Server (the Docker tier has no live
+   test of it), reported with this demo; until it is fixed the service pages through the grid entry point (5,000 rows a chunk, ordered by the stable key). Rows and bytes equal the other providers.
+5. **No difference for non-ASCII case.** `SÖHNE` and `söhne` both find `Müller, Söhne & Co`, as on PostgreSQL (the compiled `COLLATE Latin1_General_CI_AS` folds beyond ASCII; SQLite does not).
+
+Set-values filters on dates and datetimes bind the values as strings, like the adapter, and SQL Server converts them (tested with a date and a datetime filter).
+
+**Package.** The demo adds `Microsoft.Data.SqlClient` 7.1.0 (the library's version; central version in `Directory.Packages.props`) and pins `System.Security.Cryptography.Pkcs` 10.0.13, because SqlClient 7.1.0
+depends on 9.0.18, which has a high and a moderate advisory (the restore fails with NU1903 otherwise; the library's integration tests carry the same pin). SqlClient is a new library for the demo, and its use under `examples/demo/Api` is
+wider than the approved stack's wording for it (the integration tests); the Engineering Lead's approval is still pending at the time of writing.
+
 ## Optional providers and seeding a subset
 
 PostgreSQL, MongoDB, EF Core and SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
 (an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
-page does not offer it. This lets you run the demo with any subset of its databases. No optional engine ships yet; the later
-provider sections of this README name each one's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
+page does not offer it. This lets you run the demo with any subset of its databases. One optional engine ships today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`); the
+provider sections of this README name each engine's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
 start the heavy engines only on request; the umbrella profile name is `engines`.
 
 `seed` takes an optional list of providers:
@@ -225,6 +277,7 @@ start the heavy engines only on request; the umbrella profile name is `engines`.
 dotnet run --project Api -- seed                  # the default: postgres, mongo and sqlite
 dotnet run --project Api -- seed mongo            # only MongoDB
 dotnet run --project Api -- seed sqlite           # only the SQLite file (no Docker needed)
+dotnet run --project Api -- seed sqlserver        # only SQL Server (needs the profile and DEMO_SQLSERVER)
 dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
 ```
 
@@ -238,6 +291,7 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 
 ```bash
 docker compose stop          # stop the databases, keep the data
+docker compose --profile sqlserver stop   # stop SQL Server too (a plain `stop` leaves a profile service running)
 docker compose down -v       # remove the databases and their data
 docker compose up -d && dotnet run --project Api -- seed   # start again from a clean state
 ```
@@ -252,6 +306,9 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `Cannot connect to the Docker daemon` | Start Docker Desktop or the Docker service, then run `docker compose up -d` again. |
 | The grid is empty | The seed has not run, or you ran `docker compose down -v`. Run `dotnet run --project Api -- seed`. |
 | A red banner with `backend-unavailable` (HTTP 503) | The database for that provider is down or unreachable. Check `docker compose ps`, then reload. For `sqlite` the file is missing or locked: run `dotnet run --project Api -- seed sqlite`. |
+| `seed sqlserver` says `DEMO_SQLSERVER is not set`, or a red banner for `sqlserver` | Start the profile (`docker compose --profile sqlserver up -d --wait`), set `DEMO_SQLSERVER` (see [SQL Server](#sql-server-the-sqlserver-provider)), run `seed sqlserver`, restart the API. |
+| `sqlserver` answers 500 with a pre-login handshake error | The connection string lacks `TrustServerCertificate=true`. |
+| The SQL Server container exits at start | It needs about 2 GB of RAM; check `docker logs demo-sqlserver-1`. |
 | `API: unreachable` in the header | The API is not running on port 5080. Start it (step 3). |
 | A watermark and console warnings | Normal: AG Grid Enterprise evaluation mode (see above). |
 | `smoke.sh` exits 2 | Read its message: it names the API address or the provider that failed. |
@@ -260,11 +317,11 @@ Stop the API and the page with Ctrl+C in their terminals.
 
 | Path | What |
 |---|---|
-| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`), the seed (`Api/Seed/`) |
-| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down) |
+| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`), the seed (`Api/Seed/`) |
+| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server comparisons run when `DEMO_SQLSERVER` is set and the engine answers, and skip with one reason otherwise) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
 | `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL and MongoDB mappings |
 | `smoke.sh`, `smoke/` | The cross-provider check and its request files |
-| `docker-compose.yml` | PostgreSQL 16 and MongoDB 7 |
+| `docker-compose.yml` | PostgreSQL 16 and MongoDB 7; SQL Server 2022 behind the `sqlserver` and `engines` profiles |
 
 To run the API tests: `dotnet test Api.Tests` (needs the seeded databases from step 1 and 2).

@@ -16,9 +16,12 @@
 #
 # Every other provider is compared with postgres, the baseline. Equality is exact (numbers by value: 12877.0 equals 12877), except avg: PostgreSQL averages decimals with 16 digits and MongoDB with 28, so keys ending in
 # "_avg" are compared with a relative tolerance of 1e-6. The divergences are data: the RULES table at the top of the Python block
-# lists them per provider. Today it has one entry: for sqlite only, keys ending "_sum" compare with a relative tolerance of 1e-9
+# lists them per provider. Today it has two entries. For sqlite only, keys ending "_sum" compare with a relative tolerance of 1e-9
 # (|a-b| <= 1e-9 * max(1, |a|, |b|)), because SQLite stores NUMERIC as floating point and a sum can differ in the last digits.
-# When that tolerance was needed, one line after the table lists where. CSV exports are compared line by line, cell by cell, in full,
+# For sqlserver only, the key "quantity_avg" (the average of a BIGINT column) must equal the baseline value truncated toward zero:
+# SQL Server's AVG over an integer type returns an integer, and the library renders AVG bare (no cast), so 25.418... arrives as 25.
+# The rule is exact, not a tolerance. (The average of the decimal column amount needs no rule: SQL Server returns 6 decimals,
+# inside the 1e-6 relative tolerance.) When a rule was needed, one line after the table lists where. CSV exports are compared line by line, cell by cell, in full,
 # after line endings are normalised: header and every data row must be identical on every provider, with the same
 # by-value rule for plain decimals (PostgreSQL writes an amount as 20568.00, MongoDB as 20568).
 #
@@ -140,9 +143,11 @@ PROVIDERS = tuple(sys.argv[2:])
 BASE, OTHERS = PROVIDERS[0], PROVIDERS[1:]
 ENV_ERROR, DIFFERENT = 2, 1
 
-# Where a provider legitimately differs from the baseline, as data: provider -> {key suffix: relative tolerance}. Numbers under a key
-# with that suffix compare as |a-b| <= tol * max(1, |a|, |b|). Everything not listed here is exact (except the avg rule below, for all).
-RULES = {"sqlite": {"_sum": 1e-9}}
+# Where a provider legitimately differs from the baseline, as data: provider -> {key suffix: rule}. A number is a relative tolerance:
+# numbers under a key with that suffix compare as |a-b| <= tol * max(1, |a|, |b|). TRUNCATE means the value must equal the baseline
+# truncated toward zero (exact). Everything not listed here is exact (except the avg rule below, for all).
+TRUNCATE = "truncate"
+RULES = {"sqlite": {"_sum": 1e-9}, "sqlserver": {"quantity_avg": TRUNCATE}}
 AVG_RULE = {"_avg": 1e-6}
 used = {}  # (scenario, provider, key) -> how many values were equal only because of a RULES entry
 current_scenario = ""
@@ -157,7 +162,7 @@ def read(n, provider):
 
 
 def same(a, b, key="", provider=None, track=False):
-    """Exact, except numbers under a key ending _avg (relative 1e-6) and the provider's RULES (relative, per key suffix)."""
+    """Exact, except numbers under a key ending _avg (relative 1e-6) and the provider's RULES (relative or truncated, per key suffix)."""
     if isinstance(a, dict) and isinstance(b, dict):
         return a.keys() == b.keys() and all(same(a[k], b[k], k, provider, track) for k in a)
     if isinstance(a, list) and isinstance(b, list):
@@ -168,7 +173,7 @@ def same(a, b, key="", provider=None, track=False):
             return True  # 12877.0 and 12877 are the same number: PostgreSQL writes numeric(12,2) with a ".0", MongoDB without
         for suffix, tol in RULES.get(provider, {}).items():
             if key.endswith(suffix):
-                ok = abs(a - b) <= tol * max(1, abs(a), abs(b))
+                ok = b == math.trunc(a) if tol == TRUNCATE else abs(a - b) <= tol * max(1, abs(a), abs(b))
                 if ok and track:
                     used[(current_scenario, provider, key)] = used.get((current_scenario, provider, key), 0) + 1
                 return ok
@@ -337,7 +342,7 @@ for row in table:
 print()
 if used:
     parts = [f"{scenario}: {provider} {key} ({count} value{'s' if count != 1 else ''})" for (scenario, provider, key), count in used.items()]
-    print("smoke.sh: a RULES tolerance was needed (equal only within it, not exactly): " + "; ".join(parts) + ".")
+    print("smoke.sh: a RULES entry was needed (equal only by that rule, not exactly): " + "; ".join(parts) + ".")
 if failures:
     print(f"smoke.sh: {failures} of {len(table)} scenarios differ or lack the expected 400.")
     sys.exit(DIFFERENT)

@@ -1,3 +1,5 @@
+using Demo.Api.Seed;
+
 namespace Demo.Api.Grid;
 
 /// <summary>
@@ -8,12 +10,19 @@ namespace Demo.Api.Grid;
 public sealed record OptionalProvider(string Name, string EnvVar, Action<IServiceCollection, string> Register);
 
 /// <summary>
-/// The optional engines the demo knows. Empty on purpose: the SQL Server, MySQL and OpenSearch tasks each add one entry
-/// here (SQLite is always on and is registered in <c>DemoApp</c>). Tests pass their own list to <c>DemoApp.Build</c>.
+/// The optional engines the demo knows: SQL Server today; the MySQL and OpenSearch tasks each add one entry here (SQLite is
+/// always on and is registered in <c>DemoApp</c>). Tests pass their own list to <c>DemoApp.Build</c>.
 /// </summary>
 public static class OptionalProviders
 {
-    public static IReadOnlyList<OptionalProvider> All { get; } = [];
+    public static IReadOnlyList<OptionalProvider> All { get; } =
+    [
+        new OptionalProvider(
+            "sqlserver",
+            DemoSettings.SqlServerEnvVar,
+            (services, setting) => services.AddSingleton<IGridService>(provider =>
+                new SqlServerGridService(setting, provider.GetRequiredService<GridRequestPreparer>())))
+    ];
 
     /// <summary>Registers each provider whose setting is present; returns the names registered, in order.</summary>
     public static IReadOnlyList<string> RegisterConfigured(

@@ -12,7 +12,7 @@ public sealed record SeedTarget(
     string Hint,
     bool Default = true);
 
-/// <summary>The seedable providers, by the same names as the API routes. The later engine tasks add theirs to <see cref="All"/>.</summary>
+/// <summary>The seedable providers, by the same names as the API routes. The MySQL and OpenSearch tasks add theirs to <see cref="All"/>.</summary>
 public static class SeedTargets
 {
     public static IReadOnlyList<SeedTarget> All { get; } =
@@ -31,6 +31,16 @@ public static class SeedTargets
             "sqlite",
             rows => SqliteSeeder.SeedAsync(DemoSettings.SqlitePath, rows),
             count => $"SQLite: {count} rows in table orders ({DemoSettings.SqlitePath}).",
-            "SQLite needs no server. Is the file writable and not locked by another process? Set DEMO_SQLITE to use another path.")
+            "SQLite needs no server. Is the file writable and not locked by another process? Set DEMO_SQLITE to use another path."),
+        // Optional and heavy: not a default target. `seed sqlserver` fills it; without DEMO_SQLSERVER the seeder says what to set.
+        new SeedTarget(
+            "sqlserver",
+            rows => SqlServerSeeder.SeedAsync(
+                DemoSettings.OptionalSetting(DemoSettings.SqlServerEnvVar)
+                    ?? throw new SeedSettingException($"{DemoSettings.SqlServerEnvVar} is not set."),
+                rows),
+            count => $"SQL Server: {count} rows in table orders.",
+            "Is `docker compose --profile sqlserver up -d` running and healthy? Set DEMO_SQLSERVER to its connection string (README.md has the one for the compose file).",
+            Default: false)
     ];
 }

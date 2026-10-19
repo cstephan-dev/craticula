@@ -14,6 +14,10 @@ public static class DemoSettings
 
     public const string MongoDatabase = "demo";
 
+    /// <summary>The environment variable holding the SQL Server connection string; the engine is on only when it is set.
+    /// There is no default in code: README.md gives the one that matches docker-compose.yml.</summary>
+    public const string SqlServerEnvVar = "DEMO_SQLSERVER";
+
     /// <summary>The environment variable that moves the SQLite file.</summary>
     public const string SqliteEnvVar = "DEMO_SQLITE";
 

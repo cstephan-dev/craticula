@@ -1,0 +1,66 @@
+using System.Collections.Concurrent;
+using Microsoft.Data.SqlClient;
+
+namespace Demo.Api.Tests;
+
+/// <summary>
+/// Why an optional engine's tests cannot run, or null when they can. One clear reason per case: the variable is unset, the engine
+/// does not answer (a real login is tried, not only a port), or PostgreSQL and MongoDB (the baseline) are down. Probed once per
+/// variable per run. Each engine task adds its own probe to <see cref="Probes"/>.
+/// </summary>
+internal static class EngineProbe
+{
+    private static readonly ConcurrentDictionary<string, string?> Cache = new();
+
+    private static readonly Dictionary<string, Func<string, string?>> Probes = new()
+    {
+        [Seed.DemoSettings.SqlServerEnvVar] = ProbeSqlServer
+    };
+
+    public static string? SkipReason(string envVar) => Cache.GetOrAdd(envVar, Compute);
+
+    private static string? Compute(string envVar)
+    {
+        var setting = Environment.GetEnvironmentVariable(envVar);
+        if (string.IsNullOrWhiteSpace(setting))
+        {
+            return $"{envVar} is not set. Start the engine with its compose profile, seed it with `dotnet run --project Api -- seed <provider>`, "
+                + "and set the variable to its connection string (README.md of examples/demo).";
+        }
+
+        if (!Probes.TryGetValue(envVar, out var probe))
+        {
+            return $"No probe is defined for {envVar} (add it to EngineProbe).";
+        }
+
+        return probe(setting) ?? new RequiresDatabasesFactAttribute().Skip;
+    }
+
+    private static string? ProbeSqlServer(string setting)
+    {
+        try
+        {
+            var builder = new SqlConnectionStringBuilder(setting) { ConnectTimeout = 3, ConnectRetryCount = 0 };
+            using var connection = new SqlConnection(builder.ConnectionString);
+            connection.Open();
+            return null;
+        }
+        catch (Exception ex) when (ex is SqlException or ArgumentException or InvalidOperationException)
+        {
+            return $"SQL Server does not answer at the {Seed.DemoSettings.SqlServerEnvVar} connection string ({ex.GetType().Name}). "
+                + "Is `docker compose --profile sqlserver up -d` healthy and the database seeded (`seed sqlserver`)?";
+        }
+    }
+}
+
+/// <summary>A [Fact] skipped, with the reason, unless the optional engine named by <c>envVar</c> answers (and PostgreSQL and MongoDB do).</summary>
+public sealed class RequiresEngineFactAttribute : FactAttribute
+{
+    public RequiresEngineFactAttribute(string envVar) => Skip = EngineProbe.SkipReason(envVar);
+}
+
+/// <summary>A [Theory] with the same skip rule as <see cref="RequiresEngineFactAttribute"/>.</summary>
+public sealed class RequiresEngineTheoryAttribute : TheoryAttribute
+{
+    public RequiresEngineTheoryAttribute(string envVar) => Skip = EngineProbe.SkipReason(envVar);
+}
