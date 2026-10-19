@@ -229,7 +229,7 @@ development and testing, not for production). If you do not accept it, do not st
 (measured: 5 seconds from `up -d` to healthy; the healthcheck allows about three minutes for a slow one). Do not start it on a machine that is short of memory.
 
 ```bash
-docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine: SQL Server and MySQL so far)
+docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine: SQL Server, MySQL and OpenSearch)
 export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"
 dotnet run --project Api -- seed sqlserver               # SQL Server: 20000 rows in table orders.
 dotnet run --project Api                                 # /api/health now lists sqlserver
@@ -431,7 +431,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `seed mysql` says `Access denied` | `DEMO_MYSQL` has another user or password than the compose file (`demo` / `demo`), or a volume from an earlier run holds other credentials: remove only that container and its volume (`docker compose --profile mysql rm -sf mysql`, then `docker volume rm` of the `demo-mysql-data` volume from `docker volume ls`), never `down -v`, which also removes the PostgreSQL and MongoDB data. |
 | A contains filter finds a name without the accent on `mysql` only | Expected: MySQL's default collation ignores accents (see [MySQL](#mysql-the-mysql-provider)). |
 | `seed opensearch` says `DEMO_OPENSEARCH is not set`, or a red banner for `opensearch` | Start the profile (`docker compose --profile opensearch up -d --wait`), set `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)), run `seed opensearch`, restart the API. |
-| The OpenSearch container exits at start | Read `docker logs demo-opensearch-1`. A `vm.max_map_count` message: `sudo sysctl -w vm.max_map_count=262144`. It also needs about 1 GB of free RAM. |
+| The OpenSearch container exits at start | Read `docker logs demo-opensearch-1`. A `vm.max_map_count` message: `sudo sysctl -w vm.max_map_count=262144`. It also needs about 1.5 GB of free RAM (the container idles near 1 GiB). |
 | A banner "Not supported on this provider" on `opensearch` | Expected for the two grouped shapes the README lists as unsupported; the message says what to do instead. |
 | The OpenSearch grid shows no total, only "more rows" | Expected above 10,000 rows: the count is unknown there (see [OpenSearch](#opensearch-the-opensearch-provider)). |
 | `API: unreachable` in the header | The API is not running on port 5080. Start it (step 3). |

@@ -13,8 +13,9 @@ namespace Demo.Api.Seed;
 /// <c>keyword</c> (exact, what term, wildcard and the group key address) and <c>normalized</c> (a lowercase normalizer, what case-insensitive sort
 /// and range address, SEM-1: a schema without it makes the compiler refuse the sort); <c>int64</c> is <c>long</c>, <c>decimal</c> is <c>double</c>
 /// (OpenSearch computes every sum and average in double precision anyway), a datetime is a <c>date</c> in <c>strict_date_optional_time</c>
-/// and a date a <c>date</c> in <c>strict_date</c>. The document id is the order id. Field names and sub-fields come from
-/// <c>orders.schema.json</c> (<c>physical.search</c>), so the index and the compiler cannot drift. One shard and no replica: a single node
+/// and a date a <c>date</c> in <c>strict_date</c>. The document id is the order id. The mapping's field names and sub-fields come from
+/// <c>orders.schema.json</c> (<c>physical.search</c>), so the mapping and the compiler cannot drift; the property names of the documents
+/// (<c>BulkBody</c>) are written out and must match them. One shard and no replica: a single node
 /// is then green.
 /// </summary>
 public static class OpenSearchSeeder
@@ -34,7 +35,7 @@ public static class OpenSearchSeeder
         var target = ConnectionStringGuard.Build(
             url,
             value => OpenSearchGridService.ParseUrl(value),
-            () => new SeedSettingException(ConnectionStringGuard.Message(DemoSettings.OpenSearchEnvVar, "OpenSearch")));
+            () => new SeedSettingException(ConnectionStringGuard.Message(DemoSettings.OpenSearchEnvVar, "OpenSearch", "URL")));
         var client = new OpenSearchLowLevelClient(new ConnectionConfiguration(target)
             .DisablePing()
             .RequestTimeout(TimeSpan.FromMinutes(2)));

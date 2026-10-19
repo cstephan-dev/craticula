@@ -17,7 +17,7 @@ namespace Demo.Api.Grid;
 /// paging cursor (PIT and <c>search_after</c>, or a composite <c>after</c> key) lives in that cache, so a restart of the API loses it
 /// and the next deep page walks from the start. The AG Grid request carries no grid session id, so every request uses one fixed id
 /// (<see cref="GridSession"/>); the cache key also hashes the compiled filter and sort, so two grids with different queries do not
-/// share a cursor, but two grids with the same query and different positions take turns.</para>
+/// share a cursor, but two grids with the same query and different positions take turns. With two such grids reading at once past 10,000 rows, one request can close the PIT the other just read from; that request then answers 500 (a known demo limit with one fixed session id; one browser tab does not hit it).</para>
 /// <para>Grouped requests go through the adapter. The few shapes that PostgreSQL answers and OpenSearch cannot are named in
 /// <see cref="OpenSearchShapes"/> and answer <see cref="Errors.UnsupportedShapeException"/> (HTTP 400, kind <c>unsupported-shape</c>).</para>
 /// </summary>

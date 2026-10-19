@@ -71,7 +71,7 @@ public static class OptionalProviders
                         provider.Validate(value);
                         return 0;
                     },
-                    () => new InvalidOperationException(ConnectionStringGuard.Message(provider.EnvVar, provider.Engine ?? provider.Name)));
+                    () => new InvalidOperationException(ConnectionStringGuard.Message(provider.EnvVar, provider.Engine ?? provider.Name, provider.Name == "opensearch" ? "URL" : "connection string")));
             }
 
             provider.Register(services, setting);

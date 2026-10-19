@@ -67,7 +67,8 @@ public static class EngineFailures
     /// <summary>
     /// An OpenSearch call that failed because the cluster cannot be reached or says it is overloaded (HTTP 503 or 429), or because the
     /// transport failed: no HTTP status, and the transport exception inside. Measured against OpenSearch.Client 2.1.0 (every path
-    /// through the adapter, the distinct-values call and the export): a refused port and a host name that does not resolve carry an
+    /// through the adapter and the distinct-values call; the export stream does not pass the HTTP status on, so an overloaded cluster
+    /// answers <c>export.csv</c> with a 500: a library gap): a refused port and a host name that does not resolve carry an
     /// <see cref="HttpRequestException"/> (inner <see cref="SocketException"/>); a server that accepts and never answers carries a
     /// <see cref="TaskCanceledException"/> (inner <see cref="TimeoutException"/>) after the 10 s request timeout. A 4xx or other 5xx
     /// answer from a running cluster (a bad mapping, a rejected body) has a status and is a bug: it is not listed.

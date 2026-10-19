@@ -78,8 +78,9 @@ public sealed class ApiErrorMiddleware(RequestDelegate next, ILogger<ApiErrorMid
             SqlCompilationException or MongoCompilationException or DapperCompilationException
                 or EfCoreCompilationException or MongoDriverCompilationException or SearchCompilationException
                 => (bad, "compilation-failed", exception.Message),
-            // The adapter's own refusals have no inner exception; a failed OpenSearch call always carries one (the transport exception
-            // or the status) and falls through to the engine-failure test or to a logged 500.
+            // The adapter's own refusals and the value reader's failures (a stored value that does not fit its mapped type) have no inner
+            // exception; a failed OpenSearch call always carries one (the transport exception or the status) and falls through to the
+            // engine-failure test or to a logged 500.
             OpenSearchClientCompilationException { InnerException: null } => (bad, "compilation-failed", exception.Message),
             CsvWriterException e => (bad, "export-failed", e.Message),
             // Raised by Kestrel/ASP.NET itself: a body over the 1 MiB limit (413) or a body that cannot be read (400).

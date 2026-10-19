@@ -8,8 +8,8 @@ namespace Demo.Api.Grid;
 /// </summary>
 public static class ConnectionStringGuard
 {
-    public static string Message(string envVar, string engine) =>
-        $"{envVar} is not a valid {engine} connection string: a keyword or value is malformed (the setting is not echoed).";
+    public static string Message(string envVar, string engine, string what = "connection string") =>
+        $"{envVar} is not a valid {engine} {what}: a keyword or value is malformed (the setting is not echoed).";
 
     /// <summary>Runs <paramref name="build"/>; a malformed string becomes the exception <paramref name="invalid"/> makes (no inner exception).</summary>
     public static T Build<T>(string connectionString, Func<string, T> build, Func<Exception> invalid)
