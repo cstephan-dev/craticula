@@ -24,6 +24,7 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="MySqlConnector" />
     <!-- Not used by name: lifts SqlClient's transitive System.Security.Cryptography.Pkcs to a patched version (Directory.Packages.props). -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>

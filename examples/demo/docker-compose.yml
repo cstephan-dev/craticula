@@ -6,10 +6,11 @@
 # it starts only when one of its profiles is asked for:
 #   docker compose --profile sqlserver up -d   one engine, by its own profile
 #   docker compose --profile engines up -d     every optional engine at once (the umbrella profile)
+#   docker compose --profile mysql up -d       the same for MySQL
 # Every optional service lists its own profile AND `engines`. postgres and mongo have no profile: they always start.
 # The API lists an optional engine only when its connection variable is set (see README.md), and
-# `dotnet run --project Api -- seed <provider>` fills just the named provider. Today `sqlserver` is the one real optional
-# service; the MySQL and OpenSearch tasks add theirs. Example block (commented out):
+# `dotnet run --project Api -- seed <provider>` fills just the named provider. Today `sqlserver` and `mysql` are the two
+# real optional services (`engines` starts both); the OpenSearch task adds its own. Example block (commented out):
 #
 #   example-engine:
 #     image: example/engine:1
@@ -72,7 +73,32 @@ services:
       retries: 40
       start_period: 20s
 
+  # MySQL 8.4 (the image the library's Docker tier uses). MySQL Community needs no licence acceptance. MariaDB is not covered:
+  # its collations and some behaviour differ, and the library has no fixtures for it. User demo / password demo / database demo
+  # are local throw-away credentials like the PostgreSQL ones, only reachable on 127.0.0.1; the root password is random and never
+  # needed (the root account is not used). The first start initialises the data directory (tens of seconds on a slow disk), so the
+  # healthcheck waits before it counts failures.
+  mysql:
+    image: mysql:8.4.11
+    profiles: ["mysql", "engines"]
+    environment:
+      MYSQL_DATABASE: demo
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: demo
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    ports:
+      - "127.0.0.1:${DEMO_MYSQL_PORT:-53306}:3306"
+    volumes:
+      - demo-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u demo -pdemo --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
 volumes:
   demo-pg-data:
   demo-mongo-data:
   demo-sqlserver-data:
+  demo-mysql-data:

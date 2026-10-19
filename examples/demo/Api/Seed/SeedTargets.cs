@@ -12,7 +12,7 @@ public sealed record SeedTarget(
     string Hint,
     bool Default = true);
 
-/// <summary>The seedable providers, by the same names as the API routes. The MySQL and OpenSearch tasks add theirs to <see cref="All"/>.</summary>
+/// <summary>The seedable providers, by the same names as the API routes. The OpenSearch task adds its own to <see cref="All"/>.</summary>
 public static class SeedTargets
 {
     public static IReadOnlyList<SeedTarget> All { get; } =
@@ -41,6 +41,15 @@ public static class SeedTargets
                 rows),
             count => $"SQL Server: {count} rows in table orders.",
             "Is `docker compose --profile sqlserver up -d` running and healthy? Set DEMO_SQLSERVER to its connection string (README.md has the one for the compose file).",
+            Default: false),
+        new SeedTarget(
+            "mysql",
+            rows => MySqlSeeder.SeedAsync(
+                DemoSettings.OptionalSetting(DemoSettings.MySqlEnvVar)
+                    ?? throw new SeedSettingException($"{DemoSettings.MySqlEnvVar} is not set."),
+                rows),
+            count => $"MySQL: {count} rows in table orders.",
+            "Is `docker compose --profile mysql up -d` running and healthy? Set DEMO_MYSQL to its connection string (README.md has the one for the compose file).",
             Default: false)
     ];
 }

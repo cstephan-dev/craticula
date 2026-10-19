@@ -4,6 +4,7 @@ using Demo.Api.Seed;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using MongoDB.Driver;
+using MySqlConnector;
 using Npgsql;
 
 namespace Demo.Api.Errors;
@@ -25,6 +26,16 @@ public static class EngineFailures
     /// </summary>
     public static readonly ImmutableHashSet<int> SqlServerConnectionFailureNumbers = [2, 53, -1, -2, 258, 4060, 11001, 18456];
 
+    /// <summary>
+    /// MySqlConnector reports every failure to reach the server as <c>MySqlException.Number</c> 1042
+    /// (<see cref="MySqlErrorCode.UnableToConnectToHost"/>), measured against MySQL 8.4.11 with 2.6.2: a refused port, a stopped
+    /// container, a host name that does not resolve, an unroutable address and a server that accepts the connection and never
+    /// answers (message "Connect Timeout expired.", inner MySqlException). None has an inner <see cref="SocketException"/>.
+    /// A refused login (1045 access denied, 1044 no access to the database) is a setting error, and any statement error is a bug:
+    /// both stay a 500.
+    /// </summary>
+    public static readonly ImmutableHashSet<int> MySqlConnectionFailureNumbers = [(int)MySqlErrorCode.UnableToConnectToHost];
+
     // Order does not matter: the first predicate that matches wins and every match means the same thing.
     private static ImmutableArray<Func<Exception, bool>> declared =
     [
@@ -37,6 +48,9 @@ public static class EngineFailures
         // SQL Server: the server cannot be reached or refuses the login, see SqlServerConnectionFailureNumbers. Any other
         // SqlException (a bad statement, a missing table) is a bug and stays a 500.
         exception => exception is SqlException sql && IsSqlServerUnavailable(sql),
+        // MySQL: the server cannot be reached, see MySqlConnectionFailureNumbers. Any other MySqlException (a refused login, a bad
+        // statement, a missing table) stays a 500.
+        exception => exception is MySqlException mysql && MySqlConnectionFailureNumbers.Contains(mysql.Number),
         exception => exception is TimeoutException,
         exception => exception is SocketException
     ];

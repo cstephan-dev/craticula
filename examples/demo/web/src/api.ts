@@ -1,6 +1,6 @@
 import type { IServerSideGetRowsRequest } from 'ag-grid-community';
 
-export type Provider = 'postgres' | 'mongo' | 'ef' | 'sqlite' | 'sqlserver';
+export type Provider = 'postgres' | 'mongo' | 'ef' | 'sqlite' | 'sqlserver' | 'mysql';
 
 export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'postgres', label: 'PostgreSQL' },
@@ -8,6 +8,7 @@ export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'ef', label: 'EF Core' },
   { id: 'sqlite', label: 'SQLite' },
   { id: 'sqlserver', label: 'SQL Server' },
+  { id: 'mysql', label: 'MySQL' },
 ];
 
 /** What the switch offers while the API's provider list is unknown (loading, down) and in a plain setup. */

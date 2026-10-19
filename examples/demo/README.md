@@ -11,8 +11,8 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
 is up) ends with `all 24 scenarios are equal on all 4 providers (postgres, ef, mongo, sqlite)`. (SQLite is a file the seed creates; see
-[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.) SQL Server is an optional fifth provider that starts only on request:
-see [SQL Server](#sql-server-the-sqlserver-provider).
+[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.) SQL Server and MySQL are optional providers that start only on request:
+see [SQL Server](#sql-server-the-sqlserver-provider) and [MySQL](#mysql-the-mysql-provider).
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -50,7 +50,7 @@ The translation is in `web/src/inRange.ts`, shared by both pages and the CSV exp
 - Docker with the Compose plugin
 - .NET 10 SDK
 - Node 20.19 or newer
-- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page); 51433 (SQL Server) only when you start that profile
+- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page); 51433 (SQL Server) and 53306 (MySQL) only when you start those profiles
 
 All connection values have defaults that match `docker-compose.yml`, so no environment variable is needed. The databases
 use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
@@ -61,6 +61,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
 |---|---|
 | PostgreSQL, MongoDB | `DEMO_PG_PORT=55434 DEMO_MONGO_PORT=57018 docker compose up -d`, then give the same ports to the seed and the API with `DEMO_PG="Host=127.0.0.1;Port=55434;Username=demo;Password=demo;Database=demo"` and `DEMO_MONGO="mongodb://127.0.0.1:57018"` |
 | SQL Server | `DEMO_SQLSERVER_PORT=51434 docker compose --profile sqlserver up -d`, then use the same port in `DEMO_SQLSERVER` (see [SQL Server](#sql-server-the-sqlserver-provider)) |
+| MySQL | `DEMO_MYSQL_PORT=53307 docker compose --profile mysql up -d`, then use the same port in `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)) |
 | API | `dotnet run --project Api --urls http://127.0.0.1:5081`, then change the `/api` target in `web/vite.config.ts` and pass `--api http://127.0.0.1:5081` to `smoke.sh` |
 | Page | `npm run dev -- --port 5174` (the API's CORS list only matters if you skip the dev proxy) |
 
@@ -227,7 +228,7 @@ development and testing, not for production). If you do not accept it, do not st
 (measured: 5 seconds from `up -d` to healthy; the healthcheck allows about three minutes for a slow one). Do not start it on a machine that is short of memory.
 
 ```bash
-docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine; SQL Server is the only one so far)
+docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine: SQL Server and MySQL so far)
 export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"
 dotnet run --project Api -- seed sqlserver               # SQL Server: 20000 rows in table orders.
 dotnet run --project Api                                 # /api/health now lists sqlserver
@@ -263,11 +264,57 @@ Set-values filters on dates and datetimes bind the values as strings, like the a
 depends on 9.0.18, which has a high and a moderate advisory (the restore fails with NU1903 otherwise; the library's integration tests carry the same pin). SqlClient is a new library for the demo, and its use under `examples/demo/Api` is
 wider than the approved stack's wording for it (the integration tests); the Engineering Lead's approval is still pending at the time of writing.
 
+## MySQL (the `mysql` provider)
+
+An optional provider that reads the same orders from **MySQL 8.4** through `Craticula.Dapper` and `MySqlDialect`. It starts only on request and the API lists it only when
+`DEMO_MYSQL` is set. The code is `Api/Grid/MySqlGridService.cs`, `Api/Grid/MySqlBinding.cs` (the bare-`?` binding for the set-values call) and `Api/Seed/MySqlSeeder.cs`.
+**MariaDB is not covered**: its collations and some behaviour differ from MySQL's, and the library has no dialect fixtures for it. Use MySQL 8.4.
+
+**Licence.** MySQL Community needs no licence acceptance. The `demo` / `demo` user in `docker-compose.yml` is a local throw-away credential like the PostgreSQL one; the port listens on `127.0.0.1` only,
+and the root password is random and never used.
+
+**Cost.** The image is `mysql:8.4.11` (the one the library's Docker tier uses; `docker images` shows 1.12 GB on disk). It was already on the machine where this was measured, so the pull time is not measured.
+The first start of a new volume took 10.7 seconds from `up -d --wait` to healthy; a restart of the stopped container took 5.7 seconds; the idle container used about 425 MiB of RAM.
+
+```bash
+docker compose --profile mysql up -d --wait              # starts MySQL only (the umbrella `engines` profile starts every optional engine)
+export DEMO_MYSQL="Server=127.0.0.1;Port=53306;User ID=demo;Password=demo;Database=demo"
+dotnet run --project Api -- seed mysql                   # MySQL: 20000 rows in table orders.
+dotnet run --project Api                                 # /api/health now lists mysql
+docker compose --profile mysql stop mysql                # when done: stops it, keeps the volume
+```
+
+- **The connection string.** `DEMO_MYSQL` has no default in code. Change the port with `DEMO_MYSQL_PORT` on `docker compose` and in the string.
+- **Seed.** `seed mysql` drops and recreates table `orders` in database `demo` (compose creates the database) and loads the same rows with batched multi-row `INSERT` statements in one transaction
+  (`MySqlBulkCopy` would need `local_infile`, which MySQL 8.4 switches off). MySQL commits DDL on its own, so the indexes are built after the load. It is not a default target: plain `seed` still fills PostgreSQL, MongoDB and the SQLite file.
+- **Types.** `BIGINT`, `VARCHAR(1000)` (utf8mb4), `DECIMAL(12,2)`, `DATETIME(3)`, `DATE`, `BOOLEAN`. Case sensitivity is a column setting on this engine, so the compiler writes no collation: the table default is the stock
+  `utf8mb4_0900_ai_ci` (case- and accent-insensitive), and the groupable columns (country, category, status) are `utf8mb4_bin` so group buckets and drill-down are exact (GRP-2).
+  The two text indexes use a 191-character prefix, because four bytes per character make a full `VARCHAR(1000)` index longer than InnoDB's 3,072-byte limit.
+- **Stopped container.** The API answers 503 `backend-unavailable` at once (a refused connection, a stopped container, an unknown host and a connect timeout are all `MySqlException` number 1042). A refused login (1045) or a missing
+  database (1044, 1049) is a setting error and stays a 500; `seed` reports those as a failure for that provider. Without a `Connection Timeout` in the string the service sets 5 seconds.
+
+**Differences from PostgreSQL, measured on MySQL 8.4.11 and handled in the open**
+
+1. **`AVG` over a whole-number column has four decimals.** MySQL adds `div_precision_increment` (4) decimals to the average of an integer type: the grouped `quantity` average is 25.3493 where PostgreSQL gives
+   25.34926470588235. `smoke.sh` (rule for `mysql` only, key `quantity_avg`) and `Api.Tests` require the baseline value rounded half up to 4 decimals, exactly; the scenario "group by country" carries that average, and the line after
+   the table names where the rule was used. It is the only key that needed a rule.
+2. **`AVG` over the decimal column has six decimals** (12428.503752 against 12428.50375198728), inside the 1e-6 relative tolerance every provider's `_avg` already has.
+3. **The stock collation ignores accents.** A contains filter for `SÖHNE`, `söhne` or `Söhne` finds `Müller, Söhne & Co` on MySQL and PostgreSQL; `sohne` and `SOHNE` find it **only on MySQL**
+   (PostgreSQL's collation folds case, not accents; SQLite finds only `söhne` and `Söhne`). This is the engine's default family and what the library's fixtures declare, so the demo keeps it and documents it.
+4. **Datetimes need a stated kind.** `DATETIME` has no zone, so the driver returns a `DateTime` of kind Unspecified and the JSON would lose the trailing `Z`. `MySqlGridService` marks them UTC (the seed stores UTC instants).
+5. **CSV works through `DapperExportStream`.** Its keyset query also selects the sort key twice (``SELECT `id`, ..., `id` ... ORDER BY `id` ``), which fails on SQL Server (see above), but MySQL accepts it.
+   Rows and bytes equal the other providers, over the whole table (20,000 rows, several keyset chunks).
+
+Set-values filters on dates and datetimes bind the values as strings, like the adapter, and MySQL converts them (tested with a date and a datetime filter).
+
+**Package.** The demo adds `MySqlConnector` 2.6.2 (the library's version; MIT; central version in `Directory.Packages.props`). The restore shows no advisory. It is named in the approved stack for the integration tests;
+its use under `examples/demo/Api` is wider than that wording, and the Engineering Lead's approval is still pending at the time of writing.
+
 ## Optional providers and seeding a subset
 
 PostgreSQL, MongoDB, EF Core and SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
 (an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
-page does not offer it. This lets you run the demo with any subset of its databases. One optional engine ships today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`); the
+page does not offer it. This lets you run the demo with any subset of its databases. Two optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`) and MySQL (`DEMO_MYSQL`, profile `mysql`); the
 provider sections of this README name each engine's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
 start the heavy engines only on request; the umbrella profile name is `engines`.
 
@@ -278,6 +325,7 @@ dotnet run --project Api -- seed                  # the default: postgres, mongo
 dotnet run --project Api -- seed mongo            # only MongoDB
 dotnet run --project Api -- seed sqlite           # only the SQLite file (no Docker needed)
 dotnet run --project Api -- seed sqlserver        # only SQL Server (needs the profile and DEMO_SQLSERVER)
+dotnet run --project Api -- seed mysql            # only MySQL (needs the profile and DEMO_MYSQL)
 dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
 ```
 
@@ -291,7 +339,7 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 
 ```bash
 docker compose stop          # stop the databases, keep the data
-docker compose --profile sqlserver stop   # stop SQL Server too (a plain `stop` leaves a profile service running)
+docker compose --profile sqlserver --profile mysql stop   # stop the optional engines too (a plain `stop` leaves a profile service running)
 docker compose down -v       # remove the databases and their data
 docker compose up -d && dotnet run --project Api -- seed   # start again from a clean state
 ```
@@ -309,6 +357,9 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `seed sqlserver` says `DEMO_SQLSERVER is not set`, or a red banner for `sqlserver` | Start the profile (`docker compose --profile sqlserver up -d --wait`), set `DEMO_SQLSERVER` (see [SQL Server](#sql-server-the-sqlserver-provider)), run `seed sqlserver`, restart the API. |
 | `sqlserver` answers 500 with a pre-login handshake error | The connection string lacks `TrustServerCertificate=true`. |
 | The SQL Server container exits at start | It needs about 2 GB of RAM; check `docker logs demo-sqlserver-1`. |
+| `seed mysql` says `DEMO_MYSQL is not set`, or a red banner for `mysql` | Start the profile (`docker compose --profile mysql up -d --wait`), set `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)), run `seed mysql`, restart the API. |
+| `seed mysql` says `Access denied` | `DEMO_MYSQL` has another user or password than the compose file (`demo` / `demo`), or a volume from an earlier run holds other credentials: remove only that container and its volume (`docker compose --profile mysql rm -sf mysql`, then `docker volume rm` of the `demo-mysql-data` volume from `docker volume ls`), never `down -v`, which also removes the PostgreSQL and MongoDB data. |
+| A contains filter finds a name without the accent on `mysql` only | Expected: MySQL's default collation ignores accents (see [MySQL](#mysql-the-mysql-provider)). |
 | `API: unreachable` in the header | The API is not running on port 5080. Start it (step 3). |
 | A watermark and console warnings | Normal: AG Grid Enterprise evaluation mode (see above). |
 | `smoke.sh` exits 2 | Read its message: it names the API address or the provider that failed. |
@@ -317,11 +368,11 @@ Stop the API and the page with Ctrl+C in their terminals.
 
 | Path | What |
 |---|---|
-| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`), the seed (`Api/Seed/`) |
-| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server comparisons run when `DEMO_SQLSERVER` is set and the engine answers, and skip with one reason otherwise) |
+| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`, `MySqlGridService`), the seed (`Api/Seed/`) |
+| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server and MySQL comparisons run when `DEMO_SQLSERVER` or `DEMO_MYSQL` is set and the engine answers, and skip with one reason otherwise) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
 | `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL and MongoDB mappings |
 | `smoke.sh`, `smoke/` | The cross-provider check and its request files |
-| `docker-compose.yml` | PostgreSQL 16 and MongoDB 7; SQL Server 2022 behind the `sqlserver` and `engines` profiles |
+| `docker-compose.yml` | PostgreSQL 16 and MongoDB 7; SQL Server 2022 and MySQL 8.4 behind their own profiles and `engines` |
 
 To run the API tests: `dotnet test Api.Tests` (needs the seeded databases from step 1 and 2).

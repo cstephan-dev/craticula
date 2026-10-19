@@ -10,7 +10,7 @@ namespace Demo.Api.Grid;
 public sealed record OptionalProvider(string Name, string EnvVar, Action<IServiceCollection, string> Register);
 
 /// <summary>
-/// The optional engines the demo knows: SQL Server today; the MySQL and OpenSearch tasks each add one entry here (SQLite is
+/// The optional engines the demo knows: SQL Server and MySQL today; the OpenSearch task adds one entry here (SQLite is
 /// always on and is registered in <c>DemoApp</c>). Tests pass their own list to <c>DemoApp.Build</c>.
 /// </summary>
 public static class OptionalProviders
@@ -21,7 +21,12 @@ public static class OptionalProviders
             "sqlserver",
             DemoSettings.SqlServerEnvVar,
             (services, setting) => services.AddSingleton<IGridService>(provider =>
-                new SqlServerGridService(setting, provider.GetRequiredService<GridRequestPreparer>())))
+                new SqlServerGridService(setting, provider.GetRequiredService<GridRequestPreparer>()))),
+        new OptionalProvider(
+            "mysql",
+            DemoSettings.MySqlEnvVar,
+            (services, setting) => services.AddSingleton<IGridService>(provider =>
+                new MySqlGridService(setting, provider.GetRequiredService<GridRequestPreparer>())))
     ];
 
     /// <summary>Registers each provider whose setting is present; returns the names registered, in order.</summary>

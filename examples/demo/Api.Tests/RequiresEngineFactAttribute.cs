@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Data.SqlClient;
+using MySqlConnector;
 
 namespace Demo.Api.Tests;
 
@@ -14,7 +15,8 @@ internal static class EngineProbe
 
     private static readonly Dictionary<string, Func<string, string?>> Probes = new()
     {
-        [Seed.DemoSettings.SqlServerEnvVar] = ProbeSqlServer
+        [Seed.DemoSettings.SqlServerEnvVar] = ProbeSqlServer,
+        [Seed.DemoSettings.MySqlEnvVar] = ProbeMySql
     };
 
     public static string? SkipReason(string envVar) => Cache.GetOrAdd(envVar, Compute);
@@ -49,6 +51,22 @@ internal static class EngineProbe
         {
             return $"SQL Server does not answer at the {Seed.DemoSettings.SqlServerEnvVar} connection string ({ex.GetType().Name}). "
                 + "Is `docker compose --profile sqlserver up -d` healthy and the database seeded (`seed sqlserver`)?";
+        }
+    }
+
+    private static string? ProbeMySql(string setting)
+    {
+        try
+        {
+            var builder = new MySqlConnectionStringBuilder(setting) { ConnectionTimeout = 3 };
+            using var connection = new MySqlConnection(builder.ConnectionString);
+            connection.Open();
+            return null;
+        }
+        catch (Exception ex) when (ex is MySqlException or ArgumentException or InvalidOperationException)
+        {
+            return $"MySQL does not answer at the {Seed.DemoSettings.MySqlEnvVar} connection string ({ex.GetType().Name}). "
+                + "Is `docker compose --profile mysql up -d` healthy and the database seeded (`seed mysql`)?";
         }
     }
 }
