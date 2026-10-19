@@ -225,7 +225,8 @@ def check_extra(repo, public, head):
                     problem = f"touches {path} beyond the marked 'Latest release:' line ({why})"
             if problem:
                 return EXIT_REFUSED, (f"public commit {sha} {problem} "
-                                      f"(copy the change into private main with a '{TRAILER}: {sha}' trailer in its commit message)"), None
+                                      f"(a contributor's change: scripts/apply-public-change.sh {sha} --work-item <id>; anything else: copy the change into private main "
+                                      f"with a '{TRAILER}: {sha}' trailer in its commit message)"), None
         if pending is None:
             pending = sha
     if pending:
