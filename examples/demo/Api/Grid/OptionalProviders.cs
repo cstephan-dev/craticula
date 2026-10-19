@@ -17,7 +17,7 @@ public sealed record OptionalProvider(
     string? Engine = null);
 
 /// <summary>
-/// The optional engines the demo knows: SQL Server and MySQL today; the OpenSearch task adds one entry here (SQLite is
+/// The optional engines the demo knows: SQL Server, MySQL and OpenSearch (SQLite is
 /// always on and is registered in <c>DemoApp</c>). Tests pass their own list to <c>DemoApp.Build</c>.
 /// </summary>
 public static class OptionalProviders
@@ -37,7 +37,14 @@ public static class OptionalProviders
             (services, setting) => services.AddSingleton<IGridService>(provider =>
                 new MySqlGridService(setting, provider.GetRequiredService<GridRequestPreparer>())),
             setting => MySqlGridService.Normalise(setting),
-            "MySQL")
+            "MySQL"),
+        new OptionalProvider(
+            "opensearch",
+            DemoSettings.OpenSearchEnvVar,
+            (services, setting) => services.AddSingleton<IGridService>(provider =>
+                new OpenSearchGridService(setting, provider.GetRequiredService<GridRequestPreparer>())),
+            setting => OpenSearchGridService.ParseUrl(setting),
+            "OpenSearch")
     ];
 
     /// <summary>Registers each provider whose setting is present; returns the names registered, in order. A malformed setting

@@ -10,6 +10,11 @@ describe('queryNote', () => {
     expect(queryNote('postgres')).toBeNull();
   });
 
+  it('says the OpenSearch text is the compiled request, not exactly what is sent', () => {
+    expect(queryNote('opensearch')).toMatch(/compiled search request/);
+    expect(queryNote('opensearch')).toMatch(/not byte for byte/);
+  });
+
   it('stays silent for MongoDB', () => {
     expect(queryNote('mongo')).toBeNull();
   });

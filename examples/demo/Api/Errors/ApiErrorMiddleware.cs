@@ -6,6 +6,8 @@ using Craticula.EntityFrameworkCore;
 using Craticula.Export.Csv;
 using Craticula.Mongo;
 using Craticula.MongoDB.Driver;
+using Craticula.OpenSearch.Client;
+using Craticula.Search;
 using Craticula.Sql;
 using Npgsql;
 
@@ -71,8 +73,14 @@ public sealed class ApiErrorMiddleware(RequestDelegate next, ILogger<ApiErrorMid
             AggregationValidationException e => (bad, "invalid-aggregation", e.Message),
             SetValuesSpecValidationException e => (bad, "invalid-set-values", e.Message),
             PageSpecValidationException e => (bad, "invalid-page", e.Message),
+            // A shape one provider cannot answer like PostgreSQL does (grouped requests on OpenSearch): the message names the shape.
+            UnsupportedShapeException e => (bad, "unsupported-shape", e.Message),
             SqlCompilationException or MongoCompilationException or DapperCompilationException
-                or EfCoreCompilationException or MongoDriverCompilationException => (bad, "compilation-failed", exception.Message),
+                or EfCoreCompilationException or MongoDriverCompilationException or SearchCompilationException
+                => (bad, "compilation-failed", exception.Message),
+            // The adapter's own refusals have no inner exception; a failed OpenSearch call always carries one (the transport exception
+            // or the status) and falls through to the engine-failure test or to a logged 500.
+            OpenSearchClientCompilationException { InnerException: null } => (bad, "compilation-failed", exception.Message),
             CsvWriterException e => (bad, "export-failed", e.Message),
             // Raised by Kestrel/ASP.NET itself: a body over the 1 MiB limit (413) or a body that cannot be read (400).
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (

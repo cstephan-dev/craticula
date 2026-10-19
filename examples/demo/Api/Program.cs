@@ -5,7 +5,8 @@
 //                                          `seed mongo` or `seed postgres sqlite` fills only the named providers)
 //   dotnet run --project Api              (the API on http://127.0.0.1:5080; override the databases with DEMO_PG / DEMO_MONGO, the SQLite file with DEMO_SQLITE)
 //
-// Routes: POST /api/{postgres|ef|mongo|sqlite}/rows | values | export.csv | query, and GET /api/health.
+// Routes: POST /api/{postgres|ef|mongo|sqlite}/rows | values | export.csv | query, and GET /api/health. SQL Server (DEMO_SQLSERVER), MySQL (DEMO_MYSQL)
+// and OpenSearch (DEMO_OPENSEARCH, a URL) are optional providers that answer the same routes when their setting is present.
 using Demo.Api;
 using Demo.Api.Seed;
 

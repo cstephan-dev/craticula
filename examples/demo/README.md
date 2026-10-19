@@ -10,9 +10,9 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 24 scenarios are equal on all 4 providers (postgres, ef, mongo, sqlite)`. (SQLite is a file the seed creates; see
-[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.) SQL Server and MySQL are optional providers that start only on request:
-see [SQL Server](#sql-server-the-sqlserver-provider) and [MySQL](#mysql-the-mysql-provider).
+is up) ends with `all 25 scenarios are equal on all 4 providers (postgres, ef, mongo, sqlite)`. (SQLite is a file the seed creates; see
+[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.) SQL Server, MySQL and OpenSearch are optional providers that start only on request:
+see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider).
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -62,6 +62,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
 | PostgreSQL, MongoDB | `DEMO_PG_PORT=55434 DEMO_MONGO_PORT=57018 docker compose up -d`, then give the same ports to the seed and the API with `DEMO_PG="Host=127.0.0.1;Port=55434;Username=demo;Password=demo;Database=demo"` and `DEMO_MONGO="mongodb://127.0.0.1:57018"` |
 | SQL Server | `DEMO_SQLSERVER_PORT=51434 docker compose --profile sqlserver up -d`, then use the same port in `DEMO_SQLSERVER` (see [SQL Server](#sql-server-the-sqlserver-provider)) |
 | MySQL | `DEMO_MYSQL_PORT=53307 docker compose --profile mysql up -d`, then use the same port in `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)) |
+| OpenSearch | `DEMO_OPENSEARCH_PORT=59201 docker compose --profile opensearch up -d`, then use the same port in `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)) |
 | API | `dotnet run --project Api --urls http://127.0.0.1:5081`, then change the `/api` target in `web/vite.config.ts` and pass `--api http://127.0.0.1:5081` to `smoke.sh` |
 | Page | `npm run dev -- --port 5174` (the API's CORS list only matters if you skip the dev proxy) |
 
@@ -94,7 +95,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
    npm run dev
    ```
 
-5. Optional check without a browser: `bash smoke.sh` posts 24 fixed requests (`smoke/*.json`) to all four providers and prints
+5. Optional check without a browser: `bash smoke.sh` posts 25 fixed requests (`smoke/*.json`) to every provider the API lists and prints
    one row per scenario. Exit code 0 means every answer is equal; 1 means a difference or a missing `400`; 2 means the
    environment is wrong (API down, a database down). `bash smoke.sh --api URL` points it at another API.
 
@@ -311,11 +312,78 @@ Set-values filters on dates and datetimes bind the values as strings, like the a
 **Package.** The demo adds `MySqlConnector` 2.6.2 (the library's version; MIT; central version in `Directory.Packages.props`). The restore shows no advisory. It is named in the approved stack for the integration tests;
 its use under `examples/demo/Api` is wider than that wording, and the Engineering Lead's approval is still pending at the time of writing.
 
+## OpenSearch (the `opensearch` provider)
+
+An optional provider that reads the same orders from **OpenSearch 2.19** through `Craticula.OpenSearch.Client` (the low-level client) and the `Craticula.Search` compiler. It is the one provider that is not SQL, so it answers most things the
+same and a few things differently; this section lists both. It starts only on request and the API lists it only when `DEMO_OPENSEARCH` is set. The code is `Api/Grid/OpenSearchGridService.cs`, `Api/Grid/OpenSearchShapes.cs` (the unsupported shapes),
+`Api/Grid/OpenSearchCalls.cs` and `Api/Seed/OpenSearchSeeder.cs`.
+
+**Licence and security.** OpenSearch is Apache-2.0 and needs no licence acceptance. **The security plugin is switched off** (`DISABLE_SECURITY_PLUGIN=true`): there is no login and no TLS, so there is no credential anywhere and the setting is a plain URL.
+That is for this demo only: the port listens on `127.0.0.1` only, and the compose service must never be published on another interface.
+
+**Cost.** The image is `opensearchproject/opensearch:2.19.1` (the one the library's Docker tier uses; `docker images` shows **2.5 GB** on disk, more than the 1 GB first estimated). It was already on the machine where this was measured, so the pull time is
+not measured. The first start of a new volume took 10.8 seconds from `up -d --wait` to healthy; a restart of the stopped container took 10.7 seconds (the health check polls every 5 seconds); the idle container used about 1.0 GiB of RAM,
+and 1.1 to 1.2 GiB with the 20,000 orders indexed and the smoke run done (the JVM heap is fixed at 512 MB). **`vm.max_map_count`:** the single-node setup the demo uses (`discovery.type=single-node`) does not enforce it, and the container started
+here without a change (the host value was 1,048,576, so a host with the common default of 65,530 was not measured). If the container exits at start on your machine with a `max virtual memory areas vm.max_map_count` message, raise it with
+`sudo sysctl -w vm.max_map_count=262144` (Docker Desktop: in the WSL or VM settings).
+
+```bash
+docker compose --profile opensearch up -d --wait         # starts OpenSearch (the umbrella `engines` profile starts every optional engine)
+export DEMO_OPENSEARCH="http://127.0.0.1:59200"
+dotnet run --project Api -- seed opensearch              # OpenSearch: 20000 documents in index orders.
+dotnet run --project Api                                 # /api/health now lists opensearch
+docker compose --profile opensearch stop opensearch      # when done: stops only OpenSearch, keeps the volume
+```
+
+- **The setting.** `DEMO_OPENSEARCH` is a URL (no default in code); a malformed one stops the API at start naming the variable. Change the port with `DEMO_OPENSEARCH_PORT` on `docker compose` and in the URL.
+- **Seed.** `seed opensearch` deletes and recreates index `orders` (one shard, no replica) with an explicit mapping, then bulk-loads the rows in NDJSON batches of 2,000 with `refresh=true`. Every string field is a `keyword` with an exact `keyword` sub-field and a
+  `normalized` sub-field (a lowercase normalizer, which is what makes a case-insensitive sort and range work: without it uppercase text would sort before lowercase, and the compiler refuses the sort); amounts are `double`, quantities `long`, instants
+  and dates `date` fields. The mapping comes from the `physical.search` entries of `orders.schema.json`, so the index and the compiler cannot drift. It is not a default target: plain `seed` still fills PostgreSQL, MongoDB and the SQLite file.
+- **Rows, sort, count, paging.** Filters, sorts and CSV equal PostgreSQL on the whole table (measured for every sortable column, both directions, and for the text, number, date, boolean, set and blank filters and AND/OR conditions; `Api.Tests` pins a representative subset). The 20,000 rows pass OpenSearch's `max_result_window`
+  of 10,000, so rows past 10,000 come from a point in time and `search_after`, kept in one `InMemorySearchCursorCache` shared by every request (a restart of the API loses it, and the next deep page walks from the start). The AG Grid request carries no
+  session id, so the service uses one fixed id; the cursor is keyed by the compiled filter and sort too.
+- **The row count above 10,000 is unknown.** The adapter caps the count at 10,000 (PERF-3), so `lastRow` is `null` where PostgreSQL says 20,000 (or any count above 10,000): the grid keeps asking and learns the end on the first short block. Below 10,000 the count is exact.
+- **The query view is JSON.** The panel shows the compiled search request (kind `json`, values inside the body, no parameters) with a note that the adapter adds a point in time, `search_after` and a count request, so it is not byte for byte what is sent.
+- **Set values** run through the compiler's `terms` aggregation, read by a small reader in the service (the library's reader is internal). They leave out the null value, which a `terms` aggregation cannot return; the page lists strings only anyway.
+- **CSV** streams through `OpenSearchExportStream`. That stream returns every schema column, so the service narrows and reorders the rows to the columns of the request (a subset with custom headers equals PostgreSQL's file). Formula cells are prefixed
+  with an apostrophe as everywhere.
+- **Stopped container.** The API answers 503 `backend-unavailable` at once for a refused connection and an unknown host, and after 10 seconds for a server that accepts and never answers (measured with the real container stopped, and with a closed port in the tests). An HTTP 4xx or 5xx
+  answer from a running cluster (a bad mapping, a rejected body) is a bug and stays a 500, except 503 and 429, which are unavailable.
+
+**Grouped requests: what works and what does not**, measured against PostgreSQL for every grouped shape the page can send (`docs/feat/2501/validation.md` has the table with the evidence for each):
+
+| Shape | On OpenSearch |
+|---|---|
+| Group by country, category or status with sum, avg, count, min, max; ascending or descending; no sort; no aggregates | **Equal**, with two documented differences below |
+| A second level under a key (country, then category), the leaf rows under one or two keys (drill-down) | **Equal** (same differences) |
+| Any of them with text, number, set and date filters | **Equal** |
+| Blocks after the first (`startRow` above 0) of a grouped level | **Equal** (the composite aggregation's `after` key is kept in the shared cache; blocks read in order or newest first add up to the whole level) |
+| The groups ordered by an aggregate (a sum, descending) | **Unsupported**: HTTP 400, kind `unsupported-shape`. A composite aggregation lists groups in key order only, so the result would be the first groups by key, not the top ones (OSE-11(c)); sort by the group column instead |
+| Expanding the group whose key is empty (null) | **Unsupported**: HTTP 400, kind `unsupported-shape`. The query would carry a null term, which the engine rejects; PostgreSQL's `= NULL` matches no row either (a library gap, reported); use the column's blank filter |
+| A sort on a column the grouped level does not produce, or on a key two aggregates share | Refused by every provider with `compilation-failed`, OpenSearch included (not an OpenSearch limit) |
+
+The page shows an `unsupported-shape` answer as a banner that reads "Not supported on this provider" followed by the message, which names the shape and what to do instead.
+
+**Differences from PostgreSQL, measured on OpenSearch 2.19.1 and handled in the open**
+
+1. **Amounts are `double`.** The sums of the demo data come out exactly equal to PostgreSQL's (checked for every grouped shape); the averages differ in the last digits (about 1e-15 relative), inside the 1e-6 tolerance every provider's `_avg` already has.
+   An exact filter on a decimal amount can miss for the usual floating-point reasons; the smoke scenarios do not use one.
+2. **The null group sits at the other end of a grouped level.** OpenSearch treats null as the lowest value (first ascending, last descending); PostgreSQL treats it as the highest. Every other group, in order, and the null group's own numbers are equal;
+   the blocks of a grouped level are the same groups shifted by one. This is AGG-5's accepted divergence (`missing_bucket` has no order control). `smoke.sh` has a rule for `opensearch` only and names it in the line after the table.
+3. **The row count above 10,000 is unknown** (`lastRow` is null), see above.
+4. **The distinct values leave out null**, see above.
+5. **Case-insensitive text matching folds ASCII letters only.** A contains filter for `söhne`, `Söhne` or `müller` finds `Müller, Söhne & Co` on OpenSearch and PostgreSQL, but a typed capital non-ASCII letter (`SÖHNE`, `MÜLLER`, `ÖH`) does **not** match the stored
+   lowercase one on OpenSearch, where PostgreSQL matches it. `sohne` finds nothing on either (accent-sensitive, unlike MySQL).
+6. **Sorting and ranges are exact** thanks to the `normalized` sub-field: the sort equals PostgreSQL's on every column, including the case-insensitive text columns, on the first page and past row 9,900.
+
+**Package.** The demo adds `OpenSearch.Client` 2.1.0 (the library's version; Apache-2.0; central version in `Directory.Packages.props`). The restore shows no advisory. It is named in the approved stack for the integration tests; its use under
+`examples/demo/Api` is wider than that wording, and the Engineering Lead's approval is still pending at the time of writing.
+
 ## Optional providers and seeding a subset
 
 PostgreSQL, MongoDB, EF Core and SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
 (an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
-page does not offer it. This lets you run the demo with any subset of its databases. Two optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`) and MySQL (`DEMO_MYSQL`, profile `mysql`); the
+page does not offer it. This lets you run the demo with any subset of its databases. Three optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`), MySQL (`DEMO_MYSQL`, profile `mysql`) and OpenSearch (`DEMO_OPENSEARCH`, profile `opensearch`); the
 provider sections of this README name each engine's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
 start the heavy engines only on request; the umbrella profile name is `engines`.
 
@@ -327,6 +395,7 @@ dotnet run --project Api -- seed mongo            # only MongoDB
 dotnet run --project Api -- seed sqlite           # only the SQLite file (no Docker needed)
 dotnet run --project Api -- seed sqlserver        # only SQL Server (needs the profile and DEMO_SQLSERVER)
 dotnet run --project Api -- seed mysql            # only MySQL (needs the profile and DEMO_MYSQL)
+dotnet run --project Api -- seed opensearch       # only OpenSearch (needs the profile and DEMO_OPENSEARCH)
 dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
 ```
 
@@ -340,7 +409,7 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 
 ```bash
 docker compose stop          # stop the databases, keep the data
-docker compose --profile sqlserver --profile mysql stop   # stop the optional engines too (a plain `stop` leaves a profile service running)
+docker compose --profile sqlserver --profile mysql --profile opensearch stop   # stop the optional engines too (a plain `stop` leaves a profile service running)
 docker compose down -v       # remove the databases and their data
 docker compose up -d && dotnet run --project Api -- seed   # start again from a clean state
 ```
@@ -361,6 +430,10 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `seed mysql` says `DEMO_MYSQL is not set`, or a red banner for `mysql` | Start the profile (`docker compose --profile mysql up -d --wait`), set `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)), run `seed mysql`, restart the API. |
 | `seed mysql` says `Access denied` | `DEMO_MYSQL` has another user or password than the compose file (`demo` / `demo`), or a volume from an earlier run holds other credentials: remove only that container and its volume (`docker compose --profile mysql rm -sf mysql`, then `docker volume rm` of the `demo-mysql-data` volume from `docker volume ls`), never `down -v`, which also removes the PostgreSQL and MongoDB data. |
 | A contains filter finds a name without the accent on `mysql` only | Expected: MySQL's default collation ignores accents (see [MySQL](#mysql-the-mysql-provider)). |
+| `seed opensearch` says `DEMO_OPENSEARCH is not set`, or a red banner for `opensearch` | Start the profile (`docker compose --profile opensearch up -d --wait`), set `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)), run `seed opensearch`, restart the API. |
+| The OpenSearch container exits at start | Read `docker logs demo-opensearch-1`. A `vm.max_map_count` message: `sudo sysctl -w vm.max_map_count=262144`. It also needs about 1 GB of free RAM. |
+| A banner "Not supported on this provider" on `opensearch` | Expected for the two grouped shapes the README lists as unsupported; the message says what to do instead. |
+| The OpenSearch grid shows no total, only "more rows" | Expected above 10,000 rows: the count is unknown there (see [OpenSearch](#opensearch-the-opensearch-provider)). |
 | `API: unreachable` in the header | The API is not running on port 5080. Start it (step 3). |
 | A watermark and console warnings | Normal: AG Grid Enterprise evaluation mode (see above). |
 | `smoke.sh` exits 2 | Read its message: it names the API address or the provider that failed. |
@@ -369,11 +442,11 @@ Stop the API and the page with Ctrl+C in their terminals.
 
 | Path | What |
 |---|---|
-| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`, `MySqlGridService`), the seed (`Api/Seed/`) |
-| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server and MySQL comparisons run when `DEMO_SQLSERVER` or `DEMO_MYSQL` is set and the engine answers, and skip with one reason otherwise) |
+| `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`, `MySqlGridService`, `OpenSearchGridService`), the seed (`Api/Seed/`) |
+| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server, MySQL and OpenSearch comparisons run when `DEMO_SQLSERVER`, `DEMO_MYSQL` or `DEMO_OPENSEARCH` is set and the engine answers, and skip with one reason otherwise) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
-| `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL and MongoDB mappings |
+| `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL, MongoDB and OpenSearch mappings |
 | `smoke.sh`, `smoke/` | The cross-provider check and its request files |
-| `docker-compose.yml` | PostgreSQL 16 and MongoDB 7; SQL Server 2022 and MySQL 8.4 behind their own profiles and `engines` |
+| `docker-compose.yml` | PostgreSQL 16 and MongoDB 7; SQL Server 2022, MySQL 8.4 and OpenSearch 2.19 behind their own profiles and `engines` |
 
 To run the API tests: `dotnet test Api.Tests` (needs the seeded databases from step 1 and 2).
