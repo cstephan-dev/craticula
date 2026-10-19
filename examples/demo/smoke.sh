@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Demo smoke test: sends the same fixed requests (smoke/*.json) to the running demo API for PostgreSQL, MongoDB, the Entity Framework Core provider
-# (ef, on PostgreSQL) and SQLite and checks that every provider answers the same as the postgres baseline. It starts nothing; run the quickstart in README.md first.
+# Demo smoke test: sends the same fixed requests (smoke/*.json) to the running demo API for every provider it lists (PostgreSQL, MongoDB, the Entity
+# Framework Core provider (ef, on PostgreSQL), SQLite and the optional SQL Server, MySQL and OpenSearch) and checks that every provider answers the same as the postgres baseline. It starts nothing; run the quickstart in README.md first.
 # Needs only bash, curl and python3 (3.8+).
 #
 #   bash smoke.sh [--api URL]        default URL: http://127.0.0.1:5080
@@ -24,7 +24,12 @@
 # inside the 1e-6 relative tolerance.) For mysql only, the key "quantity_avg" must equal the baseline value rounded half up to 4 decimals:
 # MySQL's AVG over an integer type returns a DECIMAL with div_precision_increment (4) extra decimals, so 25.349264... arrives as 25.3493.
 # The rule is exact, not a tolerance. (amount_avg needs no rule: AVG over DECIMAL(12,2) has 6 decimals, inside the 1e-6 relative tolerance.)
-# When a rule was needed, one line after the table lists where. CSV exports are compared line by line, cell by cell, in full,
+# For opensearch only (measured, docs/feat/2501/validation.md): a row count above 10,000 is unknown there, so lastRow may be null where the baseline's is
+# above 10,000 (PERF-3); the group whose key is null sits at the other end of a grouped level (OpenSearch sorts null lowest, PostgreSQL highest: AGG-5), every
+# other row and the null row itself being equal; the distinct values leave out null (a terms aggregation has no bucket for a missing value); the compiled
+# query is JSON text (kind json). One scenario is a shape OpenSearch cannot answer: the UNSUPPORTED table names it with its reason, and the provider must
+# answer HTTP 400 with the kind unsupported-shape (the other providers answer it normally and must be equal to the baseline).
+# When a rule was needed, one line after the table lists where; one more line lists each unsupported expectation that was met. CSV exports are compared line by line, cell by cell, in full,
 # after line endings are normalised: header and every data row must be identical on every provider, with the same
 # by-value rule for plain decimals (PostgreSQL writes an amount as 20568.00, MongoDB as 20568).
 #
@@ -38,7 +43,7 @@ api="http://127.0.0.1:5080"
 while [ $# -gt 0 ]; do
   case "$1" in
     --api) [ $# -ge 2 ] || { echo "smoke.sh: --api needs a URL" >&2; exit 2; }; api="${2%/}"; shift 2 ;;
-    -h|--help) sed -n '2,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "smoke.sh: unknown argument '$1' (usage: bash smoke.sh [--api URL])" >&2; exit 2 ;;
   esac
 done
@@ -101,6 +106,7 @@ scenarios=(
   "in range on a date column plus a set filter|rows|in-range-shipped-on.json|rows"
   "one-bound range becomes greater-than|rows|in-range-one-bound.json|rows"
   "group by country: sum, avg, count|rows|group-by-country.json|rows"
+  "group ordered by an aggregate (sum, descending)|rows|group-sort-by-aggregate.json|rows"
   "page past the end|rows|past-the-end.json|rows"
   "set values for country|values|set-values-country.json|values"
   "csv export, status filter|export.csv|export-status.json|csv"
@@ -154,6 +160,18 @@ TRUNCATE = "truncate"
 ROUND4 = ("round", 4)
 RULES = {"sqlite": {"_sum": 1e-9}, "sqlserver": {"quantity_avg": TRUNCATE}, "mysql": {"quantity_avg": ROUND4}}
 AVG_RULE = {"_avg": 1e-6}
+# Names of the opensearch-only rules (they are not number tolerances, so they live outside RULES); they appear in the "rule was needed" line as the key.
+LAST_ROW_UNKNOWN = "lastRow (count above 10,000 unknown)"
+NULL_GROUP_ORDER = "null group at the other end"
+VALUES_WITHOUT_NULL = "values without null"
+OPENSEARCH_COUNT_CAP = 10000  # the adapter's max_result_window, PERF-3: a count above it is reported as unknown (null)
+# Scenarios a provider cannot answer, as data: (scenario, provider) -> reason. The provider must answer HTTP 400 with error kind
+# unsupported-shape while the baseline answers 200; a scenario listed here is never skipped, it is compared against that contract.
+UNSUPPORTED = {
+    ("group ordered by an aggregate (sum, descending)", "opensearch"):
+        "a composite aggregation lists groups in key order only, so it cannot order them by an aggregate (OSE-11(c))",
+}
+unsupported_met = []  # (scenario, provider, reason) for every UNSUPPORTED expectation that was met
 used = {}  # (scenario, provider, key) -> how many values were equal only because of a RULES entry
 current_scenario = ""
 
@@ -196,6 +214,20 @@ def same(a, b, key="", provider=None, track=False):
             return math.isclose(a, b, rel_tol=AVG_RULE["_avg"])
         return False
     return type(a) is type(b) and a == b
+
+
+def null_group_at_other_end(base_rows, other_rows):
+    """A grouped level where only the null group moved: the baseline's null group(s) are the same rows at the start or the end of the
+    other provider's list, and every other row is equal in order. False when the baseline has no null group (nothing to excuse)."""
+    if not base_rows or not all(isinstance(r, dict) and r for r in base_rows + other_rows):
+        return False
+    is_null = lambda r: next(iter(r.values())) is None
+    base_null, other_null = [r for r in base_rows if is_null(r)], [r for r in other_rows if is_null(r)]
+    base_rest, other_rest = [r for r in base_rows if not is_null(r)], [r for r in other_rows if not is_null(r)]
+    if not base_null or len(base_null) != len(other_null):
+        return False
+    at_an_end = other_rows[:len(other_null)] == other_null or other_rows[-len(other_null):] == other_null
+    return at_an_end and same(base_rest, other_rest, provider="opensearch") and same(base_null, other_null, provider="opensearch")
 
 
 def first_difference(a, b, provider):
@@ -242,6 +274,13 @@ def compare(kind, base_status, base_body, other, status, body):
         bk, ok_kind = error_kind(base_status, base_body), error_kind(status, body)
         ok = bk is not None and bk == ok_kind
         return f"{status} {ok_kind or '-'}", ok, "" if ok else f": want 400 + the same error kind as {BASE} ({bk or '-'})"
+    if (current_scenario, other) in UNSUPPORTED:
+        reason = UNSUPPORTED[(current_scenario, other)]
+        found = error_kind(status, body)
+        ok = base_status == 200 and found == "unsupported-shape"
+        if ok:
+            unsupported_met.append((current_scenario, other, reason))
+        return f"{status} {found or '-'}", ok, "" if ok else f": want 400 unsupported-shape ({reason}), the baseline answers 200"
     if status != 200:
         return f"HTTP {status}", False, ": expected 200"
     if kind == "rows":
@@ -252,14 +291,26 @@ def compare(kind, base_status, base_body, other, status, body):
             key = "id" if "id" in first else next(iter(first))
             first[key] = (first[key] + 1) if isinstance(first[key], int) else f"{first[key]}-sabotaged"
         cell = f"{len(ot['rows'])} rows, lastRow {ot['lastRow']}"
-        ok = pg.get("lastRow") == ot.get("lastRow") and same(pg["rows"], ot["rows"], provider=other, track=True)
+        last_ok = pg.get("lastRow") == ot.get("lastRow")
+        if not last_ok and other == "opensearch" and ot.get("lastRow") is None and isinstance(pg.get("lastRow"), int) \
+                and pg["lastRow"] > OPENSEARCH_COUNT_CAP:
+            last_ok = True  # PERF-3: OpenSearch does not count above max_result_window; the grid keeps asking until a short block
+            used[(current_scenario, other, LAST_ROW_UNKNOWN)] = 1
+        rows_ok = same(pg["rows"], ot["rows"], provider=other, track=True)
+        if not rows_ok and other == "opensearch" and null_group_at_other_end(pg["rows"], ot["rows"]):
+            rows_ok = True  # AGG-5 / OSE-11(b): OpenSearch's null group is the lowest value
+            used[(current_scenario, other, NULL_GROUP_ORDER)] = 1
+        ok = last_ok and rows_ok
         detail = "" if ok else ": " + (
             f"lastRow {pg.get('lastRow')} vs {ot.get('lastRow')}"
-            if pg.get("lastRow") != ot.get("lastRow") else first_difference(pg["rows"], ot["rows"], other))
+            if not last_ok else first_difference(pg["rows"], ot["rows"], other))
         return cell, ok, detail
     if kind == "values":
         pg, ot = json.loads(base_body)["values"], json.loads(body)["values"]
         canon = lambda values: sorted(json.dumps(v) for v in values)
+        if other == "opensearch" and None in pg and None not in ot:
+            used[(current_scenario, other, VALUES_WITHOUT_NULL)] = 1
+            pg = [v for v in pg if v is not None]  # a terms aggregation has no bucket for a missing value
         return f"{len(ot)} values", canon(pg) == canon(ot), ""
     if kind in ("csv", "csv-formula"):
         pg_lines, ot_lines = csv_records(base_body), csv_records(body)
@@ -283,6 +334,13 @@ def compare(kind, base_status, base_body, other, status, body):
         ot = json.loads(body)
         if other == "mongo":
             ok = ot.get("kind") == "mongo" and bool(ot.get("text"))
+        elif other == "opensearch":
+            # the compiled search body as JSON text: it must parse, and carry a query or aggregation member
+            try:
+                body_json = json.loads(ot.get("text") or "")
+            except ValueError:
+                body_json = None
+            ok = ot.get("kind") == "json" and ot.get("dialect") == "opensearch" and isinstance(body_json, dict) and bool(body_json)
         elif other == "ef":
             # EF Core inlines parameter values in its text (shown as comment lines), so only the shape is asserted
             ok = ot.get("kind") == "sql" and ot.get("dialect") == "ef-npgsql" and bool(ot.get("text"))
@@ -358,6 +416,9 @@ print()
 if used:
     parts = [f"{scenario}: {provider} {key} ({count} value{'s' if count != 1 else ''})" for (scenario, provider, key), count in used.items()]
     print("smoke.sh: a RULES entry was needed (equal only by that rule, not exactly): " + "; ".join(parts) + ".")
+if unsupported_met:
+    parts = [f"{scenario}: {provider} answered unsupported-shape ({reason})" for scenario, provider, reason in unsupported_met]
+    print("smoke.sh: the unsupported contract was met (expected 400 unsupported-shape, never skipped): " + "; ".join(parts) + ".")
 if failures:
     print(f"smoke.sh: {failures} of {len(table)} scenarios differ or lack the expected 400.")
     sys.exit(DIFFERENT)

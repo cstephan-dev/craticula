@@ -58,7 +58,7 @@ describe('api error mapping', () => {
 });
 
 describe('provider list', () => {
-  it('offers PostgreSQL, MongoDB, EF Core, SQLite, SQL Server and MySQL in that order', () => {
+  it('offers PostgreSQL, MongoDB, EF Core, SQLite, SQL Server, MySQL and OpenSearch in that order', () => {
     expect(PROVIDERS).toEqual([
       { id: 'postgres', label: 'PostgreSQL' },
       { id: 'mongo', label: 'MongoDB' },
@@ -66,7 +66,19 @@ describe('provider list', () => {
       { id: 'sqlite', label: 'SQLite' },
       { id: 'sqlserver', label: 'SQL Server' },
       { id: 'mysql', label: 'MySQL' },
+      { id: 'opensearch', label: 'OpenSearch' },
     ]);
+  });
+
+  it('posts to the opensearch routes and reads a json query view', async () => {
+    const mock = stubFetch(async () => Response.json({ kind: 'json', dialect: 'opensearch', text: '{}', parameters: [] }));
+    await expect(fetchQuery('opensearch', request)).resolves.toMatchObject({ kind: 'json', dialect: 'opensearch' });
+    expect((mock.mock.calls[0] as unknown as [string])[0]).toBe('/api/opensearch/query');
+  });
+
+  it('keeps the unsupported-shape kind and message of a 400 answer', async () => {
+    stubFetch(async () => Response.json({ error: { kind: 'unsupported-shape', message: 'OpenSearch cannot order groups by an aggregate.' } }, { status: 400 }));
+    await expect(fetchRows('opensearch', request)).rejects.toMatchObject({ status: 400, kind: 'unsupported-shape', message: 'OpenSearch cannot order groups by an aggregate.' });
   });
 
   it('posts to the mysql routes', async () => {

@@ -1,4 +1,5 @@
 import type { ApiError } from '../api';
+import { errorHeading } from './errorHeading';
 
 interface Props {
   error: ApiError | null;
@@ -12,7 +13,7 @@ export function ErrorBanner({ error, onDismiss }: Props) {
   return (
     <div className="banner" role="alert">
       <span>
-        <strong>{error.kind}</strong>: {error.message}
+        <strong>{errorHeading(error.kind)}</strong>: {error.message}
       </span>
       <button type="button" className="link" onClick={onDismiss} aria-label="Dismiss the error">
         Dismiss

@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Demo.Api.Seed;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
+using Craticula.OpenSearch.Client;
 using MongoDB.Driver;
 using MySqlConnector;
 using Npgsql;
@@ -52,6 +53,8 @@ public static class EngineFailures
         // MySQL: the server cannot be reached, see MySqlConnectionFailureNumbers. Any other MySqlException (a refused login, a bad
         // statement, a missing table) stays a 500.
         exception => exception is MySqlException mysql && MySqlConnectionFailureNumbers.Contains(mysql.Number),
+        // OpenSearch: the low-level client does not throw, the adapter wraps a failed call; see IsOpenSearchUnavailable.
+        exception => exception is OpenSearchClientCompilationException opensearch && IsOpenSearchUnavailable(opensearch),
         exception => exception is TimeoutException,
         exception => exception is SocketException
     ];
@@ -60,6 +63,20 @@ public static class EngineFailures
     /// Anything else (a bad statement, a missing table, an untrusted certificate: a configuration error) is not.</summary>
     public static bool IsSqlServerUnavailable(SqlException exception) =>
         SqlServerConnectionFailureNumbers.Contains(exception.Number) || exception.InnerException is SocketException;
+
+    /// <summary>
+    /// An OpenSearch call that failed because the cluster cannot be reached or says it is overloaded (HTTP 503 or 429), or because the
+    /// transport failed: no HTTP status, and the transport exception inside. Measured against OpenSearch.Client 2.1.0 (every path
+    /// through the adapter and the distinct-values call; the export stream does not pass the HTTP status on, so an overloaded cluster
+    /// answers <c>export.csv</c> with a 500: a library gap): a refused port and a host name that does not resolve carry an
+    /// <see cref="HttpRequestException"/> (inner <see cref="SocketException"/>); a server that accepts and never answers carries a
+    /// <see cref="TaskCanceledException"/> (inner <see cref="TimeoutException"/>) after the 10 s request timeout. A 4xx or other 5xx
+    /// answer from a running cluster (a bad mapping, a rejected body) has a status and is a bug: it is not listed.
+    /// </summary>
+    public static bool IsOpenSearchUnavailable(OpenSearchClientCompilationException exception) =>
+        exception.HttpStatusCode is 503 or 429
+        || (exception.HttpStatusCode is null
+            && exception.InnerException is HttpRequestException or SocketException or TimeoutException or TaskCanceledException);
 
     /// <summary>True when the exception is a connection failure of an engine.</summary>
     public static bool IsUnavailable(Exception exception)

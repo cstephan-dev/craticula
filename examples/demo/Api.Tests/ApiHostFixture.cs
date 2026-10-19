@@ -33,6 +33,7 @@ public sealed class ApiHostFixture : IAsyncLifetime
             // The default host serves the always-on providers whatever the machine's environment holds; the engine fixtures own the engines.
             builder.Configuration[DemoSettings.SqlServerEnvVar] = "";
             builder.Configuration[DemoSettings.MySqlEnvVar] = "";
+            builder.Configuration[DemoSettings.OpenSearchEnvVar] = "";
         });
         await app.StartAsync();
         Client = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
@@ -55,6 +56,7 @@ public sealed class ApiHostFixture : IAsyncLifetime
             builder.Configuration["Urls"] = "http://127.0.0.1:0";
             builder.Configuration[DemoSettings.SqlServerEnvVar] = "";
             builder.Configuration[DemoSettings.MySqlEnvVar] = "";
+            builder.Configuration[DemoSettings.OpenSearchEnvVar] = "";
             // The last NpgsqlDataSource registration is the one PostgresGridService receives.
             builder.Services.AddSingleton(NpgsqlDataSource.Create(
                 $"Host=127.0.0.1;Port={closedPort};Username=demo;Password=demo;Database=demo;Timeout=2"));
@@ -71,9 +73,10 @@ public sealed class ApiHostFixture : IAsyncLifetime
         var app = DemoApp.Build([], builder =>
         {
             builder.Configuration["Urls"] = "http://127.0.0.1:0";
-            // Blank unless the test sets it: a DEMO_SQLSERVER or DEMO_MYSQL in the machine's environment must not change what a host lists.
+            // Blank unless the test sets it: a DEMO_SQLSERVER, DEMO_MYSQL or DEMO_OPENSEARCH in the machine's environment must not change what a host lists.
             builder.Configuration[DemoSettings.SqlServerEnvVar] = "";
             builder.Configuration[DemoSettings.MySqlEnvVar] = "";
+            builder.Configuration[DemoSettings.OpenSearchEnvVar] = "";
             configure?.Invoke(builder);
         }, optionalProviders);
         await app.StartAsync();

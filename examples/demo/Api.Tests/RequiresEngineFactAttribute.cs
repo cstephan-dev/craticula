@@ -16,7 +16,8 @@ internal static class EngineProbe
     private static readonly Dictionary<string, Func<string, string?>> Probes = new()
     {
         [Seed.DemoSettings.SqlServerEnvVar] = ProbeSqlServer,
-        [Seed.DemoSettings.MySqlEnvVar] = ProbeMySql
+        [Seed.DemoSettings.MySqlEnvVar] = ProbeMySql,
+        [Seed.DemoSettings.OpenSearchEnvVar] = ProbeOpenSearch
     };
 
     public static string? SkipReason(string envVar) => Cache.GetOrAdd(envVar, Compute);
@@ -51,6 +52,23 @@ internal static class EngineProbe
         {
             return $"SQL Server does not answer at the {Seed.DemoSettings.SqlServerEnvVar} connection string ({ex.GetType().Name}). "
                 + "Is `docker compose --profile sqlserver up -d` healthy and the database seeded (`seed sqlserver`)?";
+        }
+    }
+
+    private static string? ProbeOpenSearch(string setting)
+    {
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(setting.Trim()), Timeout = TimeSpan.FromSeconds(3) };
+            using var response = http.GetAsync("_cluster/health").GetAwaiter().GetResult();
+            return response.IsSuccessStatusCode
+                ? null
+                : $"OpenSearch answers HTTP {(int)response.StatusCode} at the {Seed.DemoSettings.OpenSearchEnvVar} URL.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException or InvalidOperationException)
+        {
+            return $"OpenSearch does not answer at the {Seed.DemoSettings.OpenSearchEnvVar} URL ({ex.GetType().Name}). "
+                + "Is `docker compose --profile opensearch up -d --wait` healthy and the index seeded (`seed opensearch`)?";
         }
     }
 

@@ -7,10 +7,11 @@
 #   docker compose --profile sqlserver up -d   one engine, by its own profile
 #   docker compose --profile engines up -d     every optional engine at once (the umbrella profile)
 #   docker compose --profile mysql up -d       the same for MySQL
+#   docker compose --profile opensearch up -d --wait   the same for OpenSearch (waits for the cluster health check)
 # Every optional service lists its own profile AND `engines`. postgres and mongo have no profile: they always start.
 # The API lists an optional engine only when its connection variable is set (see README.md), and
-# `dotnet run --project Api -- seed <provider>` fills just the named provider. Today `sqlserver` and `mysql` are the two
-# real optional services (`engines` starts both); the OpenSearch task adds its own. Example block (commented out):
+# `dotnet run --project Api -- seed <provider>` fills just the named provider. Today `sqlserver`, `mysql` and `opensearch`
+# are the real optional services (`engines` starts all three). Example block (commented out):
 #
 #   example-engine:
 #     image: example/engine:1
@@ -97,8 +98,32 @@ services:
       retries: 40
       start_period: 30s
 
+  # OpenSearch 2.19 (the image the library's Docker tier uses), single node, Apache-2.0, no licence acceptance.
+  # DEMO ONLY: the security plugin is switched off (no TLS, no login), so the port is bound to 127.0.0.1 and must stay there;
+  # never publish this service on another interface. There are no credentials at all, so the API setting is a plain URL.
+  # The JVM heap is fixed at 512 MB. The first start takes tens of seconds, so the healthcheck waits before it counts failures.
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    profiles: ["opensearch", "engines"]
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "127.0.0.1:${DEMO_OPENSEARCH_PORT:-59200}:9200"
+    volumes:
+      - demo-opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 5s
+      timeout: 10s
+      retries: 40
+      start_period: 20s
+
 volumes:
   demo-pg-data:
   demo-mongo-data:
   demo-sqlserver-data:
   demo-mysql-data:
+  demo-opensearch-data:

@@ -22,6 +22,10 @@ public static class DemoSettings
     /// There is no default in code: README.md gives the one that matches docker-compose.yml.</summary>
     public const string MySqlEnvVar = "DEMO_MYSQL";
 
+    /// <summary>The environment variable holding the OpenSearch URL (for example <c>http://127.0.0.1:59200</c>); the engine is on only
+    /// when it is set. The compose service has its security plugin off, so there is no credential in it.</summary>
+    public const string OpenSearchEnvVar = "DEMO_OPENSEARCH";
+
     /// <summary>The environment variable that moves the SQLite file.</summary>
     public const string SqliteEnvVar = "DEMO_SQLITE";
 

@@ -15,14 +15,16 @@
       "filterable": true,
       "sortable": true,
       "label": "Order no",
-      "physical": { "sql": { "column": "order_no" }, "mongo": { "path": "orderNo" } }
+      "physical": { "sql": { "column": "order_no" }, "mongo": { "path": "orderNo" },
+        "search": { "field": "orderNo", "keywordSubField": "orderNo.keyword", "normalizedSubField": "orderNo.normalized" } }
     },
     "customer": {
       "type": "string",
       "filterable": true,
       "sortable": true,
       "label": "Customer",
-      "physical": { "sql": { "column": "customer" }, "mongo": { "path": "customer" } }
+      "physical": { "sql": { "column": "customer" }, "mongo": { "path": "customer" },
+        "search": { "field": "customer", "keywordSubField": "customer.keyword", "normalizedSubField": "customer.normalized" } }
     },
     "country": {
       "type": "string",
@@ -30,7 +32,8 @@
       "sortable": true,
       "groupable": true,
       "label": "Country",
-      "physical": { "sql": { "column": "country" }, "mongo": { "path": "country" } }
+      "physical": { "sql": { "column": "country" }, "mongo": { "path": "country" },
+        "search": { "field": "country", "keywordSubField": "country.keyword", "normalizedSubField": "country.normalized" } }
     },
     "category": {
       "type": "string",
@@ -38,7 +41,8 @@
       "sortable": true,
       "groupable": true,
       "label": "Category",
-      "physical": { "sql": { "column": "category" }, "mongo": { "path": "category" } }
+      "physical": { "sql": { "column": "category" }, "mongo": { "path": "category" },
+        "search": { "field": "category", "keywordSubField": "category.keyword", "normalizedSubField": "category.normalized" } }
     },
     "status": {
       "type": "string",
@@ -46,7 +50,8 @@
       "sortable": true,
       "groupable": true,
       "label": "Status",
-      "physical": { "sql": { "column": "status" }, "mongo": { "path": "status" } }
+      "physical": { "sql": { "column": "status" }, "mongo": { "path": "status" },
+        "search": { "field": "status", "keywordSubField": "status.keyword", "normalizedSubField": "status.normalized" } }
     },
     "amount": {
       "type": "decimal",

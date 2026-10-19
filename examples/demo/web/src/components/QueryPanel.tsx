@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ApiError, type QueryView } from '../api';
+import { errorHeading } from './errorHeading';
 import { queryNote } from './queryNote';
 
 export interface CompiledQuery {
@@ -32,7 +33,7 @@ export function QueryPanel({ query }: Props) {
       {!view && <p className="muted">Waiting for the first request.</p>}
       {view instanceof ApiError && (
         <p className="panel-error">
-          <strong>{view.kind}</strong>: {view.message}
+          <strong>{errorHeading(view.kind)}</strong>: {view.message}
         </p>
       )}
       {view && !(view instanceof ApiError) && (
