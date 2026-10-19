@@ -7,6 +7,9 @@ export function createProviderGate(initial: Provider) {
     select(next: Provider) {
       current = next;
     },
+    current(): Provider {
+      return current;
+    },
     isCurrent(candidate: Provider) {
       return current === candidate;
     },

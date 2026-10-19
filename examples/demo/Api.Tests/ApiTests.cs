@@ -374,7 +374,7 @@ public sealed class ApiTests(ApiHostFixture api)
         var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(new[] { "ef", "mongo", "postgres" }, json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()!).ToArray());
+        Assert.Equal(new[] { "ef", "mongo", "postgres", "sqlite" }, json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()!).ToArray());
     }
 
     [Theory]

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi, GridReadyEvent } from 'ag-grid-enterprise';
-import { ApiError, fetchExport, fetchHealth, type Provider } from './api';
+import { ApiError, fetchExport, fetchHealth, providerToSelect, visibleProviders, type HealthResponse, type Provider } from './api';
 import { buildColumnDefs, type GridContext } from './columns';
 import { asApiError, createDatasource, createProviderGate } from './datasource';
 import { buildExportRequest } from './exportRequest';
@@ -20,6 +20,7 @@ const AUTO_GROUP_COLUMN_DEF: ColDef = { minWidth: 220, headerName: 'Group' };
 export function App() {
   const [provider, setProvider] = useState<Provider>('postgres');
   const [health, setHealth] = useState<Health>('checking');
+  const [reported, setReported] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [paged, setPaged] = useState(false);
@@ -29,16 +30,6 @@ export function App() {
   const apiRef = useRef<GridApi | null>(null);
   // The provider on screen, for the datasources to ask (switchProvider is the only writer).
   const [gate] = useState(() => createProviderGate('postgres'));
-  useEffect(() => {
-    let cancelled = false;
-    fetchHealth().then(
-      () => !cancelled && setHealth('ok'),
-      () => !cancelled && setHealth('down'),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const columnDefs = useMemo(() => buildColumnDefs({ onError: setError }), []);
   // The set-filter callbacks read the provider from the grid context, so the column definitions never change.
@@ -65,6 +56,29 @@ export function App() {
     setError(null);
     setProvider(next);
   }, [gate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchHealth().then(
+      (answer) => {
+        if (!cancelled) {
+          setReported(answer);
+          // The API may serve fewer providers than the page knows: never stay on one that is not offered.
+          const target = providerToSelect(gate.current(), visibleProviders(answer));
+          if (target !== gate.current()) {
+            switchProvider(target);
+          }
+          setHealth('ok');
+        }
+      },
+      () => !cancelled && setHealth('down'),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [gate, switchProvider]);
+
+  const visible = useMemo(() => visibleProviders(reported), [reported]);
 
   const onGridReady = useCallback((event: GridReadyEvent) => {
     apiRef.current = event.api;
@@ -100,7 +114,7 @@ export function App() {
           <p className="muted">AG Grid Enterprise evaluation mode: watermark expected</p>
         </div>
         <div className="controls">
-          <ProviderSwitch provider={provider} onChange={switchProvider} />
+          <ProviderSwitch provider={provider} onChange={switchProvider} providers={visible} />
           <span className={`health ${health}`} title="GET /api/health">
             API: {health === 'ok' ? 'up' : health === 'down' ? 'unreachable' : 'checking'}
           </span>

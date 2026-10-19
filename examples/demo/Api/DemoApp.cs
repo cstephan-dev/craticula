@@ -20,7 +20,14 @@ public static class DemoApp
     private static readonly string[] AllowedOrigins =
         ["http://localhost:5173", "http://127.0.0.1:5173"];
 
-    public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configure = null)
+    /// <param name="configure">Runs after the always-on registrations and before the optional ones, so it can also set
+    /// a provider's setting with <c>builder.Configuration["DEMO_X"] = ...</c> (environment variables are part of the
+    /// configuration) without touching the real environment.</param>
+    /// <param name="extraOptionalProviders">Added to <see cref="OptionalProviders.All"/>; tests use it to add a fake engine.</param>
+    public static WebApplication Build(
+        string[] args,
+        Action<WebApplicationBuilder>? configure = null,
+        IReadOnlyList<OptionalProvider>? extraOptionalProviders = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -54,6 +61,11 @@ public static class DemoApp
         builder.Services.AddSingleton<IGridService, PostgresGridService>();
         builder.Services.AddSingleton<IGridService, EfGridService>();
         builder.Services.AddSingleton<IGridService, MongoGridService>();
+        // SQLite is a file, so it is always on. The path is read when the service is first built, after `configure` ran:
+        // DEMO_SQLITE from the configuration (the environment is part of it), else data/demo.sqlite under the demo folder.
+        builder.Services.AddSingleton<IGridService>(services => new SqliteGridService(
+            DemoSettings.ResolveSqlitePath(services.GetRequiredService<IConfiguration>()[DemoSettings.SqliteEnvVar]),
+            services.GetRequiredService<GridRequestPreparer>()));
         builder.Services.AddSingleton<ProviderRegistry>();
 
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
@@ -62,6 +74,10 @@ public static class DemoApp
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 1_048_576);
 
         configure?.Invoke(builder);
+
+        // An optional engine is registered only when its setting is present; health and the 404 text list what is registered.
+        OptionalProviders.RegisterConfigured(
+            builder.Services, [.. OptionalProviders.All, .. extraOptionalProviders ?? []], name => builder.Configuration[name]);
 
         var app = builder.Build();
 

@@ -1,16 +1,17 @@
 # Craticula demo
 
-One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL (through Dapper or through Entity Framework Core) or MongoDB. A small C# API turns each grid
+One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL (through Dapper or through Entity Framework Core), MongoDB or SQLite (a file, no container). A small C# API turns each grid
 request into a native query with the Craticula library. To run it (three terminals, from this folder):
 
 ```bash
-docker compose up -d && dotnet run --project Api -- seed   # terminal 1: databases, then fill them
+docker compose up -d && dotnet run --project Api -- seed   # terminal 1: databases, then fill them (PostgreSQL, MongoDB, the SQLite file)
 dotnet run --project Api                                   # terminal 2: the API on http://127.0.0.1:5080
 cd web && npm install && npm run dev                       # terminal 3: the page on http://localhost:5173
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 24 scenarios are equal on all 3 providers (postgres, mongo, ef)`.
+is up) ends with `all 24 scenarios are equal on all 4 providers (postgres, ef, mongo, sqlite)`. (SQLite is a file the seed creates; see
+[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.)
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -90,15 +91,15 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
    npm run dev
    ```
 
-5. Optional check without a browser: `bash smoke.sh` posts 24 fixed requests (`smoke/*.json`) to all three providers and prints
+5. Optional check without a browser: `bash smoke.sh` posts 24 fixed requests (`smoke/*.json`) to all four providers and prints
    one row per scenario. Exit code 0 means every answer is equal; 1 means a difference or a missing `400`; 2 means the
    environment is wrong (API down, a database down). `bash smoke.sh --api URL` points it at another API.
 
 ## Click-through checklist
 
-Do these in the browser. Each should work on all three providers (PostgreSQL is the Dapper route, EF Core is the Entity Framework route).
+Do these in the browser. Each should work on all the providers the API lists (PostgreSQL is the Dapper route, EF Core is the Entity Framework route).
 
-1. **Switch provider.** Use the PostgreSQL / MongoDB / EF Core switch in the header. Apply a filter and a sort, then switch: the same
+1. **Switch provider.** Use the provider switch in the header (PostgreSQL, MongoDB, EF Core, SQLite). Apply a filter and a sort, then switch: the same
    rows appear.
 2. **Sort.** Click a column header (Amount, Ordered at). Shift-click a second column to sort by both.
 3. **Filters, one per type.** Text (Customer contains `GmbH`), number (Quantity greater than 8), date (Shipped on, Ordered
@@ -183,6 +184,56 @@ CSV export uses `EfCoreExportStream.StreamAsync` the same way.
 **Package.** The demo adds `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (central version in `Directory.Packages.props`). It is a new library and
 needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
 
+## SQLite (the `sqlite` provider)
+
+The fourth provider reads the same orders from a **SQLite file** through `Craticula.Dapper` and `SqliteDialect`. There is no container and no
+compose profile: SQLite is always on, and `/api/health` always lists `sqlite`. The code is `Api/Grid/SqliteGridService.cs`,
+`Api/Seed/SqliteSeeder.cs` and `Api/Grid/SetValuesRunner.cs` (the compile-and-run helper `PostgresSetValues` now shares).
+
+- **Where the file is.** `DEMO_SQLITE` if set, else `data/demo.sqlite` in this folder. `data/` is git-ignored: the file is generated, never commit it.
+- **Create it.** `dotnet run --project Api -- seed sqlite` drops and recreates table `orders` (same rows and indexes as PostgreSQL) and prints
+  `SQLite: 20000 rows in table orders (<path>).` Plain `seed` fills PostgreSQL, MongoDB and the SQLite file.
+- **Missing file.** The API opens the file read-write but never creates it. If it is missing, or `seed sqlite` holds the lock, the provider answers
+  503 `backend-unavailable` like a database that is down. Seed it, then reload.
+- **Version.** SQLite 3.30 or later (the dialect's `NULLS FIRST/LAST`). The library bundled with `Microsoft.Data.Sqlite` is newer; the seed
+  checks it and stops with a clear message if it is not.
+- **Stored forms.** Dates are text `yyyy-MM-dd`, instants are text `yyyy-MM-ddTHH:mm:ss.fffZ` (exactly three digits and `Z`, UTC), booleans are 0 and 1,
+  `amount` is a `NUMERIC` column.
+
+**Two differences from PostgreSQL, both measured and both documented, not hidden**
+
+1. **Floating-point sums.** SQLite stores `NUMERIC` as a floating-point number, so a grouped `amount` sum can differ from PostgreSQL's exact decimal in the last digits.
+   `smoke.sh` compares keys ending `_sum` for `sqlite` (only) with a relative tolerance of 1e-9, `|a-b| <= 1e-9 * max(1, |a|, |b|)`; the average keeps its
+   1e-6 tolerance, and every other value, the row counts and the CSV stay exact. When the tolerance was needed, `smoke.sh` prints one line saying where.
+2. **ASCII-only case folding.** SQLite's `NOCASE` and `LIKE` fold ASCII letters only. A "contains" filter for `SÖHNE` finds `Müller, Söhne & Co` on PostgreSQL and
+   not on SQLite (`Ö` and `ö` differ); `söhne` finds it on both. The smoke scenarios avoid this case; `Api.Tests` pins the actual behaviour.
+
+**Package.** The demo adds `Microsoft.Data.Sqlite` 10.0.11 (the version the library's tests use; central version in `Directory.Packages.props`). It is a
+new library, not named in the approved stack, and needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
+
+## Optional providers and seeding a subset
+
+PostgreSQL, MongoDB, EF Core and SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
+(an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
+page does not offer it. This lets you run the demo with any subset of its databases. No optional engine ships yet; the later
+provider sections of this README name each one's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
+start the heavy engines only on request; the umbrella profile name is `engines`.
+
+`seed` takes an optional list of providers:
+
+```bash
+dotnet run --project Api -- seed                  # the default: postgres, mongo and sqlite
+dotnet run --project Api -- seed mongo            # only MongoDB
+dotnet run --project Api -- seed sqlite           # only the SQLite file (no Docker needed)
+dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
+```
+
+Each provider is seeded on its own: a database that is down prints its error and the others still run. The exit code is 0 when
+everything requested was seeded, 1 when a count is wrong, and 2 when a provider failed or the name is unknown.
+
+`bash smoke.sh` compares every provider the API lists with the postgres baseline. To compare a chosen list, set
+`DEMO_SMOKE_PROVIDERS=postgres,ef` (postgres is always required); a name the API does not list stops it with exit 2 and a clear message.
+
 ## Stop and reset
 
 ```bash
@@ -200,7 +251,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `port is already allocated` or `address already in use` | Find the owner with `ss -ltnp \| grep :5080` (or `lsof -i :5080`), stop it, or change the port (see above). |
 | `Cannot connect to the Docker daemon` | Start Docker Desktop or the Docker service, then run `docker compose up -d` again. |
 | The grid is empty | The seed has not run, or you ran `docker compose down -v`. Run `dotnet run --project Api -- seed`. |
-| A red banner with `backend-unavailable` (HTTP 503) | The database for that provider is down or unreachable. Check `docker compose ps`, then reload. |
+| A red banner with `backend-unavailable` (HTTP 503) | The database for that provider is down or unreachable. Check `docker compose ps`, then reload. For `sqlite` the file is missing or locked: run `dotnet run --project Api -- seed sqlite`. |
 | `API: unreachable` in the header | The API is not running on port 5080. Start it (step 3). |
 | A watermark and console warnings | Normal: AG Grid Enterprise evaluation mode (see above). |
 | `smoke.sh` exits 2 | Read its message: it names the API address or the provider that failed. |
@@ -210,7 +261,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | Path | What |
 |---|---|
 | `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`), the seed (`Api/Seed/`) |
-| `Api.Tests/` | xUnit tests that start the real API against both databases (they skip when the databases are down) |
+| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
 | `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL and MongoDB mappings |
 | `smoke.sh`, `smoke/` | The cross-provider check and its request files |

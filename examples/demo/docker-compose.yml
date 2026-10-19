@@ -1,6 +1,26 @@
 # Demo databases for examples/demo. Local, throw-away credentials (user demo / password demo / database demo);
 # nothing here is a secret. Ports are bound to localhost only. Override a host port when it is taken:
 #   DEMO_PG_PORT=55434 DEMO_MONGO_PORT=57018 docker compose up -d
+#
+# Optional engines use compose profiles. A service with `profiles: [...]` is NOT started by a plain `docker compose up -d`;
+# it starts only when one of its profiles is asked for:
+#   docker compose --profile mysql up -d       one engine, by its own profile
+#   docker compose --profile engines up -d     every optional engine at once (the umbrella profile)
+# Every optional service lists its own profile AND `engines`. postgres and mongo have no profile: they always start.
+# The API lists an optional engine only when its connection variable is set (see README.md), and
+# `dotnet run --project Api -- seed <provider>` fills just the named provider. Example block (commented out; the real
+# services arrive with the SQL Server, MySQL and OpenSearch tasks):
+#
+#   example-engine:
+#     image: example/engine:1
+#     profiles: ["example", "engines"]
+#     ports:
+#       - "127.0.0.1:${DEMO_EXAMPLE_PORT:-51000}:5000"
+#     healthcheck:
+#       test: ["CMD-SHELL", "example-ping"]
+#       interval: 5s
+#       timeout: 3s
+#       retries: 20
 services:
   postgres:
     image: postgres:16
