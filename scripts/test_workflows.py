@@ -21,8 +21,8 @@ READ_ONLY_PERMISSIONS = re.compile(r"^permissions:\n  contents: read\n(?!  )", r
 JOB_PERMISSIONS = re.compile(r"^    permissions:", re.MULTILINE)
 PIPED_RUN = re.compile(r"^\s*run:\s.*\|", re.MULTILINE)
 EXPLICIT_BASH = re.compile(r"^\s*shell:\s*bash\s*$", re.MULTILINE)
-KEY_WITHOUT_SPACE = re.compile(r"^(?P<key>[A-Za-z_][\w.-]*):(?P<rest>[^\s/].*)$")
-BLOCK_SCALAR = re.compile(r":\s+[|>][+-]?\d*\s*(?:#.*)?$")
+KEY_WITHOUT_SPACE = re.compile(r"^(?P<key>[A-Za-z_][\w.-]*):(?P<rest>(?!//)[^ ].*)$")
+BLOCK_SCALAR = re.compile(r":\s+[|>](?:[+-]?\d*|\d*[+-]?)\s*(?:#.*)?$")
 
 
 def unpinned_uses(text: str) -> list[str]:
@@ -56,8 +56,10 @@ def pipe_hides_failure(text: str) -> bool:
 
 def key_without_space(text: str) -> list[str]:
     """Mapping lines written `key:value` with no space after the colon (FR-02: `run:bash x` is not a mapping entry, so the
-    whole file fails to load). Comments, blank lines, the bodies of block scalars (`run: |`) and list items (`- a:b` is a plain
-    string) are skipped. Stdlib only, a line scan: it does not replace a parser, it catches the one class a regex lint missed."""
+    whole file fails to load; `- run:bash x` loads but the step is a string, which GitHub rejects). Comments, blank lines, the
+    bodies of block scalars (`run: |`), URLs (`key://`) and `- vol:/path` list strings are skipped. Stdlib only, a line scan: it does not replace a parser,
+    it catches the one class a regex lint missed. A multi-line plain scalar whose continuation line looks like `a:b` is a known
+    false positive (none exists; the failure is loud)."""
     bad = []
     block_column = None
     for line in text.splitlines():
@@ -69,15 +71,18 @@ def key_without_space(text: str) -> list[str]:
             if indent > block_column:
                 continue
             block_column = None
-        content = line.lstrip(" ")
+        content = line.lstrip(" ").rstrip()
         key_column = indent
         while content.startswith("- "):
             content = content[2:].lstrip(" ")
             key_column = len(line) - len(content)
         if BLOCK_SCALAR.search(line):
             block_column = key_column
-        elif not stripped.startswith("- ") and KEY_WITHOUT_SPACE.match(content):
-            bad.append(stripped)
+        else:
+            match = KEY_WITHOUT_SPACE.match(content)
+            # `- vol:/path` (a volume or port mapping) is a legitimate list string: a leading slash only counts on a mapping key.
+            if match and not (stripped.startswith("- ") and match.group("rest").startswith("/")):
+                bad.append(stripped)
     return bad
 
 
@@ -142,6 +147,27 @@ class RuleFunctionTests(unittest.TestCase):
 
     def test_key_without_space_fails_on_other_keys(self):
         self.assertEqual(["name:Build", "uses:actions/checkout@v4"], key_without_space("name:Build\n    uses:actions/checkout@v4\n"))
+
+    def test_list_item_keys_are_checked(self):
+        """The first key of a step sits after `- `: the same mistake there loads as a string and GitHub rejects the step."""
+        text = "    steps:\n      - run:bash x\n      - uses:actions/checkout@v4\n"
+        self.assertEqual(["- run:bash x", "- uses:actions/checkout@v4"], key_without_space(text))
+
+    def test_value_starting_with_a_slash_is_flagged_but_a_url_is_not(self):
+        self.assertEqual(["working-directory:/tmp"], key_without_space("  working-directory:/tmp\n"))
+        self.assertEqual([], key_without_space("  url://host/x\n"))
+
+    def test_tab_after_the_colon_is_flagged(self):
+        self.assertEqual(["a:\tb"], key_without_space("a:\tb\n"))
+
+    def test_list_items_that_are_plain_strings_pass(self):
+        self.assertEqual([], key_without_space("    ports:\n      - 5432:5432\n      - 'a:b'\n      - vol:/path\n"))
+
+    def test_block_scalar_header_variants(self):
+        for header in ("|", "|-", "|+", ">", ">-", "|2", "|2-", "|-2"):
+            with self.subTest(header=header):
+                text = f"        run: {header}\n          echo url:x\n        shell:bash\n"
+                self.assertEqual(["shell:bash"], key_without_space(text))
 
     def test_key_with_space_passes(self):
         self.assertEqual([], key_without_space("      - name: Test\n        run: bash x.sh\n    needs:\n      - build\n"))
