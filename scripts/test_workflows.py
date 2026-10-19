@@ -2,7 +2,9 @@
 """Pins the supply-chain rules of every GitHub workflow offline (story #2467, NFR-02): each `uses:` of a third-party
 or local-looking action is pinned to a 40-character commit SHA, every workflow declares a top-level `permissions:`
 block, and the public CI (`ci.yml`) references no secret. Line checks only, stdlib only, no network. A reusable-workflow
-call to this repository (`./.github/workflows/...`) needs no pin. Run: python3 scripts/test_workflows.py
+call to this repository (`./.github/workflows/...`) needs no pin. A mapping line with no space after its colon (`run:bash x`,
+story #1662 FR-02) is invalid YAML that no job could survive; `key_without_space` catches that class without a YAML library,
+and every workflow is also parsed with PyYAML when it is installed. Run: python3 scripts/test_workflows.py
 (also run by Craticula.Conformance.Tests/WorkflowLintTests.cs on every `dotnet test`).
 """
 import re
@@ -19,6 +21,8 @@ READ_ONLY_PERMISSIONS = re.compile(r"^permissions:\n  contents: read\n(?!  )", r
 JOB_PERMISSIONS = re.compile(r"^    permissions:", re.MULTILINE)
 PIPED_RUN = re.compile(r"^\s*run:\s.*\|", re.MULTILINE)
 EXPLICIT_BASH = re.compile(r"^\s*shell:\s*bash\s*$", re.MULTILINE)
+KEY_WITHOUT_SPACE = re.compile(r"^(?P<key>[A-Za-z_][\w.-]*):(?P<rest>(?!//)[^ ].*)$")
+BLOCK_SCALAR = re.compile(r":\s+[|>](?:[+-]?\d*|\d*[+-]?)\s*(?:#.*)?$")
 
 
 def unpinned_uses(text: str) -> list[str]:
@@ -48,6 +52,38 @@ def is_read_only(text: str) -> bool:
 def pipe_hides_failure(text: str) -> bool:
     """A single-line `run:` with a pipe and no explicit `shell: bash` (default `bash -e` has no pipefail)."""
     return PIPED_RUN.search(text) is not None and EXPLICIT_BASH.search(text) is None
+
+
+def key_without_space(text: str) -> list[str]:
+    """Mapping lines written `key:value` with no space after the colon (FR-02: `run:bash x` is not a mapping entry, so the
+    whole file fails to load; `- run:bash x` loads but the step is a string, which GitHub rejects). Comments, blank lines, the
+    bodies of block scalars (`run: |`), URLs (`key://`) and `- vol:/path` list strings are skipped. Stdlib only, a line scan: it does not replace a parser,
+    it catches the one class a regex lint missed. A multi-line plain scalar whose continuation line looks like `a:b` is a known
+    false positive (none exists; the failure is loud)."""
+    bad = []
+    block_column = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if block_column is not None:
+            if indent > block_column:
+                continue
+            block_column = None
+        content = line.lstrip(" ").rstrip()
+        key_column = indent
+        while content.startswith("- "):
+            content = content[2:].lstrip(" ")
+            key_column = len(line) - len(content)
+        if BLOCK_SCALAR.search(line):
+            block_column = key_column
+        else:
+            match = KEY_WITHOUT_SPACE.match(content)
+            # `- vol:/path` (a volume or port mapping) is a legitimate list string: a leading slash only counts on a mapping key.
+            if match and not (stripped.startswith("- ") and match.group("rest").startswith("/")):
+                bad.append(stripped)
+    return bad
 
 
 def secret_references(text: str) -> list[str]:
@@ -104,6 +140,50 @@ class RuleFunctionTests(unittest.TestCase):
     def test_pipe_with_explicit_bash_passes(self):
         self.assertFalse(pipe_hides_failure("        shell: bash\n        run: bash x.sh | tee log\n"))
 
+    def test_key_without_space_fails_on_the_broken_ci_line(self):
+        """FR-02: the exact line commit 78a7c9c wrote into ci.yml."""
+        line = '        run:bash scripts/coverage.sh 2>&1 | tee "$RUNNER_TEMP/coverage.log"\n'
+        self.assertEqual(['run:bash scripts/coverage.sh 2>&1 | tee "$RUNNER_TEMP/coverage.log"'], key_without_space(line))
+
+    def test_key_without_space_fails_on_other_keys(self):
+        self.assertEqual(["name:Build", "uses:actions/checkout@v4"], key_without_space("name:Build\n    uses:actions/checkout@v4\n"))
+
+    def test_list_item_keys_are_checked(self):
+        """The first key of a step sits after `- `: the same mistake there loads as a string and GitHub rejects the step."""
+        text = "    steps:\n      - run:bash x\n      - uses:actions/checkout@v4\n"
+        self.assertEqual(["- run:bash x", "- uses:actions/checkout@v4"], key_without_space(text))
+
+    def test_value_starting_with_a_slash_is_flagged_but_a_url_is_not(self):
+        self.assertEqual(["working-directory:/tmp"], key_without_space("  working-directory:/tmp\n"))
+        self.assertEqual([], key_without_space("  url://host/x\n"))
+
+    def test_tab_after_the_colon_is_flagged(self):
+        self.assertEqual(["a:\tb"], key_without_space("a:\tb\n"))
+
+    def test_list_items_that_are_plain_strings_pass(self):
+        self.assertEqual([], key_without_space("    ports:\n      - 5432:5432\n      - 'a:b'\n      - vol:/path\n"))
+
+    def test_block_scalar_header_variants(self):
+        for header in ("|", "|-", "|+", ">", ">-", "|2", "|2-", "|-2"):
+            with self.subTest(header=header):
+                text = f"        run: {header}\n          echo url:x\n        shell:bash\n"
+                self.assertEqual(["shell:bash"], key_without_space(text))
+
+    def test_key_with_space_passes(self):
+        self.assertEqual([], key_without_space("      - name: Test\n        run: bash x.sh\n    needs:\n      - build\n"))
+
+    def test_block_scalar_bodies_are_not_scanned(self):
+        text = "      - run: |\n          echo a:b\n          url:x\n      - name: next\n"
+        self.assertEqual([], key_without_space(text))
+
+    def test_key_without_space_resumes_after_a_block_scalar(self):
+        text = "        run: |\n          echo a:b\n        shell:bash\n"
+        self.assertEqual(["shell:bash"], key_without_space(text))
+
+    def test_urls_comments_and_expressions_are_not_flagged(self):
+        text = "# note a:b\n  https://example.org/x\n  if: ${{ github.event_name == 'push' }}\n  cron: '0 3 * * 1'\n"
+        self.assertEqual([], key_without_space(text))
+
     def test_secret_in_comment_is_ignored(self):
         self.assertEqual([], secret_references("# No secret: nothing reads secrets.X here\n"))
 
@@ -118,6 +198,22 @@ class RealWorkflowTests(unittest.TestCase):
         for path in self.workflows():
             with self.subTest(workflow=path.name):
                 self.assertEqual([], unpinned_uses(path.read_text(encoding="utf-8")))
+
+    def test_every_workflow_has_a_space_after_each_key_colon(self):
+        """FR-02: stdlib check, always runs."""
+        for path in self.workflows():
+            with self.subTest(workflow=path.name):
+                self.assertEqual([], key_without_space(path.read_text(encoding="utf-8")))
+
+    def test_every_workflow_parses_as_yaml(self):
+        """FR-02: a full parse when PyYAML is installed (it is not a dependency of the repository)."""
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML is not installed; test_every_workflow_has_a_space_after_each_key_colon still runs")
+        for path in self.workflows():
+            with self.subTest(workflow=path.name):
+                self.assertIsInstance(yaml.safe_load(path.read_text(encoding="utf-8")), dict)
 
     def test_every_workflow_declares_permissions(self):
         for path in self.workflows():
