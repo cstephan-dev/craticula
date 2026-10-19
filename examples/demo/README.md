@@ -1,6 +1,6 @@
 # Craticula demo
 
-One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL (through Dapper or through Entity Framework Core), MongoDB or SQLite (a file, no container). A small C# API turns each grid
+One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL (through Dapper or through Entity Framework Core), MongoDB or SQLite (a file, no container), and, when you start them, from SQL Server, MySQL or OpenSearch. A small C# API turns each grid
 request into a native query with the Craticula library. To run it (three terminals, from this folder):
 
 ```bash
@@ -12,7 +12,7 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
 is up) ends with `all 25 scenarios are equal on all 4 providers (postgres, ef, mongo, sqlite)`. (SQLite is a file the seed creates; see
 [SQLite](#sqlite-the-sqlite-provider) for the two documented differences.) SQL Server, MySQL and OpenSearch are optional providers that start only on request:
-see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider).
+see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), or [all seven at once](#all-seven-providers-at-once).
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -50,7 +50,7 @@ The translation is in `web/src/inRange.ts`, shared by both pages and the CSV exp
 - Docker with the Compose plugin
 - .NET 10 SDK
 - Node 20.19 or newer
-- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page); 51433 (SQL Server) and 53306 (MySQL) only when you start those profiles
+- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page); 51433 (SQL Server), 53306 (MySQL) and 59200 (OpenSearch) only when you start those profiles
 
 All connection values have defaults that match `docker-compose.yml`, so no environment variable is needed. The databases
 use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
@@ -404,6 +404,28 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 
 `bash smoke.sh` compares every provider the API lists with the postgres baseline. To compare a chosen list, set
 `DEMO_SMOKE_PROVIDERS=postgres,ef` (postgres is always required); a name the API does not list stops it with exit 2 and a clear message.
+
+## All seven providers at once
+
+To see every provider side by side (and to run the full parity check), start the three optional engines together. This needs about
+4 GB of free RAM (SQL Server about 2 GB, OpenSearch about 1 GiB, MySQL about 0.5 GiB) and accepts Microsoft's SQL Server licence
+(see [SQL Server](#sql-server-the-sqlserver-provider)). From this folder:
+
+```bash
+docker compose --profile engines up -d --wait            # PostgreSQL, MongoDB, SQL Server, MySQL, OpenSearch
+export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"
+export DEMO_MYSQL="Server=127.0.0.1;Port=53306;User ID=demo;Password=demo;Database=demo"
+export DEMO_OPENSEARCH=http://127.0.0.1:59200
+dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch
+dotnet run --project Api                                 # /api/health lists all seven
+bash smoke.sh                                            # in another terminal: all 25 scenarios equal on all 7 providers
+docker compose --profile engines stop sqlserver mysql opensearch   # when done: keeps the data, leaves PostgreSQL and MongoDB up
+```
+
+`smoke.sh` ends with `all 25 scenarios are equal on all 7 providers (postgres, ef, mongo, mysql, opensearch, sqlite, sqlserver)`.
+It also prints the places where an engine was equal only by a documented rule (SQL Server and MySQL `quantity_avg`, the OpenSearch
+differences) and the one scenario OpenSearch answers with `unsupported-shape`. If one engine is not up, name the ones to compare:
+`DEMO_SMOKE_PROVIDERS=postgres,ef,mongo,sqlite bash smoke.sh`; a name the API does not list stops the run with exit 2.
 
 ## Stop and reset
 
