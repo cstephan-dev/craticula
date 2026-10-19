@@ -35,5 +35,5 @@ See [VERSIONING.md](VERSIONING.md) for how versions are numbered.
 In scope: the compilers and adapters in `csharp/src/`, for example a way to inject into a generated query, to reach a
 column or field that the schema does not allow, to bypass a limit, or to make an export write data it should not.
 
-Out of scope: the example application in `examples/demo`. It runs only on your own machine with throw-away credentials
-(`demo` / `demo`) and is not meant to be exposed.
+Out of scope: the example application in `examples/demo`. It runs only on your own machine with throw-away local
+credentials and is not meant to be exposed.
