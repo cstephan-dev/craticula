@@ -23,7 +23,8 @@ PIPED_RUN = re.compile(r"^\s*run:\s.*\|", re.MULTILINE)
 EXPLICIT_BASH = re.compile(r"^\s*shell:\s*bash\s*$", re.MULTILINE)
 KEY_WITHOUT_SPACE = re.compile(r"^(?P<key>[A-Za-z_][\w.-]*):(?P<rest>(?!//)[^ ].*)$")
 RUN_KEY = re.compile(r"^(?P<indent>\s*)(?:-\s+)*run:\s*(?P<value>.*)$")
-UNTRUSTED_EXPRESSION = re.compile(r"\$\{\{[^}]*\b(?:github\.event\.|github\.head_ref|github\.ref_name)")
+UNTRUSTED_EXPRESSION = re.compile(r"\$\{\{.*?\b(?:github\.event\b|github\[|github\.head_ref|github\.ref_name)")
+HEAD_CHECKOUT = re.compile(r"^\s*(?:ref|repository):\s*.*(?:pull_request\.head|head_ref|head\.repo|refs/pull|github\[)", re.MULTILINE)
 BLOCK_SCALAR = re.compile(r":\s+[|>](?:[+-]?\d*|\d*[+-]?)\s*(?:#.*)?$")
 
 
@@ -114,6 +115,16 @@ def event_expression_in_run(text: str) -> list[str]:
         elif UNTRUSTED_EXPRESSION.search(value):
             bad.append(line.strip())
     return bad
+
+
+def target_checks_out_head(text: str) -> list[str]:
+    """In a `pull_request_target` workflow (it runs with the base branch's code and token), the `ref:` or `repository:` lines
+    of a checkout that point at the pull request's head: that would run a contributor's code with that token. The pull
+    request's commits may be fetched as data in a `run:` step (`git fetch refs/pull/<n>/head`); they may not be checked out."""
+    code = re.sub(r"(?m)^\s*#.*$", "", text)
+    if "pull_request_target" not in code:
+        return []
+    return [line.strip() for line in code.splitlines() if HEAD_CHECKOUT.match(line)]
 
 
 def secret_references(text: str) -> list[str]:
@@ -222,6 +233,28 @@ class RuleFunctionTests(unittest.TestCase):
         text = "      - name: x\n        run: |\n          echo start\n          git checkout ${{ github.head_ref }}\n          echo ${{ github.ref_name }}\n"
         self.assertEqual(["git checkout ${{ github.head_ref }}", "echo ${{ github.ref_name }}"], event_expression_in_run(text))
 
+    def test_other_event_expression_forms_in_a_run_line_fail(self):
+        for expr in ("${{ toJSON(github.event) }}", "${{ format('{0}', github.event.pull_request.title) }}",
+                     "${{ github['event']['pull_request']['title'] }}", "${{ github.head_ref }}", "${{ github.ref_name }}"):
+            with self.subTest(expr=expr):
+                self.assertEqual(1, len(event_expression_in_run(f"        run: echo {expr}\n")), expr)
+
+    def test_head_checkout_in_a_pull_request_target_workflow_fails(self):
+        for ref in ("ref: ${{ github.event.pull_request.head.sha }}", "ref: ${{ github.head_ref }}", "ref: refs/pull/1/merge",
+                    "repository: ${{ github.event.pull_request.head.repo.full_name }}", "ref: ${{ github['event'] }}"):
+            with self.subTest(ref=ref):
+                text = f"on:\n  pull_request_target:\njobs:\n  a:\n    steps:\n      - uses: a/b@{'a' * 40}\n        with:\n          {ref}\n"
+                self.assertEqual([ref], target_checks_out_head(text), ref)
+
+    def test_head_checkout_in_a_pull_request_workflow_is_not_this_rules_concern(self):
+        text = "on:\n  pull_request:\njobs:\n  a:\n    steps:\n      - uses: a/b@" + "a" * 40 + "\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n"
+        self.assertEqual([], target_checks_out_head(text))
+
+    def test_a_base_checkout_and_a_data_fetch_in_a_pull_request_target_workflow_pass(self):
+        text = ("on:\n  pull_request_target:\n# ref: ${{ github.head_ref }} is only a comment\njobs:\n  a:\n    steps:\n      - uses: a/b@" + "a" * 40 +
+                "\n        with:\n          fetch-depth: 0\n      - run: |\n          git fetch origin \"+refs/pull/${PR}/head:refs/x\"\n")
+        self.assertEqual([], target_checks_out_head(text))
+
     def test_event_expression_in_env_with_a_clean_run_passes(self):
         text = ("      - name: x\n        env:\n          TITLE: ${{ github.event.pull_request.title }}\n"
                 "        run: |\n          echo \"$TITLE\"\n")
@@ -271,14 +304,29 @@ class RealWorkflowTests(unittest.TestCase):
             with self.subTest(workflow=path.name):
                 self.assertEqual([], event_expression_in_run(path.read_text(encoding="utf-8")))
 
-    def test_dco_workflow_is_a_read_only_pull_request_check_named_dco(self):
+    def test_a_pull_request_target_workflow_is_read_only_secretless_and_never_checks_out_the_head(self):
+        found = 0
+        for path in self.workflows():
+            text = path.read_text(encoding="utf-8")
+            if "pull_request_target" not in re.sub(r"(?m)^\s*#.*$", "", text):
+                continue
+            found += 1
+            with self.subTest(workflow=path.name):
+                self.assertTrue(is_read_only(text), "a pull_request_target workflow must be read-only (contents: read)")
+                self.assertEqual([], secret_references(text), "a pull_request_target workflow must use no secret")
+                self.assertEqual([], target_checks_out_head(text), "it must not check out the pull request's head")
+                self.assertIn("persist-credentials: false", text)
+        self.assertGreaterEqual(found, 1, "dco.yml is expected to be a pull_request_target workflow")
+
+    def test_dco_workflow_runs_the_base_checker_under_the_job_name_dco(self):
         text = (WORKFLOWS / "dco.yml").read_text(encoding="utf-8")
-        self.assertTrue(is_read_only(text))
-        self.assertRegex(text, r"(?m)^  dco:$")
-        self.assertRegex(text, r"(?m)^  pull_request:$")
-        self.assertNotIn("pull_request_target", re.sub(r"(?m)^\s*#.*$", "", text))
-        self.assertIn("persist-credentials: false", text)
-        self.assertIn("scripts/check-dco.sh", text)
+        code = re.sub(r"(?m)^\s*#.*$", "", text)
+        self.assertRegex(code, r"(?m)^  dco:$")
+        self.assertRegex(code, r"(?m)^  pull_request_target:$")
+        self.assertNotRegex(code, r"(?m)^  pull_request:$")
+        self.assertIn("scripts/check-dco.sh", code)
+        self.assertIn("refs/pull/${PR_NUMBER}/head", code)
+        self.assertEqual(1, len(re.findall(r"(?m)^\s*- uses: actions/checkout@", code)), "one checkout, of the base")
 
     def test_every_workflow_declares_permissions(self):
         for path in self.workflows():

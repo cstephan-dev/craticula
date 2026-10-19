@@ -1,22 +1,31 @@
-# DCO check (story #1662, TRD OS-1, spec FR-02): every commit of an outside pull request carries a `Signed-off-by` line, instead
-# of a contributor license agreement. One job named `dco`: that is the check name the branch ruleset on main requires.
-# The logic is scripts/check-dco.sh (tested offline by scripts/test_check_dco.py). No third-party action, no secret, a read-only
-# token, `pull_request` (never `pull_request_target`: a fork's code must not run with write access), every action pinned to a
-# commit SHA (scripts/test_workflows.py checks that, and that no `run:` block holds an event expression).
+# DCO check: every commit of an outside pull request carries a `Signed-off-by` line, instead of a contributor license
+# agreement (https://developercertificate.org). One job named `dco`: that is the check name the branch ruleset on main requires.
+#
+# Why `pull_request_target`: it runs THIS workflow and THIS checker as they are on main, so a pull request cannot rewrite the
+# check that judges it (with `pull_request` it would run the pull request's own copy of both). That is only safe because
+#   - the job never checks out, builds or runs the pull request's code: the checkout is the base branch (no `ref:`), and the
+#     pull request's commits are fetched afterwards as DATA (`git fetch refs/pull/<n>/head`) and only read by `git log`;
+#   - the token is read-only (`contents: read`) and no secret is used;
+#   - event data comes in through `env:`, never spliced into script text.
+# scripts/test_workflows.py checks all of this: an action pinned to a SHA, read-only permissions, no secret, no checkout of the
+# pull request's head in a `pull_request_target` workflow, no event expression inside a `run:` block.
 # Exempt: the pull requests that the Release Please action (author `github-actions[bot]`) and Dependabot (`dependabot[bot]`)
-# open in THIS repository. The exemption reads the pull request author's login, which a contributor cannot choose; a commit's
-# author e-mail is never an exemption, because anyone can write any e-mail into a commit. Merge commits are exempt in the script.
+# open in THIS repository. The exemption reads the pull request author's login and the head repository, which a contributor
+# cannot choose; a commit's author e-mail is never an exemption, because anyone can write any e-mail into a commit. Merge
+# commits are exempt in the script only when they bring no content of their own.
+# A pull request opened with the default GITHUB_TOKEN (the Release Please one) starts no workflow at all: that check is then
+# satisfied by a bypass actor or a run started by hand, see the maintainers' settings notes.
 name: dco
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: dco-${{ github.ref }}
+  group: dco-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -24,23 +33,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # The head commit and the full history, so that <base>..<head> is exactly the pull request's commits.
+      # No `ref:`: the base branch, so the checker is the one on main. The full history holds the base side of the range.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      # Event data comes in through env, never spliced into the script text.
+      # The pull request's commits, as data: fetched into a ref that is never checked out.
+      - name: Fetch the pull request commits
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/dco/pr-head"
+          fetched="$(git rev-parse refs/dco/pr-head)"
+          if [ "$fetched" != "$HEAD_SHA" ]; then
+            echo "The pull request head moved while the check ran ($fetched, expected $HEAD_SHA); the next run checks the new head."
+            exit 1
+          fi
+
       - name: Signed-off-by on every commit
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
           exempt=""
-          if [ "$PR_FROM_FORK" = "false" ]; then
+          if [ -n "$PR_HEAD_REPO" ] && [ "$PR_HEAD_REPO" = "$GITHUB_REPOSITORY" ]; then
             case "$PR_AUTHOR" in
               'github-actions[bot]') exempt="pull request opened by the Release Please action (github-actions[bot])" ;;
               'dependabot[bot]') exempt="pull request opened by Dependabot (dependabot[bot])" ;;
