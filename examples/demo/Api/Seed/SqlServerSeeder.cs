@@ -1,4 +1,5 @@
 using System.Data;
+using Demo.Api.Grid;
 using Microsoft.Data.SqlClient;
 
 namespace Demo.Api.Seed;
@@ -40,7 +41,10 @@ public static class SqlServerSeeder
 
     public static async Task<long> SeedAsync(string connectionString, IReadOnlyList<OrderRow> rows)
     {
-        var target = new SqlConnectionStringBuilder(connectionString);
+        var target = ConnectionStringGuard.Build(
+            connectionString,
+            value => new SqlConnectionStringBuilder(value),
+            () => new SeedSettingException(ConnectionStringGuard.Message(DemoSettings.SqlServerEnvVar, "SQL Server")));
         if (string.IsNullOrWhiteSpace(target.InitialCatalog))
         {
             target.InitialCatalog = DefaultDatabase;

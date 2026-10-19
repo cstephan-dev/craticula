@@ -20,6 +20,7 @@ namespace Demo.Api.Tests;
 /// tolerance), and the stock collation is accent-insensitive, so a contains-filter for "sohne" finds "Söhne". Everything else is exact.
 /// </summary>
 [Collection("api-mysql")]
+// Acceptance ids (docs/feat-breakdown/2494): AC-1 rows, AC-2 groups and drill-down, AC-3 CSV, AC-6 typed 4xx; the per-AC method list is in docs/feat/2500/validation.md.
 public sealed class MySqlProviderTests(MySqlApiFixture api)
 {
     private const string Engine = DemoSettings.MySqlEnvVar;

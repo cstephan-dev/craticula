@@ -242,8 +242,9 @@ docker compose --profile sqlserver stop                  # when done: stops it, 
   plain `seed` still fills PostgreSQL, MongoDB and the SQLite file.
 - **Types.** `BIGINT`, `NVARCHAR(450)`, `DECIMAL(12,2)`, `DATETIME2(3)` (never the coarse `DATETIME`), `DATE`, `BIT`. The groupable columns (country, category, status) carry the binary collation
   `Latin1_General_100_BIN2` so group buckets and drill-down are exact (GRP-2); the other text keeps the server's case-insensitive default.
+- **A malformed setting stops the API at startup** (`DEMO_SQLSERVER` or `DEMO_MYSQL` such as `Sever=x`): the message names the variable and does not repeat the string; `seed` reports that provider as failed and goes on. `ConnectRetryCount` is always forced to 0 for SQL Server, whatever the string says, so the 503 below is immediate after the timeout.
 - **Stopped container.** The API answers 503 `backend-unavailable` after about 5 seconds (the connect timeout; a refused connection is retried until it expires).
-  Only connection failures count (error numbers 2, 53, -1, -2, 258, 4060, 11001, 18456 and a refused socket); any other SQL Server error is a 500.
+  Only connection failures count (error numbers 2, 53, -1, -2, 258, 4060 and 11001, and a refused socket); any other SQL Server error is a 500.
 
 **Differences from PostgreSQL, measured on SQL Server 2022 CU14 and handled in the open**
 
@@ -253,7 +254,7 @@ docker compose --profile sqlserver stop                  # when done: stops it, 
 2. **`AVG` over the decimal column has six decimals** (12428.503751 against 12428.503751987...), inside the 1e-6 relative tolerance every provider's `_avg` already has.
 3. **Datetimes need a stated kind.** `DATETIME2` has no zone, so the driver returns a `DateTime` of kind Unspecified and the JSON would lose the trailing `Z`.
    `SqlServerGridService` marks them UTC (the seed stores UTC instants), so the answer equals the others to the millisecond.
-4. **CSV is walked a page at a time.** `DapperExportStream`'s keyset query selects the sort key twice when it is also an export column (`SELECT [id], ..., [id] ... ORDER BY [id]`) and SQL Server
+4. **CSV is walked a page at a time** (library defect #2510). `DapperExportStream`'s keyset query selects the sort key twice when it is also an export column (`SELECT [id], ..., [id] ... ORDER BY [id]`) and SQL Server
    answers error 209 "Ambiguous column name" for every export that includes `id`. This is a defect in the library's Dapper adapter on SQL Server (the Docker tier has no live
    test of it), reported with this demo; until it is fixed the service pages through the grid entry point (5,000 rows a chunk, ordered by the stable key). Rows and bytes equal the other providers.
 5. **No difference for non-ASCII case.** `SÖHNE` and `söhne` both find `Müller, Söhne & Co`, as on PostgreSQL (the compiled `COLLATE Latin1_General_CI_AS` folds beyond ASCII; SQLite does not).
@@ -302,7 +303,7 @@ docker compose --profile mysql stop mysql                # when done: stops it, 
 3. **The stock collation ignores accents.** A contains filter for `SÖHNE`, `söhne` or `Söhne` finds `Müller, Söhne & Co` on MySQL and PostgreSQL; `sohne` and `SOHNE` find it **only on MySQL**
    (PostgreSQL's collation folds case, not accents; SQLite finds only `söhne` and `Söhne`). This is the engine's default family and what the library's fixtures declare, so the demo keeps it and documents it.
 4. **Datetimes need a stated kind.** `DATETIME` has no zone, so the driver returns a `DateTime` of kind Unspecified and the JSON would lose the trailing `Z`. `MySqlGridService` marks them UTC (the seed stores UTC instants).
-5. **CSV works through `DapperExportStream`.** Its keyset query also selects the sort key twice (``SELECT `id`, ..., `id` ... ORDER BY `id` ``), which fails on SQL Server (see above), but MySQL accepts it.
+5. **CSV works through `DapperExportStream`** (the #2510 defect is SQL Server only). Its keyset query also selects the sort key twice (``SELECT `id`, ..., `id` ... ORDER BY `id` ``), which fails on SQL Server (see above), but MySQL accepts it.
    Rows and bytes equal the other providers, over the whole table (20,000 rows, several keyset chunks).
 
 Set-values filters on dates and datetimes bind the values as strings, like the adapter, and MySQL converts them (tested with a date and a datetime filter).

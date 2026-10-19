@@ -21,13 +21,23 @@ public sealed class SqlServerGridService : IGridService
     public SqlServerGridService(string connectionString, GridRequestPreparer preparer)
     {
         this.preparer = preparer;
+        this.connectionString = Normalise(connectionString);
+    }
+
+    /// <summary>
+    /// The connection string the service uses. <c>ConnectRetryCount</c> is always forced to 0, whatever the setting says, so a
+    /// stopped container answers 503 as soon as the connect timeout expires instead of after the driver's retries. Throws
+    /// <see cref="ArgumentException"/> for a malformed string; the host checks it at startup (<c>OptionalProviders</c>).
+    /// </summary>
+    public static string Normalise(string connectionString)
+    {
         var builder = new SqlConnectionStringBuilder(connectionString) { ConnectRetryCount = 0 };
         if (!builder.ShouldSerialize("Connect Timeout"))
         {
             builder.ConnectTimeout = 5;
         }
 
-        this.connectionString = builder.ConnectionString;
+        return builder.ConnectionString;
     }
 
     public string Name => "sqlserver";
@@ -52,7 +62,7 @@ public sealed class SqlServerGridService : IGridService
             cancellationToken);
 
     /// <summary>
-    /// The export is walked a page at a time through the grid entry point, not through <c>DapperExportStream</c>: on SQL Server the
+    /// The export is walked a page at a time through the grid entry point, not through <c>DapperExportStream</c> (library defect #2510): on SQL Server the
     /// stream's keyset query lists the sort key twice when it is also an export column (<c>SELECT [id], ..., [id] ... ORDER BY
     /// [id]</c>), and the engine answers error 209 "Ambiguous column name" (measured on 2022-CU14 for every export that
     /// includes <c>id</c>). The walk pages with OFFSET/FETCH over the compiled statement, whose ORDER BY already ends in the
@@ -103,7 +113,7 @@ public sealed class SqlServerGridService : IGridService
     /// <summary>
     /// SQL Server's <c>datetime2</c> carries no zone, so the driver hands back a <see cref="DateTime"/> of kind Unspecified and
     /// the JSON writer would drop the trailing <c>Z</c> every other provider sends. The column holds UTC (the seed writes UTC
-    /// instants and the schema's datetime is an absolute instant, SEM-4), so the kind is stated here.
+    /// instants and the schema's datetime is an absolute instant, SEM-4), so the kind is stated here (library gap #2511).
     /// </summary>
     private static IReadOnlyList<object?> MarkInstantsUtc(IReadOnlyList<object?> cells) =>
         [.. cells.Select(cell => cell is DateTime { Kind: DateTimeKind.Unspecified } instant ? DateTime.SpecifyKind(instant, DateTimeKind.Utc) : cell)];

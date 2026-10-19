@@ -1,4 +1,5 @@
 using System.Text;
+using Demo.Api.Grid;
 using MySqlConnector;
 
 namespace Demo.Api.Seed;
@@ -44,7 +45,10 @@ public static class MySqlSeeder
 
     public static async Task<long> SeedAsync(string connectionString, IReadOnlyList<OrderRow> rows)
     {
-        var target = new MySqlConnectionStringBuilder(connectionString);
+        var target = ConnectionStringGuard.Build(
+            connectionString,
+            value => new MySqlConnectionStringBuilder(value),
+            () => new SeedSettingException(ConnectionStringGuard.Message(DemoSettings.MySqlEnvVar, "MySQL")));
         if (string.IsNullOrWhiteSpace(target.Database))
         {
             target.Database = DefaultDatabase;
@@ -56,7 +60,8 @@ public static class MySqlSeeder
         await using var connection = new MySqlConnection(target.ConnectionString);
         await connection.OpenAsync();
 
-        // The session zone is UTC so nothing converts the instants on the way in; DATETIME(3) holds the UTC wall clock.
+        // DATETIME never converts by session zone: the UTC wall clock goes in and comes out as written. The zone is set so that any
+        // default or NOW() and any TIMESTAMP column behave in UTC too.
         await ExecuteAsync(connection, null, "SET time_zone = '+00:00'");
         await ExecuteAsync(connection, null, Ddl);
 

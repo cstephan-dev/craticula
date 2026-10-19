@@ -20,13 +20,20 @@ public sealed class MySqlGridService : IGridService
     public MySqlGridService(string connectionString, GridRequestPreparer preparer)
     {
         this.preparer = preparer;
+        this.connectionString = Normalise(connectionString);
+    }
+
+    /// <summary>The connection string the service uses (5 s connect timeout unless the setting names one). Throws
+    /// <see cref="ArgumentException"/> for a malformed string; the host checks it at startup (<c>OptionalProviders</c>).</summary>
+    public static string Normalise(string connectionString)
+    {
         var builder = new MySqlConnectionStringBuilder(connectionString);
         if (!ConnectionStringNamesATimeout(connectionString))
         {
             builder.ConnectionTimeout = 5;
         }
 
-        this.connectionString = builder.ConnectionString;
+        return builder.ConnectionString;
     }
 
     public string Name => "mysql";
@@ -81,7 +88,7 @@ public sealed class MySqlGridService : IGridService
     /// <summary>
     /// MySQL's <c>DATETIME</c> carries no zone, so the driver hands back a <see cref="DateTime"/> of kind Unspecified and
     /// the JSON writer would drop the trailing <c>Z</c> every other provider sends. The column holds UTC (the seed writes UTC
-    /// instants and the schema's datetime is an absolute instant, SEM-4), so the kind is stated here.
+    /// instants and the schema's datetime is an absolute instant, SEM-4), so the kind is stated here (library gap #2511).
     /// </summary>
     private static IReadOnlyList<object?> MarkInstantsUtc(IReadOnlyList<object?> cells) =>
         [.. cells.Select(cell => cell is DateTime { Kind: DateTimeKind.Unspecified } instant ? DateTime.SpecifyKind(instant, DateTimeKind.Utc) : cell)];

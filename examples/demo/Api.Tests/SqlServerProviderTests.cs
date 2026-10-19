@@ -18,6 +18,7 @@ namespace Demo.Api.Tests;
 /// AVG over the decimal column has six decimals (inside smoke.sh's 1e-6 relative tolerance). Everything else is exact.
 /// </summary>
 [Collection("api-sqlserver")]
+// Acceptance ids (docs/feat-breakdown/2494): AC-1 rows, AC-2 groups and drill-down, AC-3 CSV, AC-6 typed 4xx; the per-AC method list is in docs/feat/2499/validation.md.
 public sealed class SqlServerProviderTests(SqlServerApiFixture api)
 {
     private const string Engine = DemoSettings.SqlServerEnvVar;
@@ -365,7 +366,7 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
     [InlineData(-2, true)]
     [InlineData(258, true)]
     [InlineData(4060, true)]
-    [InlineData(18456, true)]
+    [InlineData(18456, false)]
     [InlineData(11001, true)]
     [InlineData(-2146893019, false)]
     [InlineData(208, false)]
