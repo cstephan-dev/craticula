@@ -197,14 +197,23 @@ public static class DapperExportStream
                 "schema-order default; AgGridRequestParser rejects an empty 'exportColumns' at the wire.");
         }
 
-        // The projection: the export's own columns, then the keyset walk's sort keys, in one list — ONE
-        // execution serves both, and a key that is also an export column is simply read twice, cheaper
-        // than a second query. Mirrors EfCoreExportStream's identical reasoning.
+        // The projection: the export's own columns, then the keyset walk's sort keys that are not already
+        // among them, in one list — ONE execution serves both. A key that is also an export column is read
+        // from that column's ordinal, never selected twice: SQL Server rejects a repeated column next to an
+        // ORDER BY on it (error 209, bug #2510), while SQLite and PostgreSQL tolerate it.
         var projected = new List<string>(columns.Count + keys.Count);
         projected.AddRange(columns);
-        foreach (var key in keys)
+        var keyOrdinals = new int[keys.Count];
+        for (var index = 0; index < keys.Count; index++)
         {
-            projected.Add(key.Field);
+            var ordinal = projected.IndexOf(keys[index].Field);
+            if (ordinal < 0)
+            {
+                ordinal = projected.Count;
+                projected.Add(keys[index].Field);
+            }
+
+            keyOrdinals[index] = ordinal;
         }
 
         var columnTypes = ResolveTypes(columns, request.Schema);
@@ -264,7 +273,7 @@ public static class DapperExportStream
                     // terminate; a non-unique stableKey instead SKIPS the second of two tied rows at
                     // whichever chunk edge it lands on. Adjacent rows are the right place to look: the
                     // result is sorted, so duplicates of the trailing key are neighbours.
-                    var stableKey = DapperValueReader.Read(reader, columns.Count + stableKeyIndex, keyTypes[stableKeyIndex]);
+                    var stableKey = DapperValueReader.Read(reader, keyOrdinals[stableKeyIndex], keyTypes[stableKeyIndex]);
 
                     if (rowsInChunk == chunking.ChunkSize)
                     {
@@ -295,7 +304,7 @@ public static class DapperExportStream
 
                     for (var index = 0; index < keys.Count; index++)
                     {
-                        boundary[index] = DapperValueReader.Read(reader, columns.Count + index, keyTypes[index]);
+                        boundary[index] = DapperValueReader.Read(reader, keyOrdinals[index], keyTypes[index]);
                     }
 
                     rowsInChunk++;

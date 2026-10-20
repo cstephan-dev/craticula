@@ -377,6 +377,99 @@ public class DapperExportStreamTests
 
     // ---- helper --------------------------------------------------------------------------------------
 
+    // ---- bug #2510: a key that is also an export column must not be selected twice -----------------------
+
+    /// <summary>The select-list items of a compiled statement: the text between the first <c>SELECT</c> and
+    /// the first <c>FROM</c>, split on commas (no expression of these fixtures contains a comma).</summary>
+    private static List<string> SelectList(string sql)
+    {
+        var from = sql.IndexOf(" FROM ", StringComparison.OrdinalIgnoreCase);
+        Assert.True(from > 0, $"No FROM in: {sql}");
+        var list = sql["SELECT".Length..from];
+        return [.. list.Split(',').Select(item => item.Trim())];
+    }
+
+    private static async Task<(List<IReadOnlyList<object?>> Rows, List<string> Commands)> DrainRecording(
+        SqliteFixtureDatabase database, FixtureRequest fixture, int chunkSize)
+    {
+        var recording = new RecordingConnection((System.Data.Common.DbConnection)database.Connection);
+        var rows = new List<IReadOnlyList<object?>>();
+
+        await foreach (var row in DapperExportStream.StreamAsync(
+            recording, fixture.Sql, Sqlite, new DapperExportOptions { ChunkSize = chunkSize }))
+        {
+            rows.Add([.. Enumerable.Range(0, row.Count).Select(index => row[index])]);
+        }
+
+        return (rows, recording.CommandTexts);
+    }
+
+    /// <summary>
+    /// Bug #2510. The keyset walk reads its sort keys back through the same statement as the export columns.
+    /// When a key (the stable key <c>id</c>, always the last) is ALSO an export column, the select list
+    /// named it twice: <c>SELECT [id], ..., [id] ... ORDER BY [id]</c>, which SQL Server rejects (error 209,
+    /// ambiguous column). SQLite accepts the repeat, so the assertion is on the command text the engine got.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(5000)]
+    public async Task No_Statement_Selects_The_Same_Column_Twice_When_A_Sort_Key_Is_Also_An_Export_Column(int chunkSize)
+    {
+        var fixture = HardestOrdering();
+        fixture = fixture with { Sql = fixture.Sql with { Projection = ["id", "department", "age"] } };
+        using var database = SqliteFixtureDatabase.Create(fixture.Schema, Datasets.Employees());
+
+        var (_, commands) = await DrainRecording(database, fixture, chunkSize);
+
+        var walk = commands.Where(text => text.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.NotEmpty(walk);
+        foreach (var text in walk)
+        {
+            var items = SelectList(text);
+            Assert.Equal(items.Count, items.Distinct(StringComparer.Ordinal).Count());
+        }
+    }
+
+    /// <summary>The de-duplicated select list must not shift the ordinals the walk reads its keys from: the
+    /// rows are the same, and in the same order, as an export of the same columns where no key is among
+    /// them (which selects the keys separately, after the columns).</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(5000)]
+    public async Task The_Rows_Do_Not_Change_When_A_Sort_Key_Is_Also_An_Export_Column(int chunkSize)
+    {
+        var baseline = HardestOrdering();
+        using var database = SqliteFixtureDatabase.Create(baseline.Schema, Datasets.Employees());
+
+        foreach (var projection in new[]
+        {
+            new[] { "id", "department", "age" },
+            ["age", "id"],
+            ["department", "age", "id", "hireDate"],
+            ["hireDate", "id"],
+            ["id"]
+        })
+        {
+            var withKeys = baseline with { Sql = baseline.Sql with { Projection = projection } };
+            var (rows, _) = await DrainRecording(database, withKeys, chunkSize);
+
+            // Reference: the full schema-order export, picked down to the projected columns by position.
+            var full = await Drain(database, baseline, chunkSize);
+            var order = baseline.Schema.FieldOrder.ToList();
+            var expected = full
+                .Select(row => (IReadOnlyList<object?>)[.. projection.Select(column => row[order.IndexOf(column)])])
+                .ToList();
+
+            Assert.Equal(expected.Count, rows.Count);
+            for (var index = 0; index < expected.Count; index++)
+            {
+                Assert.Equal(expected[index], rows[index]);
+            }
+        }
+    }
+
     private static async Task<List<IReadOnlyList<object?>>> Drain(
         SqliteFixtureDatabase database, FixtureRequest fixture, int chunkSize)
     {
