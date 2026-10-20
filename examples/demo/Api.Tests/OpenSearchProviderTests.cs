@@ -733,7 +733,7 @@ public sealed class OpenSearchProviderTests(OpenSearchApiFixture api)
         {
             var json = JsonDocument.Parse(await client.GetStringAsync("/api/health")).RootElement;
             Assert.Equal(
-                ["ef", "mongo", "opensearch", "postgres", "sqlite"],
+                ["ef", "ef-sqlite", "mongo", "opensearch", "postgres", "sqlite"],
                 json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()!));
         }
     }

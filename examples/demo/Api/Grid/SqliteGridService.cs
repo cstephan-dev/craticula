@@ -14,7 +14,10 @@ namespace Demo.Api.Grid;
 public sealed class SqliteGridService(string path, GridRequestPreparer preparer) : IGridService
 {
     // A lock held by `seed sqlite` should end the request quickly (503) instead of the driver's 30 s default.
-    private readonly string connectionString = new SqliteConnectionStringBuilder
+    private readonly string connectionString = ConnectionStringFor(path);
+
+    /// <summary>The string both SQLite routes (Dapper and EF Core) open the file with: read-write on an existing file, no pooling, a 5 s lock wait.</summary>
+    internal static string ConnectionStringFor(string path) => new SqliteConnectionStringBuilder
     {
         DataSource = path,
         Mode = SqliteOpenMode.ReadWrite,

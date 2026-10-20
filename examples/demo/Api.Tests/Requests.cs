@@ -53,6 +53,50 @@ internal static class Requests
         }
         """;
 
+    /// <summary>A datetime range whose bounds are NOT at midnight: on the bound's own date, a text comparison in a different form (a space instead of <c>T</c>) counts every row as later.</summary>
+    public static string DatetimeRangeAtNoon => $$"""
+        {
+          "startRow": 0, "endRow": 200, {{NoGrouping}}
+          "filterModel": null,
+          "sortModel": [ { "colId": "id", "sort": "asc" } ],
+          "requestContext": { "zone": "UTC" },
+          "customFilters": {
+            "type": "comparison", "field": "orderedAt", "op": "inRange",
+            "from": { "type": "datetime", "value": "2025-06-01T12:00:00Z", "zone": "UTC" },
+            "to": { "type": "datetime", "value": "2025-06-03T12:00:00Z", "zone": "UTC" },
+            "fromInclusive": false, "toInclusive": true
+          }
+        }
+        """;
+
+    /// <summary>A one-sided datetime comparison at noon, so the total (<c>lastRow</c>) of every provider must agree.</summary>
+    public static string DatetimeGreaterThanNoon => $$"""
+        {
+          "startRow": 0, "endRow": 200, {{NoGrouping}}
+          "filterModel": null,
+          "sortModel": [ { "colId": "id", "sort": "asc" } ],
+          "requestContext": { "zone": "UTC" },
+          "customFilters": {
+            "type": "comparison", "field": "orderedAt", "op": "gt",
+            "value": { "type": "datetime", "value": "2025-06-01T12:00:00Z", "zone": "UTC" }
+          }
+        }
+        """;
+
+    /// <summary>The whole table as CSV ordered by a datetime: the keyset walk of the export compares the datetime of each chunk's last row.</summary>
+    public static string FullExportByOrderedAt(string direction) => $$"""
+        {
+          "startRow": null, "endRow": null, {{NoGrouping}}
+          "filterModel": null,
+          "sortModel": [ { "colId": "orderedAt", "sort": "{{direction}}" } ],
+          "exportFormat": "csv", "exportScope": "all"
+        }
+        """;
+
+    /// <summary>A text filter on a column; the ones that matter here are the binary-collated grouping columns (country, category, status).</summary>
+    public static string TextFilter(string column, string type, string value) => FirstPage(
+        $$"""{ "{{column}}": { "filterType": "text", "type": "{{type}}", "filter": "{{value}}" } }""");
+
     /// <summary>operators/005: boolean eq true.</summary>
     public static string Boolean => $$"""
         {

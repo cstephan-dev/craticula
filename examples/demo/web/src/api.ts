@@ -1,13 +1,24 @@
 import type { IServerSideGetRowsRequest } from 'ag-grid-community';
 
-export type Provider = 'postgres' | 'mongo' | 'ef' | 'sqlite' | 'sqlserver' | 'mysql' | 'opensearch';
+export type Provider =
+  | 'postgres'
+  | 'mongo'
+  | 'ef'
+  | 'sqlite'
+  | 'ef-sqlite'
+  | 'sqlserver'
+  | 'ef-sqlserver'
+  | 'mysql'
+  | 'opensearch';
 
 export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'postgres', label: 'PostgreSQL' },
   { id: 'mongo', label: 'MongoDB' },
   { id: 'ef', label: 'EF Core' },
   { id: 'sqlite', label: 'SQLite' },
+  { id: 'ef-sqlite', label: 'EF Core (SQLite)' },
   { id: 'sqlserver', label: 'SQL Server' },
+  { id: 'ef-sqlserver', label: 'EF Core (SQL Server)' },
   { id: 'mysql', label: 'MySQL' },
   { id: 'opensearch', label: 'OpenSearch' },
 ];

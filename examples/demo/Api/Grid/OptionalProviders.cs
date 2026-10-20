@@ -1,4 +1,7 @@
+using Craticula.EntityFrameworkCore;
 using Demo.Api.Seed;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace Demo.Api.Grid;
 
@@ -31,6 +34,13 @@ public static class OptionalProviders
                 new SqlServerGridService(setting, provider.GetRequiredService<GridRequestPreparer>())),
             setting => SqlServerGridService.Normalise(setting),
             "SQL Server"),
+        // EF Core on the same SQL Server database (route ef-sqlserver): switched on by the same setting as the Dapper route.
+        new OptionalProvider(
+            "ef-sqlserver",
+            DemoSettings.SqlServerEnvVar,
+            RegisterEfSqlServer,
+            setting => SqlServerGridService.Normalise(setting),
+            "SQL Server"),
         new OptionalProvider(
             "mysql",
             DemoSettings.MySqlEnvVar,
@@ -46,6 +56,23 @@ public static class OptionalProviders
             setting => OpenSearchGridService.ParseUrl(setting),
             "OpenSearch")
     ];
+
+    // Unlike the Npgsql EF provider, the SQL Server one does not wrap a connection failure by default (measured: a stopped server answers 503
+    // without NonRetryingExecutionStrategy), so none is configured.
+    private static void RegisterEfSqlServer(IServiceCollection services, string setting)
+    {
+        var normalised = SqlServerGridService.Normalise(setting);
+        services.AddDbContextFactory<SqlServerOrdersDbContext>(options => options
+            .UseSqlServer(normalised)
+            .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>());
+        services.AddSingleton<IGridService>(provider => new EfGridService<SqlServerOrdersDbContext>(
+            "ef-sqlserver",
+            "ef-sqlserver",
+            SqlServerOrdersDbContext.Semantics,
+            provider.GetRequiredService<IDbContextFactory<SqlServerOrdersDbContext>>(),
+            new SqlServerGridService(setting, provider.GetRequiredService<GridRequestPreparer>()).FetchSetValuesAsync,
+            provider.GetRequiredService<GridRequestPreparer>()));
+    }
 
     /// <summary>Registers each provider whose setting is present; returns the names registered, in order. A malformed setting
     /// throws <see cref="InvalidOperationException"/> naming the variable.</summary>

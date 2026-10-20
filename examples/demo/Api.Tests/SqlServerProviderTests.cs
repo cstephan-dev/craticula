@@ -352,7 +352,7 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
         {
             var json = JsonDocument.Parse(await client.GetStringAsync("/api/health")).RootElement;
             Assert.Equal(
-                ["ef", "mongo", "postgres", "sqlite", "sqlserver"],
+                ["ef", "ef-sqlite", "ef-sqlserver", "mongo", "postgres", "sqlite", "sqlserver"],
                 json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()!));
         }
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Demo smoke test: sends the same fixed requests (smoke/*.json) to the running demo API for every provider it lists (PostgreSQL, MongoDB, the Entity
-# Framework Core provider (ef, on PostgreSQL), SQLite and the optional SQL Server, MySQL and OpenSearch) and checks that every provider answers the same as the postgres baseline. It starts nothing; run the quickstart in README.md first.
+# Framework Core routes (ef on PostgreSQL, ef-sqlite, and the optional ef-sqlserver), SQLite and the optional SQL Server, MySQL and OpenSearch) and checks that every provider answers the same as the postgres baseline. It starts nothing; run the quickstart in README.md first.
 # Needs only bash, curl and python3 (3.8+).
 #
 #   bash smoke.sh [--api URL]        default URL: http://127.0.0.1:5080
@@ -341,12 +341,12 @@ def compare(kind, base_status, base_body, other, status, body):
             except ValueError:
                 body_json = None
             ok = ot.get("kind") == "json" and ot.get("dialect") == "opensearch" and isinstance(body_json, dict) and bool(body_json)
-        elif other == "ef":
+        elif other == "ef" or other.startswith("ef-"):
             # EF Core inlines parameter values in its text (shown as comment lines), so only the shape is asserted
-            ok = ot.get("kind") == "sql" and ot.get("dialect") == "ef-npgsql" and bool(ot.get("text"))
+            ok = ot.get("kind") == "sql" and ot.get("dialect") == ("ef-npgsql" if other == "ef" else other) and bool(ot.get("text"))
         else:
             ok = ot.get("kind") == "sql" and bool(ot.get("text"))
-        return f"kind {ot.get('kind')}" + (f", {ot.get('dialect')}" if other == "ef" else ""), ok, ""
+        return f"kind {ot.get('kind')}" + (f", {ot.get('dialect')}" if other == "ef" or other.startswith("ef-") else ""), ok, ""
     raise ValueError(kind)
 
 
