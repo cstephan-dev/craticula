@@ -58,6 +58,12 @@ public class SqlQueryBuilderPageAndSortTests
         Assert.Contains("not declared in the GridSchema", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_Null_Sort_Item_Is_A_SortItemValidationException_Not_A_Crash()
+    {
+        Assert.Throws<SortItemValidationException>(() => Compile([Key("id", SortDirection.Asc, NullsPosition.Last), null!]));
+    }
+
     private static SortItem Key(string field, SortDirection direction, NullsPosition nulls) =>
         new() { Field = field, Direction = direction, NullsPosition = nulls };
 

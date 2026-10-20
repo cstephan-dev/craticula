@@ -557,6 +557,19 @@ public class SemanticsResolverTests
         Assert.Equal(["lastName", "age", "lastName"], result.Select(item => item.Field));
     }
 
+    /// <summary>The schema-aware overload validates the sort before it reads a key: a malformed hand-built sort is a clean validation error, not a crash.</summary>
+    [Fact]
+    public void The_Schema_Aware_Overload_Validates_The_Sort_Before_Reading_Its_Keys()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        Assert.Throws<SortItemValidationException>(() => SemanticsResolver.AppendStableKeyTiebreaker([Item("age"), null!], schema, null, out _));
+        Assert.Throws<SortItemValidationException>(() => SemanticsResolver.AppendStableKeyTiebreaker([Item("")], schema, null, out _));
+        Assert.Throws<SortItemValidationException>(() => SemanticsResolver.AppendStableKeyTiebreaker([], schema, null, out _));
+        Assert.Throws<SortItemValidationException>(
+            () => SemanticsResolver.AppendStableKeyTiebreaker([Item("age"), null!], schema, "age", out _, aggregateColumnIds: []));
+    }
+
     [Fact]
     public void StableKeyOrdersExactly_Follows_The_Field_Type_And_Case_Setting()
     {

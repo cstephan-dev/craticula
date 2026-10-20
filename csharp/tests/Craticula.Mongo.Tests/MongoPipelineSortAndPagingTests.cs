@@ -289,6 +289,12 @@ public class MongoPipelineSortAndPagingTests
         Assert.Contains("exact tiebreaker", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_Null_Sort_Item_Is_A_SortItemValidationException_Not_A_Crash()
+    {
+        Assert.Throws<SortItemValidationException>(() => Compile([Key("id", SortDirection.Asc, NullsPosition.Last), null!]));
+    }
+
     // ---- paging (AG-3 / EXP-2) --------------------------------------------------------------------
 
     [Fact]

@@ -375,6 +375,10 @@ public static class SemanticsResolver
         IReadOnlyList<SortItem>? sort, GridSchema schema, string? groupColumn, out bool appended,
         IReadOnlyCollection<string>? aggregateColumnIds = null)
     {
+        // Validate before the keys are read: a null item or a blank field must stay a clean SortItemValidationException (a host maps it to a
+        // 400), not a NullReferenceException from the known-key check below. The shared overload validates again; the cost is a loop.
+        SortItemValidator.Validate(sort);
+
         if (groupColumn is not null)
         {
             var known = AllKeysKnown(sort, field =>

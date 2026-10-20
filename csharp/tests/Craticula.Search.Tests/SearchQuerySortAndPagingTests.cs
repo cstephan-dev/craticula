@@ -101,6 +101,15 @@ public class SearchQuerySortAndPagingTests
     }
 
     [Fact]
+    public void A_Null_Sort_Item_Is_A_SortItemValidationException_Not_A_Crash()
+    {
+        Assert.Throws<SortItemValidationException>(() => Compile(Names, [
+            new SortItem { Field = "id", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            null!
+        ]));
+    }
+
+    [Fact]
     public void A_Range_Page_Emits_From_And_Size_Including_The_Zero_Offset()
     {
         var query = Compile(Names, null, new RangePage { StartRow = 20, EndRow = 40 });
