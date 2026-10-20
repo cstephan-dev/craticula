@@ -107,7 +107,7 @@ public static class DapperExportStream
                 "built the request by hand.");
         }
 
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, request.Schema.StableKey);
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, request.Schema, groupColumn: null, out _);
 
         // SEM-6/SEM-1 collation hazard, UNCONDITIONAL on the stableKey's own declared type -- an earlier
         // version of this guard fired only for a MINTED tiebreaker, on the reasoning that a sort already

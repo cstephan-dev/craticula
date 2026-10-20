@@ -41,7 +41,7 @@ spec doesn't have, the spec changes first, then the port follows.
   category index. Execution-equality fixtures (`dataset.json`/`expectedRows.json`, T-1b) have their format
   pinned (`semantics.md` XEQ-1..XEQ-4, `fixtures/schemas/dataset.schema.json` and `expected-rows.schema.json`);
   they are hand-derived from the semantics, never copied from an engine run, and are authored category;
-  227 fixtures carry the pair today (rule: XEQ-1..XEQ-4; worked example `operators/001`). The cross-backend parity property over generated requests (T-3) and its divergence register are
+  228 fixtures carry the pair today (rule: XEQ-1..XEQ-4; worked example `operators/001`). The cross-backend parity property over generated requests (T-3) and its divergence register are
   stated in `semantics.md` PAR-1..PAR-4.
 - **`conformance-runner.md`** — how an implementation is graded against `fixtures/` (T-1 tier (a), ML-3): the
   driver protocol every language implements, what a driver pins (limits, clock, entry point), the per-backend

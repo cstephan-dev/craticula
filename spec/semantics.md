@@ -660,8 +660,8 @@ guess" structurally true: a compiler cannot receive an ambiguous scalar in the f
 
 ## SEM-6. Deterministic paging
 
-**Rule.** Schema config declares a required, unique `stableKey` per grid. If the IR's `sort` array
-does not already end in that key, the compiler appends it as an implicit trailing tiebreaker —
+**Rule.** Schema config declares a required, unique `stableKey` per grid. If the IR's `sort` array,
+once reduced as the pinned paragraph below says, does not already reach that key, the compiler appends it as an implicit trailing tiebreaker —
 after every sort key the user actually chose, never ahead of them — before compiling the final
 ordering clause. The appended tiebreaker still needs a `nullsPosition` (SEM-3 applies to it exactly
 as to any other sort key): since a `stableKey` is required to be unique but not required to be
@@ -670,31 +670,50 @@ as to any other sort key): since a `stableKey` is required to be unique but not 
 no direction the user chose) — i.e. the appended key is always `{ field: stableKey, direction: "asc",
 nullsPosition: "last" }`.
 
-**The effective sort lists a field once and ends at the stable key (pinned; Bug #2565).** Before the
+**The effective sort lists a field once and stops at an exact stable key (pinned; Bug #2565).** Before the
 compiler appends anything it reduces the request's `sort` array by two rules, and both only remove keys
 that can never change the order:
 
 1. **A later occurrence of a field the sort already named is dropped.** The first occurrence already
    decided every tie the later one could break (`[age desc, age asc]` orders exactly like `[age desc]`).
-2. **Everything after the first occurrence of the stable key is dropped.** The key is unique by
-   declaration, so no two rows tie on it and no key after it can break a tie (`[id desc, age asc]` orders
-   exactly like `[id desc]`). When the sort reaches the stable key this way nothing is appended; when it
-   does not, the tiebreaker is appended as above.
+   This looks at the field only: a repeat that differs in direction or null placement is still redundant.
+2. **When the stable key orders exactly, everything after its first occurrence is dropped.** A key on it
+   orders exactly when it is numeric, or a text key declared case-sensitive (SC-3): two rows with
+   different values never tie under it, so no key after it can break a tie (`[id desc, age asc]` orders
+   exactly like `[id desc]`). When the sort stops at the stable key this way nothing is appended; when it
+   does not reach it, the tiebreaker is appended as above.
 
-The result names every field at most once and, whenever the stable key is among them, ends in it. The
-first wording of this rule only asked whether the sort *ends* in the stable key, so `[id desc, age asc]`
-compiled to `ORDER BY id DESC, age ASC, id ASC`: SQL Server refuses a column named twice in an `ORDER BY`
-list (error 169), and a MongoDB `$sort` document cannot hold one key twice, so the same request failed on
-one arm and was ambiguous on another. A field before the stable key is kept (`[age asc, id desc]` stays as
-written); the reductions look at order only, never at direction, null placement or case folding, because a
-dropped key could not have mattered under any of them. The reductions apply to the **group column** in a
-grouped level exactly as to the stable key (GRP-4: it is unique across the level's rows by construction),
-and to every consumer of the effective sort, including the keyset walk of an export.
+"Unique" in this rule means that no two rows share a value, **NULL included**: at most one row has no
+value. SQL Server's `UNIQUE` constraint and a MongoDB unique index enforce that; PostgreSQL, MySQL, SQLite
+and Oracle allow many NULLs, and a host on one of them whose stable key is nullable never had SEM-6's
+guarantee, since the appended tiebreaker does not break ties among NULLs either. Rule 2 relies on the same
+reading of "unique" that the appended tiebreaker always did.
+
+**A case-insensitive text stable key is the exception to rule 2.** Under SEM-1 a user's own key on a text
+field resolves case-insensitively unless the field declares otherwise, and `'aB3'` and `'Ab3'` compare
+equal under it (the blockquote below makes the same argument against collating the *appended* key). Such a
+sort is not total, so **nothing after it is dropped and the exact tiebreaker is appended as before**: the
+sort counts as total only when it already ends in the key, which is what this rule has always said. Rule 1
+applies regardless. That shape names the stable key's column twice in one ordering (the user's collated
+key and the exact tiebreaker), which SQL Server refuses (error 169); it stays unsupported there.
+
+The result names every field at most once, except in that exception, and, whenever the stable key is among
+them, ends in it. The first wording of this rule only asked whether the sort *ends* in the stable key, so
+`[id desc, age asc]` compiled to `ORDER BY id DESC, age ASC, id ASC`: SQL Server refuses a column named
+twice in an `ORDER BY` list (error 169), and a MongoDB `$sort` document cannot hold one key twice, so the
+same request failed on one arm and was ambiguous on another. A field before the stable key is kept
+(`[age asc, id desc]` stays as written). The reductions apply to the **group column** in a grouped level
+exactly as to the stable key, with rule 2 unconditional (GRP-4, GRP-2: it is unique and exact across the
+level's rows by construction), so a key after the group column is dropped **without being inspected**: an
+aggregate there (which a Search level used to refuse) or a column the level does not produce (which GRP-4
+rejects when it comes *before* the group column) can no longer change the order of one-bucket-per-value
+rows. The reductions also apply to every consumer of the effective sort, including the keyset walk of an
+export.
 
 Must NOT: reject a request for naming a field twice or for sorting past the stable key (the grid cannot
 prevent either, and the order the user asked for is still honoured); drop a key that comes **before** the
-stable key or is the first occurrence of its field; keep a dropped key "for the record" in any backend's
-artifact.
+stable key or is the first occurrence of its field; drop the keys after a **case-insensitive** text stable
+key; keep a dropped key "for the record" in any backend's artifact.
 
 > **Superseded in part by GRP-4 (#1640) for a grouped level, and by GRP-6 (#1641) for BM-3's
 > distinct-values query.** This rule says the appended key is *always* the schema's `stableKey`, and
@@ -2333,7 +2352,8 @@ nothing the existing arms do not already show.
 **MDB-10. Every stage MongoDB emits is a document, so every name a request can influence needs a
 collision check.** A repeated key in a BSON document is last-wins, not an error, and three of the
 names in a compiled pipeline are client-influenced: the `$sort` keys (a grid may send a colId twice
-in `sortModel`), the aggregate output names and hence their buckets (AGG-2 derives them from
+in `sortModel`; since SEM-6's reduction that no longer reaches the compiler, see the first collision),
+the aggregate output names and hence their buckets (AGG-2 derives them from
 `valueCols[].id`), and MDB-8's reserved `__groupNullBucket`. Each collision is silent and each
 changes the answer:
 
@@ -2351,7 +2371,8 @@ changes the answer:
 The second and third MUST be rejected (the first no longer arises). Renaming either side is not an alternative: the emitted bucket name would
 then depend on what else the request happened to contain, which is a worse oracle than an error.
 There is no SQL counterpart to any of this — the SQL compiler renders null placement as an inline
-expression rather than as a named field, and a repeated `ORDER BY` key is merely redundant there.
+expression rather than as a named field, and a repeated `ORDER BY` key is merely redundant on most of
+them (SQL Server refuses it, error 169, which is the bug SEM-6's reduction prevents).
 
 **MDB-11. SEM-7's escape set is "every **ASCII** character outside `[A-Za-z0-9]`", and "character"
 means one ASCII byte.** SEM-7 states the rule as "a full backslash-escape of every character outside

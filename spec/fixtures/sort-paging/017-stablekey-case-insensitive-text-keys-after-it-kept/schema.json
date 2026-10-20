@@ -1,0 +1,25 @@
+{
+  "mode": "strict",
+  "source": "employees",
+  "stableKey": "code",
+  "fields": {
+    "code": {
+      "type": "string",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "code" },
+        "mongo": { "path": "code" },
+        "search": { "field": "code", "keywordSubField": "code.keyword", "normalizedSubField": "code.normalized" }
+      }
+    },
+    "age": {
+      "type": "int64",
+      "sortable": true,
+      "physical": {
+        "sql": { "column": "age" },
+        "mongo": { "path": "age" },
+        "search": { "field": "age" }
+      }
+    }
+  }
+}

@@ -727,7 +727,7 @@ public static class SqlQueryBuilder
     {
         var groupColumn = grouping?.GroupColumn;
         var keys = SemanticsResolver.AppendStableKeyTiebreaker(
-            sort, groupColumn ?? context.Schema.StableKey, out var tiebreakerAppended);
+            sort, context.Schema, groupColumn, out var tiebreakerAppended);
 
         // GRP-2, at its narrowed scope: exactness covers the protocol's OWN keys, and a grouped
         // level's ORDER BY is one of them — it orders the very buckets the GROUP BY produced, so it

@@ -141,7 +141,7 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
     [RequiresEngineTheory(Engine)]
     [InlineData("id desc|amount asc")]
     [InlineData("amount desc|id asc|country asc")]
-    public async Task TheExportOfAMultiSortThatGoesPastTheStableKey_EqualsPostgresOverEveryChunk(string sort)
+    public async Task TheExportOfAMultiSortThatGoesPastTheStableKey_EqualsPostgresCellByCellOverEveryChunk(string sort)
     {
         var body = Requests.MultiSortExport(ParseSort(sort));
         var pg = await ApiHostFixture.PostRawAsync(api.Client, "postgres", "export.csv", body);
@@ -150,7 +150,7 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
         Assert.Equal(HttpStatusCode.OK, sql.Status);
         var rows = ParseCsv(sql.Bytes);
         Assert.True(rows.Count > 5000, "more than one keyset chunk");
-        Assert.Equal(ParseCsv(pg.Bytes).Count, rows.Count);
+        Assert.True(EfParity.CsvSame(ParseCsv(pg.Bytes), rows), "the export equals PostgreSQL's cell by cell, in the same order");
     }
 
     // ---- grouping and drill-down ---------------------------------------------------------------------

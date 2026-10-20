@@ -38,6 +38,7 @@ inventing a new domain per case.
 | 014 | `stablekey-in-the-middle-later-keys-dropped` | The stable key in the middle (`age asc`, `id desc`, `lastName`): the key before it is kept as written, the one after it dropped, nothing appended | SEM-6, SEM-3, AR-9 |
 | 015 | `repeated-field-later-occurrence-dropped` | A field named twice (`age desc`, `age asc`): the later occurrence is dropped, then the tiebreaker is appended | SEM-6, SEM-3, AR-9 |
 | 016 | `repeated-stablekey-later-occurrence-dropped` | The stable key named twice (`id asc`, `id desc`): the first reaches the stable key, the later is dropped | SEM-6, SEM-3, AR-9 |
+| 017 | `stablekey-case-insensitive-text-keys-after-it-kept` | The exception to rule 2: a case-insensitive TEXT stable key can tie (`'aB3'` = `'Ab3'`), so the keys after it are kept and the exact tiebreaker is appended; Postgres and Search artifacts only (SQL Server and MongoDB refuse the repeated column, documented) | SEM-6, SEM-1, SEM-3, AR-9 |
 
 ## Notes on artifact construction
 

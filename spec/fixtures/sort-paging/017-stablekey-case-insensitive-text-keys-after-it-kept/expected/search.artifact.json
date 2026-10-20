@@ -1,0 +1,10 @@
+{
+  "query": { "match_all": {} },
+  "sort": [
+    { "code.normalized": { "order": "asc", "missing": "_last" } },
+    { "age": { "order": "asc", "missing": "_last" } },
+    { "code.keyword": { "order": "asc", "missing": "_last" } }
+  ],
+  "from": 0,
+  "size": 100
+}

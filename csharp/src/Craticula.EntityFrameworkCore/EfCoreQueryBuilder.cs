@@ -846,7 +846,7 @@ public static class EfCoreQueryBuilder
     internal static IReadOnlyList<SortKeyPlan> ResolveSortKeys(EfCoreQueryRequest request)
     {
         var keys = SemanticsResolver.AppendStableKeyTiebreaker(
-            request.Sort, request.Schema.StableKey, out var tiebreakerAppended);
+            request.Sort, request.Schema, groupColumn: null, out var tiebreakerAppended);
 
         var plans = new List<SortKeyPlan>(keys.Count);
         for (var index = 0; index < keys.Count; index++)

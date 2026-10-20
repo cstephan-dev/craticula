@@ -263,6 +263,29 @@ public class SearchQueryGroupingTests
     }
 
     /// <summary>
+    /// SEM-6 (Bug #2565) on a grouped level: the group column is unique across the level's buckets by construction, so every key AFTER it is
+    /// dropped before the checks above look at it. An aggregate after the group column used to be refused although it could never have changed
+    /// the order of one-bucket-per-value rows; it is now served, ordered by the group column alone. The same holds for a key the level does not
+    /// produce. A key BEFORE the group column is still refused (the two tests above).
+    /// </summary>
+    [Theory]
+    [InlineData("amount")]
+    [InlineData("id")]
+    public void A_Key_After_The_Group_Column_Is_Dropped_Rather_Than_Refused(string afterGroupColumn)
+    {
+        var query = Compile([Sum], [
+            new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            new SortItem { Field = afterGroupColumn, Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }
+        ]);
+
+        var orderBy = Compile([Sum], [
+            new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
+        ]);
+
+        Assert.Equal(orderBy.ToArtifact().ToJsonString(), query.ToArtifact().ToJsonString());
+    }
+
+    /// <summary>
     /// The same refusal on the fixture that used to pin the <c>bucket_sort</c>, asserted BY NAME so
     /// the deleted arm reads as a recorded capability gap rather than an oversight — the Search
     /// conformance runner discovers by artifact presence, so a missing arm is otherwise invisible to

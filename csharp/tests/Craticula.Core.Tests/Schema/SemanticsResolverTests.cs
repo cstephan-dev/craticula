@@ -429,6 +429,103 @@ public class SemanticsResolverTests
         Assert.Same(sort, SemanticsResolver.AppendStableKeyTiebreaker(sort, "id"));
     }
 
+    // -- SEM-6 (Bug #2565): the sort stops at the stable key only when the user's key on it orders exactly -----
+
+    private static GridSchema SchemaWithStableKey(string stableKey, FieldConfig stableKeyField) => new()
+    {
+        Source = "t",
+        StableKey = stableKey,
+        Fields = new Dictionary<string, FieldConfig>
+        {
+            [stableKey] = stableKeyField,
+            ["age"] = new FieldConfig { Type = FieldType.Int64 },
+            ["lastName"] = new FieldConfig { Type = FieldType.String }
+        }
+    };
+
+    /// <summary>A numeric stable key orders exactly, so the sort stops at it, as in the string overload.</summary>
+    [Fact]
+    public void A_Numeric_StableKey_Stops_The_Sort_In_The_Schema_Overload()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("id"), Item("age")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["id"], result.Select(item => item.Field));
+        Assert.False(appended);
+    }
+
+    /// <summary>A case-sensitive text stable key orders exactly too.</summary>
+    [Fact]
+    public void A_CaseSensitive_Text_StableKey_Stops_The_Sort()
+    {
+        var schema = SchemaWithStableKey("code", SensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("code"), Item("age")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["code"], result.Select(item => item.Field));
+        Assert.False(appended);
+    }
+
+    /// <summary>
+    /// A case-insensitive text stable key can tie: <c>'aB3'</c> and <c>'Ab3'</c> compare equal under the user's collated key, so the sort is not
+    /// total there. Nothing after it is dropped and the exact tiebreaker is still appended, as before this rule existed (Bug #2565 review).
+    /// </summary>
+    [Fact]
+    public void A_CaseInsensitive_Text_StableKey_Keeps_The_Keys_After_It_And_Still_Gets_The_Exact_Tiebreaker()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("code"), Item("age")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["code", "age", "code"], result.Select(item => item.Field));
+        Assert.True(appended, "the trailing key is the minted, exact tiebreaker");
+    }
+
+    [Fact]
+    public void A_CaseInsensitive_Text_StableKey_Already_Last_Is_Left_As_It_Always_Was()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+        IReadOnlyList<SortItem> sort = [Item("age"), Item("code")];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, schema, groupColumn: null, out var appended);
+
+        Assert.Same(sort, result);
+        Assert.False(appended);
+    }
+
+    /// <summary>Repeats are dropped whatever the stable key is: a later occurrence under the same collation can never break a tie the first left.</summary>
+    [Fact]
+    public void A_Repeated_Field_Is_Dropped_Even_When_The_StableKey_Is_Case_Insensitive_Text()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("age"), Item("age", SortDirection.Desc, NullsPosition.First)], schema, null, out _);
+
+        Assert.Equal(["age", "code"], result.Select(item => item.Field));
+    }
+
+    /// <summary>A grouped level's group column is exact by construction (GRP-2, GRP-4), whatever the stable key looks like.</summary>
+    [Fact]
+    public void A_Group_Column_Stops_The_Sort_Whatever_The_StableKey_Is()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("lastName"), Item("age")], schema, groupColumn: "lastName", out var appended);
+
+        Assert.Equal(["lastName"], result.Select(item => item.Field));
+        Assert.False(appended);
+    }
+
+    [Fact]
+    public void StableKeyOrdersExactly_Follows_The_Field_Type_And_Case_Setting()
+    {
+        Assert.True(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 })));
+        Assert.True(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("code", SensitiveField)));
+        Assert.False(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("code", InsensitiveField)));
+        Assert.False(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("code", ExplicitlyInsensitiveField)));
+    }
+
     /// <summary>The group column plays the stable key's role on a grouped level (GRP-4): a key after it is dropped the same way.</summary>
     [Fact]
     public void The_Same_Reductions_Apply_To_A_Group_Column_In_The_StableKeys_Role()

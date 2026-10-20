@@ -865,7 +865,7 @@ public static class SearchQueryBuilder
     /// </summary>
     private static IReadOnlyList<SortKeyPlan> ResolveSortPlan(IReadOnlyList<SortItem>? sort, Context context)
     {
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(sort, context.Schema.StableKey, out var appended);
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(sort, context.Schema, groupColumn: null, out var appended);
 
         var plan = new List<SortKeyPlan>(keys.Count);
 

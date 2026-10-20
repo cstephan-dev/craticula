@@ -1032,7 +1032,7 @@ public static class MongoPipelineBuilder
         var groupColumn = grouping?.GroupColumn;
 
         var keys = SemanticsResolver.AppendStableKeyTiebreaker(
-            sort, groupColumn ?? context.Schema.StableKey, out var tiebreakerAppended);
+            sort, context.Schema, groupColumn, out var tiebreakerAppended);
 
         var ordering = groupColumn is null
             ? SemanticsResolver.GroupingMode.Ungrouped
