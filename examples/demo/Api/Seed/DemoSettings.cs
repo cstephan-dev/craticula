@@ -18,6 +18,11 @@ public static class DemoSettings
     /// There is no default in code: README.md gives the one that matches docker-compose.yml.</summary>
     public const string SqlServerEnvVar = "DEMO_SQLSERVER";
 
+    /// <summary>The environment variable holding an administrator's SQL Server connection string, used by <c>seed sqlserver</c> only
+    /// (it creates the database and the table, then the read-only login that <see cref="SqlServerEnvVar"/> names). Optional: when unset,
+    /// the seed uses <see cref="SqlServerEnvVar"/> itself, as before. The API never reads it.</summary>
+    public const string SqlServerAdminEnvVar = "DEMO_SQLSERVER_ADMIN";
+
     /// <summary>The environment variable holding the MySQL connection string; the engine is on only when it is set.
     /// There is no default in code: README.md gives the one that matches docker-compose.yml.</summary>
     public const string MySqlEnvVar = "DEMO_MYSQL";

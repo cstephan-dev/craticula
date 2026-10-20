@@ -461,11 +461,14 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
 
     // ---- the seeder (needs the engine, uses a scratch database) -----------------------------------------
 
-    [RequiresEngineFact(Engine)]
+    // The seeder needs rights to create a database: the administrator's string (DEMO_SQLSERVER_ADMIN), not the read-only one the API uses.
+    private const string Admin = DemoSettings.SqlServerAdminEnvVar;
+
+    [RequiresEngineFact(Admin)]
     public async Task Seeder_CreatesTheDatabase_AndStoresTheLibrarysTypesAndEveryRow()
     {
         var database = $"demo_seedtest_{Guid.NewGuid():N}"[..28];
-        var scratch = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Engine)) { InitialCatalog = database };
+        var scratch = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Admin)) { InitialCatalog = database };
         try
         {
             var rows = OrderGenerator.Generate();
@@ -512,10 +515,115 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
         }
     }
 
+    // ---- least privilege (#2525): the API's login can read and nothing else ------------------------------
+
+    [RequiresEngineFact(Admin)]
+    public async Task SeedingWithAnAdminString_CreatesAReadOnlyLogin_ThatCanSelectButNotWriteOrDrop()
+    {
+        var database = $"demo_readtest_{Guid.NewGuid():N}"[..28];
+        var admin = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Admin)) { InitialCatalog = database };
+        var readerName = $"rdr_{Guid.NewGuid():N}"[..20];
+        var reader = new SqlConnectionStringBuilder(admin.ConnectionString)
+        {
+            UserID = readerName,
+            Password = $"Rd-{Guid.NewGuid():N}-aZ9",
+            InitialCatalog = database
+        };
+        try
+        {
+            var rows = OrderGenerator.Generate();
+            // Twice: the second run finds the login and the user already there and must leave them working.
+            Assert.Equal(rows.Count, await SqlServerSeeder.SeedAsync(reader.ConnectionString, rows, admin.ConnectionString));
+            Assert.Equal(rows.Count, await SqlServerSeeder.SeedAsync(reader.ConnectionString, rows, admin.ConnectionString));
+
+            await using var connection = new SqlConnection(reader.ConnectionString);
+            await connection.OpenAsync();
+
+            await using (var select = new SqlCommand("SELECT COUNT_BIG(*) FROM orders", connection))
+            {
+                Assert.Equal((long)rows.Count, (long)(await select.ExecuteScalarAsync())!);
+            }
+
+            foreach (var forbidden in new[]
+            {
+                "INSERT INTO orders (id, order_no, status, ordered_at, is_priority) VALUES (-1, N'x', N'x', SYSUTCDATETIME(), 0)",
+                "UPDATE orders SET status = N'x'",
+                "DELETE FROM orders",
+                "DROP TABLE orders",
+                "CREATE TABLE intruder (id INT)"
+            })
+            {
+                await using var command = new SqlCommand(forbidden, connection);
+                var denied = await Assert.ThrowsAsync<SqlException>(() => command.ExecuteNonQueryAsync());
+                Assert.Contains(denied.Number, new[] { 229, 262, 3701 }); // permission denied on the object / on the database / a drop without the right (3701)
+            }
+        }
+        finally
+        {
+            await DropAsync(database);
+            await DropLoginAsync(readerName);
+        }
+    }
+
+    [Fact]
+    public async Task SeedingWithAnAdminString_RefusesAReaderWithoutAPasswordOrNamedLikeTheAdmin_BeforeConnecting()
+    {
+        const string admin = "Server=127.0.0.1,1;User Id=adm;Password=x;Database=demo;ConnectTimeout=1";
+        var rows = OrderGenerator.Generate();
+
+        var noPassword = await Assert.ThrowsAsync<SeedSettingException>(() =>
+            SqlServerSeeder.SeedAsync("Server=127.0.0.1,1;User Id=rdr;Database=demo", rows, admin));
+        Assert.Contains("DEMO_SQLSERVER needs a User Id and a Password", noPassword.Message);
+
+        var same = await Assert.ThrowsAsync<SeedSettingException>(() =>
+            SqlServerSeeder.SeedAsync("Server=127.0.0.1,1;User Id=ADM;Password=y;Database=demo", rows, admin));
+        Assert.Contains("same login", same.Message);
+    }
+
+    [RequiresEngineFact(Admin)]
+    public async Task SeedingWithAnAdminString_RefusesToReKeyAnExistingLoginThatHoldsMoreThanRead()
+    {
+        var database = $"demo_guardtest_{Guid.NewGuid():N}"[..28];
+        var admin = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Admin)) { InitialCatalog = database };
+        var powerful = $"pwr_{Guid.NewGuid():N}"[..20];
+        var master = new SqlConnectionStringBuilder(admin.ConnectionString) { InitialCatalog = "master" };
+        try
+        {
+            await using (var connection = new SqlConnection(master.ConnectionString))
+            {
+                await connection.OpenAsync();
+                await using var create = new SqlCommand(
+                    $"CREATE LOGIN [{powerful}] WITH PASSWORD = N'Pw-{Guid.NewGuid():N}-aZ9', CHECK_POLICY = OFF; ALTER SERVER ROLE [dbcreator] ADD MEMBER [{powerful}];",
+                    connection);
+                await create.ExecuteNonQueryAsync();
+            }
+
+            var reader = new SqlConnectionStringBuilder(admin.ConnectionString) { UserID = powerful, Password = "Other-Pw-1aZ9" };
+            var refused = await Assert.ThrowsAsync<SeedSettingException>(() =>
+                SqlServerSeeder.SeedAsync(reader.ConnectionString, OrderGenerator.Generate(), admin.ConnectionString));
+            Assert.Contains("server role", refused.Message);
+            Assert.DoesNotContain("Other-Pw-1aZ9", refused.Message);
+        }
+        finally
+        {
+            await DropAsync(database);
+            await DropLoginAsync(powerful);
+        }
+    }
+
+    private static async Task DropLoginAsync(string login)
+    {
+        var master = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Admin)) { InitialCatalog = "master" };
+        await using var connection = new SqlConnection(master.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand($"IF SUSER_ID(N'{login}') IS NOT NULL DROP LOGIN [{login}]", connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
     private static async Task DropAsync(string database)
     {
         SqlConnection.ClearAllPools();
-        var master = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Engine)) { InitialCatalog = "master" };
+        var master = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Admin)) { InitialCatalog = "master" };
         await using var connection = new SqlConnection(master.ConnectionString);
         await connection.OpenAsync();
         await using var command = new SqlCommand(

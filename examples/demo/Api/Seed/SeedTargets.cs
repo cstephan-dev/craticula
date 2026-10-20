@@ -38,9 +38,10 @@ public static class SeedTargets
             rows => SqlServerSeeder.SeedAsync(
                 DemoSettings.OptionalSetting(DemoSettings.SqlServerEnvVar)
                     ?? throw new SeedSettingException($"{DemoSettings.SqlServerEnvVar} is not set."),
-                rows),
+                rows,
+                DemoSettings.OptionalSetting(DemoSettings.SqlServerAdminEnvVar)),
             count => $"SQL Server: {count} rows in table orders.",
-            "Is `docker compose --profile sqlserver up -d` running and healthy? Set DEMO_SQLSERVER to its connection string (README.md has the one for the compose file).",
+            "Is `docker compose --profile sqlserver up -d` running and healthy? Set DEMO_SQLSERVER (the read-only login) and DEMO_SQLSERVER_ADMIN (the seed's login) to its connection strings (README.md has the ones for the compose file).",
             Default: false),
         new SeedTarget(
             "mysql",

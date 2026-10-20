@@ -60,7 +60,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
 | Port | How |
 |---|---|
 | PostgreSQL, MongoDB | `DEMO_PG_PORT=55434 DEMO_MONGO_PORT=57018 docker compose up -d`, then give the same ports to the seed and the API with `DEMO_PG="Host=127.0.0.1;Port=55434;Username=demo;Password=demo;Database=demo"` and `DEMO_MONGO="mongodb://127.0.0.1:57018"` |
-| SQL Server | `DEMO_SQLSERVER_PORT=51434 docker compose --profile sqlserver up -d`, then use the same port in `DEMO_SQLSERVER` (see [SQL Server](#sql-server-the-sqlserver-provider)) |
+| SQL Server | `DEMO_SQLSERVER_PORT=51434 docker compose --profile sqlserver up -d`, then use the same port in `DEMO_SQLSERVER` and `DEMO_SQLSERVER_ADMIN` (see [SQL Server](#sql-server-the-sqlserver-provider)) |
 | MySQL | `DEMO_MYSQL_PORT=53307 docker compose --profile mysql up -d`, then use the same port in `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)) |
 | OpenSearch | `DEMO_OPENSEARCH_PORT=59201 docker compose --profile opensearch up -d`, then use the same port in `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)) |
 | API | `dotnet run --project Api --urls http://127.0.0.1:5081`, then change the `/api` target in `web/vite.config.ts` and pass `--api http://127.0.0.1:5081` to `smoke.sh` |
@@ -230,15 +230,20 @@ development and testing, not for production). If you do not accept it, do not st
 
 ```bash
 docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine: SQL Server, MySQL and OpenSearch)
-export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"
-dotnet run --project Api -- seed sqlserver               # SQL Server: 20000 rows in table orders.
+export DEMO_SQLSERVER_ADMIN="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the seed only
+export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=demo_reader;Password=$(sed -n 's/.*DEMO_READER_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the API: read-only
+dotnet run --project Api -- seed sqlserver               # SQL Server: 20000 rows in table orders; creates the read-only demo_reader login
 dotnet run --project Api                                 # /api/health now lists sqlserver
 docker compose --profile sqlserver stop                  # when done: stops it, keeps the volume
 ```
 
+- **Least privilege.** The API connects as `demo_reader`, a login that is a member of `db_datareader` in database `demo` and nothing else: it can select from `orders`, and an
+  insert, update, delete, drop or create is refused by the server. `sa` is used by the seed only (`DEMO_SQLSERVER_ADMIN`); the API never reads that variable. `seed sqlserver` creates the login from
+  the user name and password in `DEMO_SQLSERVER` (the password is `DEMO_READER_PASSWORD` in `docker-compose.yml`, a local throw-away value like the `sa` one) and re-keys it when you run the seed again. Without
+  `DEMO_SQLSERVER_ADMIN` the seed uses `DEMO_SQLSERVER` itself, so that login must then be able to create databases (an administrator): the old way, kept for a machine that already has such a string.
 - **The connection string.** `DEMO_SQLSERVER` has no default in code. `TrustServerCertificate=true` is needed because the container's certificate is
   self-signed and the driver encrypts by default (without it the login fails in the pre-login handshake, and the API answers 500, not 503, since it is a setting error). `Database=demo` is created by the seed.
-  Change the port with `DEMO_SQLSERVER_PORT` on `docker compose` and in the string.
+  Change the port with `DEMO_SQLSERVER_PORT` on `docker compose` and in both strings.
 - **Seed.** `seed sqlserver` creates database `demo` if it is missing, drops and recreates table `orders` and loads the same rows with `SqlBulkCopy` in one transaction. It is not a default target:
   plain `seed` still fills PostgreSQL, MongoDB and the SQLite file.
 - **Types.** `BIGINT`, `NVARCHAR(450)`, `DECIMAL(12,2)`, `DATETIME2(3)` (never the coarse `DATETIME`), `DATE`, `BIT`. The groupable columns (country, category, status) carry the binary collation
@@ -393,7 +398,7 @@ start the heavy engines only on request; the umbrella profile name is `engines`.
 dotnet run --project Api -- seed                  # the default: postgres, mongo and sqlite
 dotnet run --project Api -- seed mongo            # only MongoDB
 dotnet run --project Api -- seed sqlite           # only the SQLite file (no Docker needed)
-dotnet run --project Api -- seed sqlserver        # only SQL Server (needs the profile and DEMO_SQLSERVER)
+dotnet run --project Api -- seed sqlserver        # only SQL Server (needs the profile, DEMO_SQLSERVER and DEMO_SQLSERVER_ADMIN)
 dotnet run --project Api -- seed mysql            # only MySQL (needs the profile and DEMO_MYSQL)
 dotnet run --project Api -- seed opensearch       # only OpenSearch (needs the profile and DEMO_OPENSEARCH)
 dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
@@ -413,7 +418,8 @@ To see every provider side by side (and to run the full parity check), start the
 
 ```bash
 docker compose --profile engines up -d --wait            # PostgreSQL, MongoDB, SQL Server, MySQL, OpenSearch
-export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"
+export DEMO_SQLSERVER_ADMIN="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the seed only
+export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=demo_reader;Password=$(sed -n 's/.*DEMO_READER_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the API: read-only
 export DEMO_MYSQL="Server=127.0.0.1;Port=53306;User ID=demo;Password=demo;Database=demo"
 export DEMO_OPENSEARCH=http://127.0.0.1:59200
 dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch
@@ -446,7 +452,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `Cannot connect to the Docker daemon` | Start Docker Desktop or the Docker service, then run `docker compose up -d` again. |
 | The grid is empty | The seed has not run, or you ran `docker compose down -v`. Run `dotnet run --project Api -- seed`. |
 | A red banner with `backend-unavailable` (HTTP 503) | The database for that provider is down or unreachable. Check `docker compose ps`, then reload. For `sqlite` the file is missing or locked: run `dotnet run --project Api -- seed sqlite`. |
-| `seed sqlserver` says `DEMO_SQLSERVER is not set`, or a red banner for `sqlserver` | Start the profile (`docker compose --profile sqlserver up -d --wait`), set `DEMO_SQLSERVER` (see [SQL Server](#sql-server-the-sqlserver-provider)), run `seed sqlserver`, restart the API. |
+| `seed sqlserver` says `DEMO_SQLSERVER is not set`, or a red banner for `sqlserver` | Start the profile (`docker compose --profile sqlserver up -d --wait`), set `DEMO_SQLSERVER` and `DEMO_SQLSERVER_ADMIN` (see [SQL Server](#sql-server-the-sqlserver-provider)), run `seed sqlserver`, restart the API. |
 | `sqlserver` answers 500 with a pre-login handshake error | The connection string lacks `TrustServerCertificate=true`. |
 | The SQL Server container exits at start | It needs about 2 GB of RAM; check `docker logs demo-sqlserver-1`. |
 | `seed mysql` says `DEMO_MYSQL is not set`, or a red banner for `mysql` | Start the profile (`docker compose --profile mysql up -d --wait`), set `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)), run `seed mysql`, restart the API. |
@@ -465,7 +471,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | Path | What |
 |---|---|
 | `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`, `MySqlGridService`, `OpenSearchGridService`), the seed (`Api/Seed/`) |
-| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server, MySQL and OpenSearch comparisons run when `DEMO_SQLSERVER`, `DEMO_MYSQL` or `DEMO_OPENSEARCH` is set and the engine answers, and skip with one reason otherwise) |
+| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server, MySQL and OpenSearch comparisons run when `DEMO_SQLSERVER`, `DEMO_MYSQL` or `DEMO_OPENSEARCH` is set and the engine answers, and skip with one reason otherwise; the SQL Server seeder tests also need `DEMO_SQLSERVER_ADMIN`) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
 | `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL, MongoDB and OpenSearch mappings |
 | `smoke.sh`, `smoke/` | The cross-provider check and its request files |

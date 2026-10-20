@@ -15,7 +15,8 @@ internal static class EngineProbe
 
     private static readonly Dictionary<string, Func<string, string?>> Probes = new()
     {
-        [Seed.DemoSettings.SqlServerEnvVar] = ProbeSqlServer,
+        [Seed.DemoSettings.SqlServerEnvVar] = setting => ProbeSqlServer(setting, Seed.DemoSettings.SqlServerEnvVar),
+        [Seed.DemoSettings.SqlServerAdminEnvVar] = setting => ProbeSqlServer(setting, Seed.DemoSettings.SqlServerAdminEnvVar),
         [Seed.DemoSettings.MySqlEnvVar] = ProbeMySql,
         [Seed.DemoSettings.OpenSearchEnvVar] = ProbeOpenSearch
     };
@@ -39,7 +40,7 @@ internal static class EngineProbe
         return probe(setting) ?? new RequiresDatabasesFactAttribute().Skip;
     }
 
-    private static string? ProbeSqlServer(string setting)
+    private static string? ProbeSqlServer(string setting, string envVar)
     {
         try
         {
@@ -50,7 +51,7 @@ internal static class EngineProbe
         }
         catch (Exception ex) when (ex is SqlException or ArgumentException or InvalidOperationException)
         {
-            return $"SQL Server does not answer at the {Seed.DemoSettings.SqlServerEnvVar} connection string ({ex.GetType().Name}). "
+            return $"SQL Server does not answer at the {envVar} connection string ({ex.GetType().Name}). "
                 + "Is `docker compose --profile sqlserver up -d` healthy and the database seeded (`seed sqlserver`)?";
         }
     }
