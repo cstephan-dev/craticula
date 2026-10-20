@@ -130,14 +130,19 @@ internal static class DapperValueReader
     };
 
     /// <summary>
-    /// SEM-4's absolute instant. Accepts a <see cref="DateTime"/> (the common case), a
+    /// SEM-4's absolute instant, delivered as UTC (the result side of SEM-4, Bug #2511). Accepts a <see cref="DateTime"/> (the common case:
+    /// a UTC kind is kept, a local kind is converted to the same instant in UTC, and a value of <b>unspecified</b> kind, which is what SQL Server's
+    /// <c>datetime2</c> and MySQL's <c>DATETIME</c> give, is read as UTC, the host obligation of SEM-4's comparison side seen from the other end,
+    /// so a JSON serialiser writes the trailing <c>Z</c>), a
     /// <see cref="DateTimeOffset"/> (a provider that maps a timezone-aware column to it — converted to
     /// its UTC instant, never its offset-local wall-clock reading, matching SEM-4's "the absolute instant
     /// is what a datetimeValue denotes"), or an ISO-8601 instant string (SQLite's TEXT affinity).
     /// </summary>
     private static DateTime ToDateTime(object raw) => raw switch
     {
-        DateTime value => value,
+        DateTime { Kind: DateTimeKind.Utc } value => value,
+        DateTime { Kind: DateTimeKind.Local } value => value.ToUniversalTime(),
+        DateTime value => DateTime.SpecifyKind(value, DateTimeKind.Utc),
         DateTimeOffset value => value.UtcDateTime,
         string text => DateTime.Parse(
             text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
