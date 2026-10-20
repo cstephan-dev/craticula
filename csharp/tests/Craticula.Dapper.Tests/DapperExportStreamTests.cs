@@ -375,8 +375,6 @@ public class DapperExportStreamTests
         Assert.Equal(new DateOnly(2024, 1, 1), rows[0][2]);
     }
 
-    // ---- helper --------------------------------------------------------------------------------------
-
     // ---- bug #2510: a key that is also an export column must not be selected twice -----------------------
 
     /// <summary>The select-list items of a compiled statement: the text between the first <c>SELECT</c> and
@@ -427,13 +425,13 @@ public class DapperExportStreamTests
         foreach (var text in walk)
         {
             var items = SelectList(text);
-            Assert.Equal(items.Count, items.Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(items.Count, items.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         }
     }
 
     /// <summary>The de-duplicated select list must not shift the ordinals the walk reads its keys from: the
-    /// rows are the same, and in the same order, as an export of the same columns where no key is among
-    /// them (which selects the keys separately, after the columns).</summary>
+    /// rows equal the full schema-order export (itself pinned against the expected ids elsewhere in this
+    /// class) picked down to the projected columns by position.</summary>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
@@ -469,6 +467,8 @@ public class DapperExportStreamTests
             }
         }
     }
+
+    // ---- helper --------------------------------------------------------------------------------------
 
     private static async Task<List<IReadOnlyList<object?>>> Drain(
         SqliteFixtureDatabase database, FixtureRequest fixture, int chunkSize)
