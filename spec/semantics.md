@@ -670,6 +670,32 @@ as to any other sort key): since a `stableKey` is required to be unique but not 
 no direction the user chose) — i.e. the appended key is always `{ field: stableKey, direction: "asc",
 nullsPosition: "last" }`.
 
+**The effective sort lists a field once and ends at the stable key (pinned; Bug #2565).** Before the
+compiler appends anything it reduces the request's `sort` array by two rules, and both only remove keys
+that can never change the order:
+
+1. **A later occurrence of a field the sort already named is dropped.** The first occurrence already
+   decided every tie the later one could break (`[age desc, age asc]` orders exactly like `[age desc]`).
+2. **Everything after the first occurrence of the stable key is dropped.** The key is unique by
+   declaration, so no two rows tie on it and no key after it can break a tie (`[id desc, age asc]` orders
+   exactly like `[id desc]`). When the sort reaches the stable key this way nothing is appended; when it
+   does not, the tiebreaker is appended as above.
+
+The result names every field at most once and, whenever the stable key is among them, ends in it. The
+first wording of this rule only asked whether the sort *ends* in the stable key, so `[id desc, age asc]`
+compiled to `ORDER BY id DESC, age ASC, id ASC`: SQL Server refuses a column named twice in an `ORDER BY`
+list (error 169), and a MongoDB `$sort` document cannot hold one key twice, so the same request failed on
+one arm and was ambiguous on another. A field before the stable key is kept (`[age asc, id desc]` stays as
+written); the reductions look at order only, never at direction, null placement or case folding, because a
+dropped key could not have mattered under any of them. The reductions apply to the **group column** in a
+grouped level exactly as to the stable key (GRP-4: it is unique across the level's rows by construction),
+and to every consumer of the effective sort, including the keyset walk of an export.
+
+Must NOT: reject a request for naming a field twice or for sorting past the stable key (the grid cannot
+prevent either, and the order the user asked for is still honoured); drop a key that comes **before** the
+stable key or is the first occurrence of its field; keep a dropped key "for the record" in any backend's
+artifact.
+
 > **Superseded in part by GRP-4 (#1640) for a grouped level, and by GRP-6 (#1641) for BM-3's
 > distinct-values query.** This rule says the appended key is *always* the schema's `stableKey`, and
 > its first Must-NOT below forbids treating anything else as unique. On a **grouped level** that is

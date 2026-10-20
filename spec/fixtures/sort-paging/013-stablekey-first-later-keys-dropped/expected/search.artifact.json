@@ -1,0 +1,15 @@
+{
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    {
+      "id": {
+        "order": "desc",
+        "missing": "_first"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 100
+}

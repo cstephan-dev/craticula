@@ -9,7 +9,9 @@ EXP-2 (`startRow`/`endRow` → `$defs/rangePage`, vs. the unpaginated `$defs/non
 
 Backend coverage: every case in this category is a general/structural fixture per the suite's
 coverage policy — Postgres + MongoDB + one shared Search artifact, no dialect-specific or
-cross-backend-parity showcase cases.
+cross-backend-parity showcase cases. The one exception is `013`-`016` (Bug #2565): they also carry the
+SQL Server artifact, because SQL Server is the arm that rejects a column named twice in an `ORDER BY`
+list (error 169), and all four carry the execution-equality pair so the Docker tier runs them there.
 
 All cases model a shared `employees` domain: `id` (int64, the `stableKey`), `lastName` (string),
 `age` (int64), `hireDate` (date), `salary` (decimal), `isActive` (boolean), `department` (string),
@@ -32,6 +34,10 @@ inventing a new domain per case.
 | 010 | `stablekey-tiebreaker-not-appended-sort-ends-in-key` | Negative case: `sortModel` already ends in `stableKey` — no duplicate tiebreaker appended | SEM-6, SEM-3, AR-9, AG-3 |
 | 011 | `page-range-with-tiebreaker` | `page: { mode: "range" }` at a non-zero offset (`startRow: 20, endRow: 40`), tiebreaker makes the offset read deterministic | AG-3, SEM-6, SEM-3, AR-9 |
 | 012 | `page-none-unpaginated-export` | `page: { mode: "none" }` via `exportScope: "all"` (EXP-1): full unpaginated artifact, no row-range clause in any backend — and, being an export, EXP-1(b)'s named output columns on Postgres and MongoDB | EXP-1, EXP-2, SEM-3, SEM-6, AR-9 |
+| 013 | `stablekey-first-later-keys-dropped` | `sortModel` starts with the stable key (`id desc`, then `age`): the keys after it are dropped, nothing is appended; also carries the SQL Server artifact, the arm that rejected the repeated key (Bug #2565) | SEM-6, SEM-3, AR-9 |
+| 014 | `stablekey-in-the-middle-later-keys-dropped` | The stable key in the middle (`age asc`, `id desc`, `lastName`): the key before it is kept as written, the one after it dropped, nothing appended | SEM-6, SEM-3, AR-9 |
+| 015 | `repeated-field-later-occurrence-dropped` | A field named twice (`age desc`, `age asc`): the later occurrence is dropped, then the tiebreaker is appended | SEM-6, SEM-3, AR-9 |
+| 016 | `repeated-stablekey-later-occurrence-dropped` | The stable key named twice (`id asc`, `id desc`): the first reaches the stable key, the later is dropped | SEM-6, SEM-3, AR-9 |
 
 ## Notes on artifact construction
 

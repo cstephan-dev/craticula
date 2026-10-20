@@ -1,0 +1,28 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": 3,
+        "age": 27,
+        "lastName": "Al"
+      },
+      "why": "seed row"
+    },
+    {
+      "row": {
+        "id": 1,
+        "age": 38,
+        "lastName": "Cy"
+      },
+      "why": "seed row"
+    },
+    {
+      "row": {
+        "id": 2,
+        "age": 22,
+        "lastName": "Abe"
+      },
+      "why": "seed row"
+    }
+  ]
+}
