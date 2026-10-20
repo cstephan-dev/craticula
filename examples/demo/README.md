@@ -219,6 +219,8 @@ context per engine: `SqliteOrdersDbContext` and `SqlServerOrdersDbContext`, both
 6. **The set filter** reuses the compiled statement of the same engine's Dapper route (`SqlServerGridService`, `SqliteGridService`), because the adapter has no distinct-values call.
 7. **CSV** goes through `EfCoreExportStream` and equals PostgreSQL over the whole table (several keyset chunks).
 
+**EF Core on MySQL is not offered.** The only MIT-licensed provider, Pomelo.EntityFrameworkCore.MySql, stops at EF Core 9: its 9.0.0 restores next to the demo's EF Core 10 with a warning (`NU1608`) but fails at the first call with a `MissingMethodException` (EF Core 10 removed a method it uses). MySQL is served by the Dapper route (`mysql`). The route will be added when Pomelo ships an EF Core 10 build; Oracle's provider is excluded by the dependency licence policy.
+
 **Packages.** The demo adds `Microsoft.EntityFrameworkCore.SqlServer` and `Microsoft.EntityFrameworkCore.Sqlite`, both 10.0.11 (the version of `Microsoft.EntityFrameworkCore` the Npgsql provider already brings; central versions in
 `Directory.Packages.props`). They are new libraries and need the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
 
