@@ -74,12 +74,12 @@ safe-parameterization behavior, not here.
 
 ## Breakdown by validation stage
 
-- `allowlist`: 7 (001–003, 019, 024–026)
+- `allowlist`: 8 (001–003, 019, 024–026, 028)
 - `resourceLimits`: 8 (004–011)
 - `typeCoercion`: 4 (012–015)
 - `requestParsing`: 8 (016–018, 020–023, 027)
 
-**Total: 27 fixtures.**
+**Total: 28 fixtures.**
 
 ## Notes on construction
 
