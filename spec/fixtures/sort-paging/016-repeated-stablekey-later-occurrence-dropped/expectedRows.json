@@ -1,24 +1,8 @@
 {
-  "columns": [
-    "id",
-    "age",
-    "lastName"
-  ],
+  "columns": ["id",  "age",  "lastName"],
   "rows": [
-    [
-      1,
-      38,
-      "Cy"
-    ],
-    [
-      2,
-      22,
-      "Abe"
-    ],
-    [
-      3,
-      27,
-      "Al"
-    ]
+    [1,  38,  "Cy"],
+    [2,  22,  "Abe"],
+    [3,  27,  "Al"]
   ]
 }

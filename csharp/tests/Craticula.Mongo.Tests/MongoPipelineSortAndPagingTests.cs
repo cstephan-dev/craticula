@@ -211,18 +211,37 @@ public class MongoPipelineSortAndPagingTests
     }
 
     [Fact]
-    public void A_Repeated_Sort_Key_Is_Refused_Because_A_Sort_Document_Would_Keep_Only_The_Last()
+    public void A_Repeated_Sort_Key_Is_Dropped_So_The_First_Entry_Stays_Primary()
     {
-        // MDB-10. `$addFields`, `$sort` and `$unset` are documents, so `lastName asc, lastName desc`
-        // does not "collapse to the first" — the SECOND entry overwrites the first, silently making
-        // the secondary key primary, and `$unset` names the bucket twice. A grid can send a repeated
-        // colId in `sortModel`, so this is reachable from the wire.
-        var failure = Assert.Throws<MongoCompilationException>(() => Compile([
+        // MDB-10's first collision, superseded by SEM-6 (Bug #2565). `$addFields`, `$sort` and `$unset` are
+        // documents, so a repeated `lastName` would have overwritten the first entry and silently made the
+        // secondary key primary; it used to be refused. The effective sort now lists a field once, so the
+        // request is served and the first occurrence decides: the pipeline equals the one for the first key alone.
+        var repeated = Compile([
             Key("lastName", SortDirection.Asc, NullsPosition.Last),
             Key("lastName", SortDirection.Desc, NullsPosition.First)
-        ]));
+        ]).Pipeline;
+        var once = Compile([Key("lastName", SortDirection.Asc, NullsPosition.Last)]).Pipeline;
 
-        Assert.Contains("names 'lastName' more than once", failure.Message);
+        Assert.Equal(once.Select(Json), repeated.Select(Json));
+        Assert.Equal(
+            """{"$sort":{"__lastNameNullBucket":1,"lastName":1,"__idNullBucket":1,"id":1}}""",
+            Json(repeated[1]));
+        Assert.Equal("""{"$unset":["__lastNameNullBucket","__idNullBucket"]}""", Json(repeated[2]));
+    }
+
+    [Fact]
+    public void Keys_After_The_StableKey_Are_Dropped_Because_The_Sort_Is_Already_Total()
+    {
+        // SEM-6 (Bug #2565): the stable key is unique, so a key after it can never break a tie. The `$sort`
+        // document ends at `id`, with no second `id` entry that would overwrite the user's own direction.
+        var pipeline = Compile([
+            Key("id", SortDirection.Desc, NullsPosition.First),
+            Key("lastName", SortDirection.Asc, NullsPosition.Last)
+        ]).Pipeline;
+
+        Assert.Equal("""{"$sort":{"__idNullBucket":-1,"id":-1}}""", Json(pipeline[1]));
+        Assert.Equal("""{"$unset":"__idNullBucket"}""", Json(pipeline[2]));
     }
 
     // ---- paging (AG-3 / EXP-2) --------------------------------------------------------------------

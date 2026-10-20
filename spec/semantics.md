@@ -2338,14 +2338,17 @@ in `sortModel`), the aggregate output names and hence their buckets (AGG-2 deriv
 changes the answer:
 
 - **two sort keys on one field** (`region asc, region desc`) — the second `$sort` entry replaces the
-  first, so the *secondary* key becomes primary;
+  first, so the *secondary* key becomes primary. **Superseded by SEM-6 (Bug #2565):** the effective
+  sort lists a field once (a later occurrence is dropped before any compiler sees the sort), so this
+  collision can no longer arise and the first entry, the user's primary, stays primary. It was a
+  rejection when this rule was written; a request that repeats a colId is now served on every arm;
 - **an aggregate whose output name is `group`** — its bucket is `__groupNullBucket`, which the group
   key also claims, so `_id` becomes the primary sort key, a null sorts last where nulls-first was
   requested, and `$unset` lists one name twice;
 - **two aggregates with one output name** — the second accumulator replaces the first in `$group`,
   and the grid reads one column holding another column's number.
 
-All three MUST be rejected. Renaming either side is not an alternative: the emitted bucket name would
+The second and third MUST be rejected (the first no longer arises). Renaming either side is not an alternative: the emitted bucket name would
 then depend on what else the request happened to contain, which is a worse oracle than an error.
 There is no SQL counterpart to any of this — the SQL compiler renders null placement as an inline
 expression rather than as a named field, and a repeated `ORDER BY` key is merely redundant there.
@@ -2664,10 +2667,12 @@ tiebreaker: SEM-3's first Must-NOT forbids relying on an engine's implicit defau
 happens to match today, and SEM-6's fourth forbids "the stable key is probably never null" as a
 licence to omit the marker.
 
-A repeated sort key needs **no rejection** here, and the contrast with MDB-10's first collision is
-structural rather than a judgement call: `sort` is an ARRAY, so a colId the grid sent twice is
-redundant and the primary key stays primary, whereas a `$sort` **document** silently replaces the
-first entry and promotes the secondary key.
+A repeated sort key **never reaches this compiler**: SEM-6 drops a later occurrence of a field before
+the sort is compiled (Bug #2565), so there is nothing to reject here or in MDB-10's first collision.
+The difference this paragraph used to draw is still the reason the two engines needed different
+answers *before* that reduction: `sort` is an ARRAY, where a colId sent twice is merely redundant and
+the primary key stays primary, whereas a `$sort` **document** silently replaces the first entry and
+promotes the secondary key.
 
 **Which sub-field each key addresses is OSE-6's table, including its one carve-out**, which is easy to
 lose sight of here because this rule is about the two parameters rather than the target: a user's own

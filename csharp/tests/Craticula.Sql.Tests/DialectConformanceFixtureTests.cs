@@ -66,7 +66,7 @@ public class DialectConformanceFixtureTests
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [
-        ("mssql", MssqlDialect.Instance, 44),
+        ("mssql", MssqlDialect.Instance, 48),
         ("mysql", MySqlDialect.Instance, 45),
         ("oracle", OracleDialect.Instance, 43),
         ("sqlite", SqliteDialect.Instance, 45)
@@ -196,7 +196,9 @@ public class DialectConformanceFixtureTests
     [Fact]
     public void The_Suite_Is_All_173_Non_Postgres_Arms_In_The_Fixture_Tree()
     {
-        // #2243 added the most recent 1: dialect-parity/025, SQLite's fixed-width datetime bound (SEM-4);
+        // #2565 added the most recent 4: the SQL Server arms of sort-paging/013-016 (SEM-6's effective sort lists a field once;
+        // SQL Server is the arm that refused a column named twice in an ORDER BY list).
+        // #2243 added the 1 before that: dialect-parity/025, SQLite's fixed-width datetime bound (SEM-4);
         // its one arm is the sqlite one, authored from the rule rather than transformed from another arm.
         // #1886 added the 4 before that: dialect-parity/024, AGG-6's discriminator — a grouped level
         // ordered by an AVG beside a COALESCE-wrapped SUM. All four arms are that fixture's own
@@ -222,7 +224,7 @@ public class DialectConformanceFixtureTests
         // which is what makes BM-2's "identical grouping protocol across all four dialects"
         // checkable at all. This number going up without the per-dialect table above changing with
         // it means an arm was added and went unexercised.
-        Assert.Equal(177, Arms.Count);
+        Assert.Equal(181, Arms.Count);
     }
 
     [Fact]

@@ -8,17 +8,8 @@
   "groupKeys": [],
   "filterModel": null,
   "sortModel": [
-    {
-      "colId": "age",
-      "sort": "asc"
-    },
-    {
-      "colId": "id",
-      "sort": "desc"
-    },
-    {
-      "colId": "lastName",
-      "sort": "asc"
-    }
+    { "colId": "age", "sort": "asc" },
+    { "colId": "id", "sort": "desc" },
+    { "colId": "lastName", "sort": "asc" }
   ]
 }

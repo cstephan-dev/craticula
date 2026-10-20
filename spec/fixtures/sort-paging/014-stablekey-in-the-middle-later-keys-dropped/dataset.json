@@ -1,52 +1,28 @@
 {
   "rows": [
     {
-      "row": {
-        "id": 1,
-        "age": 30,
-        "lastName": "Zed"
-      },
-      "why": "seed row"
+      "row": { "id": 1, "age": 30, "lastName": "Zed" },
+      "why": "age 30 tie with ids 2 and 4: id desc puts it last of the three"
     },
     {
-      "row": {
-        "id": 2,
-        "age": 30,
-        "lastName": "Abe"
-      },
-      "why": "seed row"
+      "row": { "id": 2, "age": 30, "lastName": "Abe" },
+      "why": "age 30 tie, id desc puts it between ids 4 and 1; its lastName is the one a kept key would compare"
     },
     {
-      "row": {
-        "id": 3,
-        "age": 25,
-        "lastName": "Mia"
-      },
-      "why": "seed row"
+      "row": { "id": 3, "age": 25, "lastName": "Mia" },
+      "why": "age 25 tie with id 6: id desc puts it second of the pair"
     },
     {
-      "row": {
-        "id": 4,
-        "age": 30,
-        "lastName": "Bo"
-      },
-      "why": "seed row"
+      "row": { "id": 4, "age": 30, "lastName": "Bo" },
+      "why": "age 30 tie, highest id of the three so first in the age 30 group"
     },
     {
-      "row": {
-        "id": 5,
-        "age": null,
-        "lastName": "Cy"
-      },
-      "why": "seed row"
+      "row": { "id": 5, "age": null, "lastName": "Cy" },
+      "why": "null age: last on asc (SEM-3)"
     },
     {
-      "row": {
-        "id": 6,
-        "age": 25,
-        "lastName": "Al"
-      },
-      "why": "seed row"
+      "row": { "id": 6, "age": 25, "lastName": "Al" },
+      "why": "age 25 tie, highest id so first of the age 25 pair"
     }
   ]
 }

@@ -1179,15 +1179,17 @@ public static class MongoPipelineBuilder
 
         foreach (var key in keys)
         {
-            // MDB-10, and the reason it is an exception rather than a de-duplication: all three
-            // stages below are DOCUMENTS, whose repeated key is last-wins. A second key landing on an
-            // already-claimed bucket therefore does not merely add nothing — it overwrites the FIRST
-            // key's entry in `$sort`, promoting the later key to primary, and it lists the same name
-            // twice in `$unset`. Both reachable from the wire: `sortModel` may repeat a colId, and
-            // AGG-2 lets `valueCols[].id` name the reserved `__groupNullBucket`. Renaming one side
-            // would make the emitted bucket name depend on the rest of the request, so the request is
-            // refused instead — GRP-4's "a sort key the projection does not contain is rejected
-            // rather than rendered", one register down.
+            // MDB-10: all three stages below are DOCUMENTS, whose repeated key is last-wins. A second
+            // key landing on an already-claimed bucket therefore does not merely add nothing — it
+            // overwrites the FIRST key's entry in `$sort`, promoting the later key to primary, and it
+            // lists the same name twice in `$unset`. Two ways to get there remain: AGG-2 lets
+            // `valueCols[].id` name the reserved `__groupNullBucket`, and two different fields could
+            // claim one bucket. The third, `sortModel` repeating a colId, no longer reaches this
+            // point: SEM-6's reduction (Bug #2565) drops a later occurrence of a field before the
+            // keys are listed, so the same-path branch below is the invariant's guard, not a
+            // request-reachable error. Renaming one side would make the emitted bucket name depend
+            // on the rest of the request, so the request is refused instead — GRP-4's "a sort key
+            // the projection does not contain is rejected rather than rendered", one register down.
             if (claimed.TryGetValue(key.Bucket, out var owner))
             {
                 throw new MongoCompilationException(owner == key.Path

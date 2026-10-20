@@ -1,20 +1,8 @@
 {
-  "query": {
-    "match_all": {}
-  },
+  "query": { "match_all": {} },
   "sort": [
-    {
-      "age": {
-        "order": "desc",
-        "missing": "_first"
-      }
-    },
-    {
-      "id": {
-        "order": "asc",
-        "missing": "_last"
-      }
-    }
+    { "age": { "order": "desc", "missing": "_first" } },
+    { "id": { "order": "asc", "missing": "_last" } }
   ],
   "from": 0,
   "size": 100

@@ -1,14 +1,7 @@
 {
-  "query": {
-    "match_all": {}
-  },
+  "query": { "match_all": {} },
   "sort": [
-    {
-      "id": {
-        "order": "asc",
-        "missing": "_last"
-      }
-    }
+    { "id": { "order": "asc", "missing": "_last" } }
   ],
   "from": 0,
   "size": 100

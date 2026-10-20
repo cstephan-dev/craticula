@@ -327,7 +327,8 @@ public static class SemanticsResolver
     /// <summary>
     /// SEM-6: appends the schema-declared <paramref name="stableKey"/> as a trailing sort tiebreaker
     /// — always last, never ahead of or interleaved with the user's own chosen keys — unless
-    /// <paramref name="sort"/> already ends in it. The appended key is always
+    /// <paramref name="sort"/> already reaches it. The sort is reduced first (SEM-6, Bug #2565): a later occurrence of a field the sort
+    /// already named is dropped, and so is everything after the first occurrence of the stable key. The appended key is always
     /// <c>{ field: stableKey, direction: asc, nullsPosition: last }</c> (SEM-6: the tiebreaker's
     /// direction is always ascending, since it exists purely to break ties and carries no direction
     /// the user chose, and SEM-3's own adapter default for <c>asc</c> applies to it identically).
@@ -372,10 +373,17 @@ public static class SemanticsResolver
     {
         SortItemValidator.Validate(sort);
 
-        if (sort is not null && sort[^1].Field == stableKey)
+        // SEM-6 (Bug #2565): reduce first, append second. A later occurrence of a field the sort already named is dropped, and so is
+        // everything after the first occurrence of the stable key (it is unique by declaration, so nothing after it can break a tie).
+        // Both only remove keys that can never change the order; the result names every field once and, when the stable key is among
+        // them, ends in it. Without this, [id desc, age asc] compiled to ORDER BY id DESC, age ASC, id ASC, which SQL Server rejects
+        // (error 169) and a MongoDB $sort document cannot hold.
+        var reduced = ReduceSort(sort, stableKey, out var reachedStableKey);
+
+        if (reachedStableKey)
         {
             appended = false;
-            return sort;
+            return reduced!;
         }
 
         appended = true;
@@ -389,6 +397,40 @@ public static class SemanticsResolver
 
         SortItemValidator.Validate([tiebreaker]);
 
-        return sort is null ? [tiebreaker] : [..sort, tiebreaker];
+        return reduced is null ? [tiebreaker] : [..reduced, tiebreaker];
+    }
+
+    /// <summary>
+    /// The two SEM-6 reductions, in one pass: keep the first occurrence of each field, and stop after the stable key. Returns
+    /// <paramref name="sort"/> itself, by reference, when nothing was dropped (the common case allocates nothing), and
+    /// <see langword="null"/> for a null sort. <paramref name="reachedStableKey"/> says the result ends in the stable key.
+    /// Direction, null placement and case handling play no part: a dropped key could not have mattered under any of them.
+    /// </summary>
+    private static IReadOnlyList<SortItem>? ReduceSort(IReadOnlyList<SortItem>? sort, string stableKey, out bool reachedStableKey)
+    {
+        reachedStableKey = false;
+        if (sort is null)
+        {
+            return null;
+        }
+
+        HashSet<string> seen = new(sort.Count, StringComparer.Ordinal);
+        List<SortItem> kept = new(sort.Count);
+        foreach (var item in sort)
+        {
+            if (!seen.Add(item.Field))
+            {
+                continue;
+            }
+
+            kept.Add(item);
+            if (string.Equals(item.Field, stableKey, StringComparison.Ordinal))
+            {
+                reachedStableKey = true;
+                break;
+            }
+        }
+
+        return kept.Count == sort.Count ? sort : kept;
     }
 }

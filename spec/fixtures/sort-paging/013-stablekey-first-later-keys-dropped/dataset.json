@@ -1,52 +1,28 @@
 {
   "rows": [
     {
-      "row": {
-        "id": 6,
-        "age": 31,
-        "lastName": "Zed"
-      },
-      "why": "seed row"
+      "row": { "id": 6, "age": 31, "lastName": "Zed" },
+      "why": "highest id: first on id desc although its age is mid-range"
     },
     {
-      "row": {
-        "id": 2,
-        "age": 22,
-        "lastName": "Abe"
-      },
-      "why": "seed row"
+      "row": { "id": 2, "age": 22, "lastName": "Abe" },
+      "why": "fifth by id; age 22 ties with id 4 and id alone orders them"
     },
     {
-      "row": {
-        "id": 5,
-        "age": 45,
-        "lastName": "Bo"
-      },
-      "why": "seed row"
+      "row": { "id": 5, "age": 45, "lastName": "Bo" },
+      "why": "second by id; the oldest, so an age key kept after id would still not move it"
     },
     {
-      "row": {
-        "id": 1,
-        "age": 38,
-        "lastName": "Cy"
-      },
-      "why": "seed row"
+      "row": { "id": 1, "age": 38, "lastName": "Cy" },
+      "why": "lowest id: last on id desc"
     },
     {
-      "row": {
-        "id": 4,
-        "age": 22,
-        "lastName": "Mia"
-      },
-      "why": "seed row"
+      "row": { "id": 4, "age": 22, "lastName": "Mia" },
+      "why": "third by id; shares age 22 with id 2, the tie an age key would see"
     },
     {
-      "row": {
-        "id": 3,
-        "age": 27,
-        "lastName": "Al"
-      },
-      "why": "seed row"
+      "row": { "id": 3, "age": 27, "lastName": "Al" },
+      "why": "fourth by id; youngest but one"
     }
   ]
 }

@@ -1,18 +1,7 @@
 [
   {
     "$addFields": {
-      "__idNullBucket": {
-        "$cond": [
-          {
-            "$eq": [
-              "$id",
-              null
-            ]
-          },
-          1,
-          0
-        ]
-      }
+      "__idNullBucket": { "$cond": [{ "$eq": ["$id", null] }, 1, 0] }
     }
   },
   {
@@ -21,15 +10,7 @@
       "id": 1
     }
   },
-  {
-    "$unset": [
-      "__idNullBucket"
-    ]
-  },
-  {
-    "$skip": 0
-  },
-  {
-    "$limit": 100
-  }
+  { "$unset": "__idNullBucket" },
+  { "$skip": 0 },
+  { "$limit": 100 }
 ]

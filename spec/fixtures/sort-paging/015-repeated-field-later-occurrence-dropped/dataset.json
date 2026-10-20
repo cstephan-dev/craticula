@@ -1,52 +1,28 @@
 {
   "rows": [
     {
-      "row": {
-        "id": 1,
-        "age": 30,
-        "lastName": "Zed"
-      },
-      "why": "seed row"
+      "row": { "id": 1, "age": 30, "lastName": "Zed" },
+      "why": "age 30 tie with ids 3 and 6: the appended id asc orders the three"
     },
     {
-      "row": {
-        "id": 2,
-        "age": 25,
-        "lastName": "Abe"
-      },
-      "why": "seed row"
+      "row": { "id": 2, "age": 25, "lastName": "Abe" },
+      "why": "age 25 tie with id 5: id asc puts it first of the pair"
     },
     {
-      "row": {
-        "id": 3,
-        "age": 30,
-        "lastName": "Bo"
-      },
-      "why": "seed row"
+      "row": { "id": 3, "age": 30, "lastName": "Bo" },
+      "why": "age 30 tie, second of the three by id"
     },
     {
-      "row": {
-        "id": 4,
-        "age": null,
-        "lastName": "Cy"
-      },
-      "why": "seed row"
+      "row": { "id": 4, "age": null, "lastName": "Cy" },
+      "why": "null age: first on desc (SEM-3), the first occurrence's placement"
     },
     {
-      "row": {
-        "id": 5,
-        "age": 25,
-        "lastName": "Mia"
-      },
-      "why": "seed row"
+      "row": { "id": 5, "age": 25, "lastName": "Mia" },
+      "why": "age 25 tie, second of the pair by id"
     },
     {
-      "row": {
-        "id": 6,
-        "age": 30,
-        "lastName": "Al"
-      },
-      "why": "seed row"
+      "row": { "id": 6, "age": 30, "lastName": "Al" },
+      "why": "age 30 tie, last of the three by id"
     }
   ]
 }
