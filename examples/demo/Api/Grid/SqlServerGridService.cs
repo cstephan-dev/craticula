@@ -1,6 +1,5 @@
 using Craticula.Core.Export;
 using Craticula.Core.Grid;
-using Craticula.Core.Ir;
 using Craticula.Dapper;
 using Craticula.Sql;
 using Microsoft.Data.SqlClient;
@@ -47,8 +46,7 @@ public sealed class SqlServerGridService : IGridService
         await using var connection = await OpenAsync(cancellationToken);
         var page = await DapperGridQuery.FetchPageAsync(
             connection, ToSqlRequest(request), MssqlDialect.Instance, includeRowCount: true, cancellationToken);
-        var result = page.ToGridPageResult();
-        return result with { Rows = [.. result.Rows.Select(MarkInstantsUtc)] };
+        return page.ToGridPageResult();
     }
 
     /// <summary>The Dapper adapter has no entry point for BM-3's distinct values; see <see cref="SetValuesRunner"/>.</summary>
@@ -61,37 +59,14 @@ public sealed class SqlServerGridService : IGridService
             SqlServerBinding.CreateCommand,
             cancellationToken);
 
-    /// <summary>
-    /// The export is walked a page at a time through the grid entry point, not through <c>DapperExportStream</c> (library defect #2510): on SQL Server the
-    /// stream's keyset query lists the sort key twice when it is also an export column (<c>SELECT [id], ..., [id] ... ORDER BY
-    /// [id]</c>), and the engine answers error 209 "Ambiguous column name" (measured on 2022-CU14 for every export that
-    /// includes <c>id</c>). The walk pages with OFFSET/FETCH over the compiled statement, whose ORDER BY already ends in the
-    /// stable key (SEM-6), so the order is total and the demo table is static during an export. Chunks of
-    /// <see cref="ExportPageSize"/> keep memory flat like the stream does.
-    /// </summary>
     public async IAsyncEnumerable<ExportRow> StreamExportAsync(
         PreparedRows request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await using var connection = await OpenAsync(cancellationToken);
-        var baseRequest = ToSqlRequest(request);
-        for (var start = 0; ; start += ExportPageSize)
+        await foreach (var row in DapperExportStream.StreamAsync(
+            connection, ToSqlRequest(request), MssqlDialect.Instance, options: null, cancellationToken))
         {
-            var page = await DapperGridQuery.FetchPageAsync(
-                connection,
-                baseRequest with { Page = new RangePage { StartRow = start, EndRow = start + ExportPageSize } },
-                MssqlDialect.Instance,
-                includeRowCount: false,
-                cancellationToken);
-            foreach (var row in page.Rows)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return new ExportRow(MarkInstantsUtc(row));
-            }
-
-            if (page.Rows.Count < ExportPageSize)
-            {
-                yield break;
-            }
+            yield return row;
         }
     }
 
@@ -107,16 +82,6 @@ public sealed class SqlServerGridService : IGridService
         var query = SqlQueryBuilder.Build(sqlRequest, MssqlDialect.Instance);
         return new CompiledQueryView("sql", query.Dialect, query.Sql, query.Parameters);
     }
-
-    private const int ExportPageSize = 5000;
-
-    /// <summary>
-    /// SQL Server's <c>datetime2</c> carries no zone, so the driver hands back a <see cref="DateTime"/> of kind Unspecified and
-    /// the JSON writer would drop the trailing <c>Z</c> every other provider sends. The column holds UTC (the seed writes UTC
-    /// instants and the schema's datetime is an absolute instant, SEM-4), so the kind is stated here (library gap #2511).
-    /// </summary>
-    private static IReadOnlyList<object?> MarkInstantsUtc(IReadOnlyList<object?> cells) =>
-        [.. cells.Select(cell => cell is DateTime { Kind: DateTimeKind.Unspecified } instant ? DateTime.SpecifyKind(instant, DateTimeKind.Utc) : cell)];
 
     private async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken)
     {

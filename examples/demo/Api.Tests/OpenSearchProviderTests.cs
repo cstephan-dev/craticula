@@ -628,6 +628,74 @@ public sealed class OpenSearchProviderTests(OpenSearchApiFixture api)
         }
     }
 
+    /// <summary>
+    /// An overloaded cluster answers HTTP 503. The library's export stream used to drop that status (bug #2523), so the demo answered
+    /// <c>export.csv</c> with a 500; the status now travels with the exception and every route is a 503 <c>backend-unavailable</c>.
+    /// A stub server answers 503 to any request, so no cluster is needed.
+    /// </summary>
+    [Theory]
+    [InlineData("rows")]
+    [InlineData("values")]
+    [InlineData("export.csv")]
+    public async Task AClusterThatAnswersHttp503_Is503BackendUnavailable_OnEveryRoute_TheExportIncluded(string route)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        using var stop = new CancellationTokenSource();
+        var serving = Task.Run(async () =>
+        {
+            const string answer = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}";
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    using var tcp = await listener.AcceptTcpClientAsync(stop.Token);
+                    var stream = tcp.GetStream();
+                    var buffer = new byte[8192];
+                    var seen = new StringBuilder();
+                    while (!seen.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+                    {
+                        var read = await stream.ReadAsync(buffer, stop.Token);
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        seen.Append(Encoding.ASCII.GetString(buffer, 0, read));
+                    }
+
+                    await stream.WriteAsync(Encoding.ASCII.GetBytes(answer), stop.Token);
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or IOException or SocketException or ObjectDisposedException)
+                {
+                    // The test ended, or the client hung up: nothing to serve.
+                }
+            }
+        });
+        try
+        {
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            var (app, client) = await ApiHostFixture.StartAsync(null, builder =>
+                builder.Configuration[DemoSettings.OpenSearchEnvVar] = $"http://127.0.0.1:{port}");
+            await using (app)
+            using (client)
+            {
+                var body = route == "values" ? Requests.CountryValues : route == "export.csv" ? Requests.StatusExport : Requests.PageSize(10);
+                using var response = await client.PostAsync($"/api/opensearch/{route}", new StringContent(body, Encoding.UTF8, "application/json"));
+                var error = await ErrorBody(response);
+
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+                Assert.Equal("backend-unavailable", error.GetProperty("kind").GetString());
+            }
+        }
+        finally
+        {
+            await stop.CancelAsync();
+            listener.Stop();
+            await serving;
+        }
+    }
+
     [Fact]
     public async Task AServerThatNeverAnswers_Is503AfterTheServicesTenSecondTimeout()
     {

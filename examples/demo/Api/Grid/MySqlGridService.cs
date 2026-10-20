@@ -43,8 +43,7 @@ public sealed class MySqlGridService : IGridService
         await using var connection = await OpenAsync(cancellationToken);
         var page = await DapperGridQuery.FetchPageAsync(
             connection, ToSqlRequest(request), MySqlDialect.Instance, includeRowCount: true, cancellationToken);
-        var result = page.ToGridPageResult();
-        return result with { Rows = [.. result.Rows.Select(MarkInstantsUtc)] };
+        return page.ToGridPageResult();
     }
 
     /// <summary>The Dapper adapter has no entry point for BM-3's distinct values; see <see cref="SetValuesRunner"/>.</summary>
@@ -57,10 +56,6 @@ public sealed class MySqlGridService : IGridService
             MySqlBinding.CreateCommand,
             cancellationToken);
 
-    /// <summary>
-    /// The export goes through <c>DapperExportStream</c> (keyset pages over the stable key); the datetimes it reads are marked UTC
-    /// like the grid rows, or the CSV would write them without the zone.
-    /// </summary>
     public async IAsyncEnumerable<ExportRow> StreamExportAsync(
         PreparedRows request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -68,7 +63,7 @@ public sealed class MySqlGridService : IGridService
         await foreach (var row in DapperExportStream.StreamAsync(
             connection, ToSqlRequest(request), MySqlDialect.Instance, options: null, cancellationToken))
         {
-            yield return MarkInstantsUtc(row);
+            yield return row;
         }
     }
 
@@ -85,23 +80,12 @@ public sealed class MySqlGridService : IGridService
         return new CompiledQueryView("sql", query.Dialect, query.Sql, query.Parameters);
     }
 
-    /// <summary>
-    /// MySQL's <c>DATETIME</c> carries no zone, so the driver hands back a <see cref="DateTime"/> of kind Unspecified and
-    /// the JSON writer would drop the trailing <c>Z</c> every other provider sends. The column holds UTC (the seed writes UTC
-    /// instants and the schema's datetime is an absolute instant, SEM-4), so the kind is stated here (library gap #2511).
-    /// </summary>
-    private static IReadOnlyList<object?> MarkInstantsUtc(IReadOnlyList<object?> cells) =>
-        [.. cells.Select(cell => cell is DateTime { Kind: DateTimeKind.Unspecified } instant ? DateTime.SpecifyKind(instant, DateTimeKind.Utc) : cell)];
-
     /// <summary>The builder cannot tell a timeout the string sets from its own default, so the keys are looked up by name.</summary>
     private static bool ConnectionStringNamesATimeout(string connectionString)
     {
         var keys = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
         return keys.ContainsKey("Connection Timeout") || keys.ContainsKey("Connect Timeout") || keys.ContainsKey("ConnectionTimeout");
     }
-
-    private static ExportRow MarkInstantsUtc(ExportRow row) =>
-        new(MarkInstantsUtc([.. Enumerable.Range(0, row.Count).Select(index => row[index])]));
 
     private async Task<MySqlConnection> OpenAsync(CancellationToken cancellationToken)
     {

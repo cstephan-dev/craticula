@@ -258,11 +258,12 @@ docker compose --profile sqlserver stop                  # when done: stops it, 
    where PostgreSQL gives 25.418... `smoke.sh` (rule for `sqlserver` only, key `quantity_avg`) and `Api.Tests` require the baseline value truncated toward zero, exactly; the
    scenario "group by country" carries that average for this reason, and the line after the table names where the rule was used.
 2. **`AVG` over the decimal column has six decimals** (12428.503751 against 12428.503751987...), inside the 1e-6 relative tolerance every provider's `_avg` already has.
-3. **Datetimes need a stated kind.** `DATETIME2` has no zone, so the driver returns a `DateTime` of kind Unspecified and the JSON would lose the trailing `Z`.
-   `SqlServerGridService` marks them UTC (the seed stores UTC instants), so the answer equals the others to the millisecond.
-4. **CSV is walked a page at a time** (library defect #2510). `DapperExportStream`'s keyset query selects the sort key twice when it is also an export column (`SELECT [id], ..., [id] ... ORDER BY [id]`) and SQL Server
-   answers error 209 "Ambiguous column name" for every export that includes `id`. This is a defect in the library's Dapper adapter on SQL Server (the Docker tier has no live
-   test of it), reported with this demo; until it is fixed the service pages through the grid entry point (5,000 rows a chunk, ordered by the stable key). Rows and bytes equal the other providers.
+3. **Datetimes are UTC instants.** `DATETIME2` has no zone and the driver returns a `DateTime` of unspecified kind; the library's Dapper adapter reads such a value as UTC (SEM-4, result side; the seed stores UTC instants), so the JSON
+   has the trailing `Z` like every other provider. `Api.Tests` pins it (`Datetimes_AreSentAsUtcInstantsWithTheTrailingZ`).
+4. **CSV streams through `DapperExportStream`**, like SQLite and MySQL: rows and bytes equal the other providers, over the whole table (20,000 rows, several keyset chunks).
+   **Known library defect, not worked around (bug #2565, spec first): on SQL Server, a sort that lists `id` anywhere except last, or lists any column twice, fails with error 169** ("column specified more than once in the order by list"),
+   on the grid page and on the export alike: the compiled `ORDER BY` repeats the stable key the library appends. A multi-sort such as shift-clicking Id and then another column hits it. A sort by `id` alone, or one that ends with `id`
+   or leaves it out, works; PostgreSQL, MySQL and SQLite accept the repeat.
 5. **No difference for non-ASCII case.** `SÖHNE` and `söhne` both find `Müller, Söhne & Co`, as on PostgreSQL (the compiled `COLLATE Latin1_General_CI_AS` folds beyond ASCII; SQLite does not).
 
 Set-values filters on dates and datetimes bind the values as strings, like the adapter, and SQL Server converts them (tested with a date and a datetime filter).
@@ -308,8 +309,8 @@ docker compose --profile mysql stop mysql                # when done: stops it, 
 2. **`AVG` over the decimal column has six decimals** (12428.503752 against 12428.50375198728), inside the 1e-6 relative tolerance every provider's `_avg` already has.
 3. **The stock collation ignores accents.** A contains filter for `SÖHNE`, `söhne` or `Söhne` finds `Müller, Söhne & Co` on MySQL and PostgreSQL; `sohne` and `SOHNE` find it **only on MySQL**
    (PostgreSQL's collation folds case, not accents; SQLite finds only `söhne` and `Söhne`). This is the engine's default family and what the library's fixtures declare, so the demo keeps it and documents it.
-4. **Datetimes need a stated kind.** `DATETIME` has no zone, so the driver returns a `DateTime` of kind Unspecified and the JSON would lose the trailing `Z`. `MySqlGridService` marks them UTC (the seed stores UTC instants).
-5. **CSV works through `DapperExportStream`** (the #2510 defect is SQL Server only). Its keyset query also selects the sort key twice (``SELECT `id`, ..., `id` ... ORDER BY `id` ``), which fails on SQL Server (see above), but MySQL accepts it.
+4. **Datetimes are UTC instants.** `DATETIME` has no zone and the driver returns a `DateTime` of unspecified kind; the library's Dapper adapter reads it as UTC (SEM-4, result side; the seed stores UTC instants), so the JSON has the trailing `Z`.
+5. **CSV works through `DapperExportStream`.**
    Rows and bytes equal the other providers, over the whole table (20,000 rows, several keyset chunks).
 
 Set-values filters on dates and datetimes bind the values as strings, like the adapter, and MySQL converts them (tested with a date and a datetime filter).

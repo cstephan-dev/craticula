@@ -115,7 +115,7 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
     [RequiresEngineFact(Engine)]
     public async Task Datetimes_AreSentAsUtcInstantsWithTheTrailingZ()
     {
-        // datetime2 has no zone; the service states the kind, or the JSON would drop the Z every other provider sends.
+        // datetime2 has no zone; the library's Dapper adapter reads it as UTC (SEM-4, #2511), or the JSON would drop the Z every other provider sends.
         var page = await RowsOk("sqlserver", Requests.PageSize(5));
 
         Assert.All(page.GetProperty("rows").EnumerateArray(), row =>
