@@ -1,0 +1,16 @@
+{
+  "rows": [
+    {
+      "row": { "id": 3, "age": 27, "lastName": "Al" },
+      "why": "stored out of order on purpose: id asc puts it last"
+    },
+    {
+      "row": { "id": 1, "age": 38, "lastName": "Cy" },
+      "why": "lowest id: first on id asc; a later id desc key would have reversed nothing it could reach"
+    },
+    {
+      "row": { "id": 2, "age": 22, "lastName": "Abe" },
+      "why": "middle id"
+    }
+  ]
+}

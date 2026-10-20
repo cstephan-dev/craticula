@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "row": { "code": "Ab3", "age": 30 },
+      "why": "case variant of aB3: ties with it under the user's case-insensitive key, so the next key (age) must decide, and 30 puts it second"
+    },
+    {
+      "row": { "code": "aB3", "age": 20 },
+      "why": "ties with Ab3 under the case-insensitive key; age 20 puts it first, which only works if age is kept after the stable key"
+    },
+    {
+      "row": { "code": "abc", "age": 10 },
+      "why": "after the ab3 pair under a case-insensitive order (digit before letter); its young age cannot move it ahead of the pair"
+    },
+    {
+      "row": { "code": "Zed", "age": 25 },
+      "why": "sorts last whatever its age"
+    }
+  ]
+}

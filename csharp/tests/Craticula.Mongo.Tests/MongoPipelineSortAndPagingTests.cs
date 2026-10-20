@@ -211,18 +211,88 @@ public class MongoPipelineSortAndPagingTests
     }
 
     [Fact]
-    public void A_Repeated_Sort_Key_Is_Refused_Because_A_Sort_Document_Would_Keep_Only_The_Last()
+    public void A_Repeated_Sort_Key_Is_Dropped_So_The_First_Entry_Stays_Primary()
     {
-        // MDB-10. `$addFields`, `$sort` and `$unset` are documents, so `lastName asc, lastName desc`
-        // does not "collapse to the first" — the SECOND entry overwrites the first, silently making
-        // the secondary key primary, and `$unset` names the bucket twice. A grid can send a repeated
-        // colId in `sortModel`, so this is reachable from the wire.
-        var failure = Assert.Throws<MongoCompilationException>(() => Compile([
+        // MDB-10's first collision, superseded by SEM-6 (Bug #2565). `$addFields`, `$sort` and `$unset` are
+        // documents, so a repeated `lastName` would have overwritten the first entry and silently made the
+        // secondary key primary; it used to be refused. The effective sort now lists a field once, so the
+        // request is served and the first occurrence decides: the pipeline equals the one for the first key alone.
+        var repeated = Compile([
             Key("lastName", SortDirection.Asc, NullsPosition.Last),
             Key("lastName", SortDirection.Desc, NullsPosition.First)
+        ]).Pipeline;
+        var once = Compile([Key("lastName", SortDirection.Asc, NullsPosition.Last)]).Pipeline;
+
+        Assert.Equal(once.Select(Json), repeated.Select(Json));
+        Assert.Equal(
+            """{"$sort":{"__lastNameNullBucket":1,"lastName":1,"__idNullBucket":1,"id":1}}""",
+            Json(repeated[1]));
+        Assert.Equal("""{"$unset":["__lastNameNullBucket","__idNullBucket"]}""", Json(repeated[2]));
+    }
+
+    [Fact]
+    public void Keys_After_The_StableKey_Are_Dropped_Because_The_Sort_Is_Already_Total()
+    {
+        // SEM-6 (Bug #2565): the stable key is unique, so a key after it can never break a tie. The `$sort`
+        // document ends at `id`, with no second `id` entry that would overwrite the user's own direction.
+        var pipeline = Compile([
+            Key("id", SortDirection.Desc, NullsPosition.First),
+            Key("lastName", SortDirection.Asc, NullsPosition.Last)
+        ]).Pipeline;
+
+        Assert.Equal("""{"$sort":{"__idNullBucket":-1,"id":-1}}""", Json(pipeline[1]));
+        Assert.Equal("""{"$unset":"__idNullBucket"}""", Json(pipeline[2]));
+    }
+
+    /// <summary>SC-1 / SEC-6 (Bug #2565's review): a dropped key is never looked up, so a sort naming an undeclared column after the stable key must be left unreduced and refused.</summary>
+    [Fact]
+    public void An_Undeclared_Sort_Field_After_The_StableKey_Is_Still_Refused()
+    {
+        var exception = Assert.Throws<MongoCompilationException>(() => Compile([
+            Key("id", SortDirection.Asc, NullsPosition.Last),
+            Key("internalRank", SortDirection.Asc, NullsPosition.Last)
         ]));
 
-        Assert.Contains("names 'lastName' more than once", failure.Message);
+        Assert.Contains("not declared", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// SEM-6's exception (#2809): a case-insensitive TEXT stable key with a key after it keeps the user's key and appends the exact tiebreaker on the
+    /// same field, which a `$sort` document cannot hold twice (MDB-10). The request is refused, and the message names the real cause: the user named
+    /// the stable key once. Numeric and case-sensitive stable keys stop at the key and are not affected.
+    /// </summary>
+    [Fact]
+    public void A_CaseInsensitive_Text_StableKey_With_A_Key_After_It_Is_Refused_With_A_Message_That_Names_The_Cause()
+    {
+        var textKeySchema = Schema with
+        {
+            StableKey = "lastName",
+            Fields = new Dictionary<string, FieldConfig>
+            {
+                ["lastName"] = Field(FieldType.String),
+                ["salary"] = Field(FieldType.Decimal)
+            }
+        };
+
+        var exception = Assert.Throws<MongoCompilationException>(() => MongoPipelineBuilder.Build(new MongoQueryRequest
+        {
+            Schema = textKeySchema,
+            Sort =
+            [
+                Key("lastName", SortDirection.Asc, NullsPosition.Last),
+                Key("salary", SortDirection.Asc, NullsPosition.Last)
+            ],
+            Page = new RangePage { StartRow = 0, EndRow = 100 }
+        }));
+
+        Assert.Contains("needs 'lastName' twice", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exact tiebreaker", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_Null_Sort_Item_Is_A_SortItemValidationException_Not_A_Crash()
+    {
+        Assert.Throws<SortItemValidationException>(() => Compile([Key("id", SortDirection.Asc, NullsPosition.Last), null!]));
     }
 
     // ---- paging (AG-3 / EXP-2) --------------------------------------------------------------------

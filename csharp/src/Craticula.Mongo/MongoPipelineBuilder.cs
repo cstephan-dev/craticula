@@ -1011,7 +1011,7 @@ public static class MongoPipelineBuilder
 
     /// <summary>
     /// SEM-6/SEM-3/GRP-4: the request's own keys in order, then a trailing tiebreaker unless the sort
-    /// already ends in it — resolved to what the pipeline can actually sort on at this stage.
+    /// already reaches it, after SEM-6's reduction — resolved to what the pipeline can actually sort on at this stage.
     ///
     /// <para>GRP-4: on a grouped level the tiebreaker is the <b>group column</b>, not the schema's
     /// <see cref="GridSchema.StableKey"/>, which is not in the grouped output at all; the group
@@ -1032,7 +1032,8 @@ public static class MongoPipelineBuilder
         var groupColumn = grouping?.GroupColumn;
 
         var keys = SemanticsResolver.AppendStableKeyTiebreaker(
-            sort, groupColumn ?? context.Schema.StableKey, out var tiebreakerAppended);
+            sort, context.Schema, groupColumn, out var tiebreakerAppended,
+            aggregateColumnIds: grouping?.Aggregations.Select(aggregation => aggregation.ColumnId).ToArray());
 
         var ordering = groupColumn is null
             ? SemanticsResolver.GroupingMode.Ungrouped
@@ -1179,21 +1180,24 @@ public static class MongoPipelineBuilder
 
         foreach (var key in keys)
         {
-            // MDB-10, and the reason it is an exception rather than a de-duplication: all three
-            // stages below are DOCUMENTS, whose repeated key is last-wins. A second key landing on an
-            // already-claimed bucket therefore does not merely add nothing — it overwrites the FIRST
-            // key's entry in `$sort`, promoting the later key to primary, and it lists the same name
-            // twice in `$unset`. Both reachable from the wire: `sortModel` may repeat a colId, and
-            // AGG-2 lets `valueCols[].id` name the reserved `__groupNullBucket`. Renaming one side
-            // would make the emitted bucket name depend on the rest of the request, so the request is
-            // refused instead — GRP-4's "a sort key the projection does not contain is rejected
-            // rather than rendered", one register down.
+            // MDB-10: all three stages below are DOCUMENTS, whose repeated key is last-wins. A second
+            // key landing on an already-claimed bucket therefore does not merely add nothing — it
+            // overwrites the FIRST key's entry in `$sort`, promoting the later key to primary, and it
+            // lists the same name twice in `$unset`. Three ways to get there: AGG-2 lets
+            // `valueCols[].id` name the reserved `__groupNullBucket`; two different fields could claim
+            // one bucket; and a case-insensitive TEXT stable key with keys after it, where SEM-6 keeps
+            // the user's key and appends the exact tiebreaker on the same field (#2809). A repeated
+            // colId in `sortModel` no longer reaches this point: SEM-6's reduction (Bug #2565) drops
+            // a later occurrence of a field first. Renaming one side would make the emitted bucket name
+            // depend on the rest of the request, so the request is refused instead — GRP-4's "a sort key
+            // the projection does not contain is rejected rather than rendered", one register down.
             if (claimed.TryGetValue(key.Bucket, out var owner))
             {
                 throw new MongoCompilationException(owner == key.Path
-                    ? $"The sort names '{key.Path}' more than once. MongoDB's $sort is a document, so the " +
-                      "second key would replace the first rather than refine it — the request is ambiguous " +
-                      "about which direction and null placement it wants."
+                    ? $"The sort needs '{key.Path}' twice: once as the key the request names and once as the exact " +
+                      "tiebreaker SEM-6 appends (the stable key is case-insensitive text, so ties between case variants " +
+                      "need an exact key after it). MongoDB's $sort is a document and cannot hold one key twice, so " +
+                      "this shape is not supported here (MDB-10; declare the stable key case-sensitive, or sort by it last)."
                     : $"The sort key '{key.Path}' and the sort key '{owner}' both emulate null placement " +
                       $"through the bucket field '{key.Bucket}', which can only hold one of them. " +
                       $"'{GroupKeyBucket}' is reserved for a grouped level's own _id key (MDB-10); rename the " +

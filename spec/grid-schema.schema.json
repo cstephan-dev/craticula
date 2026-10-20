@@ -19,7 +19,7 @@
     "stableKey": {
       "type": "string",
       "minLength": 1,
-      "description": "SEM-6: the field appended as a trailing sort tiebreaker whenever the request's own sort doesn't already end in a unique key. Required per grid — every GridSchema fixture must declare one, and it must itself be a key present in 'fields'."
+      "description": "SEM-6: the field appended as a trailing sort tiebreaker whenever the request's own sort, after SEM-6's reduction (a field listed once, the sort stopping at an exact stable key), doesn't already reach a unique key. Required per grid — every GridSchema fixture must declare one, and it must itself be a key present in 'fields'."
     },
     "staticFilter": {
       "$ref": "./ir.schema.json#/$defs/filterNode",

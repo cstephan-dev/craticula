@@ -117,7 +117,7 @@ comparison rule and how an accepted divergence is declared. In short:
 **Worked example: `operators/001-eq-string`.** Its seed holds seven rows chosen to sit on each side of every boundary
 (`"active"`, `"ACTIVE"`, `"Approved"`, `"pending"`, a null, `""`, `"activex"`), and its expected result is the three rows
 that match case-insensitively, in `id` order: `[[1,"active"],[2,"ACTIVE"],[3,"Approved"]]`. Without the collation only
-id 1 would match; as a `startsWith`, id 7 would join. 223 fixtures carry the pair today, in every category that can
+id 1 would match; as a `startsWith`, id 7 would join. 228 fixtures carry the pair today, in every category that can
 be executed; the rule lives in `semantics.md` XEQ-1..XEQ-4.
 
 ## SQL artifact rendering — one canonical form, pinned in `spec/semantics.md`
@@ -662,7 +662,7 @@ Top level (`IServerSideGetRowsRequest`, `packages/ag-grid-community/src/interfac
 | `operators/` | AR-6's 17-operator closed set, across field types | ~62 |
 | `date-presets/` | AG-2 date presets resolved to absolute half-open ranges (SEM-4 type + zone) | ~28 |
 | `filter-tree/` | AR-5 And/Or/Not composition, nesting/depth variation | ~15 |
-| `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~12 |
+| `sort-paging/` | SEM-3 null ordering, SEM-6 stableKey tiebreaker, AR-9 | ~17 |
 | `group-aggregation/` | BM-2 grouping, BM-3 set-filter values, AR-8 aggregation funcs | ~20 |
 | `page-export/` | AG-3/EXP-2 page spec, EXP-1 export + EXP-4/EXP-5/EXP-8 byte-exact writer output (delimiters, BOM, per-field formats) + EXP-6 hostile CSV values | ~20 |
 | `adversarial/` | SEC-6: injection attempts, unknown fields, type confusion, depth bombs, oversized limits, duplicate aggregation output names | ~20 |

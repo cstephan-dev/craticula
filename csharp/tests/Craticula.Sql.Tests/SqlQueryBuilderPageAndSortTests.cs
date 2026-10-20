@@ -42,6 +42,28 @@ public class SqlQueryBuilderPageAndSortTests
             },
             PostgresDialect.Instance);
 
+    /// <summary>
+    /// SC-1 / SEC-6 (Bug #2565's review): SEM-6's reduction drops every key after the stable key, and a dropped key is never looked up. A
+    /// sort that names an undeclared column AFTER the stable key must still be refused, so the reduction leaves a sort with an unknown key
+    /// alone and the compiler's own lookup rejects it, as it did before the reduction existed. Fixture <c>adversarial/028</c> is the wire shape.
+    /// </summary>
+    [Fact]
+    public void An_Undeclared_Sort_Field_After_The_StableKey_Is_Still_Refused()
+    {
+        var exception = Assert.Throws<SqlCompilationException>(() => Compile([
+            Key("id", SortDirection.Asc, NullsPosition.Last),
+            Key("internalRank", SortDirection.Asc, NullsPosition.Last)
+        ]));
+
+        Assert.Contains("not declared in the GridSchema", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_Null_Sort_Item_Is_A_SortItemValidationException_Not_A_Crash()
+    {
+        Assert.Throws<SortItemValidationException>(() => Compile([Key("id", SortDirection.Asc, NullsPosition.Last), null!]));
+    }
+
     private static SortItem Key(string field, SortDirection direction, NullsPosition nulls) =>
         new() { Field = field, Direction = direction, NullsPosition = nulls };
 

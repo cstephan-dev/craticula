@@ -327,7 +327,8 @@ public static class SemanticsResolver
     /// <summary>
     /// SEM-6: appends the schema-declared <paramref name="stableKey"/> as a trailing sort tiebreaker
     /// — always last, never ahead of or interleaved with the user's own chosen keys — unless
-    /// <paramref name="sort"/> already ends in it. The appended key is always
+    /// <paramref name="sort"/> already reaches it. The sort is reduced first (SEM-6, Bug #2565): a later occurrence of a field the sort
+    /// already named is dropped, and so is everything after the first occurrence of the stable key. The appended key is always
     /// <c>{ field: stableKey, direction: asc, nullsPosition: last }</c> (SEM-6: the tiebreaker's
     /// direction is always ascending, since it exists purely to break ties and carries no direction
     /// the user chose, and SEM-3's own adapter default for <c>asc</c> applies to it identically).
@@ -353,8 +354,51 @@ public static class SemanticsResolver
     /// <see cref="FieldConfig.Sortable"/>) before calling this method, the same way
     /// <see cref="GridFilterPipeline"/> already does for filter field names.</para>
     /// </summary>
+    // No schema here: this overload cannot tell a case-insensitive text key from an exact one nor a known field from an undeclared one, so it
+    // always stops at the key and never checks a field. Use the schema-aware overload below wherever a GridSchema is at hand (every compiler does).
     public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(IReadOnlyList<SortItem>? sort, string stableKey) =>
         AppendStableKeyTiebreaker(sort, stableKey, out _);
+
+    /// <summary>
+    /// <see cref="AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string, out bool)"/> for a compiler that has the schema: it decides, from
+    /// the stable key's own field, whether the sort may stop at the stable key, and it never lets the reduction hide a key the compilers
+    /// would have rejected. <b>The sort is reduced only when every key in it is one the query knows</b> (SC-1, SEC-6, GRP-4): on a row query a
+    /// field of <paramref name="schema"/>; on a grouped level (<paramref name="groupColumn"/> not null, where the group column plays the stable
+    /// key's role and is exact by construction, GRP-2/GRP-4) the group column or one of the level's aggregate column ids
+    /// (<paramref name="aggregateColumnIds"/>). A sort that names anything else is left as it is (nothing after a key is dropped), so the
+    /// compiler's own lookup still rejects the unknown key, as it did before the reduction existed.
+    /// On a row query the user's own key on the stable key resolves under SEM-1 like any other: a case-insensitive text stable key can tie
+    /// (<c>'aB3'</c> and <c>'Ab3'</c> compare equal), so nothing after it is dropped and the exact tiebreaker is still appended; any other
+    /// stable key is exact and the sort stops at it. Repeated fields are dropped in every case.
+    /// </summary>
+    public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(
+        IReadOnlyList<SortItem>? sort, GridSchema schema, string? groupColumn, out bool appended,
+        IReadOnlyCollection<string>? aggregateColumnIds = null)
+    {
+        // Validate before the keys are read: a null item or a blank field must stay a clean SortItemValidationException (a host maps it to a
+        // 400), not a NullReferenceException from the known-key check below. The shared overload validates again; the cost is a loop.
+        SortItemValidator.Validate(sort);
+
+        if (groupColumn is not null)
+        {
+            var known = AllKeysKnown(sort, field =>
+                string.Equals(field, groupColumn, StringComparison.Ordinal) || aggregateColumnIds?.Contains(field) == true);
+            return AppendStableKeyTiebreaker(sort, groupColumn, known, out appended);
+        }
+
+        var stop = StableKeyOrdersExactly(schema) && AllKeysKnown(sort, schema.Fields.ContainsKey);
+        return AppendStableKeyTiebreaker(sort, schema.StableKey, stop, out appended);
+    }
+
+    private static bool AllKeysKnown(IReadOnlyList<SortItem>? sort, Func<string, bool> isKnown) =>
+        sort is null || sort.All(item => isKnown(item.Field));
+
+    /// <summary>True when a user's key on the schema's stable key compares exactly (SEM-1 resolves it to a mode other than case-insensitive),
+    /// so two rows with different stable-key values never tie under it.</summary>
+    public static bool StableKeyOrdersExactly(GridSchema schema) =>
+        !schema.Fields.TryGetValue(schema.StableKey, out var field)
+        || ResolveOrderingAndGroupKeyCaseSensitivity(field, GroupingMode.Ungrouped, SortKeyProvenance.Request).Mode
+            != CaseSensitivityMode.Insensitive;
 
     /// <summary>
     /// <see cref="AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string)"/>, additionally
@@ -368,14 +412,27 @@ public static class SemanticsResolver
     /// reported from the one place that decides it.
     /// </summary>
     public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(
-        IReadOnlyList<SortItem>? sort, string stableKey, out bool appended)
+        IReadOnlyList<SortItem>? sort, string stableKey, out bool appended) =>
+        AppendStableKeyTiebreaker(sort, stableKey, true, out appended);
+
+    private static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(
+        IReadOnlyList<SortItem>? sort, string stableKey, bool stopAtStableKey, out bool appended)
     {
         SortItemValidator.Validate(sort);
 
-        if (sort is not null && sort[^1].Field == stableKey)
+        // SEM-6 (Bug #2565): reduce first, append second. A later occurrence of a field the sort already named is dropped, and so is
+        // everything after the first occurrence of the stable key (it is unique by declaration, so nothing after it can break a tie).
+        // Both only remove keys that can never change the order; the result names every field once and, when the stable key is among
+        // them, ends in it. Without this, [id desc, age asc] compiled to ORDER BY id DESC, age ASC, id ASC, which SQL Server rejects
+        // (error 169) and a MongoDB $sort document cannot hold.
+        var reduced = ReduceSort(sort, stableKey, stopAtStableKey, out var reachedStableKey);
+
+        // Stopping at the stable key needs it to order exactly. When it does not (a case-insensitive text key can tie), nothing after it was
+        // dropped, and the sort counts as total only if it already ENDS in the key, as it always has; otherwise the exact tiebreaker is appended.
+        if (stopAtStableKey ? reachedStableKey : reduced is { Count: > 0 } && reduced[^1].Field == stableKey)
         {
             appended = false;
-            return sort;
+            return reduced!;
         }
 
         appended = true;
@@ -389,6 +446,42 @@ public static class SemanticsResolver
 
         SortItemValidator.Validate([tiebreaker]);
 
-        return sort is null ? [tiebreaker] : [..sort, tiebreaker];
+        return reduced is null ? [tiebreaker] : [..reduced, tiebreaker];
+    }
+
+    /// <summary>
+    /// The two SEM-6 reductions, in one pass: keep the first occurrence of each field, and (when <paramref name="stopAtStableKey"/>, i.e. the stable
+    /// key orders exactly) stop after the stable key. Returns
+    /// <paramref name="sort"/> itself, by reference, when nothing was dropped (a sort that needs no reduction is not copied), and
+    /// <see langword="null"/> for a null sort. <paramref name="reachedStableKey"/> says the result stops at the stable key.
+    /// Direction, null placement and case handling play no part: a dropped key could not have mattered under any of them.
+    /// </summary>
+    private static IReadOnlyList<SortItem>? ReduceSort(
+        IReadOnlyList<SortItem>? sort, string stableKey, bool stopAtStableKey, out bool reachedStableKey)
+    {
+        reachedStableKey = false;
+        if (sort is null)
+        {
+            return null;
+        }
+
+        HashSet<string> seen = new(sort.Count, StringComparer.Ordinal);
+        List<SortItem> kept = new(sort.Count);
+        foreach (var item in sort)
+        {
+            if (!seen.Add(item.Field))
+            {
+                continue;
+            }
+
+            kept.Add(item);
+            if (stopAtStableKey && string.Equals(item.Field, stableKey, StringComparison.Ordinal))
+            {
+                reachedStableKey = true;
+                break;
+            }
+        }
+
+        return kept.Count == sort.Count ? sort : kept;
     }
 }

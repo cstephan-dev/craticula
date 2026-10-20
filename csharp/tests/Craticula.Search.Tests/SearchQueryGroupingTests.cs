@@ -263,6 +263,41 @@ public class SearchQueryGroupingTests
     }
 
     /// <summary>
+    /// SEM-6 (Bug #2565) on a grouped level: the group column is unique across the level's buckets by construction, so an AGGREGATE after it is
+    /// dropped. It used to be refused although it could never have changed the order of one-bucket-per-value rows; it is now served, ordered by
+    /// the group column alone (disclosed as a behaviour change in docs/feat/2565/plan.md).
+    /// </summary>
+    [Fact]
+    public void An_Aggregate_After_The_Group_Column_Is_Dropped_Rather_Than_Refused()
+    {
+        var withAggregate = Compile([Sum], [
+            new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            new SortItem { Field = "amount", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }
+        ]);
+
+        var groupColumnOnly = Compile([Sum], [
+            new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
+        ]);
+
+        Assert.Equal(groupColumnOnly.ToArtifact().ToJsonString(), withAggregate.ToArtifact().ToJsonString());
+    }
+
+    /// <summary>
+    /// ...but a key the level does NOT produce is still rejected wherever it sits (GRP-4, SC-1, SEC-6): the reduction leaves a sort alone when
+    /// any key in it is unknown to the level, so the compiler's own check still sees it. A key after the group column is not exempt.
+    /// </summary>
+    [Fact]
+    public void A_Key_The_Level_Does_Not_Produce_Is_Still_Refused_After_The_Group_Column()
+    {
+        var exception = Assert.Throws<SearchCompilationException>(() => Compile([Sum], [
+            new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            new SortItem { Field = "id", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }
+        ]));
+
+        Assert.Contains("'id'", exception.Message);
+    }
+
+    /// <summary>
     /// The same refusal on the fixture that used to pin the <c>bucket_sort</c>, asserted BY NAME so
     /// the deleted arm reads as a recorded capability gap rather than an oversight — the Search
     /// conformance runner discovers by artifact presence, so a missing arm is otherwise invisible to

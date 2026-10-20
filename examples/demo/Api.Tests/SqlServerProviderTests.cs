@@ -122,6 +122,37 @@ public sealed class SqlServerProviderTests(SqlServerApiFixture api)
             Assert.EndsWith("Z", row.GetProperty("orderedAt").GetString(), StringComparison.Ordinal));
     }
 
+    // ---- multi-sorts that name a field twice or go past the stable key (bug #2565, SEM-6) ----------------
+
+    private static (string ColId, string Direction)[] ParseSort(string text) =>
+        [.. text.Split('|').Select(part => (part.Split(' ')[0], part.Split(' ')[1]))];
+
+    /// <summary>Each of these used to answer 500 on SQL Server (error 169, the compiled ORDER BY named a column twice): the stable key first,
+    /// in the middle, a repeated column, and a repeated stable key. The library now reduces the sort to one key per field and ends it at the
+    /// stable key, so the rows equal PostgreSQL's.</summary>
+    [RequiresEngineTheory(Engine)]
+    [InlineData("id desc|amount asc")]
+    [InlineData("amount desc|id asc|country asc")]
+    [InlineData("amount desc|amount asc")]
+    [InlineData("id asc|id desc")]
+    public Task AMultiSortThatRepeatsAFieldOrGoesPastTheStableKey_EqualsPostgres(string sort) =>
+        AssertRowsEqualPostgres(Requests.MultiSort(200, ParseSort(sort)));
+
+    [RequiresEngineTheory(Engine)]
+    [InlineData("id desc|amount asc")]
+    [InlineData("amount desc|id asc|country asc")]
+    public async Task TheExportOfAMultiSortThatGoesPastTheStableKey_EqualsPostgresCellByCellOverEveryChunk(string sort)
+    {
+        var body = Requests.MultiSortExport(ParseSort(sort));
+        var pg = await ApiHostFixture.PostRawAsync(api.Client, "postgres", "export.csv", body);
+        var sql = await ApiHostFixture.PostRawAsync(api.Client, "sqlserver", "export.csv", body);
+
+        Assert.Equal(HttpStatusCode.OK, sql.Status);
+        var rows = ParseCsv(sql.Bytes);
+        Assert.True(rows.Count > 5000, "more than one keyset chunk");
+        Assert.True(EfParity.CsvSame(ParseCsv(pg.Bytes), rows), "the export equals PostgreSQL's cell by cell, in the same order");
+    }
+
     // ---- grouping and drill-down ---------------------------------------------------------------------
 
     [RequiresEngineTheory(Engine)]

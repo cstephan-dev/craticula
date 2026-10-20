@@ -340,6 +340,256 @@ public class SemanticsResolverTests
         Assert.Single(result);
     }
 
+    // -- SEM-6 (Bug #2565): the effective sort lists a field once and ends at the stable key -------
+
+    /// <summary>The stable key first: it is unique, so no key after it can break a tie. Dropped, nothing appended (SQL Server error 169 otherwise).</summary>
+    [Fact]
+    public void Keys_After_The_StableKey_Are_Dropped_And_Nothing_Is_Appended()
+    {
+        IReadOnlyList<SortItem> sort = [Item("id", SortDirection.Desc, NullsPosition.First), Item("age")];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, "id", out var appended);
+
+        var only = Assert.Single(result);
+        Assert.Equal("id", only.Field);
+        Assert.Equal(SortDirection.Desc, only.Direction);
+        Assert.Equal(NullsPosition.First, only.NullsPosition);
+        Assert.False(appended, "the stable key is the user's own key here, not a minted tiebreaker");
+    }
+
+    [Fact]
+    public void The_StableKey_In_The_Middle_Keeps_The_Keys_Before_It_And_Drops_The_Ones_After()
+    {
+        IReadOnlyList<SortItem> sort = [Item("age"), Item("id", SortDirection.Desc, NullsPosition.First), Item("lastName")];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, "id", out var appended);
+
+        Assert.Equal(["age", "id"], result.Select(item => item.Field));
+        Assert.Equal(SortDirection.Desc, result[1].Direction);
+        Assert.False(appended);
+    }
+
+    [Fact]
+    public void A_Repeated_Field_Keeps_Its_First_Occurrence_And_The_Tiebreaker_Is_Still_Appended()
+    {
+        IReadOnlyList<SortItem> sort = [Item("age", SortDirection.Desc, NullsPosition.First), Item("age")];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, "id", out var appended);
+
+        Assert.Equal(["age", "id"], result.Select(item => item.Field));
+        Assert.Equal(SortDirection.Desc, result[0].Direction);
+        Assert.Equal(NullsPosition.First, result[0].NullsPosition);
+        Assert.True(appended);
+    }
+
+    [Fact]
+    public void The_StableKey_Named_Twice_Keeps_The_First_And_Appends_Nothing()
+    {
+        IReadOnlyList<SortItem> sort = [Item("id"), Item("id", SortDirection.Desc, NullsPosition.First)];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, "id", out var appended);
+
+        var only = Assert.Single(result);
+        Assert.Equal(SortDirection.Asc, only.Direction);
+        Assert.False(appended);
+    }
+
+    [Fact]
+    public void A_Repeat_Is_Dropped_Wherever_It_Sits_Among_Other_Keys()
+    {
+        IReadOnlyList<SortItem> sort = [Item("age"), Item("lastName"), Item("age", SortDirection.Desc, NullsPosition.First), Item("salary"), Item("lastName")];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, "id");
+
+        Assert.Equal(["age", "lastName", "salary", "id"], result.Select(item => item.Field));
+        Assert.Equal(SortDirection.Asc, result[0].Direction);
+    }
+
+    /// <summary>The reductions look at the field only: a repeat that differs in direction or null placement is still a repeat.</summary>
+    [Theory]
+    [InlineData(SortDirection.Asc, NullsPosition.Last)]
+    [InlineData(SortDirection.Asc, NullsPosition.First)]
+    [InlineData(SortDirection.Desc, NullsPosition.Last)]
+    [InlineData(SortDirection.Desc, NullsPosition.First)]
+    public void A_Repeat_Is_A_Repeat_Whatever_Its_Direction_Or_Null_Placement(SortDirection direction, NullsPosition nulls)
+    {
+        IReadOnlyList<SortItem> sort = [Item("age"), Item("age", direction, nulls)];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, "id");
+
+        Assert.Equal(["age", "id"], result.Select(item => item.Field));
+    }
+
+    /// <summary>A sort with no repeat and no key after the stable key is not touched, by reference: the common case allocates nothing.</summary>
+    [Fact]
+    public void A_Sort_That_Needs_No_Reduction_Is_Returned_By_Reference_When_It_Reaches_The_StableKey()
+    {
+        IReadOnlyList<SortItem> sort = [Item("age"), Item("lastName"), Item("id")];
+
+        Assert.Same(sort, SemanticsResolver.AppendStableKeyTiebreaker(sort, "id"));
+    }
+
+    // -- SEM-6 (Bug #2565): the sort stops at the stable key only when the user's key on it orders exactly -----
+
+    private static GridSchema SchemaWithStableKey(string stableKey, FieldConfig stableKeyField) => new()
+    {
+        Source = "t",
+        StableKey = stableKey,
+        Fields = new Dictionary<string, FieldConfig>
+        {
+            [stableKey] = stableKeyField,
+            ["age"] = new FieldConfig { Type = FieldType.Int64 },
+            ["lastName"] = new FieldConfig { Type = FieldType.String }
+        }
+    };
+
+    /// <summary>A numeric stable key orders exactly, so the sort stops at it, as in the string overload.</summary>
+    [Fact]
+    public void A_Numeric_StableKey_Stops_The_Sort_In_The_Schema_Overload()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("id"), Item("age")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["id"], result.Select(item => item.Field));
+        Assert.False(appended);
+    }
+
+    /// <summary>A case-sensitive text stable key orders exactly too.</summary>
+    [Fact]
+    public void A_CaseSensitive_Text_StableKey_Stops_The_Sort()
+    {
+        var schema = SchemaWithStableKey("code", SensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("code"), Item("age")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["code"], result.Select(item => item.Field));
+        Assert.False(appended);
+    }
+
+    /// <summary>
+    /// A case-insensitive text stable key can tie: <c>'aB3'</c> and <c>'Ab3'</c> compare equal under the user's collated key, so the sort is not
+    /// total there. Nothing after it is dropped and the exact tiebreaker is still appended, as before this rule existed (Bug #2565 review).
+    /// </summary>
+    [Fact]
+    public void A_CaseInsensitive_Text_StableKey_Keeps_The_Keys_After_It_And_Still_Gets_The_Exact_Tiebreaker()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("code"), Item("age")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["code", "age", "code"], result.Select(item => item.Field));
+        Assert.True(appended, "the trailing key is the minted, exact tiebreaker");
+    }
+
+    [Fact]
+    public void A_CaseInsensitive_Text_StableKey_Already_Last_Is_Left_As_It_Always_Was()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+        IReadOnlyList<SortItem> sort = [Item("age"), Item("code")];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, schema, groupColumn: null, out var appended);
+
+        Assert.Same(sort, result);
+        Assert.False(appended);
+    }
+
+    /// <summary>Repeats are dropped whatever the stable key is: a later occurrence under the same collation can never break a tie the first left.</summary>
+    [Fact]
+    public void A_Repeated_Field_Is_Dropped_Even_When_The_StableKey_Is_Case_Insensitive_Text()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("age"), Item("age", SortDirection.Desc, NullsPosition.First)], schema, null, out _);
+
+        Assert.Equal(["age", "code"], result.Select(item => item.Field));
+    }
+
+    /// <summary>A grouped level's group column is exact by construction (GRP-2, GRP-4), whatever the stable key looks like; an aggregate of the level after it is dropped.</summary>
+    [Fact]
+    public void A_Group_Column_Stops_The_Sort_Whatever_The_StableKey_Is()
+    {
+        var schema = SchemaWithStableKey("code", InsensitiveField);
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(
+            [Item("lastName"), Item("amount_sum", SortDirection.Desc, NullsPosition.First)], schema, groupColumn: "lastName", out var appended,
+            aggregateColumnIds: ["amount_sum"]);
+
+        Assert.Equal(["lastName"], result.Select(item => item.Field));
+        Assert.False(appended);
+    }
+
+    /// <summary>
+    /// SC-1 / SEC-6 / GRP-4: the reduction must never hide a key the compilers would have rejected. A key unknown to the query keeps the sort
+    /// unreduced (here: nothing after the stable key is dropped), so each compiler's own field lookup still sees and rejects it.
+    /// </summary>
+    [Fact]
+    public void An_Unknown_Field_After_The_StableKey_Is_Not_Dropped_So_The_Compiler_Still_Rejects_It()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("id"), Item("internalRank")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["id", "internalRank", "id"], result.Select(item => item.Field));
+        Assert.True(appended);
+    }
+
+    [Fact]
+    public void An_Unknown_Field_Anywhere_Keeps_Even_The_Known_Keys_After_The_StableKey()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("internalRank"), Item("id"), Item("age")], schema, groupColumn: null, out _);
+
+        Assert.Equal(["internalRank", "id", "age", "id"], result.Select(item => item.Field));
+    }
+
+    /// <summary>On a grouped level only the group column and the level's aggregates are known: a schema field that the level does not produce
+    /// (GRP-4: rejected rather than rendered) keeps the sort unreduced, exactly as an undeclared one does.</summary>
+    [Fact]
+    public void A_Schema_Field_The_Grouped_Level_Does_Not_Produce_Is_Not_Dropped_After_The_Group_Column()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(
+            [Item("lastName"), Item("age")], schema, groupColumn: "lastName", out _, aggregateColumnIds: []);
+
+        Assert.Equal(["lastName", "age", "lastName"], result.Select(item => item.Field));
+    }
+
+    /// <summary>The schema-aware overload validates the sort before it reads a key: a malformed hand-built sort is a clean validation error, not a crash.</summary>
+    [Fact]
+    public void The_Schema_Aware_Overload_Validates_The_Sort_Before_Reading_Its_Keys()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        Assert.Throws<SortItemValidationException>(() => SemanticsResolver.AppendStableKeyTiebreaker([Item("age"), null!], schema, null, out _));
+        Assert.Throws<SortItemValidationException>(() => SemanticsResolver.AppendStableKeyTiebreaker([Item("")], schema, null, out _));
+        Assert.Throws<SortItemValidationException>(() => SemanticsResolver.AppendStableKeyTiebreaker([], schema, null, out _));
+        Assert.Throws<SortItemValidationException>(
+            () => SemanticsResolver.AppendStableKeyTiebreaker([Item("age"), null!], schema, "age", out _, aggregateColumnIds: []));
+    }
+
+    [Fact]
+    public void StableKeyOrdersExactly_Follows_The_Field_Type_And_Case_Setting()
+    {
+        Assert.True(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 })));
+        Assert.True(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("code", SensitiveField)));
+        Assert.False(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("code", InsensitiveField)));
+        Assert.False(SemanticsResolver.StableKeyOrdersExactly(SchemaWithStableKey("code", ExplicitlyInsensitiveField)));
+    }
+
+    /// <summary>The group column plays the stable key's role on a grouped level (GRP-4): a key after it is dropped the same way.</summary>
+    [Fact]
+    public void The_Same_Reductions_Apply_To_A_Group_Column_In_The_StableKeys_Role()
+    {
+        IReadOnlyList<SortItem> sort = [Item("country"), Item("amount", SortDirection.Desc, NullsPosition.First)];
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(sort, "country");
+
+        Assert.Equal(["country"], result.Select(item => item.Field));
+    }
+
     /// <summary>
     /// SEM-6: the tiebreaker this resolver MINTED is not recoverable from the returned list — it is
     /// the same <see cref="SortItem"/> a user key on that field would be — so the one place that

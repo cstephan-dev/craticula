@@ -1,0 +1,5 @@
+{
+  "rejectedAt": "allowlist",
+  "reason": "unknown-field",
+  "note": "colId 'internalRank' referenced by sortModel is absent from GridSchema.fields, although it follows the stable key 'id', where SEM-6's reduction would otherwise drop it unseen."
+}

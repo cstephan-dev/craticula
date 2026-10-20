@@ -58,15 +58,12 @@ public class SearchQuerySortAndPagingTests
     }
 
     /// <summary>
-    /// MDB-10's first collision has <b>no counterpart here</b>, and the difference is structural
-    /// rather than a judgement call: this DSL's <c>sort</c> is an ARRAY, so a colId the grid sent
-    /// twice is redundant and the primary key stays primary. MongoDB's <c>$sort</c> is a DOCUMENT,
-    /// where the second entry silently replaces the first and the SECONDARY key becomes primary,
-    /// which is why that rule rejects the request. Asserted so a future port does not copy the Mongo
-    /// rejection across on the assumption that a rule in one addendum belongs in all of them.
+    /// A colId the grid sent twice never reaches the compiler as two keys: SEM-6 (Bug #2565) drops the later occurrence, and with it
+    /// MDB-10's first collision, so nothing is rejected here either. The DSL's <c>sort</c> is an ARRAY, where a repeat would only
+    /// have been redundant; the reduction makes all three arms agree and keeps the first occurrence, the user's primary key.
     /// </summary>
     [Fact]
-    public void A_Repeated_Sort_Key_Is_Redundant_Here_Rather_Than_Last_Wins()
+    public void A_Repeated_Sort_Key_Is_Dropped_And_The_First_Occurrence_Stays()
     {
         var sort = Compile(Names, [
             new SortItem { Field = "id", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
@@ -74,8 +71,42 @@ public class SearchQuerySortAndPagingTests
         ]).Sort;
 
         Assert.Equal(
-            """[{"id":{"missing":"_last","order":"asc"}},{"id":{"missing":"_first","order":"desc"}}]""",
+            """[{"id":{"missing":"_last","order":"asc"}}]""",
             SearchFixtureCompiler.CanonicalJson(sort));
+    }
+
+    [Fact]
+    public void A_Key_After_The_StableKey_Is_Dropped()
+    {
+        var sort = Compile(Names, [
+            new SortItem { Field = "id", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First },
+            new SortItem { Field = "lastName", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
+        ]).Sort;
+
+        Assert.Equal(
+            """[{"id":{"missing":"_first","order":"desc"}}]""",
+            SearchFixtureCompiler.CanonicalJson(sort));
+    }
+
+    /// <summary>SC-1 / SEC-6 (Bug #2565's review): a dropped key is never looked up, so a sort naming an undeclared column after the stable key must be left unreduced and refused.</summary>
+    [Fact]
+    public void An_Undeclared_Sort_Field_After_The_StableKey_Is_Still_Refused()
+    {
+        var exception = Assert.Throws<SearchCompilationException>(() => Compile(Names, [
+            new SortItem { Field = "id", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            new SortItem { Field = "internalRank", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
+        ]));
+
+        Assert.Contains("not declared in the GridSchema", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_Null_Sort_Item_Is_A_SortItemValidationException_Not_A_Crash()
+    {
+        Assert.Throws<SortItemValidationException>(() => Compile(Names, [
+            new SortItem { Field = "id", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            null!
+        ]));
     }
 
     [Fact]

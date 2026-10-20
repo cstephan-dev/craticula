@@ -847,7 +847,7 @@ public static class SearchQueryBuilder
 
     /// <summary>
     /// SEM-6/SEM-3/GRP-2: the request's own keys in order, then a trailing tiebreaker unless the sort
-    /// already ends in it — resolved to the sub-field each one can actually be ordered on.
+    /// already reaches it, after SEM-6's reduction — resolved to the sub-field each one can actually be ordered on.
     ///
     /// <para>GRP-2, at its narrowed scope: a drill-down LEAF has no buckets — it orders raw hits by
     /// whatever field the user picked, which need not be a group column at all — so it is
@@ -857,14 +857,15 @@ public static class SearchQueryBuilder
     /// <c>region</c> in the same request — the per-clause granularity that lets this backend satisfy
     /// GRP-2 and SEM-1 at once where MongoDB cannot.</para>
     ///
-    /// <para><b>A repeated sort key needs no rejection here</b>, unlike MDB-10's: this DSL's
-    /// <c>sort</c> is an ARRAY, so a colId sent twice is redundant rather than last-wins, and the
-    /// primary key stays primary. The MongoDB rule exists because a <c>$sort</c> document silently
-    /// replaces the first entry.</para>
+    /// <para><b>A repeated sort key never reaches this method</b> (SEM-6, Bug #2565):
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string, out bool)"/> drops a later
+    /// occurrence of a field, and everything after the stable key, so there is nothing to reject or to
+    /// tolerate here or in MDB-10's first collision. This DSL's <c>sort</c> is an ARRAY, where a repeat
+    /// would only have been redundant; a MongoDB <c>$sort</c> document would have replaced the first entry.</para>
     /// </summary>
     private static IReadOnlyList<SortKeyPlan> ResolveSortPlan(IReadOnlyList<SortItem>? sort, Context context)
     {
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(sort, context.Schema.StableKey, out var appended);
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(sort, context.Schema, groupColumn: null, out var appended);
 
         var plan = new List<SortKeyPlan>(keys.Count);
 
@@ -1203,7 +1204,9 @@ public static class SearchQueryBuilder
     private static SortDirection RequireBucketOrder(
         string groupColumn, IReadOnlyList<Aggregation> aggregations, SearchQueryRequest request, Context context)
     {
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, groupColumn);
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(
+            request.Sort, context.Schema, groupColumn, out _,
+            aggregateColumnIds: aggregations.Select(aggregation => aggregation.ColumnId).ToArray());
 
         foreach (var key in keys)
         {

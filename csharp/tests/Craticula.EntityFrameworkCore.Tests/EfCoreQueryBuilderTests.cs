@@ -472,6 +472,24 @@ public class EfCoreQueryBuilderTests
         Assert.EndsWith("\"id\"", sql.TrimEnd(), StringComparison.Ordinal);
     }
 
+    /// <summary>SC-1 / SEC-6 (Bug #2565's review): a dropped key is never looked up, so a sort naming an undeclared column after the stable key must be left unreduced and refused.</summary>
+    [Fact]
+    public void An_Undeclared_Sort_Field_After_The_Stable_Key_Is_Still_Refused()
+    {
+        var request = Request(null) with
+        {
+            Sort =
+            [
+                new SortItem { Field = "id", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+                new SortItem { Field = "internalRank", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
+            ]
+        };
+
+        var exception = Assert.Throws<EfCoreCompilationException>(
+            () => EfCoreQueryBuilder.ApplyOrdering(EmptyDatabase(request.Schema).Rows(), request, Sqlite));
+        Assert.Contains("not declared in the GridSchema", exception.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>SEM-6: the tiebreaker is appended when the sort does not already end in the stable key,
     /// and NOT appended when it does — the decision made once, in
     /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string, out bool)"/>,

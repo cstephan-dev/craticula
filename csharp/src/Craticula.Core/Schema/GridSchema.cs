@@ -22,7 +22,7 @@ public sealed record GridSchema
     public required string Source { get; init; }
 
     /// <summary>SEM-6: the field appended as a trailing sort tiebreaker whenever the request's own
-    /// sort doesn't already end in a unique key. Must itself be a key present in <see cref="Fields"/>.</summary>
+    /// sort, after SEM-6's reduction, doesn't already reach a unique key. Must itself be a key present in <see cref="Fields"/>.</summary>
     public required string StableKey { get; init; }
 
     /// <summary>

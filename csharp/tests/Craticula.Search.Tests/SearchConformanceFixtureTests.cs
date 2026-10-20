@@ -57,7 +57,7 @@ public class SearchConformanceFixtureTests
         ("dialect-parity", 19),
         ("group-aggregation", 22),
         ("filter-tree", 15),
-        ("sort-paging", 12),
+        ("sort-paging", 17),
         ("ag-grid-majors", 6),
         ("page-export", 14)
     ];
@@ -262,7 +262,7 @@ public class SearchConformanceFixtureTests
         // arm and no excluded fixture at all. It last moved when #1650's review pass authored
         // page-export/024; before that #1650 itself released page-export (13, now 14) and
         // sort-paging/012 from exclusion and authored page-export/023.
-        Assert.Equal(203, InScopeFixtures.Count);
+        Assert.Equal(208, InScopeFixtures.Count);
         Assert.Empty(ExcludedFixtures);
     }
 
@@ -302,7 +302,7 @@ public class SearchConformanceFixtureTests
                 .EnumerateFiles(RepoPaths.Fixture(category), "search.artifact.json", SearchOption.AllDirectories)
                 .Count());
 
-        Assert.Equal(203, onDisk);
+        Assert.Equal(208, onDisk);
         Assert.Equal(0, excludedCategoryArtifacts);
         Assert.Equal(onDisk - excludedCategoryArtifacts - ExcludedFixtures.Count, InScopeFixtures.Count);
     }
