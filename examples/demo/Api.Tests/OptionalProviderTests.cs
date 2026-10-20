@@ -37,7 +37,7 @@ public sealed class OptionalProviderTests
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "mongo", "postgres", "sqlite"], await HealthAsync(client));
+            Assert.Equal(["ef", "ef-sqlite", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 
@@ -48,7 +48,7 @@ public sealed class OptionalProviderTests
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "mongo", "postgres", "sqlite"], await HealthAsync(client));
+            Assert.Equal(["ef", "ef-sqlite", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 
@@ -59,7 +59,7 @@ public sealed class OptionalProviderTests
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "fake", "mongo", "postgres", "sqlite"], await HealthAsync(client));
+            Assert.Equal(["ef", "ef-sqlite", "fake", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 
@@ -67,16 +67,17 @@ public sealed class OptionalProviderTests
     public async Task TheRealOptionalList_HoldsSqlServerMySqlAndOpenSearch_AndADefaultHostDoesNotListThem()
     {
         // Documents the extension point: the shipped list names each optional engine, and without its setting a default host
-        // serves exactly the four always-on providers.
-        Assert.Equal(["sqlserver", "mysql", "opensearch"], OptionalProviders.All.Select(provider => provider.Name));
+        // serves exactly the five always-on providers.
+        Assert.Equal(["sqlserver", "ef-sqlserver", "mysql", "opensearch"], OptionalProviders.All.Select(provider => provider.Name));
         Assert.Equal("DEMO_SQLSERVER", OptionalProviders.All[0].EnvVar);
-        Assert.Equal("DEMO_MYSQL", OptionalProviders.All[1].EnvVar);
-        Assert.Equal("DEMO_OPENSEARCH", OptionalProviders.All[2].EnvVar);
+        Assert.Equal("DEMO_SQLSERVER", OptionalProviders.All[1].EnvVar); // ef-sqlserver shares the SQL Server setting
+        Assert.Equal("DEMO_MYSQL", OptionalProviders.All[2].EnvVar);
+        Assert.Equal("DEMO_OPENSEARCH", OptionalProviders.All[3].EnvVar);
         var (app, client) = await ApiHostFixture.StartAsync();
         await using (app)
         using (client)
         {
-            Assert.Equal(["ef", "mongo", "postgres", "sqlite"], await HealthAsync(client));
+            Assert.Equal(["ef", "ef-sqlite", "mongo", "postgres", "sqlite"], await HealthAsync(client));
         }
     }
 

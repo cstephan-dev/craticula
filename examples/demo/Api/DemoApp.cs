@@ -64,7 +64,18 @@ public static class DemoApp
         // SQLite is a file, so it is always on. The path is read when the service is first built, after `configure` ran:
         // DEMO_SQLITE from the configuration (the environment is part of it), else data/demo.sqlite under the demo folder.
         builder.Services.AddSingleton<IGridService>(services => new SqliteGridService(
-            DemoSettings.ResolveSqlitePath(services.GetRequiredService<IConfiguration>()[DemoSettings.SqliteEnvVar]),
+            SqlitePath(services),
+            services.GetRequiredService<GridRequestPreparer>()));
+        // EF Core on the same SQLite file (route ef-sqlite): always on like sqlite. The path is read when the factory first builds a context.
+        builder.Services.AddDbContextFactory<SqliteOrdersDbContext>((services, options) => options
+            .UseSqlite(SqliteGridService.ConnectionStringFor(SqlitePath(services)))
+            .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>());
+        builder.Services.AddSingleton<IGridService>(services => new EfGridService<SqliteOrdersDbContext>(
+            "ef-sqlite",
+            "ef-sqlite",
+            EfCoreProviderSemantics.Sqlite,
+            services.GetRequiredService<IDbContextFactory<SqliteOrdersDbContext>>(),
+            new SqliteGridService(SqlitePath(services), services.GetRequiredService<GridRequestPreparer>()).FetchSetValuesAsync,
             services.GetRequiredService<GridRequestPreparer>()));
         builder.Services.AddSingleton<ProviderRegistry>();
 
@@ -89,4 +100,8 @@ public static class DemoApp
 
         return app;
     }
+
+    /// <summary>DEMO_SQLITE from the configuration (the environment is part of it), else data/demo.sqlite under the demo folder.</summary>
+    private static string SqlitePath(IServiceProvider services) =>
+        DemoSettings.ResolveSqlitePath(services.GetRequiredService<IConfiguration>()[DemoSettings.SqliteEnvVar]);
 }

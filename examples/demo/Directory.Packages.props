@@ -9,6 +9,10 @@
   <ItemGroup>
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- The EF Core providers for the demo's two extra EF routes (#2554); the version matches Microsoft.EntityFrameworkCore, which
+         Npgsql.EntityFrameworkCore.PostgreSQL already brings. New libraries (MIT): the Engineering Lead's approval is pending. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageVersion Include="Dapper" Version="2.1.79" />
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.11" />

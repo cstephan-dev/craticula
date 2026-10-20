@@ -10,9 +10,9 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 25 scenarios are equal on all 4 providers (postgres, ef, mongo, sqlite)`. (SQLite is a file the seed creates; see
-[SQLite](#sqlite-the-sqlite-provider) for the two documented differences.) SQL Server, MySQL and OpenSearch are optional providers that start only on request:
-see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), or [all seven at once](#all-seven-providers-at-once).
+is up) ends with `all 25 scenarios are equal on all 5 providers (postgres, ef, ef-sqlite, mongo, sqlite)`. (SQLite is a file the seed creates; see
+[SQLite](#sqlite-the-sqlite-provider) for the two documented differences, and [EF Core on SQLite and SQL Server](#ef-core-on-sqlite-and-sql-server-the-ef-sqlite-and-ef-sqlserver-providers) for the two extra EF routes.) SQL Server, MySQL and OpenSearch are optional providers that start only on request:
+see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), or [all nine at once](#all-nine-providers-at-once).
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -187,6 +187,39 @@ CSV export uses `EfCoreExportStream.StreamAsync` the same way.
 
 **Package.** The demo adds `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (central version in `Directory.Packages.props`). It is a new library and
 needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
+
+## EF Core on SQLite and SQL Server (the `ef-sqlite` and `ef-sqlserver` providers)
+
+The EF Core adapter also runs on two more engines, next to the PostgreSQL `ef` route. Both reuse `EfGridService<TContext>` (`Api/Grid/EfGridService.cs`; `ef` is a thin subclass of it) with one
+context per engine: `SqliteOrdersDbContext` and `SqlServerOrdersDbContext`, both on the shared `SchemaDbContext<T>` (`Api/Grid/OrdersDbContext.cs`).
+
+- **`ef-sqlite`** is always on, over the same file as `sqlite`. It uses the adapter's own SQLite preset (`EfCoreProviderSemantics.Sqlite`), so there are no engine facts to declare. It does need **a datetime converter on the context**
+  (`SqliteOrdersDbContext`): the seed stores datetimes as `yyyy-MM-ddTHH:mm:ss.fffZ` text and SQLite compares text, but EF's own SQLite mapping writes a `DateTime` parameter as `yyyy-MM-dd HH:mm:ss` (a space, no `Z`). Without the converter
+  (measured) a range filter with a bound that is not at midnight counts every row of the bound's date as later (13,335 rows for `orderedAt > 2025-06-01T12:00Z` instead of 13,321) and a CSV export sorted by a datetime repeats or drops rows at
+  the chunk boundaries (20,060 and 19,947 rows instead of 20,000). With it, rows, groups, drill-down, set values and CSV equal PostgreSQL with no rule beyond the ones `sqlite` already has; tests cover non-midnight bounds and both export directions.
+- **`ef-sqlserver`** is on when `DEMO_SQLSERVER` is set, the same setting as `sqlserver` (so it connects as the read-only `demo_reader` login too). Its engine facts are the demo's declaration, in `SqlServerOrdersDbContext.Semantics`:
+
+| Setting | Value on SQL Server | Why |
+|---|---|---|
+| `CaseInsensitiveCollation` | `Latin1_General_CI_AS` | the name the Dapper route spells (`MssqlDialect`), so both routes compare alike |
+| `CaseSensitiveCollation` | `Latin1_General_CS_AS` | the same dialect's name, for a field the schema marks case-sensitive |
+| `PatternMatchFoldsCase` | `false` | `LIKE` follows the column's own collation, and the grouping columns (`country`, `category`, `status`) are binary-collated, so a bare `LIKE` would match case exactly there (measured: a "germ" filter found 0 of 1,933 countries); with `false` the adapter lowers both sides and every column folds case |
+| `PatternMatchTreatsLeftBracketAsMetacharacter` | `true` | only T-SQL's `LIKE` does (SEC-4) |
+| `EmptyStringIsNull` | `false` | only Oracle does |
+
+**Measured on SQL Server 2022 CU14 with `Microsoft.EntityFrameworkCore.SqlServer` 10.0.11**
+
+1. **No `AVG` rule.** The Dapper SQL Server route returns an integer for the average of a `BIGINT` column and `smoke.sh` truncates the baseline for it; EF averages as a float, so `ef-sqlserver` equals PostgreSQL there. Only the usual 1e-6 on `_avg` keys applies.
+2. **Datetimes need a host converter (bug #2798).** `datetime2` has no zone, EF returns a `DateTime` of unspecified kind and the JSON would lose the trailing `Z`; the EF adapter has no reader of its own to fix that. The demo's context therefore declares
+   a value converter that reads every datetime as UTC (`ConfigureConventions` in `SqlServerOrdersDbContext`; the seed stores UTC instants). A test fails without it. Whether the adapter should do this itself is the open bug.
+3. **No `NonRetryingExecutionStrategy` needed.** Unlike the Npgsql provider, the SQL Server provider does not wrap a connection failure by default: a stopped SQL Server answers 503 on the EF route without it (a test with a closed port).
+4. **`Microsoft.Data.SqlClient`.** `Microsoft.EntityFrameworkCore.SqlServer` 10.0.11 asks for `Microsoft.Data.SqlClient` 6.1.6 or later and resolves to the demo's 7.1.0, one major version above its own floor (NuGet checks only the lower bound, so there is no warning). Everything here works on it, so the two routes share one driver; nothing guarantees the pairing beyond these tests.
+5. **Not affected by bug #2565.** A sort that lists `id` anywhere except last fails on the Dapper `sqlserver` route with error 169 (see above) but works on `ef-sqlserver`: EF drops the repeated stable key from the `ORDER BY` itself.
+6. **The set filter** reuses the compiled statement of the same engine's Dapper route (`SqlServerGridService`, `SqliteGridService`), because the adapter has no distinct-values call.
+7. **CSV** goes through `EfCoreExportStream` and equals PostgreSQL over the whole table (several keyset chunks).
+
+**Packages.** The demo adds `Microsoft.EntityFrameworkCore.SqlServer` and `Microsoft.EntityFrameworkCore.Sqlite`, both 10.0.11 (the version of `Microsoft.EntityFrameworkCore` the Npgsql provider already brings; central versions in
+`Directory.Packages.props`). They are new libraries and need the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
 
 ## SQLite (the `sqlite` provider)
 
@@ -387,7 +420,7 @@ The page shows an `unsupported-shape` answer as a banner that reads "Not support
 
 ## Optional providers and seeding a subset
 
-PostgreSQL, MongoDB, EF Core and SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
+PostgreSQL, MongoDB, EF Core, SQLite and EF Core on SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
 (an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
 page does not offer it. This lets you run the demo with any subset of its databases. Three optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`), MySQL (`DEMO_MYSQL`, profile `mysql`) and OpenSearch (`DEMO_OPENSEARCH`, profile `opensearch`); the
 provider sections of this README name each engine's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
@@ -411,7 +444,7 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 `bash smoke.sh` compares every provider the API lists with the postgres baseline. To compare a chosen list, set
 `DEMO_SMOKE_PROVIDERS=postgres,ef` (postgres is always required); a name the API does not list stops it with exit 2 and a clear message.
 
-## All seven providers at once
+## All nine providers at once
 
 To see every provider side by side (and to run the full parity check), start the three optional engines together. This needs about
 4 GB of free RAM (SQL Server about 2 GB, OpenSearch about 1 GiB, MySQL about 0.5 GiB) and accepts Microsoft's SQL Server licence
@@ -424,12 +457,12 @@ export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=demo_reader;Password=$(sed
 export DEMO_MYSQL="Server=127.0.0.1;Port=53306;User ID=demo;Password=demo;Database=demo"
 export DEMO_OPENSEARCH=http://127.0.0.1:59200
 dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch
-dotnet run --project Api                                 # /api/health lists all seven
-bash smoke.sh                                            # in another terminal: all 25 scenarios equal on all 7 providers
+dotnet run --project Api                                 # /api/health lists all nine
+bash smoke.sh                                            # in another terminal: all 25 scenarios equal on all 9 providers
 docker compose --profile engines stop sqlserver mysql opensearch   # when done: keeps the data, leaves PostgreSQL and MongoDB up
 ```
 
-`smoke.sh` ends with `all 25 scenarios are equal on all 7 providers (postgres, ef, mongo, mysql, opensearch, sqlite, sqlserver)`.
+`smoke.sh` ends with `all 25 scenarios are equal on all 9 providers (postgres, ef, ef-sqlite, ef-sqlserver, mongo, mysql, opensearch, sqlite, sqlserver)`.
 It also prints the places where an engine was equal only by a documented rule (SQL Server and MySQL `quantity_avg`, the OpenSearch
 differences) and the one scenario OpenSearch answers with `unsupported-shape`. If one engine is not up, name the ones to compare:
 `DEMO_SMOKE_PROVIDERS=postgres,ef,mongo,sqlite bash smoke.sh`; a name the API does not list stops the run with exit 2.

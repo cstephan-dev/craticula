@@ -7,38 +7,41 @@ using Npgsql;
 namespace Demo.Api.Grid;
 
 /// <summary>
-/// PostgreSQL through <c>Craticula.EntityFrameworkCore</c>: the IR becomes an <c>IQueryable</c> over a property-bag model and
-/// the Npgsql EF provider writes the SQL. One <see cref="OrdersDbContext"/> per call, from the factory.
+/// One EF Core route through <c>Craticula.EntityFrameworkCore</c>: the IR becomes an <c>IQueryable</c> over a property-bag model and the
+/// provider of <typeparamref name="TContext"/> writes the SQL. One context per call, from the factory. The route's name, its dialect
+/// label, the engine facts (<see cref="EfCoreProviderSemantics"/>) and the distinct-values call are parameters, so PostgreSQL
+/// (<see cref="EfGridService"/>), SQL Server and SQLite share the code.
 /// </summary>
-public sealed class EfGridService(
-    IDbContextFactory<OrdersDbContext> contexts, NpgsqlDataSource dataSource, GridRequestPreparer preparer) : IGridService
+public class EfGridService<TContext>(
+    string name,
+    string dialect,
+    EfCoreProviderSemantics semantics,
+    IDbContextFactory<TContext> contexts,
+    Func<PreparedSetValues, CancellationToken, Task<IReadOnlyList<object?>>> fetchSetValues,
+    GridRequestPreparer preparer) : IGridService
+    where TContext : DbContext
 {
-    private static readonly EfCoreProviderSemantics Semantics = OrdersDbContext.PostgresSemantics;
-
-    public string Name => "ef";
+    public string Name => name;
 
     public async Task<GridPageResult> FetchRowsAsync(PreparedRows request, CancellationToken cancellationToken)
     {
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         var page = await EfCoreGridQuery.FetchPageAsync(
-            GridSchemaPropertyBag.Query(context, preparer.Schema), ToEfRequest(request), Semantics,
+            GridSchemaPropertyBag.Query(context, preparer.Schema), ToEfRequest(request), semantics,
             includeRowCount: true, cancellationToken);
         return page.ToGridPageResult();
     }
 
-    /// <summary>
-    /// The EF adapter has no entry point for BM-3's distinct values either, so this runs the same compiled artifact as the
-    /// <c>postgres</c> provider (<see cref="PostgresSetValues"/>) through Npgsql, not through EF.
-    /// </summary>
+    /// <summary>The EF adapter has no entry point for BM-3's distinct values either: the compiled artifact of the engine's own Dapper route runs instead.</summary>
     public Task<IReadOnlyList<object?>> FetchSetValuesAsync(PreparedSetValues request, CancellationToken cancellationToken) =>
-        PostgresSetValues.FetchAsync(dataSource, preparer.Schema, request, cancellationToken);
+        fetchSetValues(request, cancellationToken);
 
     public async IAsyncEnumerable<ExportRow> StreamExportAsync(
         PreparedRows request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await using var context = await contexts.CreateDbContextAsync(cancellationToken);
         await foreach (var row in EfCoreExportStream.StreamAsync(
-            GridSchemaPropertyBag.Query(context, preparer.Schema), ToEfRequest(request), Semantics,
+            GridSchemaPropertyBag.Query(context, preparer.Schema), ToEfRequest(request), semantics,
             options: null, cancellationToken))
         {
             yield return row;
@@ -53,7 +56,6 @@ public sealed class EfGridService(
     public CompiledQueryView Compile(PreparedRows request)
     {
         const string kind = "sql";
-        const string dialect = "ef-npgsql";
         var efRequest = ToEfRequest(request);
 
         if (efRequest.Group is not null)
@@ -66,8 +68,8 @@ public sealed class EfGridService(
 
         using var context = contexts.CreateDbContext();
         var source = GridSchemaPropertyBag.Query(context, preparer.Schema);
-        var filtered = EfCoreQueryBuilder.ApplyFilter(source, efRequest, Semantics);
-        var ordered = EfCoreQueryBuilder.ApplyOrdering(filtered, efRequest, Semantics);
+        var filtered = EfCoreQueryBuilder.ApplyFilter(source, efRequest, semantics);
+        var ordered = EfCoreQueryBuilder.ApplyOrdering(filtered, efRequest, semantics);
         var window = EfCoreQueryBuilder.ApplyRowWindow(ordered, efRequest.Page);
         var projected = EfCoreQueryBuilder.ApplyProjection(
             window, preparer.Schema, efRequest.Projection ?? preparer.Schema.FieldOrder);
@@ -85,3 +87,14 @@ public sealed class EfGridService(
         Projection = request.Parsed.Export?.ProjectionColumns
     };
 }
+
+/// <summary>PostgreSQL through <c>Craticula.EntityFrameworkCore</c> and the Npgsql EF provider (route <c>ef</c>).</summary>
+public sealed class EfGridService(
+    IDbContextFactory<OrdersDbContext> contexts, NpgsqlDataSource dataSource, GridRequestPreparer preparer)
+    : EfGridService<OrdersDbContext>(
+        "ef",
+        "ef-npgsql",
+        OrdersDbContext.PostgresSemantics,
+        contexts,
+        (request, cancellationToken) => PostgresSetValues.FetchAsync(dataSource, preparer.Schema, request, cancellationToken),
+        preparer);

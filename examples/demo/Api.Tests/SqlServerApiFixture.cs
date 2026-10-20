@@ -5,7 +5,7 @@ namespace Demo.Api.Tests;
 
 /// <summary>
 /// An API host that serves <c>sqlserver</c>: <c>DEMO_SQLSERVER</c> is taken from the environment (through the host's
-/// configuration) when the engine answers, so the main <see cref="ApiHostFixture"/> keeps listing the four always-on providers.
+/// configuration) when the engine answers, so the main <see cref="ApiHostFixture"/> keeps listing the always-on providers.
 /// Without the engine the host is not started and the tests that need it are skipped by <see cref="RequiresEngineFactAttribute"/>.
 /// </summary>
 public sealed class SqlServerApiFixture : IAsyncLifetime

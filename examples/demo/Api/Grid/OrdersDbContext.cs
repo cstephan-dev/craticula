@@ -5,6 +5,21 @@ using Microsoft.EntityFrameworkCore;
 namespace Demo.Api.Grid;
 
 /// <summary>
+/// The model shared by the demo's EF Core routes: the <c>orders</c> table from the grid schema, whatever the provider.
+/// One concrete context per provider (EF keys a <c>DbContextOptions</c> by the context type), each declaring its engine's
+/// <see cref="EfCoreProviderSemantics"/>.
+/// </summary>
+public abstract class SchemaDbContext<TContext>(DbContextOptions<TContext> options, GridSchema schema)
+    : DbContext(options), IGridSchemaModel
+    where TContext : DbContext
+{
+    public GridSchema Schema => schema;
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+        GridSchemaPropertyBag.Configure(modelBuilder, schema);
+}
+
+/// <summary>
 /// The EF Core model of the <c>orders</c> table, built from the grid schema rather than from an entity class
 /// (<see cref="GridSchemaPropertyBag"/>: columns come from <c>physical.sql.column</c> in <c>orders.schema.json</c>).
 /// <see cref="IGridSchemaModel"/> plus <c>GridSchemaModelCacheKeyFactory</c> (registered in <c>DemoApp</c>) keep EF's model
@@ -16,7 +31,7 @@ namespace Demo.Api.Grid;
 /// </code>
 /// </summary>
 public sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options, GridSchema schema)
-    : DbContext(options), IGridSchemaModel
+    : SchemaDbContext<OrdersDbContext>(options, schema)
 {
     /// <summary>
     /// The five engine facts the EF adapter cannot derive, declared for this PostgreSQL database (the adapter ships only a
@@ -37,9 +52,4 @@ public sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options, G
         // Only Oracle treats '' as NULL; PostgreSQL keeps them apart.
         EmptyStringIsNull = false
     };
-
-    public GridSchema Schema => schema;
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-        GridSchemaPropertyBag.Configure(modelBuilder, schema);
 }

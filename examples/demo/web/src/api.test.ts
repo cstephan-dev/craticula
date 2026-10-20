@@ -58,13 +58,15 @@ describe('api error mapping', () => {
 });
 
 describe('provider list', () => {
-  it('offers PostgreSQL, MongoDB, EF Core, SQLite, SQL Server, MySQL and OpenSearch in that order', () => {
+  it('offers PostgreSQL, MongoDB, EF Core, SQLite, EF Core (SQLite), SQL Server, EF Core (SQL Server), MySQL and OpenSearch in that order', () => {
     expect(PROVIDERS).toEqual([
       { id: 'postgres', label: 'PostgreSQL' },
       { id: 'mongo', label: 'MongoDB' },
       { id: 'ef', label: 'EF Core' },
       { id: 'sqlite', label: 'SQLite' },
+      { id: 'ef-sqlite', label: 'EF Core (SQLite)' },
       { id: 'sqlserver', label: 'SQL Server' },
+      { id: 'ef-sqlserver', label: 'EF Core (SQL Server)' },
       { id: 'mysql', label: 'MySQL' },
       { id: 'opensearch', label: 'OpenSearch' },
     ]);

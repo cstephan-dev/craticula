@@ -404,7 +404,7 @@ public sealed class MySqlProviderTests(MySqlApiFixture api)
         {
             var json = JsonDocument.Parse(await client.GetStringAsync("/api/health")).RootElement;
             Assert.Equal(
-                ["ef", "mongo", "mysql", "postgres", "sqlite"],
+                ["ef", "ef-sqlite", "mongo", "mysql", "postgres", "sqlite"],
                 json.GetProperty("providers").EnumerateArray().Select(p => p.GetString()!));
         }
     }
