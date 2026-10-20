@@ -229,7 +229,9 @@ public static class OpenSearchExportStream
 
     /// <summary>Checks the raw HTTP status rather than <c>StringResponse.Success</c> — see
     /// <c>OpenSearchGridQuery.RequireSuccess</c>'s own remarks for why <c>Success</c> alone is not
-    /// trustworthy here (a 404 on <c>_search</c> reads back as <see langword="true"/>).</summary>
+    /// trustworthy here (a 404 on <c>_search</c> reads back as <see langword="true"/>). The status travels on the
+    /// exception (<see cref="OpenSearchClientCompilationException.HttpStatusCode"/>), exactly as in
+    /// <c>OpenSearchGridQuery</c>, so a host can tell an overloaded cluster (503/429) from a bug (#2523).</summary>
     private static void RequireSuccess(StringResponse response)
     {
         if (response.HttpStatusCode is >= 200 and < 300)
@@ -240,7 +242,8 @@ public static class OpenSearchExportStream
         throw new OpenSearchClientCompilationException(
             $"The OpenSearch/Elasticsearch call failed (HTTP {response.HttpStatusCode?.ToString() ?? "n/a"}): " +
             Truncate(response.Body ?? response.DebugInformation, 500),
-            response.OriginalException ?? new InvalidOperationException("The call did not succeed."));
+            response.OriginalException ?? new InvalidOperationException("The call did not succeed."),
+            response.HttpStatusCode);
     }
 
     private static string Truncate(string? text, int max)
