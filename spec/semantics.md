@@ -430,6 +430,26 @@ compiler quietly reaching into a comparison node's provenance field.) For `inRan
 inclusivity (`fromInclusive`/`toInclusive`) is carried explicitly on the IR node and the compiler
 MUST read it from there — never assume a fixed default.
 
+**A `datetime` read back from a result is an absolute UTC instant (pinned; Bug #2511).** Everything above is about the
+value going **in**; an execution adapter that reads a result row back must hand a `datetime` cell to its caller as the
+same kind of thing: an absolute instant, expressed in UTC. In a language whose date-time type records a kind or an
+offset (C#'s `DateTime`, a zone-aware value elsewhere), the value carries **UTC**, so that serialising it yields the
+trailing `Z` and nothing in between can reinterpret it. Three cases, by what the driver returns:
+
+| The driver returns | The adapter delivers |
+|---|---|
+| a value that already denotes UTC (a UTC kind, an offset of zero, an ISO text ending in `Z`) | that instant, unchanged |
+| a value with an offset or a local kind (SQL Server's `datetimeoffset`, PostgreSQL's `timestamptz` through a zone-aware type) | the same instant converted to UTC; never the offset-local wall-clock reading |
+| a value with **no zone** (SQL Server's `datetime2`, MySQL's `DATETIME`, a zone-less text) | that wall-clock reading **as UTC** |
+
+The last row is the host obligation of SEM-4's comparison side seen from the other end: a column with no zone type
+stores UTC instants (the compare side already requires it, and the seed of every execution-equality fixture is UTC,
+XEQ-2), so reading it as UTC is the only reading under which what went in is what comes out. **Must NOT:** deliver a
+zone-less value with an *unspecified* kind (a serialiser then drops the `Z`, and a consumer is left to guess), reinterpret
+it in the server process's local zone (SEM-4 already forbids that for the way in), or treat it as local and convert it to
+UTC (that would shift every instant by the server's offset). A `date` cell is unaffected (a local date has no zone).
+This rule is checked by each execution adapter's own tests, not by compile fixtures: a compiler never reads a result.
+
 **MongoDB representation of `dateValue` (pinned): a plain ISO date string, never a BSON `Date`.**
 MongoDB's `Date` type has no "calendar date, no time-of-day" concept — every BSON `Date` is an
 instant. Storing/comparing a `dateValue` as a BSON `Date` therefore requires silently promoting it to
