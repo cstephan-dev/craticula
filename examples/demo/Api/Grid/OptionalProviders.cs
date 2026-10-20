@@ -20,7 +20,7 @@ public sealed record OptionalProvider(
     string? Engine = null);
 
 /// <summary>
-/// The optional engines the demo knows: SQL Server, MySQL and OpenSearch (SQLite is
+/// The optional engines the demo knows: SQL Server, MySQL, OpenSearch and Elasticsearch (SQLite is
 /// always on and is registered in <c>DemoApp</c>). Tests pass their own list to <c>DemoApp.Build</c>.
 /// </summary>
 public static class OptionalProviders
@@ -54,7 +54,15 @@ public static class OptionalProviders
             (services, setting) => services.AddSingleton<IGridService>(provider =>
                 new OpenSearchGridService(setting, provider.GetRequiredService<GridRequestPreparer>())),
             setting => OpenSearchGridService.ParseUrl(setting),
-            "OpenSearch")
+            "OpenSearch"),
+        // The same client and compiler on Elasticsearch 8; the point-in-time calls are translated at the HTTP level (ElasticsearchPitConnection).
+        new OptionalProvider(
+            "elasticsearch",
+            DemoSettings.ElasticsearchEnvVar,
+            (services, setting) => services.AddSingleton<IGridService>(provider =>
+                new OpenSearchGridService(setting, provider.GetRequiredService<GridRequestPreparer>(), elasticsearch: true)),
+            setting => OpenSearchGridService.ParseUrl(setting),
+            "Elasticsearch")
     ];
 
     // Unlike the Npgsql EF provider, the SQL Server one does not wrap a connection failure by default (measured: a stopped server answers 503
@@ -98,7 +106,7 @@ public static class OptionalProviders
                         provider.Validate(value);
                         return 0;
                     },
-                    () => new InvalidOperationException(ConnectionStringGuard.Message(provider.EnvVar, provider.Engine ?? provider.Name, provider.Name == "opensearch" ? "URL" : "connection string")));
+                    () => new InvalidOperationException(ConnectionStringGuard.Message(provider.EnvVar, provider.Engine ?? provider.Name, provider.Name is "opensearch" or "elasticsearch" ? "URL" : "connection string")));
             }
 
             provider.Register(services, setting);

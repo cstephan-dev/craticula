@@ -9,7 +9,8 @@ export type Provider =
   | 'sqlserver'
   | 'ef-sqlserver'
   | 'mysql'
-  | 'opensearch';
+  | 'opensearch'
+  | 'elasticsearch';
 
 export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'postgres', label: 'PostgreSQL' },
@@ -21,6 +22,7 @@ export const PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'ef-sqlserver', label: 'EF Core (SQL Server)' },
   { id: 'mysql', label: 'MySQL' },
   { id: 'opensearch', label: 'OpenSearch' },
+  { id: 'elasticsearch', label: 'Elasticsearch' },
 ];
 
 /** What the switch offers while the API's provider list is unknown (loading, down) and in a plain setup. */

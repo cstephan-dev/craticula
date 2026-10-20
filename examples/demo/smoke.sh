@@ -160,6 +160,8 @@ TRUNCATE = "truncate"
 ROUND4 = ("round", 4)
 RULES = {"sqlite": {"_sum": 1e-9}, "sqlserver": {"quantity_avg": TRUNCATE}, "mysql": {"quantity_avg": ROUND4}}
 AVG_RULE = {"_avg": 1e-6}
+# The two search engines share the compiler, the client and the rules below (Elasticsearch: measured in tasks #2556 and #2557).
+SEARCH_ENGINES = ("opensearch", "elasticsearch")
 # Names of the opensearch-only rules (they are not number tolerances, so they live outside RULES); they appear in the "rule was needed" line as the key.
 LAST_ROW_UNKNOWN = "lastRow (count above 10,000 unknown)"
 NULL_GROUP_ORDER = "null group at the other end"
@@ -169,6 +171,8 @@ OPENSEARCH_COUNT_CAP = 10000  # the adapter's max_result_window, PERF-3: a count
 # unsupported-shape while the baseline answers 200; a scenario listed here is never skipped, it is compared against that contract.
 UNSUPPORTED = {
     ("group ordered by an aggregate (sum, descending)", "opensearch"):
+        "a composite aggregation lists groups in key order only, so it cannot order them by an aggregate (OSE-11(c))",
+    ("group ordered by an aggregate (sum, descending)", "elasticsearch"):
         "a composite aggregation lists groups in key order only, so it cannot order them by an aggregate (OSE-11(c))",
 }
 unsupported_met = []  # (scenario, provider, reason) for every UNSUPPORTED expectation that was met
@@ -292,12 +296,12 @@ def compare(kind, base_status, base_body, other, status, body):
             first[key] = (first[key] + 1) if isinstance(first[key], int) else f"{first[key]}-sabotaged"
         cell = f"{len(ot['rows'])} rows, lastRow {ot['lastRow']}"
         last_ok = pg.get("lastRow") == ot.get("lastRow")
-        if not last_ok and other == "opensearch" and ot.get("lastRow") is None and isinstance(pg.get("lastRow"), int) \
+        if not last_ok and other in SEARCH_ENGINES and ot.get("lastRow") is None and isinstance(pg.get("lastRow"), int) \
                 and pg["lastRow"] > OPENSEARCH_COUNT_CAP:
             last_ok = True  # PERF-3: OpenSearch does not count above max_result_window; the grid keeps asking until a short block
             used[(current_scenario, other, LAST_ROW_UNKNOWN)] = 1
         rows_ok = same(pg["rows"], ot["rows"], provider=other, track=True)
-        if not rows_ok and other == "opensearch" and null_group_at_other_end(pg["rows"], ot["rows"]):
+        if not rows_ok and other in SEARCH_ENGINES and null_group_at_other_end(pg["rows"], ot["rows"]):
             rows_ok = True  # AGG-5 / OSE-11(b): OpenSearch's null group is the lowest value
             used[(current_scenario, other, NULL_GROUP_ORDER)] = 1
         ok = last_ok and rows_ok
@@ -308,7 +312,7 @@ def compare(kind, base_status, base_body, other, status, body):
     if kind == "values":
         pg, ot = json.loads(base_body)["values"], json.loads(body)["values"]
         canon = lambda values: sorted(json.dumps(v) for v in values)
-        if other == "opensearch" and None in pg and None not in ot:
+        if other in SEARCH_ENGINES and None in pg and None not in ot:
             used[(current_scenario, other, VALUES_WITHOUT_NULL)] = 1
             pg = [v for v in pg if v is not None]  # a terms aggregation has no bucket for a missing value
         return f"{len(ot)} values", canon(pg) == canon(ot), ""
@@ -334,13 +338,13 @@ def compare(kind, base_status, base_body, other, status, body):
         ot = json.loads(body)
         if other == "mongo":
             ok = ot.get("kind") == "mongo" and bool(ot.get("text"))
-        elif other == "opensearch":
+        elif other in SEARCH_ENGINES:
             # the compiled search body as JSON text: it must parse, and carry a query or aggregation member
             try:
                 body_json = json.loads(ot.get("text") or "")
             except ValueError:
                 body_json = None
-            ok = ot.get("kind") == "json" and ot.get("dialect") == "opensearch" and isinstance(body_json, dict) and bool(body_json)
+            ok = ot.get("kind") == "json" and ot.get("dialect") == other and isinstance(body_json, dict) and bool(body_json)
         elif other == "ef" or other.startswith("ef-"):
             # EF Core inlines parameter values in its text (shown as comment lines), so only the shape is asserted
             ok = ot.get("kind") == "sql" and ot.get("dialect") == ("ef-npgsql" if other == "ef" else other) and bool(ot.get("text"))

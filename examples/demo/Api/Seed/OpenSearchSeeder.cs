@@ -29,13 +29,18 @@ public static class OpenSearchSeeder
     public static GridSchema LoadSchema() =>
         GridSchema.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, DemoApp.SchemaFile)));
 
-    public static async Task<long> SeedAsync(string url, IReadOnlyList<OrderRow> rows)
+    /// <summary>Seeds the OpenSearch index, or an Elasticsearch one (the same mapping and bulk calls work on both: measured in #2556): only the setting's
+    /// name and the engine's name in a malformed-setting message change.</summary>
+    public static Task<long> SeedAsync(string url, IReadOnlyList<OrderRow> rows) =>
+        SeedAsync(url, rows, DemoSettings.OpenSearchEnvVar, "OpenSearch");
+
+    public static async Task<long> SeedAsync(string url, IReadOnlyList<OrderRow> rows, string envVar, string engine)
     {
         var schema = LoadSchema();
         var target = ConnectionStringGuard.Build(
             url,
             value => OpenSearchGridService.ParseUrl(value),
-            () => new SeedSettingException(ConnectionStringGuard.Message(DemoSettings.OpenSearchEnvVar, "OpenSearch", "URL")));
+            () => new SeedSettingException(ConnectionStringGuard.Message(envVar, engine, "URL")));
         var client = new OpenSearchLowLevelClient(new ConnectionConfiguration(target)
             .DisablePing()
             .RequestTimeout(TimeSpan.FromMinutes(2)));

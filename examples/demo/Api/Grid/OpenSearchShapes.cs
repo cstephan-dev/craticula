@@ -14,7 +14,7 @@ namespace Demo.Api.Grid;
 internal static class OpenSearchShapes
 {
     /// <summary>Throws <see cref="UnsupportedShapeException"/> for a grouped request OpenSearch cannot answer; does nothing otherwise.</summary>
-    public static void ThrowIfUnsupported(PreparedRows request)
+    public static void ThrowIfUnsupported(PreparedRows request, string engine = "OpenSearch")
     {
         if (request.Parsed.Group is not { } group)
         {
@@ -28,7 +28,7 @@ internal static class OpenSearchShapes
         {
             var column = group.GroupCols[nullKey];
             throw new UnsupportedShapeException(
-                $"OpenSearch cannot expand the group whose '{column}' value is empty (null): the query it would run has a null term, which the engine rejects. " +
+                $"{engine} cannot expand the group whose '{column}' value is empty (null): the query it would run has a null term, which the engine rejects. " +
                 $"Use the '{column}' column's blank filter to list those rows.");
         }
 
@@ -47,7 +47,7 @@ internal static class OpenSearchShapes
             if (sort.Field != groupColumn && aggregations.Count(aggregation => aggregation.ColumnId == sort.Field) == 1)
             {
                 throw new UnsupportedShapeException(
-                    $"OpenSearch cannot order groups by an aggregate ('{sort.Field}'): groups come back in the order of their own '{groupColumn}' value only, " +
+                    $"{engine} cannot order groups by an aggregate ('{sort.Field}'): groups come back in the order of their own '{groupColumn}' value only, " +
                     $"so the result would be the first groups by '{groupColumn}', not the top ones. Sort by '{groupColumn}', or use another provider for this ordering.");
             }
         }

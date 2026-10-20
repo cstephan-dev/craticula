@@ -4,7 +4,7 @@ using Demo.Api.Seed;
 namespace Demo.Api.Tests;
 
 /// <summary>
-/// A malformed <c>DEMO_SQLSERVER</c> / <c>DEMO_MYSQL</c> / <c>DEMO_OPENSEARCH</c> (a URL, for the last) is an operator's setting error: the API stops at startup with a message that
+/// A malformed <c>DEMO_SQLSERVER</c> / <c>DEMO_MYSQL</c> / <c>DEMO_OPENSEARCH</c> / <c>DEMO_ELASTICSEARCH</c> (a URL, for the last two) is an operator's setting error: the API stops at startup with a message that
 /// names the variable (never every route answering 500 at request time), and <c>seed</c> reports that provider as failed and
 /// goes on. No engine is contacted, so none of these needs a database.
 /// </summary>
@@ -22,7 +22,10 @@ public sealed class MalformedSettingTests
         { "mysql", DemoSettings.MySqlEnvVar, "no equals sign " + Secret },
         { "opensearch", DemoSettings.OpenSearchEnvVar, "no url " + Secret },
         { "opensearch", DemoSettings.OpenSearchEnvVar, "ftp://127.0.0.1:9200/" + Secret },
-        { "opensearch", DemoSettings.OpenSearchEnvVar, "127.0.0.1:9200?" + Secret }
+        { "opensearch", DemoSettings.OpenSearchEnvVar, "127.0.0.1:9200?" + Secret },
+        { "elasticsearch", DemoSettings.ElasticsearchEnvVar, "no url " + Secret },
+        { "elasticsearch", DemoSettings.ElasticsearchEnvVar, "ftp://127.0.0.1:9200/" + Secret },
+        { "elasticsearch", DemoSettings.ElasticsearchEnvVar, "127.0.0.1:9200?" + Secret }
     };
 
     [Theory]
@@ -35,7 +38,7 @@ public sealed class MalformedSettingTests
             builder.Configuration["Urls"] = "http://127.0.0.1:0";
             builder.Configuration[envVar] = setting;
             // Keep the other optional engines out of the way whatever the machine's environment holds.
-            foreach (var other in new[] { DemoSettings.SqlServerEnvVar, DemoSettings.MySqlEnvVar, DemoSettings.OpenSearchEnvVar }.Where(name => name != envVar))
+            foreach (var other in new[] { DemoSettings.SqlServerEnvVar, DemoSettings.MySqlEnvVar, DemoSettings.OpenSearchEnvVar, DemoSettings.ElasticsearchEnvVar }.Where(name => name != envVar))
             {
                 builder.Configuration[other] = "";
             }
@@ -57,6 +60,7 @@ public sealed class MalformedSettingTests
             {
                 "sqlserver" => SqlServerSeeder.SeedAsync(setting, rows),
                 "mysql" => MySqlSeeder.SeedAsync(setting, rows),
+                "elasticsearch" => OpenSearchSeeder.SeedAsync(setting, rows, DemoSettings.ElasticsearchEnvVar, "Elasticsearch"),
                 _ => OpenSearchSeeder.SeedAsync(setting, rows)
             },
             count => $"{count}",

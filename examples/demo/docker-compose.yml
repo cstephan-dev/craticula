@@ -8,10 +8,11 @@
 #   docker compose --profile engines up -d     every optional engine at once (the umbrella profile)
 #   docker compose --profile mysql up -d       the same for MySQL
 #   docker compose --profile opensearch up -d --wait   the same for OpenSearch (waits for the cluster health check)
+#   docker compose --profile elasticsearch up -d --wait   the same for Elasticsearch
 # Every optional service lists its own profile AND `engines`. postgres and mongo have no profile: they always start.
 # The API lists an optional engine only when its connection variable is set (see README.md), and
-# `dotnet run --project Api -- seed <provider>` fills just the named provider. Today `sqlserver`, `mysql` and `opensearch`
-# are the real optional services (`engines` starts all three). Example block (commented out):
+# `dotnet run --project Api -- seed <provider>` fills just the named provider. Today `sqlserver`, `mysql`, `opensearch` and `elasticsearch`
+# are the real optional services (`engines` starts all four). Example block (commented out):
 #
 #   example-engine:
 #     image: example/engine:1
@@ -124,9 +125,34 @@ services:
       retries: 40
       start_period: 20s
 
+  # Elasticsearch 8.17, single node. LICENCE NOTE: the 8.x image is under the Elastic License 2.0 (its LICENSE.txt and its OCI licence label say so;
+  # the SSPL and AGPL choice applies to Elastic's source code, not to the binary image), not Apache-2.0 like OpenSearch. This demo only pulls the
+  # image and redistributes nothing; the server licence is irrelevant to a client library (TRD OS-6). Running this profile means you pull Elastic's
+  # image under the Elastic License 2.0. DEMO ONLY: security is switched off (xpack.security.enabled=false: no TLS, no login), so the port is
+  # bound to 127.0.0.1 and must stay there. No credentials, so the API setting is a plain URL.
+  # The JVM heap is fixed at 512 MB (about 1 GiB of RAM in use); a warm start takes about 15 seconds.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.4
+    profiles: ["elasticsearch", "engines"]
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "127.0.0.1:${DEMO_ELASTICSEARCH_PORT:-59201}:9200"
+    volumes:
+      - demo-elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 5s
+      timeout: 10s
+      retries: 40
+      start_period: 20s
+
 volumes:
   demo-pg-data:
   demo-mongo-data:
   demo-sqlserver-data:
   demo-mysql-data:
   demo-opensearch-data:
+  demo-elasticsearch-data:

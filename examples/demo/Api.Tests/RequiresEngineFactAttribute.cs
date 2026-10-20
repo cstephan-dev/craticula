@@ -18,7 +18,8 @@ internal static class EngineProbe
         [Seed.DemoSettings.SqlServerEnvVar] = setting => ProbeSqlServer(setting, Seed.DemoSettings.SqlServerEnvVar),
         [Seed.DemoSettings.SqlServerAdminEnvVar] = setting => ProbeSqlServer(setting, Seed.DemoSettings.SqlServerAdminEnvVar),
         [Seed.DemoSettings.MySqlEnvVar] = ProbeMySql,
-        [Seed.DemoSettings.OpenSearchEnvVar] = ProbeOpenSearch
+        [Seed.DemoSettings.OpenSearchEnvVar] = setting => ProbeOpenSearch(setting, Seed.DemoSettings.OpenSearchEnvVar, "OpenSearch", "opensearch"),
+        [Seed.DemoSettings.ElasticsearchEnvVar] = setting => ProbeOpenSearch(setting, Seed.DemoSettings.ElasticsearchEnvVar, "Elasticsearch", "elasticsearch")
     };
 
     public static string? SkipReason(string envVar) => Cache.GetOrAdd(envVar, Compute);
@@ -56,7 +57,7 @@ internal static class EngineProbe
         }
     }
 
-    private static string? ProbeOpenSearch(string setting)
+    private static string? ProbeOpenSearch(string setting, string envVar, string engine, string profile)
     {
         try
         {
@@ -64,12 +65,12 @@ internal static class EngineProbe
             using var response = http.GetAsync("_cluster/health").GetAwaiter().GetResult();
             return response.IsSuccessStatusCode
                 ? null
-                : $"OpenSearch answers HTTP {(int)response.StatusCode} at the {Seed.DemoSettings.OpenSearchEnvVar} URL.";
+                : $"{engine} answers HTTP {(int)response.StatusCode} at the {envVar} URL.";
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException or InvalidOperationException)
         {
-            return $"OpenSearch does not answer at the {Seed.DemoSettings.OpenSearchEnvVar} URL ({ex.GetType().Name}). "
-                + "Is `docker compose --profile opensearch up -d --wait` healthy and the index seeded (`seed opensearch`)?";
+            return $"{engine} does not answer at the {envVar} URL ({ex.GetType().Name}). "
+                + $"Is `docker compose --profile {profile} up -d --wait` healthy and the index seeded (`seed {profile}`)?";
         }
     }
 

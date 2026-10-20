@@ -64,15 +64,16 @@ public sealed class OptionalProviderTests
     }
 
     [Fact]
-    public async Task TheRealOptionalList_HoldsSqlServerMySqlAndOpenSearch_AndADefaultHostDoesNotListThem()
+    public async Task TheRealOptionalList_HoldsSqlServerMySqlOpenSearchAndElasticsearch_AndADefaultHostDoesNotListThem()
     {
         // Documents the extension point: the shipped list names each optional engine, and without its setting a default host
         // serves exactly the five always-on providers.
-        Assert.Equal(["sqlserver", "ef-sqlserver", "mysql", "opensearch"], OptionalProviders.All.Select(provider => provider.Name));
+        Assert.Equal(["sqlserver", "ef-sqlserver", "mysql", "opensearch", "elasticsearch"], OptionalProviders.All.Select(provider => provider.Name));
         Assert.Equal("DEMO_SQLSERVER", OptionalProviders.All[0].EnvVar);
         Assert.Equal("DEMO_SQLSERVER", OptionalProviders.All[1].EnvVar); // ef-sqlserver shares the SQL Server setting
         Assert.Equal("DEMO_MYSQL", OptionalProviders.All[2].EnvVar);
         Assert.Equal("DEMO_OPENSEARCH", OptionalProviders.All[3].EnvVar);
+        Assert.Equal("DEMO_ELASTICSEARCH", OptionalProviders.All[4].EnvVar);
         var (app, client) = await ApiHostFixture.StartAsync();
         await using (app)
         using (client)

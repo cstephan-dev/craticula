@@ -60,6 +60,17 @@ public static class SeedTargets
                 rows),
             count => $"OpenSearch: {count} documents in index orders.",
             "Is `docker compose --profile opensearch up -d --wait` running and healthy? Set DEMO_OPENSEARCH to its URL (README.md has the one for the compose file).",
+            Default: false),
+        new SeedTarget(
+            "elasticsearch",
+            rows => OpenSearchSeeder.SeedAsync(
+                DemoSettings.OptionalSetting(DemoSettings.ElasticsearchEnvVar)
+                    ?? throw new SeedSettingException($"{DemoSettings.ElasticsearchEnvVar} is not set."),
+                rows,
+                DemoSettings.ElasticsearchEnvVar,
+                "Elasticsearch"),
+            count => $"Elasticsearch: {count} documents in index orders.",
+            "Is `docker compose --profile elasticsearch up -d --wait` running and healthy? Set DEMO_ELASTICSEARCH to its URL (README.md has the one for the compose file).",
             Default: false)
     ];
 }

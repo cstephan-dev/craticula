@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { queryNote } from './queryNote';
 
 describe('queryNote', () => {
-  it('explains the EF Core text', () => {
-    expect(queryNote('ef-npgsql')).toMatch(/EF Core/);
+  it.each(['ef-npgsql', 'ef-sqlite', 'ef-sqlserver'])('explains the EF Core text for %s', (dialect) => {
+    expect(queryNote(dialect)).toMatch(/EF Core/);
   });
 
   it('stays silent for the PostgreSQL dialect', () => {
     expect(queryNote('postgres')).toBeNull();
   });
 
-  it('says the OpenSearch text is the compiled request, not exactly what is sent', () => {
-    expect(queryNote('opensearch')).toMatch(/compiled search request/);
-    expect(queryNote('opensearch')).toMatch(/not byte for byte/);
+  it.each(['opensearch', 'elasticsearch'])('says the %s text is the compiled request, not exactly what is sent', (dialect) => {
+    expect(queryNote(dialect)).toMatch(/compiled search request/);
+    expect(queryNote(dialect)).toMatch(/not byte for byte/);
   });
 
   it('stays silent for MongoDB', () => {

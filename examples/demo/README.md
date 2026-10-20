@@ -11,8 +11,8 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
 is up) ends with `all 25 scenarios are equal on all 5 providers (postgres, ef, ef-sqlite, mongo, sqlite)`. (SQLite is a file the seed creates; see
-[SQLite](#sqlite-the-sqlite-provider) for the two documented differences, and [EF Core on SQLite and SQL Server](#ef-core-on-sqlite-and-sql-server-the-ef-sqlite-and-ef-sqlserver-providers) for the two extra EF routes.) SQL Server, MySQL and OpenSearch are optional providers that start only on request:
-see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), or [all nine at once](#all-nine-providers-at-once).
+[SQLite](#sqlite-the-sqlite-provider) for the two documented differences, and [EF Core on SQLite and SQL Server](#ef-core-on-sqlite-and-sql-server-the-ef-sqlite-and-ef-sqlserver-providers) for the two extra EF routes.) SQL Server, MySQL, OpenSearch and Elasticsearch are optional providers that start only on request:
+see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), [Elasticsearch](#elasticsearch-the-elasticsearch-provider), or [all ten at once](#all-ten-providers-at-once).
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -50,7 +50,7 @@ The translation is in `web/src/inRange.ts`, shared by both pages and the CSV exp
 - Docker with the Compose plugin
 - .NET 10 SDK
 - Node 20.19 or newer
-- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page); 51433 (SQL Server), 53306 (MySQL) and 59200 (OpenSearch) only when you start those profiles
+- Free ports: 55433 (PostgreSQL), 57017 (MongoDB), 5080 (API), 5173 (page); 51433 (SQL Server), 53306 (MySQL), 59200 (OpenSearch) and 59201 (Elasticsearch) only when you start those profiles
 
 All connection values have defaults that match `docker-compose.yml`, so no environment variable is needed. The databases
 use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
@@ -62,7 +62,8 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
 | PostgreSQL, MongoDB | `DEMO_PG_PORT=55434 DEMO_MONGO_PORT=57018 docker compose up -d`, then give the same ports to the seed and the API with `DEMO_PG="Host=127.0.0.1;Port=55434;Username=demo;Password=demo;Database=demo"` and `DEMO_MONGO="mongodb://127.0.0.1:57018"` |
 | SQL Server | `DEMO_SQLSERVER_PORT=51434 docker compose --profile sqlserver up -d`, then use the same port in `DEMO_SQLSERVER` and `DEMO_SQLSERVER_ADMIN` (see [SQL Server](#sql-server-the-sqlserver-provider)) |
 | MySQL | `DEMO_MYSQL_PORT=53307 docker compose --profile mysql up -d`, then use the same port in `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)) |
-| OpenSearch | `DEMO_OPENSEARCH_PORT=59201 docker compose --profile opensearch up -d`, then use the same port in `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)) |
+| OpenSearch | `DEMO_OPENSEARCH_PORT=59210 docker compose --profile opensearch up -d`, then use the same port in `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)) |
+| Elasticsearch | `DEMO_ELASTICSEARCH_PORT=59211 docker compose --profile elasticsearch up -d`, then use the same port in `DEMO_ELASTICSEARCH` (see [Elasticsearch](#elasticsearch-the-elasticsearch-provider)) |
 | API | `dotnet run --project Api --urls http://127.0.0.1:5081`, then change the `/api` target in `web/vite.config.ts` and pass `--api http://127.0.0.1:5081` to `smoke.sh` |
 | Page | `npm run dev -- --port 5174` (the API's CORS list only matters if you skip the dev proxy) |
 
@@ -262,7 +263,7 @@ development and testing, not for production). If you do not accept it, do not st
 (measured: 5 seconds from `up -d` to healthy; the healthcheck allows about three minutes for a slow one). Do not start it on a machine that is short of memory.
 
 ```bash
-docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine: SQL Server, MySQL and OpenSearch)
+docker compose --profile sqlserver up -d --wait          # starts SQL Server only (the umbrella `engines` profile starts every optional engine: SQL Server, MySQL, OpenSearch and Elasticsearch)
 export DEMO_SQLSERVER_ADMIN="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the seed only
 export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=demo_reader;Password=$(sed -n 's/.*DEMO_READER_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the API: read-only
 dotnet run --project Api -- seed sqlserver               # SQL Server: 20000 rows in table orders; creates the read-only demo_reader login
@@ -418,11 +419,41 @@ The page shows an `unsupported-shape` answer as a banner that reads "Not support
 **Package.** The demo adds `OpenSearch.Client` 2.1.0 (the library's version; Apache-2.0; central version in `Directory.Packages.props`). The restore shows no advisory. It is named in the approved stack for the integration tests; its use under
 `examples/demo/Api` is wider than that wording, and the Engineering Lead's approval is still pending at the time of writing.
 
+## Elasticsearch (the `elasticsearch` provider)
+
+The same orders from **Elasticsearch 8.17**, through the same `Craticula.OpenSearch.Client` and the same search compiler as the OpenSearch provider: `OpenSearchGridService` serves both (`elasticsearch: true`). It starts only on request and the API lists it only when
+`DEMO_ELASTICSEARCH` is set. What is new is `Api/Grid/ElasticsearchPitTranslation.cs` and the compose service; the seeder (`seed elasticsearch`) is the OpenSearch one.
+
+**Licence.** The 8.x image is under the **Elastic License 2.0** (the image's `LICENSE.txt` and its OCI licence label say so; the SSPL and AGPL choice applies to Elastic's source code, not to the binary image), not Apache-2.0 like OpenSearch. The demo only pulls the image and redistributes
+nothing; the server licence does not reach a client library (TRD OS-6). Running this profile means you pull Elastic's image under the Elastic License 2.0. Security is switched off (no TLS, no login), so the port is bound to `127.0.0.1` and must stay there.
+
+**Cost** (measured: 8.17.4, 512 MB heap). `docker images` shows 2.05 GB on disk (0.71 GB is the compressed pull), the container uses about 1.0 to 1.3 GiB of RAM with the 20,000 documents loaded (more during exports), and a warm restart takes 12 to 15 seconds.
+
+```bash
+docker compose --profile elasticsearch up -d --wait      # starts Elasticsearch only (the umbrella `engines` profile starts every optional engine)
+export DEMO_ELASTICSEARCH="http://127.0.0.1:59201"
+dotnet run --project Api -- seed elasticsearch           # Elasticsearch: 20000 documents in index orders.
+dotnet run --project Api                                 # /api/health now lists elasticsearch
+docker compose --profile elasticsearch stop              # when done: stops it, keeps the volume
+```
+
+**What was measured, and what the demo does about it.** The spike (task #2556) ran the unchanged OpenSearch page against Elasticsearch: everything worked except the two paths that use a point-in-time, which the library's client opens with OpenSearch's URL
+(`POST /{index}/_search/point_in_time`, answer key `pit_id`). Elasticsearch has the same feature under other names (`POST /{index}/_pit`, answer key `id`; closing is `DELETE /_pit` with `{"id": ...}`), and searching with it is identical. Any window that reaches row 10,000 and every
+CSV export failed with HTTP 400, which the demo reported as a 500. `ElasticsearchPitConnection` translates exactly those two calls at the HTTP level (the URL, the close body and the one answer key), so the library's own deep paging and export run unchanged on Elasticsearch.
+It is a demo-side bridge: the library follow-up (#2559, a target flavour in the client) removes it. Offline tests prove the translation against a stub (`ElasticsearchPitTranslationTests`); with it switched off, exactly the seven point-in-time tests of `ElasticsearchProviderTests` fail.
+
+**Differences from PostgreSQL** are the OpenSearch ones, measured here again, with the same `smoke.sh` rules (it names them in its last lines):
+
+1. **A row count above 10,000 is unknown** (`lastRow` is null; the grid keeps asking until a short block). Elasticsearch can count exactly with `track_total_hits: true` (19,425 on a filter); the client does not ask for it (bug #2524).
+2. **The null group of a grouped level sits at the other end**, and the distinct values leave out null.
+3. **Two grouped shapes are unsupported** and answer HTTP 400 `unsupported-shape`, naming Elasticsearch: a group ordered by an aggregate, and expanding the group whose key is null (bug #2522).
+4. Everything else is equal to PostgreSQL: rows, sort, every filter, groups, drill-down, the query panel (the compiled search body as JSON), CSV, and the typed 4xx. A stopped container answers 503, so does an overloaded one (HTTP 503 or 429).
+
 ## Optional providers and seeding a subset
 
 PostgreSQL, MongoDB, EF Core, SQLite and EF Core on SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
 (an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
-page does not offer it. This lets you run the demo with any subset of its databases. Three optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`), MySQL (`DEMO_MYSQL`, profile `mysql`) and OpenSearch (`DEMO_OPENSEARCH`, profile `opensearch`); the
+page does not offer it. This lets you run the demo with any subset of its databases. Four optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`), MySQL (`DEMO_MYSQL`, profile `mysql`), OpenSearch (`DEMO_OPENSEARCH`, profile `opensearch`) and Elasticsearch (`DEMO_ELASTICSEARCH`, profile `elasticsearch`); the
 provider sections of this README name each engine's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
 start the heavy engines only on request; the umbrella profile name is `engines`.
 
@@ -435,6 +466,7 @@ dotnet run --project Api -- seed sqlite           # only the SQLite file (no Doc
 dotnet run --project Api -- seed sqlserver        # only SQL Server (needs the profile, DEMO_SQLSERVER and DEMO_SQLSERVER_ADMIN)
 dotnet run --project Api -- seed mysql            # only MySQL (needs the profile and DEMO_MYSQL)
 dotnet run --project Api -- seed opensearch       # only OpenSearch (needs the profile and DEMO_OPENSEARCH)
+dotnet run --project Api -- seed elasticsearch    # only Elasticsearch (needs the profile and DEMO_ELASTICSEARCH)
 dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
 ```
 
@@ -444,34 +476,35 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 `bash smoke.sh` compares every provider the API lists with the postgres baseline. To compare a chosen list, set
 `DEMO_SMOKE_PROVIDERS=postgres,ef` (postgres is always required); a name the API does not list stops it with exit 2 and a clear message.
 
-## All nine providers at once
+## All ten providers at once
 
-To see every provider side by side (and to run the full parity check), start the three optional engines together. This needs about
-4 GB of free RAM (SQL Server about 2 GB, OpenSearch about 1 GiB, MySQL about 0.5 GiB) and accepts Microsoft's SQL Server licence
+To see every provider side by side (and to run the full parity check), start the four optional engines together. This needs about
+5 GB of free RAM (SQL Server about 2 GB, OpenSearch and Elasticsearch about 1 GiB each, MySQL about 0.5 GiB) and accepts Microsoft's SQL Server licence
 (see [SQL Server](#sql-server-the-sqlserver-provider)). From this folder:
 
 ```bash
-docker compose --profile engines up -d --wait            # PostgreSQL, MongoDB, SQL Server, MySQL, OpenSearch
+docker compose --profile engines up -d --wait            # PostgreSQL, MongoDB, SQL Server, MySQL, OpenSearch, Elasticsearch
 export DEMO_SQLSERVER_ADMIN="Server=127.0.0.1,51433;User Id=sa;Password=$(sed -n 's/.*MSSQL_SA_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the seed only
 export DEMO_SQLSERVER="Server=127.0.0.1,51433;User Id=demo_reader;Password=$(sed -n 's/.*DEMO_READER_PASSWORD: *"\(.*\)"/\1/p' docker-compose.yml);Database=demo;TrustServerCertificate=true"   # the API: read-only
 export DEMO_MYSQL="Server=127.0.0.1;Port=53306;User ID=demo;Password=demo;Database=demo"
 export DEMO_OPENSEARCH=http://127.0.0.1:59200
-dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch
-dotnet run --project Api                                 # /api/health lists all nine
-bash smoke.sh                                            # in another terminal: all 25 scenarios equal on all 9 providers
-docker compose --profile engines stop sqlserver mysql opensearch   # when done: keeps the data, leaves PostgreSQL and MongoDB up
+export DEMO_ELASTICSEARCH=http://127.0.0.1:59201
+dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch elasticsearch
+dotnet run --project Api                                 # /api/health lists all ten
+bash smoke.sh                                            # in another terminal: all 25 scenarios equal on all 10 providers
+docker compose --profile engines stop sqlserver mysql opensearch elasticsearch   # when done: keeps the data, leaves PostgreSQL and MongoDB up
 ```
 
-`smoke.sh` ends with `all 25 scenarios are equal on all 9 providers (postgres, ef, ef-sqlite, ef-sqlserver, mongo, mysql, opensearch, sqlite, sqlserver)`.
+`smoke.sh` ends with `all 25 scenarios are equal on all 10 providers (postgres, ef, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
 It also prints the places where an engine was equal only by a documented rule (SQL Server and MySQL `quantity_avg`, the OpenSearch
-differences) and the one scenario OpenSearch answers with `unsupported-shape`. If one engine is not up, name the ones to compare:
+differences, the same ones on Elasticsearch) and the one scenario OpenSearch and Elasticsearch answer with `unsupported-shape`. If one engine is not up, name the ones to compare:
 `DEMO_SMOKE_PROVIDERS=postgres,ef,mongo,sqlite bash smoke.sh`; a name the API does not list stops the run with exit 2.
 
 ## Stop and reset
 
 ```bash
 docker compose stop          # stop the databases, keep the data
-docker compose --profile sqlserver --profile mysql --profile opensearch stop   # stop the optional engines too (a plain `stop` leaves a profile service running)
+docker compose --profile sqlserver --profile mysql --profile opensearch --profile elasticsearch stop   # stop the optional engines too (a plain `stop` leaves a profile service running)
 docker compose down -v       # remove the databases and their data
 docker compose up -d && dotnet run --project Api -- seed   # start again from a clean state
 ```
@@ -493,6 +526,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `seed mysql` says `Access denied` | `DEMO_MYSQL` has another user or password than the compose file (`demo` / `demo`), or a volume from an earlier run holds other credentials: remove only that container and its volume (`docker compose --profile mysql rm -sf mysql`, then `docker volume rm` of the `demo-mysql-data` volume from `docker volume ls`), never `down -v`, which also removes the PostgreSQL and MongoDB data. |
 | A contains filter finds a name without the accent on `mysql` only | Expected: MySQL's default collation ignores accents (see [MySQL](#mysql-the-mysql-provider)). |
 | `seed opensearch` says `DEMO_OPENSEARCH is not set`, or a red banner for `opensearch` | Start the profile (`docker compose --profile opensearch up -d --wait`), set `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)), run `seed opensearch`, restart the API. |
+| `seed elasticsearch` says `DEMO_ELASTICSEARCH is not set`, or a red banner for `elasticsearch` | Start the profile (`docker compose --profile elasticsearch up -d --wait`), set `DEMO_ELASTICSEARCH` (see [Elasticsearch](#elasticsearch-the-elasticsearch-provider)), run `seed elasticsearch`, restart the API. |
 | The OpenSearch container exits at start | Read `docker logs demo-opensearch-1`. A `vm.max_map_count` message: `sudo sysctl -w vm.max_map_count=262144`. It also needs about 1.5 GB of free RAM (the container idles near 1 GiB). |
 | A banner "Not supported on this provider" on `opensearch` | Expected for the two grouped shapes the README lists as unsupported; the message says what to do instead. |
 | The OpenSearch grid shows no total, only "more rows" | Expected above 10,000 rows: the count is unknown there (see [OpenSearch](#opensearch-the-opensearch-provider)). |
@@ -505,7 +539,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | Path | What |
 |---|---|
 | `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`, `MySqlGridService`, `OpenSearchGridService`), the seed (`Api/Seed/`) |
-| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server, MySQL and OpenSearch comparisons run when `DEMO_SQLSERVER`, `DEMO_MYSQL` or `DEMO_OPENSEARCH` is set and the engine answers, and skip with one reason otherwise; the SQL Server seeder tests also need `DEMO_SQLSERVER_ADMIN`) |
+| `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server, MySQL, OpenSearch and Elasticsearch comparisons run when `DEMO_SQLSERVER`, `DEMO_MYSQL`, `DEMO_OPENSEARCH` or `DEMO_ELASTICSEARCH` is set and the engine answers, and skip with one reason otherwise; the SQL Server seeder tests also need `DEMO_SQLSERVER_ADMIN`) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
 | `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL, MongoDB and OpenSearch mappings |
 | `smoke.sh`, `smoke/` | The cross-provider check and its request files |
