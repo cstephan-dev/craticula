@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Craticula.Dapper.Tests;
 
@@ -15,6 +16,7 @@ internal sealed class RecordingConnection(DbConnection inner) : DbConnection
 {
     public List<string> CommandTexts { get; } = [];
 
+    [AllowNull]
     public override string ConnectionString
     {
         get => inner.ConnectionString;
@@ -47,6 +49,7 @@ internal sealed class RecordingConnection(DbConnection inner) : DbConnection
 
     private sealed class RecordingCommand(DbCommand command, RecordingConnection owner) : DbCommand
     {
+        [AllowNull]
         public override string CommandText
         {
             get => command.CommandText;
