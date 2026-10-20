@@ -244,6 +244,51 @@ public class MongoPipelineSortAndPagingTests
         Assert.Equal("""{"$unset":"__idNullBucket"}""", Json(pipeline[2]));
     }
 
+    /// <summary>SC-1 / SEC-6 (Bug #2565's review): a dropped key is never looked up, so a sort naming an undeclared column after the stable key must be left unreduced and refused.</summary>
+    [Fact]
+    public void An_Undeclared_Sort_Field_After_The_StableKey_Is_Still_Refused()
+    {
+        var exception = Assert.Throws<MongoCompilationException>(() => Compile([
+            Key("id", SortDirection.Asc, NullsPosition.Last),
+            Key("internalRank", SortDirection.Asc, NullsPosition.Last)
+        ]));
+
+        Assert.Contains("not declared", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// SEM-6's exception (#2809): a case-insensitive TEXT stable key with a key after it keeps the user's key and appends the exact tiebreaker on the
+    /// same field, which a `$sort` document cannot hold twice (MDB-10). The request is refused, and the message names the real cause: the user named
+    /// the stable key once. Numeric and case-sensitive stable keys stop at the key and are not affected.
+    /// </summary>
+    [Fact]
+    public void A_CaseInsensitive_Text_StableKey_With_A_Key_After_It_Is_Refused_With_A_Message_That_Names_The_Cause()
+    {
+        var textKeySchema = Schema with
+        {
+            StableKey = "lastName",
+            Fields = new Dictionary<string, FieldConfig>
+            {
+                ["lastName"] = Field(FieldType.String),
+                ["salary"] = Field(FieldType.Decimal)
+            }
+        };
+
+        var exception = Assert.Throws<MongoCompilationException>(() => MongoPipelineBuilder.Build(new MongoQueryRequest
+        {
+            Schema = textKeySchema,
+            Sort =
+            [
+                Key("lastName", SortDirection.Asc, NullsPosition.Last),
+                Key("salary", SortDirection.Asc, NullsPosition.Last)
+            ],
+            Page = new RangePage { StartRow = 0, EndRow = 100 }
+        }));
+
+        Assert.Contains("needs 'lastName' twice", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exact tiebreaker", exception.Message, StringComparison.Ordinal);
+    }
+
     // ---- paging (AG-3 / EXP-2) --------------------------------------------------------------------
 
     [Fact]

@@ -11,7 +11,7 @@ Backend coverage: every case in this category is a general/structural fixture pe
 coverage policy — Postgres + MongoDB + one shared Search artifact, no dialect-specific or
 cross-backend-parity showcase cases. The one exception is `013`-`016` (Bug #2565): they also carry the
 SQL Server artifact, because SQL Server is the arm that rejects a column named twice in an `ORDER BY`
-list (error 169), and all four carry the execution-equality pair so the Docker tier runs them there.
+list (error 169), and all four carry the execution-equality pair so the Docker tier runs them there. `017` has Postgres and Search artifacts only (and the pair, which runs on those engines): its shape names the stable key's column twice, which SQL Server and MongoDB refuse (SEM-6's exception, follow-up bug #2809).
 
 All cases model a shared `employees` domain: `id` (int64, the `stableKey`), `lastName` (string),
 `age` (int64), `hireDate` (date), `salary` (decimal), `isActive` (boolean), `department` (string),

@@ -70,6 +70,7 @@ safe-parameterization behavior, not here.
 | 025 | `025-filterable-false-as-set-values-target` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1, GRP-6 |
 | 026 | `026-filterable-false-as-drilldown-key` | `allowlist` | `field-not-filterable` | SC-1, SC-2, SEC-1, GRP-1, GRP-2, GRP-5 |
 | 027 | `027-zero-width-page-window` | `requestParsing` | `malformed-request` | AG-3, SEC-3, SEC-6 |
+| 028 | `028-unknown-colid-sort-model-after-stable-key` | `allowlist` | `unknown-field` | SC-1, SEC-1, SEC-6, AR-9, SEM-6 |
 
 ## Breakdown by validation stage
 

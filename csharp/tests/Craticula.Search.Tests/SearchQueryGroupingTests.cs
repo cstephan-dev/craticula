@@ -263,26 +263,38 @@ public class SearchQueryGroupingTests
     }
 
     /// <summary>
-    /// SEM-6 (Bug #2565) on a grouped level: the group column is unique across the level's buckets by construction, so every key AFTER it is
-    /// dropped before the checks above look at it. An aggregate after the group column used to be refused although it could never have changed
-    /// the order of one-bucket-per-value rows; it is now served, ordered by the group column alone. The same holds for a key the level does not
-    /// produce. A key BEFORE the group column is still refused (the two tests above).
+    /// SEM-6 (Bug #2565) on a grouped level: the group column is unique across the level's buckets by construction, so an AGGREGATE after it is
+    /// dropped. It used to be refused although it could never have changed the order of one-bucket-per-value rows; it is now served, ordered by
+    /// the group column alone (disclosed as a behaviour change in docs/feat/2565/plan.md).
     /// </summary>
-    [Theory]
-    [InlineData("amount")]
-    [InlineData("id")]
-    public void A_Key_After_The_Group_Column_Is_Dropped_Rather_Than_Refused(string afterGroupColumn)
+    [Fact]
+    public void An_Aggregate_After_The_Group_Column_Is_Dropped_Rather_Than_Refused()
     {
-        var query = Compile([Sum], [
+        var withAggregate = Compile([Sum], [
             new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
-            new SortItem { Field = afterGroupColumn, Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }
+            new SortItem { Field = "amount", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }
         ]);
 
-        var orderBy = Compile([Sum], [
+        var groupColumnOnly = Compile([Sum], [
             new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
         ]);
 
-        Assert.Equal(orderBy.ToArtifact().ToJsonString(), query.ToArtifact().ToJsonString());
+        Assert.Equal(groupColumnOnly.ToArtifact().ToJsonString(), withAggregate.ToArtifact().ToJsonString());
+    }
+
+    /// <summary>
+    /// ...but a key the level does NOT produce is still rejected wherever it sits (GRP-4, SC-1, SEC-6): the reduction leaves a sort alone when
+    /// any key in it is unknown to the level, so the compiler's own check still sees it. A key after the group column is not exempt.
+    /// </summary>
+    [Fact]
+    public void A_Key_The_Level_Does_Not_Produce_Is_Still_Refused_After_The_Group_Column()
+    {
+        var exception = Assert.Throws<SearchCompilationException>(() => Compile([Sum], [
+            new SortItem { Field = "region", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            new SortItem { Field = "id", Direction = SortDirection.Desc, NullsPosition = NullsPosition.First }
+        ]));
+
+        Assert.Contains("'id'", exception.Message);
     }
 
     /// <summary>

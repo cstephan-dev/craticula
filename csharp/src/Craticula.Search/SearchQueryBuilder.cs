@@ -847,7 +847,7 @@ public static class SearchQueryBuilder
 
     /// <summary>
     /// SEM-6/SEM-3/GRP-2: the request's own keys in order, then a trailing tiebreaker unless the sort
-    /// already ends in it — resolved to the sub-field each one can actually be ordered on.
+    /// already reaches it, after SEM-6's reduction — resolved to the sub-field each one can actually be ordered on.
     ///
     /// <para>GRP-2, at its narrowed scope: a drill-down LEAF has no buckets — it orders raw hits by
     /// whatever field the user picked, which need not be a group column at all — so it is
@@ -1204,7 +1204,9 @@ public static class SearchQueryBuilder
     private static SortDirection RequireBucketOrder(
         string groupColumn, IReadOnlyList<Aggregation> aggregations, SearchQueryRequest request, Context context)
     {
-        var keys = SemanticsResolver.AppendStableKeyTiebreaker(request.Sort, groupColumn);
+        var keys = SemanticsResolver.AppendStableKeyTiebreaker(
+            request.Sort, context.Schema, groupColumn, out _,
+            aggregateColumnIds: aggregations.Select(aggregation => aggregation.ColumnId).ToArray());
 
         foreach (var key in keys)
         {

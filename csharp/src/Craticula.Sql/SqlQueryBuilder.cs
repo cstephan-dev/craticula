@@ -705,7 +705,7 @@ public static class SqlQueryBuilder
 
     /// <summary>
     /// SEM-6/SEM-3: the request's own keys in order, then a trailing tiebreaker (unless the sort
-    /// already ends in it), each key carrying its explicit <see cref="NullsPosition"/>. Never empty —
+    /// already reaches it, after SEM-6's reduction), each key carrying its explicit <see cref="NullsPosition"/>. Never empty —
     /// the tiebreaker guarantees at least one key, so every compiled query has a total, reproducible
     /// order and server-side paging is stable.
     ///
@@ -727,7 +727,8 @@ public static class SqlQueryBuilder
     {
         var groupColumn = grouping?.GroupColumn;
         var keys = SemanticsResolver.AppendStableKeyTiebreaker(
-            sort, context.Schema, groupColumn, out var tiebreakerAppended);
+            sort, context.Schema, groupColumn, out var tiebreakerAppended,
+            aggregateColumnIds: grouping?.Aggregations.Select(aggregation => aggregation.ColumnId).ToArray());
 
         // GRP-2, at its narrowed scope: exactness covers the protocol's OWN keys, and a grouped
         // level's ORDER BY is one of them — it orders the very buckets the GROUP BY produced, so it

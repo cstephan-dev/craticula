@@ -88,6 +88,18 @@ public class SearchQuerySortAndPagingTests
             SearchFixtureCompiler.CanonicalJson(sort));
     }
 
+    /// <summary>SC-1 / SEC-6 (Bug #2565's review): a dropped key is never looked up, so a sort naming an undeclared column after the stable key must be left unreduced and refused.</summary>
+    [Fact]
+    public void An_Undeclared_Sort_Field_After_The_StableKey_Is_Still_Refused()
+    {
+        var exception = Assert.Throws<SearchCompilationException>(() => Compile(Names, [
+            new SortItem { Field = "id", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last },
+            new SortItem { Field = "internalRank", Direction = SortDirection.Asc, NullsPosition = NullsPosition.Last }
+        ]));
+
+        Assert.Contains("not declared in the GridSchema", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_Range_Page_Emits_From_And_Size_Including_The_Zero_Offset()
     {

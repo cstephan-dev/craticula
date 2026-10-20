@@ -678,8 +678,8 @@ that can never change the order:
    decided every tie the later one could break (`[age desc, age asc]` orders exactly like `[age desc]`).
    This looks at the field only: a repeat that differs in direction or null placement is still redundant.
 2. **When the stable key orders exactly, everything after its first occurrence is dropped.** A key on it
-   orders exactly when it is numeric, or a text key declared case-sensitive (SC-3): two rows with
-   different values never tie under it, so no key after it can break a tie (`[id desc, age asc]` orders
+   orders exactly when the field is of any non-text type (numeric, boolean, date, datetime), or a text
+   field declared case-sensitive (SC-3, `text.caseSensitivity`): two rows with different values never tie under it, so no key after it can break a tie (`[id desc, age asc]` orders
    exactly like `[id desc]`). When the sort stops at the stable key this way nothing is appended; when it
    does not reach it, the tiebreaker is appended as above.
 
@@ -692,10 +692,19 @@ reading of "unique" that the appended tiebreaker always did.
 **A case-insensitive text stable key is the exception to rule 2.** Under SEM-1 a user's own key on a text
 field resolves case-insensitively unless the field declares otherwise, and `'aB3'` and `'Ab3'` compare
 equal under it (the blockquote below makes the same argument against collating the *appended* key). Such a
-sort is not total, so **nothing after it is dropped and the exact tiebreaker is appended as before**: the
-sort counts as total only when it already ends in the key, which is what this rule has always said. Rule 1
-applies regardless. That shape names the stable key's column twice in one ordering (the user's collated
-key and the exact tiebreaker), which SQL Server refuses (error 169); it stays unsupported there.
+sort is not total, so **nothing after it is dropped and the exact tiebreaker is appended as before**. One
+gap predates this rule and is left as it was: a sort that already *ends* in the case-insensitive key
+(`[code]`, `[age, code]`) gets no tiebreaker, because appending one would name the column twice, which
+SQL Server and MongoDB refuse (follow-up bug #2809 tracks the whole shape). Rule 1 applies regardless.
+Where the exact tiebreaker *is* appended the ordering names the stable key's column twice (the user's
+collated key and the exact tiebreaker), which SQL Server refuses (error 169) and MongoDB refuses (MDB-10);
+that shape stays unsupported on those two arms.
+
+**A dropped key is never a way around the allowlist.** The reductions run only on a sort **every key of
+which the query knows**: on a row query, a field of the schema; on a grouped level, the group column or one
+of the level's aggregate column ids (GRP-4). A sort that names anything else is left as it is, so the
+compiler's own check still sees the unknown key and rejects it exactly as SC-1, SEC-6 and GRP-4 require,
+wherever in the sort it sits (`adversarial/028`). Only a key that is known and redundant is ever dropped.
 
 The result names every field at most once, except in that exception, and, whenever the stable key is among
 them, ends in it. The first wording of this rule only asked whether the sort *ends* in the stable key, so
@@ -704,16 +713,16 @@ twice in an `ORDER BY` list (error 169), and a MongoDB `$sort` document cannot h
 same request failed on one arm and was ambiguous on another. A field before the stable key is kept
 (`[age asc, id desc]` stays as written). The reductions apply to the **group column** in a grouped level
 exactly as to the stable key, with rule 2 unconditional (GRP-4, GRP-2: it is unique and exact across the
-level's rows by construction), so a key after the group column is dropped **without being inspected**: an
-aggregate there (which a Search level used to refuse) or a column the level does not produce (which GRP-4
-rejects when it comes *before* the group column) can no longer change the order of one-bucket-per-value
-rows. The reductions also apply to every consumer of the effective sort, including the keyset walk of an
+level's rows by construction), so an **aggregate of the level** after the group column is dropped (a Search
+level used to refuse it; it can never change the order of one-bucket-per-value rows). A column the level
+does *not* produce is not an aggregate and is not dropped: GRP-4 rejects it wherever it sits. The reductions also apply to every consumer of the effective sort, including the keyset walk of an
 export.
 
 Must NOT: reject a request for naming a field twice or for sorting past the stable key (the grid cannot
 prevent either, and the order the user asked for is still honoured); drop a key that comes **before** the
-stable key or is the first occurrence of its field; drop the keys after a **case-insensitive** text stable
-key; keep a dropped key "for the record" in any backend's artifact.
+stable key, **and** drop a key that is the first occurrence of its field; drop the keys after a
+**case-insensitive** text stable key; drop a key the query does not know (it must reach the rejection);
+keep a dropped key "for the record" in any backend's artifact.
 
 > **Superseded in part by GRP-4 (#1640) for a grouped level, and by GRP-6 (#1641) for BM-3's
 > distinct-values query.** This rule says the appended key is *always* the schema's `stableKey`, and
@@ -1361,7 +1370,7 @@ restatement in `SqlQueryBuilder`. The TRD's EXP-3 is **streaming**; the column l
 - SEM-6's tiebreaker still applies, but the **group column** plays the stable key's role: the
   schema's `stableKey` is not in the grouped projection, so ordering by it is invalid SQL, while the
   group column's values are unique across the level's rows by construction. Appended last, ascending,
-  nulls last, and not appended twice when the sort already ends in it — SEM-6's own rules, unchanged.
+  nulls last, and not appended twice when the (reduced) sort already reaches it — SEM-6's own rules, unchanged.
 - A sort key that is neither the group column nor an aggregate output MUST be rejected rather than
   rendered; the engine would refuse the statement anyway, and a compiler error names the reason.
   **This is a statement about the IR's colId space, not AG Grid's** — see AG-6 below, which is what
@@ -2359,16 +2368,19 @@ changes the answer:
 
 - **two sort keys on one field** (`region asc, region desc`) — the second `$sort` entry replaces the
   first, so the *secondary* key becomes primary. **Superseded by SEM-6 (Bug #2565):** the effective
-  sort lists a field once (a later occurrence is dropped before any compiler sees the sort), so this
-  collision can no longer arise and the first entry, the user's primary, stays primary. It was a
-  rejection when this rule was written; a request that repeats a colId is now served on every arm;
+  sort lists a field once (a later occurrence is dropped before any compiler sees the sort), so a request
+  that repeats a colId no longer reaches this check and the first entry, the user's primary, stays primary.
+  It was a rejection when this rule was written; such a request is now served on every arm. **One shape
+  still reaches it:** a case-insensitive text stable key with keys after it (SEM-6's exception) lists the
+  stable key's column twice, the user's key and the exact tiebreaker, and is still refused here (#2809);
 - **an aggregate whose output name is `group`** — its bucket is `__groupNullBucket`, which the group
   key also claims, so `_id` becomes the primary sort key, a null sorts last where nulls-first was
   requested, and `$unset` lists one name twice;
 - **two aggregates with one output name** — the second accumulator replaces the first in `$group`,
   and the grid reads one column holding another column's number.
 
-The second and third MUST be rejected (the first no longer arises). Renaming either side is not an alternative: the emitted bucket name would
+The second and third MUST be rejected, and so MUST the one shape of the first that remains (the first
+otherwise no longer arises). Renaming either side is not an alternative: the emitted bucket name would
 then depend on what else the request happened to contain, which is a worse oracle than an error.
 There is no SQL counterpart to any of this — the SQL compiler renders null placement as an inline
 expression rather than as a named field, and a repeated `ORDER BY` key is merely redundant on most of
@@ -2688,8 +2700,10 @@ tiebreaker: SEM-3's first Must-NOT forbids relying on an engine's implicit defau
 happens to match today, and SEM-6's fourth forbids "the stable key is probably never null" as a
 licence to omit the marker.
 
-A repeated sort key **never reaches this compiler**: SEM-6 drops a later occurrence of a field before
-the sort is compiled (Bug #2565), so there is nothing to reject here or in MDB-10's first collision.
+A repeated sort key **does not reach this compiler**: SEM-6 drops a later occurrence of a field before
+the sort is compiled (Bug #2565), so there is nothing to reject here for a repeated colId. (The one shape
+that still lists a column twice, a case-insensitive text stable key with keys after it, names two
+*different* sub-fields on this arm, `normalizedSubField` and `keywordSubField`, and is served.)
 The difference this paragraph used to draw is still the reason the two engines needed different
 answers *before* that reduction: `sort` is an ARRAY, where a colId sent twice is merely redundant and
 the primary key stays primary, whereas a `$sort` **document** silently replaces the first entry and

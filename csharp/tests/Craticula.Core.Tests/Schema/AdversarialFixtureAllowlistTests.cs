@@ -91,6 +91,24 @@ public class AdversarialFixtureAllowlistTests
     }
 
     [Fact]
+    public void Fixture028_UnknownColId_In_SortModel_After_The_StableKey_Throws_UnknownFieldException()
+    {
+        const string fixtureDir = "028-unknown-colid-sort-model-after-stable-key";
+        var schema = LoadSchema(fixtureDir);
+        using var request = LoadRequest(fixtureDir);
+
+        // sortModel is [id, internalRank]: the stable key first, the undeclared colId second. SEM-6's reduction would drop the second key
+        // unseen; the allowlist check over every colId of the request still names it.
+        var colIds = request.RootElement.GetProperty("sortModel").EnumerateArray()
+            .Select(item => item.GetProperty("colId").GetString()!).ToArray();
+
+        var ex = Assert.Throws<UnknownFieldException>(() => FieldAllowlistValidator.Validate(schema, colIds));
+
+        Assert.Equal(["internalRank"], ex.ColIds);
+        AssertRejectedAsUnknownField(fixtureDir);
+    }
+
+    [Fact]
     public void Fixture003_UnknownColId_In_RowGroupCols_Throws_UnknownFieldException()
     {
         const string fixtureDir = "003-unknown-colid-row-group";

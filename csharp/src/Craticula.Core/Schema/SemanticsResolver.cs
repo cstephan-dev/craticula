@@ -354,22 +354,40 @@ public static class SemanticsResolver
     /// <see cref="FieldConfig.Sortable"/>) before calling this method, the same way
     /// <see cref="GridFilterPipeline"/> already does for filter field names.</para>
     /// </summary>
+    // No schema here: this overload cannot tell a case-insensitive text key from an exact one nor a known field from an undeclared one, so it
+    // always stops at the key and never checks a field. Use the schema-aware overload below wherever a GridSchema is at hand (every compiler does).
     public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(IReadOnlyList<SortItem>? sort, string stableKey) =>
         AppendStableKeyTiebreaker(sort, stableKey, out _);
 
     /// <summary>
-    /// <see cref="AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string, out bool)"/> for a compiler that has the schema: it decides, from the
-    /// stable key's own field, whether the sort may stop at the stable key. On a grouped level (<paramref name="groupColumn"/> not null) the
-    /// group column plays the stable key's role and is exact by construction (GRP-2, GRP-4). On a row query the user's own key on the stable
-    /// key resolves under SEM-1 like any other: a case-insensitive text stable key can tie (<c>'aB3'</c> and <c>'Ab3'</c> compare equal), so
-    /// the sort is not total there, nothing after the key is dropped and the exact tiebreaker is still appended; a numeric or case-sensitive
+    /// <see cref="AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string, out bool)"/> for a compiler that has the schema: it decides, from
+    /// the stable key's own field, whether the sort may stop at the stable key, and it never lets the reduction hide a key the compilers
+    /// would have rejected. <b>The sort is reduced only when every key in it is one the query knows</b> (SC-1, SEC-6, GRP-4): on a row query a
+    /// field of <paramref name="schema"/>; on a grouped level (<paramref name="groupColumn"/> not null, where the group column plays the stable
+    /// key's role and is exact by construction, GRP-2/GRP-4) the group column or one of the level's aggregate column ids
+    /// (<paramref name="aggregateColumnIds"/>). A sort that names anything else is left as it is (nothing after a key is dropped), so the
+    /// compiler's own lookup still rejects the unknown key, as it did before the reduction existed.
+    /// On a row query the user's own key on the stable key resolves under SEM-1 like any other: a case-insensitive text stable key can tie
+    /// (<c>'aB3'</c> and <c>'Ab3'</c> compare equal), so nothing after it is dropped and the exact tiebreaker is still appended; any other
     /// stable key is exact and the sort stops at it. Repeated fields are dropped in every case.
     /// </summary>
     public static IReadOnlyList<SortItem> AppendStableKeyTiebreaker(
-        IReadOnlyList<SortItem>? sort, GridSchema schema, string? groupColumn, out bool appended) =>
-        groupColumn is not null
-            ? AppendStableKeyTiebreaker(sort, groupColumn, true, out appended)
-            : AppendStableKeyTiebreaker(sort, schema.StableKey, StableKeyOrdersExactly(schema), out appended);
+        IReadOnlyList<SortItem>? sort, GridSchema schema, string? groupColumn, out bool appended,
+        IReadOnlyCollection<string>? aggregateColumnIds = null)
+    {
+        if (groupColumn is not null)
+        {
+            var known = AllKeysKnown(sort, field =>
+                string.Equals(field, groupColumn, StringComparison.Ordinal) || aggregateColumnIds?.Contains(field) == true);
+            return AppendStableKeyTiebreaker(sort, groupColumn, known, out appended);
+        }
+
+        var stop = StableKeyOrdersExactly(schema) && AllKeysKnown(sort, schema.Fields.ContainsKey);
+        return AppendStableKeyTiebreaker(sort, schema.StableKey, stop, out appended);
+    }
+
+    private static bool AllKeysKnown(IReadOnlyList<SortItem>? sort, Func<string, bool> isKnown) =>
+        sort is null || sort.All(item => isKnown(item.Field));
 
     /// <summary>True when a user's key on the schema's stable key compares exactly (SEM-1 resolves it to a mode other than case-insensitive),
     /// so two rows with different stable-key values never tie under it.</summary>
@@ -430,7 +448,7 @@ public static class SemanticsResolver
     /// <summary>
     /// The two SEM-6 reductions, in one pass: keep the first occurrence of each field, and (when <paramref name="stopAtStableKey"/>, i.e. the stable
     /// key orders exactly) stop after the stable key. Returns
-    /// <paramref name="sort"/> itself, by reference, when nothing was dropped (the common case allocates nothing), and
+    /// <paramref name="sort"/> itself, by reference, when nothing was dropped (a sort that needs no reduction is not copied), and
     /// <see langword="null"/> for a null sort. <paramref name="reachedStableKey"/> says the result stops at the stable key.
     /// Direction, null placement and case handling play no part: a dropped key could not have mattered under any of them.
     /// </summary>

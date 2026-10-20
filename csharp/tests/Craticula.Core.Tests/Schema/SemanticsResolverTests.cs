@@ -505,16 +505,56 @@ public class SemanticsResolverTests
         Assert.Equal(["age", "code"], result.Select(item => item.Field));
     }
 
-    /// <summary>A grouped level's group column is exact by construction (GRP-2, GRP-4), whatever the stable key looks like.</summary>
+    /// <summary>A grouped level's group column is exact by construction (GRP-2, GRP-4), whatever the stable key looks like; an aggregate of the level after it is dropped.</summary>
     [Fact]
     public void A_Group_Column_Stops_The_Sort_Whatever_The_StableKey_Is()
     {
         var schema = SchemaWithStableKey("code", InsensitiveField);
 
-        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("lastName"), Item("age")], schema, groupColumn: "lastName", out var appended);
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(
+            [Item("lastName"), Item("amount_sum", SortDirection.Desc, NullsPosition.First)], schema, groupColumn: "lastName", out var appended,
+            aggregateColumnIds: ["amount_sum"]);
 
         Assert.Equal(["lastName"], result.Select(item => item.Field));
         Assert.False(appended);
+    }
+
+    /// <summary>
+    /// SC-1 / SEC-6 / GRP-4: the reduction must never hide a key the compilers would have rejected. A key unknown to the query keeps the sort
+    /// unreduced (here: nothing after the stable key is dropped), so each compiler's own field lookup still sees and rejects it.
+    /// </summary>
+    [Fact]
+    public void An_Unknown_Field_After_The_StableKey_Is_Not_Dropped_So_The_Compiler_Still_Rejects_It()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("id"), Item("internalRank")], schema, groupColumn: null, out var appended);
+
+        Assert.Equal(["id", "internalRank", "id"], result.Select(item => item.Field));
+        Assert.True(appended);
+    }
+
+    [Fact]
+    public void An_Unknown_Field_Anywhere_Keeps_Even_The_Known_Keys_After_The_StableKey()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker([Item("internalRank"), Item("id"), Item("age")], schema, groupColumn: null, out _);
+
+        Assert.Equal(["internalRank", "id", "age", "id"], result.Select(item => item.Field));
+    }
+
+    /// <summary>On a grouped level only the group column and the level's aggregates are known: a schema field that the level does not produce
+    /// (GRP-4: rejected rather than rendered) keeps the sort unreduced, exactly as an undeclared one does.</summary>
+    [Fact]
+    public void A_Schema_Field_The_Grouped_Level_Does_Not_Produce_Is_Not_Dropped_After_The_Group_Column()
+    {
+        var schema = SchemaWithStableKey("id", new FieldConfig { Type = FieldType.Int64 });
+
+        var result = SemanticsResolver.AppendStableKeyTiebreaker(
+            [Item("lastName"), Item("age")], schema, groupColumn: "lastName", out _, aggregateColumnIds: []);
+
+        Assert.Equal(["lastName", "age", "lastName"], result.Select(item => item.Field));
     }
 
     [Fact]

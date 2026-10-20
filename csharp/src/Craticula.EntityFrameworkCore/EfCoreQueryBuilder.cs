@@ -93,7 +93,7 @@ public static class EfCoreQueryBuilder
 
     /// <summary>
     /// SEM-6/SEM-3/SEM-1: the request's own sort keys in order, then SEM-6's trailing
-    /// <see cref="GridSchema.StableKey"/> tiebreaker unless the sort already ends in it. Never empty,
+    /// <see cref="GridSchema.StableKey"/> tiebreaker unless the (reduced) sort already reaches it. Never empty,
     /// so every query this adapter composes has a total, reproducible order — which the grid path needs
     /// for stable paging and the export path needs to chunk at all (see
     /// <see cref="EfCoreExportStream"/>).
@@ -984,7 +984,9 @@ public static class EfCoreQueryBuilder
         var grouped = BuildGroupedQuery<TRow>(
             source, groupColumn, context, out var groupingType, out var groupParam, out var keyExpression);
 
-        var sortKeys = SemanticsResolver.AppendStableKeyTiebreaker(sort, groupColumn, out var tiebreakerAppended);
+        var sortKeys = SemanticsResolver.AppendStableKeyTiebreaker(
+            sort, context.Schema, groupColumn, out var tiebreakerAppended,
+            aggregateColumnIds: aggregations.Select(aggregation => aggregation.ColumnId).ToArray());
         grouped = ApplyGroupedOrdering<TRow>(
             grouped, groupingType, groupParam, keyExpression, groupColumn, aggregations, sortKeys, tiebreakerAppended, context);
 
