@@ -127,7 +127,7 @@ public sealed class MySqlProviderTests(MySqlApiFixture api)
     [RequiresEngineFact(Engine)]
     public async Task Datetimes_AreSentAsUtcInstantsWithTheTrailingZ()
     {
-        // DATETIME has no zone; the service states the kind, or the JSON would drop the Z every other provider sends.
+        // DATETIME has no zone; the library's Dapper adapter reads it as UTC (SEM-4, #2511), or the JSON would drop the Z every other provider sends.
         var page = await RowsOk("mysql", Requests.PageSize(5));
 
         Assert.All(page.GetProperty("rows").EnumerateArray(), row =>
@@ -255,8 +255,7 @@ public sealed class MySqlProviderTests(MySqlApiFixture api)
         }
     }
 
-    /// <summary>The whole table through <c>DapperExportStream</c> (more than one keyset chunk). On SQL Server the same call fails because the
-    /// stream lists the sort key twice and the engine calls it ambiguous (#2510); MySQL accepts the duplicated select-list item.</summary>
+    /// <summary>The whole table through <c>DapperExportStream</c> (more than one keyset chunk).</summary>
     [RequiresEngineFact(Engine)]
     public async Task Csv_WholeTableExport_HasEveryRowOnceInKeyOrder()
     {
