@@ -438,17 +438,23 @@ trailing `Z` and nothing in between can reinterpret it. Three cases, by what the
 
 | The driver returns | The adapter delivers |
 |---|---|
-| a value that already denotes UTC (a UTC kind, an offset of zero, an ISO text ending in `Z`) | that instant, unchanged |
-| a value with an offset or a local kind (SQL Server's `datetimeoffset`, PostgreSQL's `timestamptz` through a zone-aware type) | the same instant converted to UTC; never the offset-local wall-clock reading |
+| a value that already denotes UTC (a UTC kind, an offset of zero, an ISO text ending in `Z`; PostgreSQL's `timestamptz` through a driver that returns UTC) | that instant, unchanged |
+| a value with an offset, or a local kind the driver produced by **converting** a zoned value (SQL Server's `datetimeoffset`) | the same instant converted to UTC; never the offset-local wall-clock reading |
 | a value with **no zone** (SQL Server's `datetime2`, MySQL's `DATETIME`, a zone-less text) | that wall-clock reading **as UTC** |
 
-The last row is the host obligation of SEM-4's comparison side seen from the other end: a column with no zone type
-stores UTC instants (the compare side already requires it, and the seed of every execution-equality fixture is UTC,
-XEQ-2), so reading it as UTC is the only reading under which what went in is what comes out. **Must NOT:** deliver a
+The last row is the host obligation stated for the SQL arm above, seen from the other end: a column with no zone type
+stores the UTC wall-clock reading (the seed of every execution-equality fixture is UTC, XEQ-2), so reading it as UTC is
+the only reading under which what went in is what comes out. A driver option that merely **labels** a zone-less value as
+local without converting it (MySqlConnector's `DateTimeKind=Local`) does not make it a zoned value: the host leaves such
+an option at the driver's default or at UTC, or the adapter would shift the value by the server's offset. **Must NOT:** deliver a
 zone-less value with an *unspecified* kind (a serialiser then drops the `Z`, and a consumer is left to guess), reinterpret
 it in the server process's local zone (SEM-4 already forbids that for the way in), or treat it as local and convert it to
 UTC (that would shift every instant by the server's offset). A `date` cell is unaffected (a local date has no zone).
 This rule is checked by each execution adapter's own tests, not by compile fixtures: a compiler never reads a result.
+Today `Craticula.Dapper` is covered by such tests (`DapperValueReaderDatetimeTests`); MongoDB's and OpenSearch's readers
+return UTC by construction. **Recorded exception (Bug #2798):** `Craticula.EntityFrameworkCore` has no reader of its own,
+its cells are what EF materialises from the host's model, so on SQL Server and MySQL they carry an unspecified kind until
+that bug decides between normalising in the adapter and making a UTC value converter the host's documented obligation.
 
 **MongoDB representation of `dateValue` (pinned): a plain ISO date string, never a BSON `Date`.**
 MongoDB's `Date` type has no "calendar date, no time-of-day" concept — every BSON `Date` is an
@@ -492,8 +498,9 @@ often diverge from what the grid itself shows the user.
   field is compared against already-UTC-resolved boundary parameters. PostgreSQL's `timestamptz`
   stores/compares in UTC internally regardless of session timezone, so no `AT TIME ZONE` clause is
   needed once the adapter has resolved the instant; a dialect without a true timezone-aware
-  timestamp type (SQL Server's `datetime2`) needs the equivalent conversion applied in its own idiom
-  before comparison:
+  timestamp type (SQL Server's `datetime2`, MySQL's `DATETIME`) is a **host obligation** instead: such a column stores
+  the UTC wall-clock reading of the instant, so the same UTC-resolved boundary parameters compare against it directly,
+  with no conversion in the statement and none on the way back (the result side of this rule reads it as UTC, below):
   ```sql
   WHERE created_at >= :from AND created_at < :to
   ```
