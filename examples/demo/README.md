@@ -215,7 +215,7 @@ context per engine: `SqliteOrdersDbContext` and `SqlServerOrdersDbContext`, both
    a value converter that reads every datetime as UTC (`ConfigureConventions` in `SqlServerOrdersDbContext`; the seed stores UTC instants). A test fails without it. Whether the adapter should do this itself is the open bug.
 3. **No `NonRetryingExecutionStrategy` needed.** Unlike the Npgsql provider, the SQL Server provider does not wrap a connection failure by default: a stopped SQL Server answers 503 on the EF route without it (a test with a closed port).
 4. **`Microsoft.Data.SqlClient`.** `Microsoft.EntityFrameworkCore.SqlServer` 10.0.11 asks for `Microsoft.Data.SqlClient` 6.1.6 or later and resolves to the demo's 7.1.0, one major version above its own floor (NuGet checks only the lower bound, so there is no warning). Everything here works on it, so the two routes share one driver; nothing guarantees the pairing beyond these tests.
-5. **Not affected by bug #2565.** A sort that lists `id` anywhere except last fails on the Dapper `sqlserver` route with error 169 (see above) but works on `ef-sqlserver`: EF drops the repeated stable key from the `ORDER BY` itself.
+5. **Repeated sort keys.** The Dapper `sqlserver` route used to fail with error 169 for a sort that listed `id` anywhere except last, or any column twice (bug #2565); the library now reduces the sort to one key per field (SEM-6), so both routes sort alike. `ef-sqlserver` was never affected: EF drops a repeated stable key itself.
 6. **The set filter** reuses the compiled statement of the same engine's Dapper route (`SqlServerGridService`, `SqliteGridService`), because the adapter has no distinct-values call.
 7. **CSV** goes through `EfCoreExportStream` and equals PostgreSQL over the whole table (several keyset chunks).
 
@@ -297,9 +297,8 @@ docker compose --profile sqlserver stop                  # when done: stops it, 
 3. **Datetimes are UTC instants.** `DATETIME2` has no zone and the driver returns a `DateTime` of unspecified kind; the library's Dapper adapter reads such a value as UTC (SEM-4, result side; the seed stores UTC instants), so the JSON
    has the trailing `Z` like every other provider. `Api.Tests` pins it (`Datetimes_AreSentAsUtcInstantsWithTheTrailingZ`).
 4. **CSV streams through `DapperExportStream`**, like SQLite and MySQL: rows and bytes equal the other providers, over the whole table (20,000 rows, several keyset chunks).
-   **Known library defect, not worked around (bug #2565, spec first): on SQL Server, a sort that lists `id` anywhere except last, or lists any column twice, fails with error 169** ("column specified more than once in the order by list"),
-   on the grid page and on the export alike: the compiled `ORDER BY` repeats the stable key the library appends. A multi-sort such as shift-clicking Id and then another column hits it. A sort by `id` alone, or one that ends with `id`
-   or leaves it out, works; PostgreSQL, MySQL and SQLite accept the repeat.
+   **Multi-sorts work.** A sort that lists `id` anywhere except last, or a column twice, used to fail on SQL Server with error 169 (the compiled `ORDER BY` named the stable key twice; bug #2565). The library now reduces the sort to one key per field and ends it at the stable key
+   (SEM-6), so shift-clicking Id and then another column loads on every provider. `Api.Tests` pins the shapes that failed.
 5. **No difference for non-ASCII case.** `SÖHNE` and `söhne` both find `Müller, Söhne & Co`, as on PostgreSQL (the compiled `COLLATE Latin1_General_CI_AS` folds beyond ASCII; SQLite does not).
 
 Set-values filters on dates and datetimes bind the values as strings, like the adapter, and SQL Server converts them (tested with a date and a datetime filter).

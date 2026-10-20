@@ -253,6 +253,16 @@ internal static class Requests
         }
         """;
 
+    /// <summary>A page with a multi-column sort, in the order given (a column may repeat: the library drops the later occurrence, SEM-6).</summary>
+    public static string MultiSort(int rows, params (string ColId, string Direction)[] sort) => $$"""
+        { "startRow": 0, "endRow": {{rows}}, {{NoGrouping}} "filterModel": null, "sortModel": [ {{string.Join(", ", sort.Select(key => $"{{ \"colId\": \"{key.ColId}\", \"sort\": \"{key.Direction}\" }}"))}} ] }
+        """;
+
+    /// <summary>The whole table as CSV with a multi-column sort, in the order given.</summary>
+    public static string MultiSortExport(params (string ColId, string Direction)[] sort) => $$"""
+        { "startRow": null, "endRow": null, {{NoGrouping}} "filterModel": null, "sortModel": [ {{string.Join(", ", sort.Select(key => $"{{ \"colId\": \"{key.ColId}\", \"sort\": \"{key.Direction}\" }}"))}} ], "exportFormat": "csv", "exportScope": "all" }
+        """;
+
     public static string PageSize(int rows) => $$"""
         { "startRow": 0, "endRow": {{rows}}, {{NoGrouping}} "filterModel": null, "sortModel": [] }
         """;

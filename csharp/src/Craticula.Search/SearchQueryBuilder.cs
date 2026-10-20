@@ -857,10 +857,11 @@ public static class SearchQueryBuilder
     /// <c>region</c> in the same request — the per-clause granularity that lets this backend satisfy
     /// GRP-2 and SEM-1 at once where MongoDB cannot.</para>
     ///
-    /// <para><b>A repeated sort key needs no rejection here</b>, unlike MDB-10's: this DSL's
-    /// <c>sort</c> is an ARRAY, so a colId sent twice is redundant rather than last-wins, and the
-    /// primary key stays primary. The MongoDB rule exists because a <c>$sort</c> document silently
-    /// replaces the first entry.</para>
+    /// <para><b>A repeated sort key never reaches this method</b> (SEM-6, Bug #2565):
+    /// <see cref="SemanticsResolver.AppendStableKeyTiebreaker(IReadOnlyList{SortItem}?, string, out bool)"/> drops a later
+    /// occurrence of a field, and everything after the stable key, so there is nothing to reject or to
+    /// tolerate here or in MDB-10's first collision. This DSL's <c>sort</c> is an ARRAY, where a repeat
+    /// would only have been redundant; a MongoDB <c>$sort</c> document would have replaced the first entry.</para>
     /// </summary>
     private static IReadOnlyList<SortKeyPlan> ResolveSortPlan(IReadOnlyList<SortItem>? sort, Context context)
     {
