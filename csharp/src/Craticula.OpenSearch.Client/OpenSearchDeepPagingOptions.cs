@@ -40,6 +40,13 @@ public sealed record OpenSearchDeepPagingOptions
     /// </summary>
     public TimeSpan PitKeepAlive { get; init; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Which engine this client talks to (OSE-15): only the point-in-time create and close calls differ.
+    /// Default <see cref="SearchEngineFlavour.OpenSearch"/>; against Elasticsearch 8 set
+    /// <see cref="SearchEngineFlavour.Elasticsearch"/>.
+    /// </summary>
+    public SearchEngineFlavour Flavour { get; init; } = SearchEngineFlavour.OpenSearch;
+
     public static readonly OpenSearchDeepPagingOptions Default = new();
 
     internal void Validate()

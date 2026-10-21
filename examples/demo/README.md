@@ -423,7 +423,7 @@ The page shows an `unsupported-shape` answer as a banner that reads "Not support
 ## Elasticsearch (the `elasticsearch` provider)
 
 The same orders from **Elasticsearch 8.17**, through the same `Craticula.OpenSearch.Client` and the same search compiler as the OpenSearch provider: `OpenSearchGridService` serves both (`elasticsearch: true`). It starts only on request and the API lists it only when
-`DEMO_ELASTICSEARCH` is set. What is new is `Api/Grid/ElasticsearchPitTranslation.cs` and the compose service; the seeder (`seed elasticsearch`) is the OpenSearch one.
+`DEMO_ELASTICSEARCH` is set. What is new is the compose service and one client setting, `Flavour = Elasticsearch`; the seeder (`seed elasticsearch`) is the OpenSearch one.
 
 **Licence.** The 8.x image is under the **Elastic License 2.0** (the image's `LICENSE.txt` and its OCI licence label say so; the SSPL and AGPL choice applies to Elastic's source code, not to the binary image), not Apache-2.0 like OpenSearch. The demo only pulls the image and redistributes
 nothing; the server licence does not reach a client library (TRD OS-6). Running this profile means you pull Elastic's image under the Elastic License 2.0. Security is switched off (no TLS, no login), so the port is bound to `127.0.0.1` and must stay there.
@@ -438,10 +438,9 @@ dotnet run --project Api                                 # /api/health now lists
 docker compose --profile elasticsearch stop              # when done: stops it, keeps the volume
 ```
 
-**What was measured, and what the demo does about it.** The spike (task #2556) ran the unchanged OpenSearch page against Elasticsearch: everything worked except the two paths that use a point-in-time, which the library's client opens with OpenSearch's URL
+**What was measured, and what the demo does about it.** The spike (task #2556) ran the unchanged OpenSearch page against Elasticsearch: everything worked except the two paths that use a point-in-time, which the library's client opened with OpenSearch's URL
 (`POST /{index}/_search/point_in_time`, answer key `pit_id`). Elasticsearch has the same feature under other names (`POST /{index}/_pit`, answer key `id`; closing is `DELETE /_pit` with `{"id": ...}`), and searching with it is identical. Any window that reaches row 10,000 and every
-CSV export failed with HTTP 400, which the demo reported as a 500. `ElasticsearchPitConnection` translates exactly those two calls at the HTTP level (the URL, the close body and the one answer key), so the library's own deep paging and export run unchanged on Elasticsearch.
-It is a demo-side bridge: the library follow-up (#2559, a target flavour in the client) removes it. Offline tests prove the translation against a stub (`ElasticsearchPitTranslationTests`); with it switched off, exactly the seven point-in-time tests of `ElasticsearchProviderTests` fail.
+CSV export failed with HTTP 400. The library now knows both spellings (spec OSE-15, task #2559): the demo sets `Flavour = SearchEngineFlavour.Elasticsearch` on the client's deep-paging and export options, and nothing else differs. With the default flavour against Elasticsearch, eight tests of `ElasticsearchProviderTests` fail (every deep page, export and point-in-time check).
 
 **Differences from PostgreSQL** are the OpenSearch ones, measured here again, with the same `smoke.sh` rules (it names them in its last lines):
 

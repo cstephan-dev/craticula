@@ -13,8 +13,8 @@ namespace Demo.Api.Grid;
 /// <summary>
 /// OpenSearch 2.x, or Elasticsearch 8 (<c>elasticsearch: true</c>), through <c>Craticula.OpenSearch.Client</c> and the low-level client. An
 /// optional engine: registered only when <c>DEMO_OPENSEARCH</c> (or <c>DEMO_ELASTICSEARCH</c>), a URL with no credential (the compose services
-/// have security off), is set. The same compiler artifact serves both; the one difference the client cannot bridge (the point-in-time calls)
-/// is translated at the HTTP level by <see cref="ElasticsearchPitConnection"/> until the library follow-up (#2559) adds a flavour.
+/// have security off), is set. The same compiler artifact serves both; the one difference, the point-in-time calls, is the client's
+/// <see cref="SearchEngineFlavour"/> setting (OSE-15), which this service sets for Elasticsearch.
 /// <para>One client and one <see cref="InMemorySearchCursorCache"/> are shared by every request, as the adapter requires: the deep
 /// paging cursor (PIT and <c>search_after</c>, or a composite <c>after</c> key) lives in that cache, so a restart of the API loses it
 /// and the next deep page walks from the start. The AG Grid request carries no grid session id, so every request uses one fixed id
@@ -33,12 +33,14 @@ public sealed class OpenSearchGridService : IGridService
     private readonly GridRequestPreparer preparer;
 
     private readonly bool elasticsearch;
+    private readonly SearchEngineFlavour flavour;
 
     public OpenSearchGridService(string url, GridRequestPreparer preparer, bool elasticsearch = false)
     {
         this.preparer = preparer;
         this.elasticsearch = elasticsearch;
-        client = CreateClient(ParseUrl(url), elasticsearch);
+        client = CreateClient(ParseUrl(url));
+        flavour = elasticsearch ? SearchEngineFlavour.Elasticsearch : SearchEngineFlavour.OpenSearch;
     }
 
     /// <summary>The cluster address from the setting. Throws <see cref="FormatException"/> for anything that is not an absolute
@@ -55,10 +57,8 @@ public sealed class OpenSearchGridService : IGridService
 
     /// <summary>A client with a 10 s request timeout (the connect timeout is part of it) and no ping: a single-node pool does not retry,
     /// so an unreachable cluster answers 503 at once when the port is closed and after the timeout when nothing answers.</summary>
-    private static OpenSearchLowLevelClient CreateClient(Uri url, bool elasticsearch) =>
-        new((elasticsearch
-                ? new ConnectionConfiguration(new SingleNodeConnectionPool(url), new ElasticsearchPitConnection())
-                : new ConnectionConfiguration(url))
+    private static OpenSearchLowLevelClient CreateClient(Uri url) =>
+        new(new ConnectionConfiguration(url)
             .DisablePing()
             .RequestTimeout(TimeSpan.FromSeconds(10)));
 
@@ -69,7 +69,7 @@ public sealed class OpenSearchGridService : IGridService
         OpenSearchShapes.ThrowIfUnsupported(request, elasticsearch ? "Elasticsearch" : "OpenSearch");
         var searchRequest = ToSearchRequest(request);
         var page = await OpenSearchGridQuery.FetchPageAsync(
-            client, searchRequest, GridSession, cursors, options: null, includeRowCount: true, cancellationToken);
+            client, searchRequest, GridSession, cursors, new OpenSearchDeepPagingOptions { Flavour = flavour }, includeRowCount: true, cancellationToken);
         return page.ToGridPageResult(searchRequest);
     }
 
@@ -107,7 +107,7 @@ public sealed class OpenSearchGridService : IGridService
         var order = preparer.Schema.FieldOrder;
         var picks = request.Parsed.Export!.Columns.Select(column => IndexOf(order, column.ColId)).ToArray();
 
-        await foreach (var row in OpenSearchExportStream.StreamAsync(client, ToSearchRequest(request), options: null, cancellationToken))
+        await foreach (var row in OpenSearchExportStream.StreamAsync(client, ToSearchRequest(request), new OpenSearchExportOptions { Flavour = flavour }, cancellationToken))
         {
             yield return new ExportRow([.. picks.Select(index => row[index])]);
         }

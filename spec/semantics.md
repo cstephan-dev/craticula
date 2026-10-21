@@ -2902,6 +2902,25 @@ engines has it. That is also this compiler's version floor, recorded in the same
 does diverge, the seam to add is the one this project already uses for that shape of problem
 (BM-1's `Dialect`), not a boolean threaded through a builder.
 
+**OSE-15. The one place the two engines differ is the point-in-time lifecycle, and it is client
+configuration, not part of the artifact.** OSE-14 holds for everything a compiler writes: one artifact, no
+target flag. An execution adapter that pages beyond `max_result_window` (PERF-2, OSE-10) or exports (EXP-3) opens a
+point-in-time first and closes it last, and **that** call differs, in exactly four places and nowhere else:
+
+| | OpenSearch 2.x | Elasticsearch 8.x |
+|---|---|---|
+| create | `POST /{index}/_search/point_in_time?keep_alive=<duration>` | `POST /{index}/_pit?keep_alive=<duration>` |
+| key holding the id in the answer | `pit_id` | `id` |
+| close | `DELETE /_search/point_in_time` | `DELETE /_pit` |
+| close body | `{"pit_id":["<id>"]}` | `{"id":"<id>"}` |
+
+Searching with the point-in-time is the same on both: `pit` (`id`, `keep_alive`) in the request body, `search_after`
+from the previous hit's `sort`, and `pit_id` in the answer. An adapter therefore takes the engine as a **host
+setting** (`OpenSearch`, the default, or `Elasticsearch`) and applies it only to those four places. The setting never
+reaches `search.artifact.json`, the compiler or a fixture; a conformance harness does not see it. An adapter that
+cannot tell which engine it talks to uses `OpenSearch`, and against Elasticsearch fails loudly (HTTP 400), never
+silently. The close stays best-effort and the keep-alive is still sent on every search (OSE-10).
+
 **Cross-links.** `spec/fixtures/schemas/search-artifact.schema.json` (the member set OSE-13 rests on),
 `$defs/andNode`, `$defs/orNode`, `$defs/notNode`, `$defs/unaryOperator`, `$defs/binaryOperator`,
 `$defs/setOperator`, `$defs/rangeComparisonNode`, `$defs/sortItem`, `$defs/setValuesSpec`, SEM-1,
