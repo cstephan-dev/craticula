@@ -15,6 +15,12 @@ The build also checks every link of every page, and fails (exit 1) on:
 A link to an existing repository file that has no page on the site is rewritten to its public GitHub address.
 External `http(s)` links are not fetched (the build must work offline).
 
+Pages are Markdown files, or generated from a repository file: `"generator": "schema-reference"` renders a JSON Schema as
+reference tables, `"generator": "rules-index"` lists every rule id of the rule source (`spec/semantics.md`) with a link to its
+anchor. A paragraph that opens with a bold rule id (`**GRP-7. ...**`) and a heading that opens with one (`## SEM-1. ...`) get an
+anchor of that id (`#grp-7`, `#sem-1`), and the build fails when a page mentions a rule id (of the prefixes in `ruleIdPrefixes`)
+that the rule source does not define.
+
     python3 scripts/build_site.py [--out DIR] [--root DIR]
 
 Exit codes: 0 built and every link resolves, 1 a link is dead or private, 2 bad usage or an unreadable configuration.
@@ -133,6 +139,9 @@ def _inline(text: str, line: int, out: Rendered, resolve, holes: list[str] | Non
     return text if nested else restore(text)
 
 
+RULE_ID = r"[A-Z]{2,5}-\d+[a-z]?"
+_RULE_OPENER = re.compile(rf"^\*\*({RULE_ID})\.\s")
+_RULE_HEADING = re.compile(rf"^({RULE_ID})\.\s")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$")
 _FENCE = re.compile(r"^(\s*)(```+|~~~+)\s*([\w+-]*)")
 _LIST = re.compile(r"^(\s*)([-*+]|\d+[.)])\s+(.*)")
@@ -189,9 +198,15 @@ def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rend
             level, text = len(heading.group(1)), heading.group(2)
             anchor = slugs(re.sub(r"[`*]", "", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)))
             out.anchors.add(anchor)
+            alias = ""
+            rule = _RULE_HEADING.match(text)
+            if rule:  # `## SEM-1. Case sensitivity` is also reachable as `#sem-1`
+                rule_anchor = rule.group(1).lower()
+                out.anchors.add(rule_anchor)
+                alias = f'<a id="{rule_anchor}"></a>'
             if level == 1 and not out.title:
                 out.title = re.sub(r"[`*]", "", text)
-            body.append(f'<h{level} id="{anchor}">{inline(text, number)}</h{level}>')
+            body.append(f'<h{level} id="{anchor}">{alias}{inline(text, number)}</h{level}>')
             i += 1
             continue
 
@@ -227,13 +242,33 @@ def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rend
             continue
 
         if _LIST.match(line):
-            items: list[tuple[int, int, bool, list[str]]] = []  # (line number, indent, ordered, text lines)
+            items: list[tuple[int, int, bool, list[str], list[str]]] = []  # (line, indent, ordered, text lines, code blocks as HTML)
             while i < len(lines):
                 m = _LIST.match(lines[i])
                 if m:
-                    items.append((i + 1, len(m.group(1).expandtabs(4)), m.group(2)[0].isdigit(), [m.group(3)]))
+                    items.append((i + 1, len(m.group(1).expandtabs(4)), m.group(2)[0].isdigit(), [m.group(3)], []))
                     i += 1
-                elif lines[i].strip() and lines[i].startswith((" ", "\t")) and items and not _FENCE.match(lines[i]):
+                elif not lines[i].strip():
+                    # A blank line stays inside the list only when an indented list item or fenced block follows it.
+                    j = i
+                    while j < len(lines) and not lines[j].strip():
+                        j += 1
+                    if items and j < len(lines) and lines[j].startswith(("  ", "\t")) and (_FENCE.match(lines[j]) or _LIST.match(lines[j])):
+                        i = j
+                    else:
+                        break
+                elif items and lines[i].startswith((" ", "\t")) and _FENCE.match(lines[i]):
+                    opener = _FENCE.match(lines[i])
+                    marker, language, indent = opener.group(2), opener.group(3), len(opener.group(1))
+                    i += 1
+                    code = []
+                    while i < len(lines) and not re.match(rf"^\s*{re.escape(marker[0])}{{{len(marker)},}}\s*$", lines[i]):
+                        code.append(lines[i][indent:] if lines[i][:indent].strip() == "" else lines[i])
+                        i += 1
+                    i += 1
+                    cls = f' class="language-{html.escape(language)}"' if language else ""
+                    items[-1][4].append(f"<pre><code{cls}>{html.escape(chr(10).join(code), quote=False)}</code></pre>")
+                elif lines[i].strip() and lines[i].startswith((" ", "\t")) and items:
                     items[-1][3].append(lines[i].strip())
                     i += 1
                 else:
@@ -251,17 +286,26 @@ def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rend
         ):
             paragraph.append(lines[i].strip())
             i += 1
-        body.append(f"<p>{inline(' '.join(paragraph), start)}</p>")
+        joined = " ".join(paragraph)
+        opener = _RULE_OPENER.match(joined)
+        attribute = ""
+        if opener:  # `**GRP-7. A ...**` opens a rule: give the paragraph the anchor `#grp-7`
+            rule_anchor = opener.group(1).lower()
+            if rule_anchor not in out.anchors:
+                out.anchors.add(rule_anchor)
+                attribute = f' id="{rule_anchor}"'
+        body.append(f"<p{attribute}>{inline(joined, start)}</p>")
 
     out.html = "\n".join(body)
     return out
 
 
 def _render_list(items, inline) -> str:
-    """Nested lists by indentation: an item indented deeper than the previous one opens a child list."""
+    """Nested lists by indentation: an item indented deeper than the previous one opens a child list; a fenced block indented
+    under an item stays inside that item."""
     html_parts: list[str] = []
     stack: list[tuple[int, str]] = []  # (indent, tag)
-    for number, indent, ordered, text_lines in items:
+    for number, indent, ordered, text_lines, code_blocks in items:
         tag = "ol" if ordered else "ul"
         while stack and indent < stack[-1][0]:
             html_parts.append(f"</li></{stack.pop()[1]}>")
@@ -270,7 +314,7 @@ def _render_list(items, inline) -> str:
             stack.append((indent, tag))
         else:
             html_parts.append("</li>")
-        html_parts.append(f"<li>{inline(' '.join(text_lines), number)}")
+        html_parts.append(f"<li>{inline(' '.join(text_lines), number)}{''.join(code_blocks)}")
     while stack:
         html_parts.append(f"</li></{stack.pop()[1]}>")
     return "".join(html_parts)
@@ -282,8 +326,12 @@ def _render_list(items, inline) -> str:
 class Page:
     slug: str
     title: str
-    source: str  # repository-relative path of the Markdown file
+    source: str  # repository-relative file the page reads (for a generated page: the file it is generated from)
+    generator: str | None = None
     rendered: Rendered | None = None
+
+
+GENERATORS = ("schema-reference", "rules-index")
 
 
 def load_config(root: Path) -> dict:
@@ -295,9 +343,20 @@ def load_config(root: Path) -> dict:
     for key in ("title", "repo", "branch", "pages"):
         if key not in config:
             raise BuildError(f"{path}: missing '{key}'")
+    config.setdefault("ruleSource", None)
+    config.setdefault("ruleIdPrefixes", [])
     for entry in config["pages"]:
-        if not isinstance(entry, dict) or not all(isinstance(entry.get(k), str) for k in ("slug", "title", "source")):
-            raise BuildError(f"{path}: every page needs a string 'slug', 'title' and 'source'")
+        if not isinstance(entry, dict) or not all(isinstance(entry.get(k), str) for k in ("slug", "title")):
+            raise BuildError(f"{path}: every page needs a string 'slug' and 'title'")
+        generator = entry.get("generator")
+        if generator is not None and generator not in GENERATORS:
+            raise BuildError(f"{path}: page '{entry['slug']}': unknown generator '{generator}'")
+        if generator == "schema-reference":
+            entry["source"] = entry.get("schema")
+        elif generator == "rules-index":
+            entry["source"] = config["ruleSource"]
+        if not isinstance(entry.get("source"), str):
+            raise BuildError(f"{path}: page '{entry['slug']}' needs a string 'source' (or the 'schema' / 'ruleSource' its generator reads)")
         if not SLUG.match(entry["slug"]):
             raise BuildError(f"{path}: page slug '{entry['slug']}' must match [a-z0-9][a-z0-9-]*")
         source = entry["source"]
@@ -307,7 +366,154 @@ def load_config(root: Path) -> dict:
     slugs = [p["slug"] for p in config["pages"]]
     if len(set(slugs)) != len(slugs) or "index" not in slugs:
         raise BuildError(f"{path}: page slugs must be unique and include 'index'")
+    if config["ruleIdPrefixes"] and not config["ruleSource"]:
+        raise BuildError(f"{path}: 'ruleIdPrefixes' needs a 'ruleSource'")
     return config
+
+
+# ---------------------------------------------------------------- generated pages
+
+def _cell(text: str) -> str:
+    """One Markdown table cell: no pipe, no line break."""
+    return " ".join(str(text).split()).replace("|", "\\|")
+
+
+def _ref_link(ref: str, own_file: str, page_of_file: dict[str, str]) -> str:
+    """`#/$defs/x` or `./other.schema.json#/$defs/x` as a Markdown link to the definition's heading."""
+    file_part, _, pointer = ref.partition("#")
+    name = pointer.rsplit("/", 1)[-1]
+    target_file = os.path.basename(file_part) if file_part else own_file
+    page = page_of_file.get(target_file)
+    if page is None:
+        return f"`{name}`"
+    anchor = slugify(name)
+    return f"[{name}]({'' if target_file == own_file else page + '.html'}#{anchor})"
+
+
+def _type_cell(schema: dict, own_file: str, page_of_file: dict[str, str]) -> str:
+    parts: list[str] = []
+    if "$ref" in schema:
+        parts.append(_ref_link(schema["$ref"], own_file, page_of_file))
+    if "const" in schema:
+        parts.append(f"const `{json.dumps(schema['const'])}`")
+    if "enum" in schema:
+        parts.append("one of " + ", ".join(f"`{json.dumps(v)}`" for v in schema["enum"]))
+    kind = schema.get("type")
+    if kind and "enum" not in schema and "const" not in schema:
+        parts.append(" or ".join(kind) if isinstance(kind, list) else str(kind))
+    if schema.get("type") == "array" and isinstance(schema.get("items"), dict):
+        parts.append("of " + _type_cell(schema["items"], own_file, page_of_file))
+    for key in ("oneOf", "anyOf", "allOf"):
+        if key in schema:
+            word = {"oneOf": "one of", "anyOf": "any of", "allOf": "all of"}[key]
+            parts.append(word + " " + ", ".join(_type_cell(v, own_file, page_of_file) for v in schema[key]))
+    if schema.get("type") == "object" and "properties" not in schema and "$ref" not in schema:
+        extra = schema.get("additionalProperties")
+        if isinstance(extra, dict):
+            parts.append("map to " + _type_cell(extra, own_file, page_of_file))
+    constraints = []
+    for key in ("minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "minProperties", "format", "pattern", "uniqueItems"):
+        if key in schema:
+            constraints.append(f"{key} `{schema[key]}`")
+    if constraints:
+        parts.append("(" + ", ".join(constraints) + ")")
+    return " ".join(parts) if parts else "any"
+
+
+def _member_rows(schema: dict, prefix: str, own_file: str, page_of_file: dict[str, str], required_here: set[str] | None = None) -> list[str]:
+    """Rows `| member | type | required | default | description |` for every property of an object schema, nested inline
+    objects flattened to a dotted path (`*` stands for a map's key, `[]` for an array's element)."""
+    rows: list[str] = []
+    required = set(schema.get("required", [])) if required_here is None else required_here
+    for name, sub in (schema.get("properties") or {}).items():
+        path = f"{prefix}{name}"
+        default = f"`{json.dumps(sub['default'])}`" if "default" in sub else ""
+        rows.append("| " + " | ".join([
+            f"`{path}`", _cell(_type_cell(sub, own_file, page_of_file)), "yes" if name in required else "",
+            _cell(default), _cell(sub.get("description", ""))]) + " |")
+        rows.extend(_nested_rows(sub, path, own_file, page_of_file))
+    return rows
+
+
+def _nested_rows(sub: dict, path: str, own_file: str, page_of_file: dict[str, str]) -> list[str]:
+    rows: list[str] = []
+    if sub.get("properties"):
+        rows.extend(_member_rows(sub, path + ".", own_file, page_of_file))
+    extra = sub.get("additionalProperties")
+    if isinstance(extra, dict) and "$ref" not in extra:
+        rows.extend(_nested_rows(extra, path + ".*", own_file, page_of_file))
+    items = sub.get("items")
+    if isinstance(items, dict) and "$ref" not in items and items.get("properties"):
+        rows.extend(_member_rows(items, path + "[].", own_file, page_of_file))
+    for key in ("oneOf", "anyOf", "allOf"):  # inline variants contribute their members under the same path
+        for variant in sub.get(key, []):
+            if isinstance(variant, dict) and "$ref" not in variant:
+                rows.extend(_nested_rows(variant, path, own_file, page_of_file))
+    return rows
+
+
+_TABLE_HEAD = ["| Member | Type | Required | Default | Description |", "|---|---|---|---|---|"]
+
+
+def schema_reference(schema: dict, own_file: str, page_of_file: dict[str, str]) -> str:
+    """Markdown reference of a JSON Schema: its root members, then each definition with its members and variants."""
+    lines = [f"# {schema.get('title', own_file)} reference", "",
+             f"Generated from `spec/{own_file}` (`$id` `{schema.get('$id', '')}`). Every member of the schema is listed with its type and description.", ""]
+    if schema.get("description"):
+        lines += [str(schema["description"]), ""]
+    rows = _member_rows(schema, "", own_file, page_of_file)
+    if rows:
+        lines += ["## Members", "", *_TABLE_HEAD, *rows, ""]
+    defs = schema.get("$defs") or {}
+    if defs:
+        lines += ["## Definitions", ""]
+    for name, definition in defs.items():
+        lines += [f"### {name}", ""]
+        if definition.get("description"):
+            lines += [str(definition["description"]), ""]
+        type_line = _type_cell({k: v for k, v in definition.items() if k not in ("properties", "description")}, own_file, page_of_file)
+        if type_line != "any":
+            lines += [f"Type: {type_line}", ""]
+        rows = _member_rows(definition, "", own_file, page_of_file)
+        rows.extend(_nested_rows({k: v for k, v in definition.items() if k != "properties"}, "", own_file, page_of_file))
+        if rows:
+            lines += [*_TABLE_HEAD, *rows, ""]
+    return "\n".join(lines)
+
+
+_RULE_DEFINITION = re.compile(rf"(?m)^(?:#+\s+|\*\*)({RULE_ID})\.\s*(.*)$")
+
+
+def rule_definitions(text: str) -> dict[str, str]:
+    """Rule id -> its title (the first words of the heading or bold opener), in document order."""
+    found: dict[str, str] = {}
+    for match in _RULE_DEFINITION.finditer(text):
+        title = re.sub(r"\*\*.*$", "", match.group(2)).strip()
+        found.setdefault(match.group(1), title[:110])
+    return found
+
+
+def rules_index(text: str, rules_page: str) -> str:
+    rows = [f"| [{rule}]({rules_page}.html#{rule.lower()}) | {_cell(title)} |" for rule, title in rule_definitions(text).items()]
+    return "\n".join([
+        "# Rule index", "",
+        "Every numbered rule of the semantics specification, in document order. Each id links to the rule itself.", "",
+        "| Rule | Starts with |", "|---|---|", *rows, ""])
+
+
+def check_rule_ids(texts: dict[str, str], rule_text: str, prefixes: list[str]) -> list[str]:
+    """Every `PREFIX-n` mentioned on a page must be defined by the rule source (heading or bold opener)."""
+    if not prefixes:
+        return []
+    defined = {re.sub(r"[a-z]$", "", rule) for rule in rule_definitions(rule_text)}
+    mention = re.compile(rf"\b((?:{'|'.join(map(re.escape, prefixes))})-\d+)(?![\d])")
+    errors: list[str] = []
+    for source, text in texts.items():
+        for number, line in enumerate(text.splitlines(), 1):
+            for match in mention.finditer(line):
+                if match.group(1) not in defined:
+                    errors.append(f"{source}:{number}: rule id '{match.group(1)}' is not defined in the rule source")
+    return errors
 
 
 def _is_private(rel: str) -> bool:
@@ -317,7 +523,8 @@ def _is_private(rel: str) -> bool:
 
 
 def resolve_link(href: str, source: str, pages_by_source: dict[str, Page], root: Path, config: dict,
-                 anchors_of, errors: list[str], line: int, own_anchors: set[str], raw: bool = False) -> str:
+                 anchors_of, errors: list[str], line: int, own_anchors: set[str], raw: bool = False,
+                 pages_by_slug: dict[str, Page] | None = None, page_anchors=None) -> str:
     """The href to emit for `href` found in `source`, or the original one after recording an error."""
     where = f"{source}:{line}"
     if EXTERNAL.match(href):
@@ -328,6 +535,11 @@ def resolve_link(href: str, source: str, pages_by_source: dict[str, Page], root:
     if not path_part:
         if fragment and fragment not in own_anchors:
             errors.append(f"{where}: dead anchor '#{fragment}'")
+        return href
+    if pages_by_slug and path_part.endswith(".html") and "/" not in path_part and path_part[:-5] in pages_by_slug:
+        # A link to a built page (`ir-schema.html#filternode`), as the generated pages write them.
+        if fragment and page_anchors is not None and fragment not in page_anchors(path_part[:-5]):
+            errors.append(f"{where}: dead anchor '#{fragment}' in page {path_part}")
         return href
     target = os.path.normpath(os.path.join(os.path.dirname(source), path_part)).replace(os.sep, "/")
     if target.startswith("../") or target == "..":
@@ -352,48 +564,87 @@ def resolve_link(href: str, source: str, pages_by_source: dict[str, Page], root:
 
 
 def build(root: Path, out_dir: Path) -> list[str]:
-    """Build the site; returns the list of errors (empty when every link resolves)."""
+    """Build the site; returns the list of errors (empty when every link resolves and every rule id exists)."""
     config = load_config(root)
-    pages = [Page(p["slug"], p["title"], p["source"]) for p in config["pages"]]
-    pages_by_source = {p.source: p for p in pages}
+    pages = [Page(p["slug"], p["title"], p["source"], p.get("generator")) for p in config["pages"]]
+    pages_by_slug = {p.slug: p for p in pages}
+    pages_by_source = {p.source: p for p in pages if p.generator is None}
+    page_of_file = {os.path.basename(p.source): p.slug for p in pages if p.generator == "schema-reference"}
     errors: list[str] = []
+
+    text_cache: dict[str, str] = {}
+
+    def read(rel: str) -> str:
+        return (root / rel).read_text(encoding="utf-8")
+
+    def page_text(page: Page) -> str:
+        """The Markdown of a page: the file itself, or what its generator makes of the file."""
+        if page.slug not in text_cache:
+            if page.generator == "schema-reference":
+                try:
+                    schema = json.loads(read(page.source))
+                except ValueError as error:
+                    raise BuildError(f"{page.source}: not valid JSON: {error}") from error
+                text_cache[page.slug] = schema_reference(schema, os.path.basename(page.source), page_of_file)
+            elif page.generator == "rules-index":
+                semantics = next((p for p in pages if p.source == config["ruleSource"] and p.generator is None), None)
+                text_cache[page.slug] = rules_index(read(page.source), semantics.slug if semantics else "semantics")
+            else:
+                text_cache[page.slug] = read(page.source)
+        return text_cache[page.slug]
 
     anchor_cache: dict[str, set[str]] = {}
 
-    def anchors_of(rel: str) -> set[str]:
-        if rel not in anchor_cache:
+    def page_anchors(slug: str) -> set[str]:
+        if slug not in anchor_cache:
             try:
-                anchor_cache[rel] = render_markdown((root / rel).read_text(encoding="utf-8")).anchors
+                anchor_cache[slug] = render_markdown(page_text(pages_by_slug[slug])).anchors
             except (OSError, UnicodeDecodeError):
-                anchor_cache[rel] = set()
-        return anchor_cache[rel]
+                anchor_cache[slug] = set()
+        return anchor_cache[slug]
 
-    template = (root / "site" / "template.html").read_text(encoding="utf-8")
-    style = (root / "site" / "style.css").read_text(encoding="utf-8")
+    file_anchor_cache: dict[str, set[str]] = {}
+
+    def anchors_of(rel: str) -> set[str]:
+        """Anchors of a Markdown file of the repository (a page's own are computed from its text)."""
+        if rel in pages_by_source:
+            return page_anchors(pages_by_source[rel].slug)
+        if rel not in file_anchor_cache:
+            try:
+                file_anchor_cache[rel] = render_markdown(read(rel)).anchors
+            except (OSError, UnicodeDecodeError):
+                file_anchor_cache[rel] = set()
+        return file_anchor_cache[rel]
+
+    template = read("site/template.html")
+    style = read("site/style.css")
     out_dir.mkdir(parents=True, exist_ok=True)
     for stale in out_dir.glob("*.html"):  # a page removed from site.json must not linger in the output
         stale.unlink()
     (out_dir / "style.css").write_text(style, encoding="utf-8")
 
     nav = "".join(f'<li><a href="{html.escape(p.slug)}.html">{html.escape(p.title)}</a></li>' for p in pages)
+    texts: dict[str, str] = {}
 
     for page in pages:
         try:
-            text = (root / page.source).read_text(encoding="utf-8")
+            text = page_text(page)
         except (OSError, UnicodeDecodeError) as error:
             errors.append(f"site/site.json: page '{page.slug}': cannot read {page.source}: {error}")
             continue
-        own = render_markdown(text).anchors
+        texts[page.source if page.generator is None else f"{page.source} (page '{page.slug}')"] = text
+        own = page_anchors(page.slug)
         link_errors: list[str] = []
-        rendered = render_markdown(
-            text,
-            resolve=lambda href, image=False: href)
+        rendered = render_markdown(text, resolve=lambda href, image=False: href)
         # Second pass with the real resolver, now that the page's own anchors are known; the line of each link is taken
         # from the first pass's record, in order.
         lines = iter(line for line, _ in rendered.links)
+        source_for_links = page.source if page.generator is None else f"site/site.json#{page.slug}"
 
-        def resolver(href: str, image: bool = False, source=page.source, own=own, sink=link_errors, lines=lines) -> str:
-            return resolve_link(href, source, pages_by_source, root, config, anchors_of, sink, next(lines, 0), own, raw=image)
+        def resolver(href: str, image: bool = False, source=page.source if page.generator is None else "site/_generated", own=own,
+                     sink=link_errors, lines=lines, label=source_for_links) -> str:
+            return resolve_link(href, source, pages_by_source, root, config, anchors_of, sink, next(lines, 0), own, raw=image,
+                                pages_by_slug=pages_by_slug, page_anchors=page_anchors)
 
         rendered = render_markdown(text, resolve=resolver)
         errors.extend(link_errors)
@@ -410,6 +661,12 @@ def build(root: Path, out_dir: Path) -> list[str]:
         # One pass: a value that itself contains {{...}} (page content may) is never substituted again.
         page_html = re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), template)
         (out_dir / f"{page.slug}.html").write_text(page_html, encoding="utf-8")
+
+    if config["ruleSource"]:
+        try:
+            errors.extend(check_rule_ids(texts, read(config["ruleSource"]), config["ruleIdPrefixes"]))
+        except (OSError, UnicodeDecodeError) as error:
+            errors.append(f"site/site.json: cannot read the rule source {config['ruleSource']}: {error}")
 
     return errors
 

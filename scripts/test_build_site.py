@@ -21,10 +21,10 @@ ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = "<html><title>{{page_title}}</title><nav>{{nav}}</nav>{{content}}<a href=\"{{source_url}}\">{{source}}</a></html>"
 
 
-def make_repo(files: dict[str, str], pages: list[dict]) -> Path:
+def make_repo(files: dict[str, str], pages: list[dict], **extra) -> Path:
     """A scratch repository: the site files, the given pages' sources and any other file."""
     root = Path(tempfile.mkdtemp())
-    config = {"title": "T", "repo": "https://example.test/r", "branch": "main", "pages": pages}
+    config = {"title": "T", "repo": "https://example.test/r", "branch": "main", "pages": pages, **extra}
     everything = {"site/site.json": json.dumps(config), "site/template.html": TEMPLATE, "site/style.css": "body{}", **files}
     for rel, text in everything.items():
         path = root / rel
@@ -36,8 +36,8 @@ def make_repo(files: dict[str, str], pages: list[dict]) -> Path:
 INDEX = {"slug": "index", "title": "Home", "source": "index.md"}
 
 
-def run_build(files: dict[str, str], pages: list[dict]):
-    root = make_repo(files, pages)
+def run_build(files: dict[str, str], pages: list[dict], **extra):
+    root = make_repo(files, pages, **extra)
     out = root / "_out"
     return bs.build(root, out), out
 
@@ -66,6 +66,139 @@ class Anchors(unittest.TestCase):
     def test_an_angle_bracket_in_a_heading_is_not_a_tag(self):
         self.assertEqual(bs.slugify("a < b and <c>"), "a--b-and")
         self.assertEqual(bs.slugify("x <b>bold</b>"), "x-bold")
+
+
+RULES = ("# Rules\n\n## SEM-1. Case sensitivity\n\ntext\n\n**GRP-7. A nullValue key drills in.** More text.\n\n"
+         "**GRP-7b. Not a duplicate.**\n\nplain\n")
+SEMANTICS = {"slug": "semantics", "title": "Semantics", "source": "rules.md"}
+RULE_CONFIG = {"ruleSource": "rules.md", "ruleIdPrefixes": ["SEM", "GRP"]}
+
+
+class RuleAnchors(unittest.TestCase):
+    def test_a_bold_opener_and_a_numbered_heading_get_the_rule_id_as_anchor(self):
+        rendered = bs.render_markdown(RULES)
+        self.assertIn('<p id="grp-7">', rendered.html)
+        self.assertIn('<a id="sem-1"></a>', rendered.html)
+        self.assertLessEqual({"sem-1", "sem-1-case-sensitivity", "grp-7", "grp-7b"}, rendered.anchors)
+
+    def test_a_bold_phrase_that_is_not_a_rule_id_gets_no_anchor(self):
+        rendered = bs.render_markdown("**Note. This is bold.** text\n\n**lower-1. x**\n")
+        self.assertNotIn(" id=", rendered.html)
+
+    def test_definitions_are_found_with_their_titles_in_document_order(self):
+        self.assertEqual(list(bs.rule_definitions(RULES)), ["SEM-1", "GRP-7", "GRP-7b"])
+        self.assertEqual(bs.rule_definitions(RULES)["SEM-1"], "Case sensitivity")
+
+    def test_the_rule_index_links_every_rule_to_its_anchor(self):
+        index = bs.rules_index(RULES, "semantics")
+        self.assertIn("[GRP-7](semantics.html#grp-7)", index)
+        self.assertIn("[SEM-1](semantics.html#sem-1)", index)
+
+
+class RuleIdCheck(unittest.TestCase):
+    def test_a_defined_id_passes_and_an_unknown_one_fails_with_its_line(self):
+        ok = bs.check_rule_ids({"a.md": "see SEM-1 and GRP-7 (and GRP-7b)\n"}, RULES, ["SEM", "GRP"])
+        self.assertEqual(ok, [])
+        bad = bs.check_rule_ids({"a.md": "fine\nbut GRP-99 is not a rule\n"}, RULES, ["SEM", "GRP"])
+        self.assertEqual(bad, ["a.md:2: rule id 'GRP-99' is not defined in the rule source"])
+
+    def test_a_prefix_outside_the_list_is_not_checked(self):
+        self.assertEqual(bs.check_rule_ids({"a.md": "AR-1 and EXP-9 and XYZ-3\n"}, RULES, ["SEM", "GRP"]), [])
+
+    def test_a_longer_number_is_not_mistaken_for_a_defined_one(self):
+        self.assertEqual(len(bs.check_rule_ids({"a.md": "GRP-70\n"}, RULES, ["SEM", "GRP"])), 1)
+
+    def test_the_build_fails_on_an_unknown_id_on_any_page(self):
+        pages = [INDEX, SEMANTICS]
+        errors, _ = run_build({"index.md": "# Home\n\nSee GRP-8.\n", "rules.md": RULES}, pages, **RULE_CONFIG)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("index.md:3: rule id 'GRP-8'", errors[0])
+
+    def test_the_build_passes_when_every_id_is_defined(self):
+        errors, out = run_build({"index.md": "# Home\n\nSee GRP-7 and [it](rules.md#grp-7).\n", "rules.md": RULES}, [INDEX, SEMANTICS], **RULE_CONFIG)
+        self.assertEqual(errors, [])
+        self.assertIn('href="semantics.html#grp-7"', (out / "index.html").read_text(encoding="utf-8"))
+
+    def test_a_link_to_an_undefined_rule_anchor_fails_as_a_dead_anchor(self):
+        errors, _ = run_build({"index.md": "# Home\n\n[x](rules.md#grp-99)\n", "rules.md": RULES}, [INDEX, SEMANTICS])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("dead anchor '#grp-99' in rules.md", errors[0])
+
+
+class SchemaReference(unittest.TestCase):
+    SCHEMA = {
+        "title": "Demo", "$id": "https://example.test/demo.json", "description": "A demo | with a pipe.\nTwo lines.",
+        "type": "object", "required": ["name"],
+        "properties": {
+            "name": {"type": "string", "minLength": 1, "description": "The name."},
+            "mode": {"enum": ["a", "b"], "default": "a"},
+            "tags": {"type": "array", "items": {"$ref": "#/$defs/tag"}},
+            "map": {"type": "object", "additionalProperties": {"type": "object", "properties": {"inner": {"type": "boolean"}}}},
+            "either": {"oneOf": [{"type": "object", "properties": {"left": {"type": "string"}}},
+                                 {"type": "object", "properties": {"right": {"type": "string"}}}]},
+            "ext": {"$ref": "./other.schema.json#/$defs/thing"},
+        },
+        "$defs": {"tag": {"description": "A tag.", "type": "object", "properties": {"label": {"type": "string"}}},
+                  "kind": {"enum": ["x", "y"]}},
+    }
+
+    def test_every_member_of_every_depth_is_listed(self):
+        markdown = bs.schema_reference(self.SCHEMA, "demo.schema.json", {"demo.schema.json": "demo", "other.schema.json": "other"})
+        members = set(re.findall(r"(?m)^\| `([^`]+)` \|", markdown))
+        self.assertEqual(members, {"name", "mode", "tags", "map", "map.*.inner", "either", "either.left", "either.right", "ext", "label"})
+
+    def test_types_defaults_required_and_cross_links_are_shown(self):
+        markdown = bs.schema_reference(self.SCHEMA, "demo.schema.json", {"demo.schema.json": "demo", "other.schema.json": "other"})
+        self.assertIn("| `name` | string (minLength `1`) | yes |  | The name. |", markdown)
+        self.assertIn('one of `"a"`, `"b"` |  | `"a"`', markdown)
+        self.assertIn("array of [tag](#tag)", markdown)
+        self.assertIn("[thing](other.html#thing)", markdown)
+        self.assertIn("### kind", markdown)
+        self.assertIn("A demo | with a pipe.\nTwo lines.", markdown)  # the description paragraph is plain text
+
+    def test_a_pipe_in_a_description_does_not_break_the_table(self):
+        schema = {"title": "T", "properties": {"x": {"type": "string", "description": "a | b"}}}
+        markdown = bs.schema_reference(schema, "t.schema.json", {"t.schema.json": "t"})
+        self.assertIn("a \\| b", markdown)
+        self.assertIn("<td>a | b</td>", bs.render_markdown(markdown).html)
+
+    def test_the_real_schemas_list_every_property_name(self):
+        pages = {"grid-schema.schema.json": "grid-schema", "ir.schema.json": "ir-schema"}
+        for name in pages:
+            schema = json.loads((ROOT / "spec" / name).read_text(encoding="utf-8"))
+            expected: set[str] = set()
+
+            def walk(node):
+                if isinstance(node, dict):
+                    for key, value in node.items():
+                        if key == "properties" and isinstance(value, dict):
+                            for member, sub in value.items():
+                                expected.add(member)
+                                walk(sub)
+                        else:
+                            walk(value)
+                elif isinstance(node, list):
+                    for item in node:
+                        walk(item)
+
+            walk(schema)
+            markdown = bs.schema_reference(schema, name, pages)
+            listed = {re.sub(r"\[\]|\*", "", path).split(".")[-1] for path in re.findall(r"(?m)^\| `([^`]+)` \|", markdown)}
+            self.assertEqual(sorted(expected - listed), [], f"{name}: members missing from the reference")
+            for definition in schema.get("$defs", {}):
+                self.assertIn(f"### {definition}", markdown)
+
+    def test_a_generated_page_builds_through_the_site(self):
+        schema = json.dumps(self.SCHEMA)
+        pages = [INDEX, {"slug": "demo", "title": "Demo", "generator": "schema-reference", "schema": "demo.schema.json"}]
+        errors, out = run_build({"index.md": "# Home\n\n[ref](demo.schema.json)\n", "demo.schema.json": schema.replace("./other.schema.json#/$defs/thing", "#/$defs/kind")}, pages)
+        self.assertEqual(errors, [])
+        self.assertIn('id="members"', (out / "demo.html").read_text(encoding="utf-8"))
+
+    def test_an_unknown_generator_is_a_configuration_error(self):
+        root = make_repo({"index.md": "# Home\n"}, [INDEX, {"slug": "x", "title": "X", "generator": "nope"}])
+        with self.assertRaises(bs.BuildError):
+            bs.build(root, root / "_out")
 
 
 class Converter(unittest.TestCase):
@@ -97,6 +230,11 @@ class Converter(unittest.TestCase):
         rendered = bs.render_markdown("- one\n  - inner\n- two\n\n1. first\n2. second\n")
         self.assertIn("<ul><li>one<ul><li>inner</li></ul></li><li>two</li></ul>", rendered.html)
         self.assertIn("<ol><li>first</li><li>second</li></ol>", rendered.html)
+
+    def test_a_fenced_block_indented_under_a_list_item_stays_in_the_item(self):
+        rendered = bs.render_markdown("- first\n\n  ```sql\n  SELECT 1;\n  ```\n- second\n")
+        self.assertEqual(rendered.html.count("<ul>"), 1)
+        self.assertIn("<li>first<pre><code class=\"language-sql\">SELECT 1;</code></pre></li><li>second</li>", rendered.html)
 
     def test_emphasis_and_code_do_not_interfere(self):
         rendered = bs.render_markdown("**bold** and *it* and `a*b*c` and snake_case_name\n")
@@ -312,6 +450,26 @@ class ThisRepository(unittest.TestCase):
         self.assertFalse(bs._is_private("site/pages/index.md"))
         self.assertFalse(bs._is_private("docs-site.md"))
         self.assertFalse(bs._is_private(".github/workflows/ci.yml"))
+
+    def test_the_semantics_page_reaches_every_rule_by_anchor(self):
+        with tempfile.TemporaryDirectory() as out:
+            self.assertEqual(bs.build(ROOT, Path(out)), [])
+            semantics = (Path(out) / "semantics.html").read_text(encoding="utf-8")
+            definitions = bs.rule_definitions((ROOT / "spec" / "semantics.md").read_text(encoding="utf-8"))
+            self.assertIn("GRP-7", definitions)
+            missing = [rule for rule in definitions if f'id="{rule.lower()}"' not in semantics]
+            self.assertEqual(missing, [], "rules without an anchor on the semantics page")
+            self.assertIn('id="grp-7"', semantics)
+            self.assertIn('id="sem-1"', semantics)
+            rules = (Path(out) / "rules.html").read_text(encoding="utf-8")
+            self.assertEqual(rules.count("<tr>") - 1, len(definitions))
+
+    def test_the_schema_pages_exist_and_link_to_each_other(self):
+        with tempfile.TemporaryDirectory() as out:
+            self.assertEqual(bs.build(ROOT, Path(out)), [])
+            grid = (Path(out) / "grid-schema.html").read_text(encoding="utf-8")
+            self.assertIn('href="ir-schema.html#filternode"', grid)
+            self.assertIn('id="fieldconfig"', grid)
 
     def test_no_public_markdown_file_links_into_the_private_part(self):
         """AC-7 of #1666: the public mirror does not carry docs/, so a link into it is dead there. Inline links and images
