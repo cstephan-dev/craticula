@@ -1,0 +1,2 @@
+SELECT "id", "customer", "amount", "active", "status", "region", "country" FROM "orders" WHERE ("country" = $1 AND "region" = $2) ORDER BY "id" ASC NULLS LAST LIMIT $3 OFFSET $4
+-- parameters: 'Germany', 'Bavaria', 100, 0

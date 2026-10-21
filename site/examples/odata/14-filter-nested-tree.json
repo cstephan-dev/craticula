@@ -1,0 +1,51 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {},
+  "sortModel": [],
+  "customFilters": {
+    "type": "and",
+    "nodes": [
+      {
+        "type": "not",
+        "node": {
+          "type": "comparison",
+          "field": "customer",
+          "op": "startsWith",
+          "value": {
+            "type": "string",
+            "value": "test"
+          }
+        }
+      },
+      {
+        "type": "or",
+        "nodes": [
+          {
+            "type": "comparison",
+            "field": "status",
+            "op": "eq",
+            "value": {
+              "type": "string",
+              "value": "active"
+            }
+          },
+          {
+            "type": "comparison",
+            "field": "amount",
+            "op": "gt",
+            "value": {
+              "type": "decimal",
+              "value": "1000"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

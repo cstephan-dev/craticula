@@ -592,7 +592,7 @@ class ThisRepository(unittest.TestCase):
             self.assertEqual(bs.build(ROOT, Path(out)), [])
             page = (Path(out) / "odata-migration.html").read_text(encoding="utf-8")
             folder = ROOT / "site" / "examples" / "odata"
-            names = sorted(p.stem for p in folder.glob("[0-9]*.json"))
+            names = sorted(p.stem for p in folder.glob("*.json") if p.name != "schema.json")
             self.assertGreaterEqual(len(names), 8)
             for name in names:
                 for suffix in (".json", ".sql.txt"):

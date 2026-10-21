@@ -6,6 +6,11 @@
       "id": "country",
       "displayName": "Country",
       "field": "country"
+    },
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
     }
   ],
   "valueCols": [],
@@ -15,6 +20,10 @@
     {
       "type": "string",
       "value": "Germany"
+    },
+    {
+      "type": "string",
+      "value": "Bavaria"
     }
   ],
   "filterModel": {},

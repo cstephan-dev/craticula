@@ -52,7 +52,7 @@ public class ODataGuideExamplesTests
             },
             PostgresDialect.Instance);
 
-        var actual = query.Sql + Environment.NewLine + "-- parameters: " + string.Join(", ", query.Parameters.Select(Show));
+        var actual = query.Sql + "\n-- parameters: " + string.Join(", ", query.Parameters.Select(Show));
 
         var recorded = Path.Combine(Folder, name + ".sql.txt");
         if (Environment.GetEnvironmentVariable("CRATICULA_BLESS_EXAMPLES") == "1")

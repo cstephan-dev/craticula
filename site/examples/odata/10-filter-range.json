@@ -6,21 +6,23 @@
   "pivotCols": [],
   "pivotMode": false,
   "groupKeys": [],
-  "filterModel": {},
-  "sortModel": [],
-  "customFilters": {
-    "type": "comparison",
-    "field": "amount",
-    "op": "inRange",
-    "from": {
-      "type": "decimal",
-      "value": "10"
-    },
-    "to": {
-      "type": "decimal",
-      "value": "20"
-    },
-    "fromInclusive": true,
-    "toInclusive": true
-  }
+  "filterModel": {
+    "amount": {
+      "filterType": "number",
+      "operator": "AND",
+      "conditions": [
+        {
+          "filterType": "number",
+          "type": "greaterThanOrEqual",
+          "filter": 10
+        },
+        {
+          "filterType": "number",
+          "type": "lessThanOrEqual",
+          "filter": 20
+        }
+      ]
+    }
+  },
+  "sortModel": []
 }

@@ -1,0 +1,39 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "country",
+      "displayName": "Country",
+      "field": "country"
+    },
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "amount",
+      "displayName": "Amount",
+      "field": "amount",
+      "aggFunc": "sum"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [
+    {
+      "type": "string",
+      "value": "Germany"
+    }
+  ],
+  "filterModel": {},
+  "sortModel": [
+    {
+      "colId": "region",
+      "sort": "asc"
+    }
+  ]
+}
