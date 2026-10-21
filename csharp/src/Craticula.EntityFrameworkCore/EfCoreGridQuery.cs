@@ -232,6 +232,7 @@ public static class EfCoreGridQuery
         var rows = new List<IReadOnlyList<object?>>();
         await foreach (var cells in page.AsAsyncEnumerable().WithCancellation(cancellationToken).ConfigureAwait(false))
         {
+            EfCoreValueNormalizer.NormalizeInPlace(cells, cells.Length);
             rows.Add(cells);
         }
 

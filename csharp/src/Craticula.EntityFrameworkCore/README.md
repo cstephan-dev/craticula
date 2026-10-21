@@ -34,6 +34,12 @@ public static class Example
 }
 ```
 
+## Datetime cells
+
+A `datetime` cell leaves a page or an export row as a UTC instant, whatever kind the provider materialised (SEM-4, result side): a
+UTC value is kept, a local one is converted, a zone-less one (SQL Server `datetime2`, MySQL `DATETIME`, SQLite text) is read as UTC.
+A host needs no UTC value converter for the way out. The values it stores must still be UTC readings.
+
 ## Compatibility
 
 Implements Craticula spec version 0.1.0 (the language-neutral semantics and conformance fixtures in the

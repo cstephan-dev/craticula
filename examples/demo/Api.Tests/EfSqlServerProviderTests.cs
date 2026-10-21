@@ -54,7 +54,7 @@ public sealed class EfSqlServerProviderTests(SqlServerApiFixture api)
     [RequiresEngineFact(Engine)]
     public Task WindowPastTheEnd_EqualsPostgres() => AssertRowsEqualPostgres(Requests.PastTheEnd);
 
-    /// <summary>The proof of the context's UTC value converter: without it EF hands back an unspecified-kind value and the JSON has no <c>Z</c> (bug #2798).</summary>
+    /// <summary>The proof of the adapter's result-side normalisation (SEM-4, bug #2798): <c>datetime2</c> has no zone, EF hands back an unspecified-kind value, and the adapter must deliver it as UTC so the JSON has the <c>Z</c>.</summary>
     [RequiresEngineFact(Engine)]
     public async Task Datetimes_AreSentAsUtcInstantsWithTheTrailingZ()
     {
