@@ -15,6 +15,10 @@ The build also checks every link of every page, and fails (exit 1) on:
 A link to an existing repository file that has no page on the site is rewritten to its public GitHub address.
 External `http(s)` links are not fetched (the build must work offline).
 
+A page may include a repository file as a code block with a line `{{include <path> <language>}}`: the file is the single source of
+the code the page shows (a quickstart program that the solution builds cannot drift from its page). The path must be a public
+file inside the repository.
+
 Pages are Markdown files, or generated from a repository file: `"generator": "schema-reference"` renders a JSON Schema as
 reference tables, `"generator": "rules-index"` lists every rule id of the rule source (`spec/semantics.md`) with a link to its
 anchor. A paragraph that opens with a bold rule id (`**GRP-7. ...**`) and a heading that opens with one (`## SEM-1. ...`) get an
@@ -528,6 +532,24 @@ def rules_index(text: str, rules_page: str) -> str:
         "| Rule | Starts with |", "|---|---|", *rows, ""])
 
 
+_INCLUDE = re.compile(r"(?m)^\{\{include\s+(\S+)\s+(\w*)\}\}\s*$")
+
+
+def expand_includes(text: str, root: Path, source: str) -> str:
+    """Replace each `{{include path language}}` line by the file as a fenced code block (four backticks, so a file that
+    holds a fence of its own survives). An unreadable, private or outside path is a configuration error (exit 2)."""
+    def expand(match: re.Match) -> str:
+        rel = os.path.normpath(match.group(1)).replace(os.sep, "/")
+        if os.path.isabs(match.group(1)) or rel.startswith("../") or rel == ".." or _is_private(rel):
+            raise BuildError(f"{source}: include '{match.group(1)}' must be a public file inside the repository")
+        try:
+            body = (root / rel).read_text(encoding="utf-8").rstrip("\n")
+        except (OSError, UnicodeDecodeError) as error:
+            raise BuildError(f"{source}: cannot include '{rel}': {error}") from error
+        return f"````{match.group(2)}\n{body}\n````"
+    return _INCLUDE.sub(expand, text)
+
+
 def check_rule_ids(texts: dict[str, str], rule_text: str, prefixes: list[str]) -> list[str]:
     """Every `PREFIX-n` mentioned on a page must be defined by the rule source (heading or bold opener)."""
     if not prefixes:
@@ -617,7 +639,7 @@ def build(root: Path, out_dir: Path) -> list[str]:
                 semantics = next((p for p in pages if p.source == config["ruleSource"] and p.generator is None), None)
                 text_cache[page.slug] = rules_index(read(page.source), semantics.slug if semantics else "semantics")
             else:
-                text_cache[page.slug] = read(page.source)
+                text_cache[page.slug] = expand_includes(read(page.source), root, page.source)
         return text_cache[page.slug]
 
     anchor_cache: dict[str, set[str]] = {}

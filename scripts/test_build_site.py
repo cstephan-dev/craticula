@@ -5,6 +5,7 @@ repository. Offline, standard library only.
 Run: python3 scripts/test_build_site.py
 """
 import contextlib
+import html
 import io
 import json
 import os
@@ -93,6 +94,23 @@ class RuleAnchors(unittest.TestCase):
         index = bs.rules_index(RULES, "semantics")
         self.assertIn("[GRP-7](semantics.html#grp-7)", index)
         self.assertIn("[SEM-1](semantics.html#sem-1)", index)
+
+
+class Includes(unittest.TestCase):
+    def test_a_file_is_included_as_a_code_block_even_when_it_holds_a_fence(self):
+        files = {"index.md": "# Home\n\n{{include src/a.cs csharp}}\n\nafter\n", "src/a.cs": "var x = 1 < 2;\n```\nnot a fence end\n```\n"}
+        errors, out = run_build(files, [INDEX])
+        self.assertEqual(errors, [])
+        page = (out / "index.html").read_text(encoding="utf-8")
+        self.assertIn('<pre><code class="language-csharp">var x = 1 &lt; 2;\n```\nnot a fence end\n```</code></pre>', page)
+        self.assertIn("<p>after</p>", page)
+
+    def test_a_missing_private_or_outside_include_is_a_configuration_error(self):
+        for bad in ("src/missing.cs", "docs/x.md", "../outside.md", "/etc/hostname"):
+            with self.subTest(bad=bad):
+                root = make_repo({"index.md": f"# Home\n\n{{{{include {bad} text}}}}\n", "docs/x.md": "x"}, [INDEX])
+                with self.assertRaises(bs.BuildError):
+                    bs.build(root, root / "_out")
 
 
 class RuleSuffixes(unittest.TestCase):
@@ -536,6 +554,25 @@ class ThisRepository(unittest.TestCase):
             self.assertIn('id="sem-1"', semantics)
             rules = (Path(out) / "rules.html").read_text(encoding="utf-8")
             self.assertEqual(rules.count("<tr>") - 1, len(definitions))
+
+    def test_the_quickstart_shows_the_program_and_its_output_verbatim(self):
+        with tempfile.TemporaryDirectory() as out:
+            self.assertEqual(bs.build(ROOT, Path(out)), [])
+            page = (Path(out) / "quickstart-csharp.html").read_text(encoding="utf-8")
+            sample = ROOT / "csharp" / "samples" / "Craticula.Quickstart"
+            for name in ("Program.cs", "expected-output.txt"):
+                body = (sample / name).read_text(encoding="utf-8").rstrip("\n")
+                self.assertIn(html.escape(body, quote=False), page, f"{name} is not on the quickstart page as it is")
+
+    def test_no_page_claims_a_package_is_published(self):
+        """DoD of #2834: the stubs and the quickstart say nothing is published and give no install command."""
+        with tempfile.TemporaryDirectory() as out:
+            self.assertEqual(bs.build(ROOT, Path(out)), [])
+            for slug in ("quickstart-csharp", "quickstart-typescript", "quickstart-python", "quickstart-go"):
+                page = (Path(out) / f"{slug}.html").read_text(encoding="utf-8")
+                self.assertRegex(page, r"(?i)nothing is published|no .* implementation yet", slug)
+                for command in ("dotnet add package", "npm install", "pip install", "go get ", "nuget.org/packages"):
+                    self.assertNotIn(command, page, f"{slug} shows an install command: {command}")
 
     def test_the_schema_pages_exist_and_link_to_each_other(self):
         with tempfile.TemporaryDirectory() as out:

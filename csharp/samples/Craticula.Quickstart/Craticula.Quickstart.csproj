@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The program of the docs site's C# quickstart (site/pages/quickstart-csharp.md includes Program.cs as it is). It compiles an AG Grid
+       request into parameterized SQL and prints it: no database, no driver, no package outside this repository. Built with the solution, so
+       a change to the library that breaks the quickstart breaks the build. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Craticula.Core/Craticula.Core.csproj" />
+    <ProjectReference Include="../../src/Craticula.AgGrid/Craticula.AgGrid.csproj" />
+    <ProjectReference Include="../../src/Craticula.Sql/Craticula.Sql.csproj" />
+  </ItemGroup>
+
+</Project>
