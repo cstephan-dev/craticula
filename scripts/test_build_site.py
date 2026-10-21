@@ -95,6 +95,20 @@ class RuleAnchors(unittest.TestCase):
         self.assertIn("[SEM-1](semantics.html#sem-1)", index)
 
 
+class RuleSuffixes(unittest.TestCase):
+    TEXT = "**SQL-7. Base.** x\n\n**SQL-7(b). Part b.** y\n\n**EXP-1(a). Compile half.** z\n"
+
+    def test_a_parenthesised_suffix_is_part_of_the_rule_id_and_its_anchor(self):
+        self.assertEqual(list(bs.rule_definitions(self.TEXT)), ["SQL-7", "SQL-7(b)", "EXP-1(a)"])
+        self.assertEqual(bs.rule_anchor("SQL-7(b)"), "sql-7b")
+        self.assertLessEqual({"sql-7", "sql-7b", "exp-1a"}, bs.render_markdown(self.TEXT).anchors)
+        self.assertIn("[SQL-7(b)](semantics.html#sql-7b)", bs.rules_index(self.TEXT, "semantics"))
+
+    def test_a_mention_with_a_suffix_is_checked_against_the_base_id(self):
+        self.assertEqual(bs.check_rule_ids({"a.md": "SQL-7(b) and SQL-7b and GRP-1(f)\n"}, self.TEXT, ["SQL", "GRP"]),
+                         ["a.md:1: rule id 'GRP-1' is not defined in the rule source"])
+
+
 class RuleIdCheck(unittest.TestCase):
     def test_a_defined_id_passes_and_an_unknown_one_fails_with_its_line(self):
         ok = bs.check_rule_ids({"a.md": "see SEM-1 and GRP-7 (and GRP-7b)\n"}, RULES, ["SEM", "GRP"])
@@ -155,6 +169,54 @@ class SchemaReference(unittest.TestCase):
         self.assertIn("[thing](other.html#thing)", markdown)
         self.assertIn("### kind", markdown)
         self.assertIn("A demo | with a pipe.\nTwo lines.", markdown)  # the description paragraph is plain text
+
+    def test_required_flags_follow_the_object_they_belong_to(self):
+        schema = {"title": "T", "required": ["a"], "properties": {
+            "a": {"type": "string"}, "b": {"type": "string"},
+            "o": {"type": "object", "required": ["x"], "properties": {"x": {"type": "string"}, "y": {"type": "string"}}},
+            "v": {"oneOf": [{"type": "object", "required": ["p"], "properties": {"p": {"type": "string"}}},
+                            {"type": "object", "required": ["q"], "properties": {"q": {"type": "string"}}}]}}}
+        rows = {m.group(1): m.group(3) for m in re.finditer(r"(?m)^\| `([^`]+)` \| ([^|]*) \| ([^|]*) \|", bs.schema_reference(schema, "t.schema.json", {"t.schema.json": "t"}))}
+        self.assertEqual(rows["a"].strip(), "yes")
+        self.assertEqual(rows["b"].strip(), "")
+        self.assertEqual(rows["o.x"].strip(), "yes")
+        self.assertEqual(rows["o.y"].strip(), "")
+        # a variant's own required member is only required in that variant: the variants exclude each other
+        self.assertEqual(rows["v.p"].strip(), "in this variant")
+        self.assertEqual(rows["v.q"].strip(), "in this variant")
+
+    def test_definitions_show_their_description_and_their_type_line(self):
+        schema = {"title": "T", "$defs": {"name": {"description": "A name.", "type": "string", "minLength": 1},
+                                           "kind": {"enum": ["x", "y"]}, "anything": True}}
+        markdown = bs.schema_reference(schema, "t.schema.json", {"t.schema.json": "t"})
+        self.assertIn("### name\n\nA name.\n\nType: string (minLength `1`)", markdown)
+        self.assertIn('### kind\n\nType: one of `"x"`, `"y"`', markdown)
+        self.assertIn("### anything", markdown)
+
+    def test_constraints_are_written_as_json(self):
+        markdown = bs.schema_reference({"title": "T", "properties": {"x": {"type": "array", "uniqueItems": True}}}, "t.schema.json", {"t.schema.json": "t"})
+        self.assertIn("uniqueItems `true`", markdown)
+
+    def test_a_schema_that_is_not_an_object_is_a_configuration_error(self):
+        pages = [INDEX, {"slug": "demo", "title": "Demo", "generator": "schema-reference", "schema": "demo.schema.json"}]
+        root = make_repo({"index.md": "# Home\n", "demo.schema.json": "[]"}, pages)
+        with self.assertRaises(bs.BuildError):
+            bs.build(root, root / "_out")
+
+    def test_an_unknown_id_in_a_schema_description_fails_the_build(self):
+        schema = json.dumps({"title": "T", "properties": {"x": {"type": "string", "description": "see GRP-99"}}})
+        pages = [INDEX, SEMANTICS, {"slug": "demo", "title": "Demo", "generator": "schema-reference", "schema": "demo.schema.json"}]
+        errors, _ = run_build({"index.md": "# Home\n", "rules.md": RULES, "demo.schema.json": schema}, pages, **RULE_CONFIG)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("GRP-99", errors[0])
+        self.assertIn("demo.schema.json (page 'demo')", errors[0])
+
+    def test_a_dead_link_on_a_generated_page_names_the_page_not_a_phantom_file(self):
+        schema = json.dumps({"title": "T", "properties": {"x": {"type": "string", "description": "see [it](missing.md)"}}})
+        pages = [INDEX, {"slug": "demo", "title": "Demo", "generator": "schema-reference", "schema": "demo.schema.json"}]
+        errors, _ = run_build({"index.md": "# Home\n", "demo.schema.json": schema}, pages)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("site/site.json#demo:", errors[0])
 
     def test_a_pipe_in_a_description_does_not_break_the_table(self):
         schema = {"title": "T", "properties": {"x": {"type": "string", "description": "a | b"}}}
@@ -235,6 +297,11 @@ class Converter(unittest.TestCase):
         rendered = bs.render_markdown("- first\n\n  ```sql\n  SELECT 1;\n  ```\n- second\n")
         self.assertEqual(rendered.html.count("<ul>"), 1)
         self.assertIn("<li>first<pre><code class=\"language-sql\">SELECT 1;</code></pre></li><li>second</li>", rendered.html)
+
+    def test_text_after_a_fenced_block_in_a_list_item_stays_after_it(self):
+        rendered = bs.render_markdown("- first\n  ```\n  code\n  ```\n  after the code\n- second\n")
+        self.assertLess(rendered.html.index("<pre>"), rendered.html.index("after the code"))
+        self.assertIn("<li>first<pre><code>code</code></pre><p>after the code</p></li>", rendered.html)
 
     def test_emphasis_and_code_do_not_interfere(self):
         rendered = bs.render_markdown("**bold** and *it* and `a*b*c` and snake_case_name\n")
@@ -422,6 +489,10 @@ class Cli(unittest.TestCase):
         code, _ = self.run_main(root)
         self.assertEqual(code, 1)  # reported as an unreadable page, not a traceback
 
+    def test_exit_2_when_the_rule_prefixes_are_not_a_list(self):
+        root = make_repo({"index.md": "# Home\n", "rules.md": RULES}, [INDEX], ruleSource="rules.md", ruleIdPrefixes="SEM")
+        self.assertEqual(self.run_main(root)[0], 2)
+
     def test_exit_2_when_there_is_no_index_page(self):
         code, err = self.run_main(make_repo({"a.md": "# A\n"}, [{"slug": "a", "title": "A", "source": "a.md"}]))
         self.assertEqual(code, 2)
@@ -457,7 +528,9 @@ class ThisRepository(unittest.TestCase):
             semantics = (Path(out) / "semantics.html").read_text(encoding="utf-8")
             definitions = bs.rule_definitions((ROOT / "spec" / "semantics.md").read_text(encoding="utf-8"))
             self.assertIn("GRP-7", definitions)
-            missing = [rule for rule in definitions if f'id="{rule.lower()}"' not in semantics]
+            self.assertLessEqual({"SQL-7(b)", "EXP-1(a)", "EXP-1(b)"}, set(definitions))  # a parenthesised suffix is part of the id
+            self.assertIn('id="sql-7b"', semantics)
+            missing = [rule for rule in definitions if f'id="{bs.rule_anchor(rule)}"' not in semantics]
             self.assertEqual(missing, [], "rules without an anchor on the semantics page")
             self.assertIn('id="grp-7"', semantics)
             self.assertIn('id="sem-1"', semantics)

@@ -139,7 +139,12 @@ def _inline(text: str, line: int, out: Rendered, resolve, holes: list[str] | Non
     return text if nested else restore(text)
 
 
-RULE_ID = r"[A-Z]{2,5}-\d+[a-z]?"
+RULE_ID = r"[A-Z]{2,5}-\d+(?:\([a-z]\)|[a-z])?"
+
+
+def rule_anchor(rule: str) -> str:
+    """`GRP-7` -> `grp-7`, `SQL-7(b)` -> `sql-7b`."""
+    return re.sub(r"[()]", "", rule.lower())
 _RULE_OPENER = re.compile(rf"^\*\*({RULE_ID})\.\s")
 _RULE_HEADING = re.compile(rf"^({RULE_ID})\.\s")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$")
@@ -201,9 +206,9 @@ def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rend
             alias = ""
             rule = _RULE_HEADING.match(text)
             if rule:  # `## SEM-1. Case sensitivity` is also reachable as `#sem-1`
-                rule_anchor = rule.group(1).lower()
-                out.anchors.add(rule_anchor)
-                alias = f'<a id="{rule_anchor}"></a>'
+                anchor_id = rule_anchor(rule.group(1))
+                out.anchors.add(anchor_id)
+                alias = f'<a id="{anchor_id}"></a>'
             if level == 1 and not out.title:
                 out.title = re.sub(r"[`*]", "", text)
             body.append(f'<h{level} id="{anchor}">{alias}{inline(text, number)}</h{level}>')
@@ -242,11 +247,12 @@ def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rend
             continue
 
         if _LIST.match(line):
-            items: list[tuple[int, int, bool, list[str], list[str]]] = []  # (line, indent, ordered, text lines, code blocks as HTML)
+            # (line, indent, ordered, parts): a part is a list of text lines or an HTML string for a fenced block, in source order
+            items: list[tuple[int, int, bool, list]] = []
             while i < len(lines):
                 m = _LIST.match(lines[i])
                 if m:
-                    items.append((i + 1, len(m.group(1).expandtabs(4)), m.group(2)[0].isdigit(), [m.group(3)], []))
+                    items.append((i + 1, len(m.group(1).expandtabs(4)), m.group(2)[0].isdigit(), [[m.group(3)]]))
                     i += 1
                 elif not lines[i].strip():
                     # A blank line stays inside the list only when an indented list item or fenced block follows it.
@@ -267,9 +273,11 @@ def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rend
                         i += 1
                     i += 1
                     cls = f' class="language-{html.escape(language)}"' if language else ""
-                    items[-1][4].append(f"<pre><code{cls}>{html.escape(chr(10).join(code), quote=False)}</code></pre>")
+                    items[-1][3].append(f"<pre><code{cls}>{html.escape(chr(10).join(code), quote=False)}</code></pre>")
                 elif lines[i].strip() and lines[i].startswith((" ", "\t")) and items:
-                    items[-1][3].append(lines[i].strip())
+                    if isinstance(items[-1][3][-1], str):  # text after a fenced block is a new paragraph of the item
+                        items[-1][3].append([])
+                    items[-1][3][-1].append(lines[i].strip())
                     i += 1
                 else:
                     break
@@ -290,10 +298,10 @@ def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rend
         opener = _RULE_OPENER.match(joined)
         attribute = ""
         if opener:  # `**GRP-7. A ...**` opens a rule: give the paragraph the anchor `#grp-7`
-            rule_anchor = opener.group(1).lower()
-            if rule_anchor not in out.anchors:
-                out.anchors.add(rule_anchor)
-                attribute = f' id="{rule_anchor}"'
+            anchor_id = rule_anchor(opener.group(1))
+            if anchor_id not in out.anchors:
+                out.anchors.add(anchor_id)
+                attribute = f' id="{anchor_id}"'
         body.append(f"<p{attribute}>{inline(joined, start)}</p>")
 
     out.html = "\n".join(body)
@@ -305,7 +313,7 @@ def _render_list(items, inline) -> str:
     under an item stays inside that item."""
     html_parts: list[str] = []
     stack: list[tuple[int, str]] = []  # (indent, tag)
-    for number, indent, ordered, text_lines, code_blocks in items:
+    for number, indent, ordered, parts in items:
         tag = "ol" if ordered else "ul"
         while stack and indent < stack[-1][0]:
             html_parts.append(f"</li></{stack.pop()[1]}>")
@@ -314,7 +322,14 @@ def _render_list(items, inline) -> str:
             stack.append((indent, tag))
         else:
             html_parts.append("</li>")
-        html_parts.append(f"<li>{inline(' '.join(text_lines), number)}{''.join(code_blocks)}")
+        content = []
+        for position, part in enumerate(parts):
+            if isinstance(part, str):
+                content.append(part)
+            else:
+                text = inline(" ".join(part), number)
+                content.append(text if position == 0 else f"<p>{text}</p>")
+        html_parts.append(f"<li>{''.join(content)}")
     while stack:
         html_parts.append(f"</li></{stack.pop()[1]}>")
     return "".join(html_parts)
@@ -366,6 +381,8 @@ def load_config(root: Path) -> dict:
     slugs = [p["slug"] for p in config["pages"]]
     if len(set(slugs)) != len(slugs) or "index" not in slugs:
         raise BuildError(f"{path}: page slugs must be unique and include 'index'")
+    if not isinstance(config["ruleIdPrefixes"], list) or not all(isinstance(x, str) and re.fullmatch(r"[A-Z]{2,5}", x) for x in config["ruleIdPrefixes"]):
+        raise BuildError(f"{path}: 'ruleIdPrefixes' must be a list of upper-case prefixes such as \"SEM\"")
     if config["ruleIdPrefixes"] and not config["ruleSource"]:
         raise BuildError(f"{path}: 'ruleIdPrefixes' needs a 'ruleSource'")
     return config
@@ -414,41 +431,47 @@ def _type_cell(schema: dict, own_file: str, page_of_file: dict[str, str]) -> str
     constraints = []
     for key in ("minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "minProperties", "format", "pattern", "uniqueItems"):
         if key in schema:
-            constraints.append(f"{key} `{schema[key]}`")
+            constraints.append(f"{key} `{json.dumps(schema[key])}`")
     if constraints:
         parts.append("(" + ", ".join(constraints) + ")")
     return " ".join(parts) if parts else "any"
 
 
-def _member_rows(schema: dict, prefix: str, own_file: str, page_of_file: dict[str, str], required_here: set[str] | None = None) -> list[str]:
+def _member_rows(schema: dict, prefix: str, own_file: str, page_of_file: dict[str, str], required_here: set[str] | None = None,
+                 variant: bool = False) -> list[str]:
     """Rows `| member | type | required | default | description |` for every property of an object schema, nested inline
     objects flattened to a dotted path (`*` stands for a map's key, `[]` for an array's element)."""
     rows: list[str] = []
     required = set(schema.get("required", [])) if required_here is None else required_here
     for name, sub in (schema.get("properties") or {}).items():
+        if not isinstance(sub, dict):
+            sub = {}
         path = f"{prefix}{name}"
         default = f"`{json.dumps(sub['default'])}`" if "default" in sub else ""
         rows.append("| " + " | ".join([
-            f"`{path}`", _cell(_type_cell(sub, own_file, page_of_file)), "yes" if name in required else "",
+            f"`{path}`", _cell(_type_cell(sub, own_file, page_of_file)),
+            ("in this variant" if variant else "yes") if name in required else "",
             _cell(default), _cell(sub.get("description", ""))]) + " |")
-        rows.extend(_nested_rows(sub, path, own_file, page_of_file))
+        rows.extend(_nested_rows(sub, path, own_file, page_of_file, variant))
     return rows
 
 
-def _nested_rows(sub: dict, path: str, own_file: str, page_of_file: dict[str, str]) -> list[str]:
+def _nested_rows(sub: dict, path: str, own_file: str, page_of_file: dict[str, str], variant: bool = False) -> list[str]:
     rows: list[str] = []
+    if not isinstance(sub, dict):
+        return rows
     if sub.get("properties"):
-        rows.extend(_member_rows(sub, path + ".", own_file, page_of_file))
+        rows.extend(_member_rows(sub, path + ".", own_file, page_of_file, variant=variant))
     extra = sub.get("additionalProperties")
     if isinstance(extra, dict) and "$ref" not in extra:
-        rows.extend(_nested_rows(extra, path + ".*", own_file, page_of_file))
+        rows.extend(_nested_rows(extra, path + ".*", own_file, page_of_file, variant))
     items = sub.get("items")
     if isinstance(items, dict) and "$ref" not in items and items.get("properties"):
-        rows.extend(_member_rows(items, path + "[].", own_file, page_of_file))
+        rows.extend(_member_rows(items, path + "[].", own_file, page_of_file, variant=variant))
     for key in ("oneOf", "anyOf", "allOf"):  # inline variants contribute their members under the same path
-        for variant in sub.get(key, []):
-            if isinstance(variant, dict) and "$ref" not in variant:
-                rows.extend(_nested_rows(variant, path, own_file, page_of_file))
+        for alternative in sub.get(key, []):
+            if isinstance(alternative, dict) and "$ref" not in alternative:
+                rows.extend(_nested_rows(alternative, path, own_file, page_of_file, variant=True))
     return rows
 
 
@@ -457,6 +480,8 @@ _TABLE_HEAD = ["| Member | Type | Required | Default | Description |", "|---|---
 
 def schema_reference(schema: dict, own_file: str, page_of_file: dict[str, str]) -> str:
     """Markdown reference of a JSON Schema: its root members, then each definition with its members and variants."""
+    if not isinstance(schema, dict):
+        raise BuildError(f"{own_file}: a JSON Schema document must be an object")
     lines = [f"# {schema.get('title', own_file)} reference", "",
              f"Generated from `spec/{own_file}` (`$id` `{schema.get('$id', '')}`). Every member of the schema is listed with its type and description.", ""]
     if schema.get("description"):
@@ -468,6 +493,8 @@ def schema_reference(schema: dict, own_file: str, page_of_file: dict[str, str]) 
     if defs:
         lines += ["## Definitions", ""]
     for name, definition in defs.items():
+        if not isinstance(definition, dict):  # `true` / `false` are valid subschemas
+            definition = {}
         lines += [f"### {name}", ""]
         if definition.get("description"):
             lines += [str(definition["description"]), ""]
@@ -494,7 +521,7 @@ def rule_definitions(text: str) -> dict[str, str]:
 
 
 def rules_index(text: str, rules_page: str) -> str:
-    rows = [f"| [{rule}]({rules_page}.html#{rule.lower()}) | {_cell(title)} |" for rule, title in rule_definitions(text).items()]
+    rows = [f"| [{rule}]({rules_page}.html#{rule_anchor(rule)}) | {_cell(title)} |" for rule, title in rule_definitions(text).items()]
     return "\n".join([
         "# Rule index", "",
         "Every numbered rule of the semantics specification, in document order. Each id links to the rule itself.", "",
@@ -505,7 +532,7 @@ def check_rule_ids(texts: dict[str, str], rule_text: str, prefixes: list[str]) -
     """Every `PREFIX-n` mentioned on a page must be defined by the rule source (heading or bold opener)."""
     if not prefixes:
         return []
-    defined = {re.sub(r"[a-z]$", "", rule) for rule in rule_definitions(rule_text)}
+    defined = {re.sub(r"(?:\([a-z]\)|[a-z])$", "", rule) for rule in rule_definitions(rule_text)}
     mention = re.compile(rf"\b((?:{'|'.join(map(re.escape, prefixes))})-\d+)(?![\d])")
     errors: list[str] = []
     for source, text in texts.items():
@@ -524,9 +551,9 @@ def _is_private(rel: str) -> bool:
 
 def resolve_link(href: str, source: str, pages_by_source: dict[str, Page], root: Path, config: dict,
                  anchors_of, errors: list[str], line: int, own_anchors: set[str], raw: bool = False,
-                 pages_by_slug: dict[str, Page] | None = None, page_anchors=None) -> str:
+                 pages_by_slug: dict[str, Page] | None = None, page_anchors=None, label: str | None = None) -> str:
     """The href to emit for `href` found in `source`, or the original one after recording an error."""
-    where = f"{source}:{line}"
+    where = f"{label or source}:{line}"
     if EXTERNAL.match(href):
         if not href.lower().startswith(ALLOWED_SCHEMES):
             errors.append(f"{where}: link '{href[:40]}' uses a scheme other than http, https or mailto")
@@ -642,9 +669,9 @@ def build(root: Path, out_dir: Path) -> list[str]:
         source_for_links = page.source if page.generator is None else f"site/site.json#{page.slug}"
 
         def resolver(href: str, image: bool = False, source=page.source if page.generator is None else "site/_generated", own=own,
-                     sink=link_errors, lines=lines, label=source_for_links) -> str:
+                     sink=link_errors, lines=lines, label=source_for_links if page.generator else None) -> str:
             return resolve_link(href, source, pages_by_source, root, config, anchors_of, sink, next(lines, 0), own, raw=image,
-                                pages_by_slug=pages_by_slug, page_anchors=page_anchors)
+                                pages_by_slug=pages_by_slug, page_anchors=page_anchors, label=label)
 
         rendered = render_markdown(text, resolve=resolver)
         errors.extend(link_errors)
