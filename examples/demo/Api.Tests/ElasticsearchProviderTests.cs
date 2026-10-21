@@ -7,13 +7,12 @@ using Demo.Api.Seed;
 namespace Demo.Api.Tests;
 
 /// <summary>
-/// The <c>elasticsearch</c> provider, an optional engine: the OpenSearch client and compiler on Elasticsearch 8, with the point-in-time calls
-/// translated at the HTTP level (<see cref="Demo.Api.Grid.ElasticsearchPitConnection"/>; the translation itself is proven offline in
-/// <see cref="ElasticsearchPitTranslationTests"/>). The comparisons with <c>postgres</c> run only when <c>DEMO_ELASTICSEARCH</c> is set and the
+/// The <c>elasticsearch</c> provider, an optional engine: the OpenSearch client and compiler on Elasticsearch 8, with the client's
+/// <c>Elasticsearch</c> flavour for the point-in-time calls (OSE-15; the library proves the calls offline). The comparisons with <c>postgres</c> run only when <c>DEMO_ELASTICSEARCH</c> is set and the
 /// engine answers; the stopped-engine and stub-server tests need no cluster. The documented differences are the OpenSearch ones, measured in
 /// #2556 and #2557 on Elasticsearch 8.17.4: the row count above 10,000 is unknown (<c>lastRow</c> null), the null group sits at the other end,
 /// the distinct values leave out null, and two grouped shapes are unsupported. Everything else is exact, including the deep pages past 10,000
-/// rows and the CSV export, which are the paths that need the translation. Acceptance ids (docs/feat-breakdown/2494): AC-1 rows, AC-2 groups,
+/// rows and the CSV export, which are the paths that need the flavour. Acceptance ids (docs/feat-breakdown/2494): AC-1 rows, AC-2 groups,
 /// AC-3 CSV, AC-6 typed 4xx and 503.
 /// </summary>
 [Collection("api-elasticsearch")]
@@ -257,7 +256,7 @@ public sealed class ElasticsearchProviderTests(ElasticsearchApiFixture api)
         Assert.True(EfParity.CsvSame(EfParity.ParseCsv(pg.Bytes), EfParity.ParseCsv(es.Bytes)));
     }
 
-    /// <summary>The close of the point-in-time is best-effort and its failure is swallowed, so a broken translation of it would be invisible:
+    /// <summary>The close of the point-in-time is best-effort and its failure is swallowed, so a broken close would be invisible:
     /// the cluster's count of open search contexts must be back where it was after an export and after a deep page.</summary>
     [RequiresEngineFact(Engine)]
     public async Task AnExportAndADeepPage_LeaveNoPointInTimeOpen()
@@ -338,7 +337,7 @@ public sealed class ElasticsearchProviderTests(ElasticsearchApiFixture api)
         }
     }
 
-    /// <summary>An overloaded cluster answers HTTP 503, on the point-in-time create of the export too (after the translation): a 503 on every route.</summary>
+    /// <summary>An overloaded cluster answers HTTP 503, on the point-in-time create of the export too (the flavour's own call): a 503 on every route.</summary>
     [Theory]
     [InlineData("rows")]
     [InlineData("values")]

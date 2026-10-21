@@ -37,6 +37,19 @@ public static class Example
 }
 ```
 
+## Elasticsearch
+
+The compiled request is the same for OpenSearch and Elasticsearch (OSE-14). Only the point-in-time calls that deep paging and
+the export make differ (OSE-15), so the client takes a flavour. Set it on both options records when the cluster is Elasticsearch 8:
+
+```csharp
+var paging = new OpenSearchDeepPagingOptions { Flavour = SearchEngineFlavour.Elasticsearch };
+var export = new OpenSearchExportOptions { Flavour = SearchEngineFlavour.Elasticsearch };
+```
+
+The default is `SearchEngineFlavour.OpenSearch`. Against Elasticsearch with the default, a window past 10,000 rows and every export
+fail with HTTP 400, loudly.
+
 ## Compatibility
 
 Implements Craticula spec version 0.1.0 (the language-neutral semantics and conformance fixtures in the

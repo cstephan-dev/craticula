@@ -113,7 +113,7 @@ public static class OpenSearchExportStream
         // `_source` is keyed by a column's PHYSICAL name, which can differ from its logical colId.
         var sourceFields = ResolveSourceFields(columns, request.Schema);
 
-        var pitId = await OpenPitAsync(client, request.Schema.Source, chunking.PitKeepAlive, cancellationToken).ConfigureAwait(false);
+        var pitId = await PointInTime.OpenAsync(client, request.Schema.Source, chunking.PitKeepAlive, chunking.Flavour, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -141,7 +141,7 @@ public static class OpenSearchExportStream
         }
         finally
         {
-            await TryClosePitAsync(client, pitId, cancellationToken).ConfigureAwait(false);
+            await PointInTime.TryCloseAsync(client, pitId, chunking.Flavour).ConfigureAwait(false);
         }
     }
 
@@ -189,40 +189,6 @@ public static class OpenSearchExportStream
         }
 
         return (rows, sortKeys, newPitId);
-    }
-
-    private static async Task<string> OpenPitAsync(
-        IOpenSearchLowLevelClient client, string index, TimeSpan keepAlive, CancellationToken cancellationToken)
-    {
-        var response = await client
-            .CreatePitAsync<StringResponse>(index, new CreatePitRequestParameters { KeepAlive = keepAlive }, cancellationToken)
-            .ConfigureAwait(false);
-        RequireSuccess(response);
-
-        using var document = JsonDocument.Parse(response.Body!);
-        return document.RootElement.GetProperty("pit_id").GetString()!;
-    }
-
-    /// <summary>Best-effort, even on cancellation or an exception (this method's own <c>finally</c>
-    /// caller): an unclosed PIT merely costs cluster memory until its own <c>keep_alive</c> lapses.</summary>
-    private static async Task TryClosePitAsync(IOpenSearchLowLevelClient client, string pitId, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(pitId))
-        {
-            return;
-        }
-
-        try
-        {
-            var body = new JsonObject { ["pit_id"] = new JsonArray(pitId) };
-            await client.DeletePitAsync<StringResponse>(PostData.String(body.ToJsonString()), null, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Swallowed by design (best-effort) -- see this method's own remarks. CancellationToken.None
-            // is used for the close call itself: a caller who cancelled the export still wants the PIT
-            // closed, not a SECOND cancellation racing the first.
-        }
     }
 
     private static string FormatKeepAlive(TimeSpan value) => $"{Math.Max(1, (long)value.TotalSeconds)}s";

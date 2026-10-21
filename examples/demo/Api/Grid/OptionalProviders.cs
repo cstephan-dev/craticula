@@ -55,7 +55,7 @@ public static class OptionalProviders
                 new OpenSearchGridService(setting, provider.GetRequiredService<GridRequestPreparer>())),
             setting => OpenSearchGridService.ParseUrl(setting),
             "OpenSearch"),
-        // The same client and compiler on Elasticsearch 8; the point-in-time calls are translated at the HTTP level (ElasticsearchPitConnection).
+        // The same client and compiler on Elasticsearch 8; the point-in-time calls follow the client's Elasticsearch flavour (OSE-15).
         new OptionalProvider(
             "elasticsearch",
             DemoSettings.ElasticsearchEnvVar,

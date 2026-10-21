@@ -237,7 +237,7 @@ public static class OpenSearchGridQuery
         var currentRow = 0;
 
         // Tracks whether `pitId` has ever reached the cache (via a successful SetAsync below) —
-        // review finding: a PIT opened in the cold-start branch is unprotected between OpenPitAsync
+        // review finding: a PIT opened in the cold-start branch is unprotected between PointInTime.OpenAsync
         // returning and the FIRST successful SetAsync; any failure in that window (cancellation,
         // transport error, a non-2xx response) must close THIS call's own PIT explicitly, since
         // RemoveAsync in the catch below cannot find something that was never written.
@@ -263,10 +263,10 @@ public static class OpenSearchGridQuery
             var previous = await cursorCache.RemoveAsync(cacheKey, cancellationToken).ConfigureAwait(false);
             if (previous is { PitId.Length: > 0 })
             {
-                await TryClosePitAsync(client, previous.PitId, cancellationToken).ConfigureAwait(false);
+                await PointInTime.TryCloseAsync(client, previous.PitId, options.Flavour).ConfigureAwait(false);
             }
 
-            pitId = await OpenPitAsync(client, request.Schema.Source, options.PitKeepAlive, cancellationToken).ConfigureAwait(false);
+            pitId = await PointInTime.OpenAsync(client, request.Schema.Source, options.PitKeepAlive, options.Flavour, cancellationToken).ConfigureAwait(false);
             afterCursor = null;
         }
 
@@ -299,7 +299,7 @@ public static class OpenSearchGridQuery
                         // placeholder `new JsonArray()` here is NEVER a valid search_after payload, and
                         // every future page request for this (session, hash) would 400 against it for
                         // the rest of PitKeepAlive's window. Close the PIT this call opened instead.
-                        await TryClosePitAsync(client, pitId, cancellationToken).ConfigureAwait(false);
+                        await PointInTime.TryCloseAsync(client, pitId, options.Flavour).ConfigureAwait(false);
                     }
 
                     return new HitBatch([], [], pitId);
@@ -361,7 +361,7 @@ public static class OpenSearchGridQuery
 
             if (!string.IsNullOrEmpty(toClose))
             {
-                await TryClosePitAsync(client, toClose, CancellationToken.None).ConfigureAwait(false);
+                await PointInTime.TryCloseAsync(client, toClose, options.Flavour).ConfigureAwait(false);
             }
 
             throw;
@@ -635,45 +635,6 @@ public static class OpenSearchGridQuery
 
     // ---- PIT lifecycle -------------------------------------------------------------------------------
 
-    private static async Task<string> OpenPitAsync(
-        IOpenSearchLowLevelClient client, string index, TimeSpan keepAlive, CancellationToken cancellationToken)
-    {
-        var response = await client
-            .CreatePitAsync<StringResponse>(index, new CreatePitRequestParameters { KeepAlive = keepAlive }, cancellationToken)
-            .ConfigureAwait(false);
-        RequireSuccess(response);
-
-        using var document = JsonDocument.Parse(response.Body!);
-        return document.RootElement.GetProperty("pit_id").GetString()!;
-    }
-
-    /// <summary>Best-effort per this type's own remarks: an unclosed PIT merely costs cluster memory
-    /// until its own <c>keep_alive</c> lapses, so a failure here must never fail the caller's own
-    /// request.</summary>
-    private static async Task TryClosePitAsync(IOpenSearchLowLevelClient client, string pitId, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(pitId))
-        {
-            return;
-        }
-
-        try
-        {
-            var body = new JsonObject { ["pit_id"] = new JsonArray(pitId) };
-
-            // CancellationToken.None for the close call itself — review finding, matching
-            // OpenSearchExportStream.TryClosePitAsync's own precedent: a caller whose own request was
-            // cancelled still wants the PIT closed, not a SECOND cancellation racing the first that
-            // would skip the close entirely (the previous `ex is not OperationCanceledException` filter
-            // let exactly that happen).
-            await client.DeletePitAsync<StringResponse>(PostData.String(body.ToJsonString()), null, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Swallowed by design (best-effort) -- see this method's own remarks.
-        }
-    }
-
     // ---- shared plumbing -------------------------------------------------------------------------------
 
     /// <summary>One row-level batch: materialized cells, each row's own <c>sort</c> array (for the NEXT
@@ -732,7 +693,7 @@ public static class OpenSearchGridQuery
     /// exception — the same "a plausible-looking success that is actually a failure" register SQL-7(b)
     /// and MDB-9 refuse for a compiled request, reached here for a TRANSPORT response instead.
     /// </summary>
-    private static void RequireSuccess(StringResponse response)
+    internal static void RequireSuccess(StringResponse response)
     {
         if (response.HttpStatusCode is >= 200 and < 300)
         {
