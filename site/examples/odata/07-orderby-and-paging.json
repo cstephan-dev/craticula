@@ -1,0 +1,20 @@
+{
+  "startRow": 40,
+  "endRow": 60,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {},
+  "sortModel": [
+    {
+      "colId": "amount",
+      "sort": "desc"
+    },
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

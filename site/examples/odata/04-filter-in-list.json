@@ -1,0 +1,19 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {
+    "status": {
+      "filterType": "set",
+      "values": [
+        "active",
+        "pending"
+      ]
+    }
+  },
+  "sortModel": []
+}

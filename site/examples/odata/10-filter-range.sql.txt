@@ -1,0 +1,2 @@
+SELECT * FROM "orders" WHERE ("amount" >= $1::numeric AND "amount" <= $2::numeric) ORDER BY "id" ASC NULLS LAST LIMIT $3 OFFSET $4
+-- parameters: '10', '20', 100, 0

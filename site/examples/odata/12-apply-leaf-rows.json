@@ -1,0 +1,36 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "country",
+      "displayName": "Country",
+      "field": "country"
+    },
+    {
+      "id": "region",
+      "displayName": "Region",
+      "field": "region"
+    }
+  ],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [
+    {
+      "type": "string",
+      "value": "Germany"
+    },
+    {
+      "type": "string",
+      "value": "Bavaria"
+    }
+  ],
+  "filterModel": {},
+  "sortModel": [
+    {
+      "colId": "id",
+      "sort": "asc"
+    }
+  ]
+}

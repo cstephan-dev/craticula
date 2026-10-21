@@ -13,4 +13,4 @@ This site is built from the repository's own documents, so it cannot drift from 
 - [Rule index](rules.html): every numbered rule with a link, to look one up by its id.
 - [GridSchema reference](grid-schema.html) and [IR reference](ir-schema.html): every member of the two JSON Schemas, with its type and description.
 
-A migration guide from OData follows.
+- [Migrating from OData](odata-migration.html): what you wrote in `$filter`, `$orderby`, `$top`/`$skip` and `$apply`, and the request Craticula takes instead.

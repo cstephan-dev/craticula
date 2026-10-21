@@ -1,0 +1,29 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    {
+      "id": "country",
+      "displayName": "Country",
+      "field": "country"
+    }
+  ],
+  "valueCols": [
+    {
+      "id": "amount",
+      "displayName": "Amount",
+      "field": "amount",
+      "aggFunc": "sum"
+    }
+  ],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {},
+  "sortModel": [
+    {
+      "colId": "country",
+      "sort": "asc"
+    }
+  ]
+}
