@@ -10,7 +10,7 @@ namespace Craticula.EntityFrameworkCore;
 /// <item><description>a UTC kind: unchanged</description></item>
 /// <item><description>a local kind (a driver converted a zoned value): the same instant in UTC</description></item>
 /// <item><description>an unspecified kind (no zone): the wall-clock reading as UTC</description></item>
-/// <item><description>a <see cref="DateTimeOffset"/>: the same instant at offset zero</description></item>
+/// <item><description>a <see cref="DateTimeOffset"/>: the same instant as a UTC <see cref="DateTime"/>, as the Dapper adapter delivers it (a serialiser then writes the <c>Z</c>, not <c>+00:00</c>)</description></item>
 /// </list>
 /// Everything else, including <see cref="DateOnly"/> (a local date has no zone), passes through untouched.
 /// </summary>
@@ -21,7 +21,7 @@ internal static class EfCoreValueNormalizer
         DateTime { Kind: DateTimeKind.Utc } => cell,
         DateTime { Kind: DateTimeKind.Local } value => value.ToUniversalTime(),
         DateTime value => DateTime.SpecifyKind(value, DateTimeKind.Utc),
-        DateTimeOffset value => value.ToUniversalTime(),
+        DateTimeOffset value => value.UtcDateTime,
         _ => cell
     };
 
