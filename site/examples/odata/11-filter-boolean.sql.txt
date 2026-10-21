@@ -1,0 +1,2 @@
+SELECT * FROM "orders" WHERE "active" = $1 ORDER BY "id" ASC NULLS LAST LIMIT $2 OFFSET $3
+-- parameters: true, 100, 0

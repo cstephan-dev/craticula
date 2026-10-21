@@ -1,0 +1,26 @@
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [],
+  "valueCols": [],
+  "pivotCols": [],
+  "pivotMode": false,
+  "groupKeys": [],
+  "filterModel": {},
+  "sortModel": [],
+  "customFilters": {
+    "type": "comparison",
+    "field": "status",
+    "op": "in",
+    "values": [
+      {
+        "type": "string",
+        "value": "active"
+      },
+      {
+        "type": "string",
+        "value": "pending"
+      }
+    ]
+  }
+}

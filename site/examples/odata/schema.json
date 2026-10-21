@@ -1,0 +1,14 @@
+{
+  "mode": "strict",
+  "source": "orders",
+  "stableKey": "id",
+  "fields": {
+    "id":      { "type": "int64",   "sortable": true, "physical": { "sql": { "column": "id" } } },
+    "customer": { "type": "string",  "filterable": true, "sortable": true, "physical": { "sql": { "column": "customer" } } },
+    "amount":  { "type": "decimal", "filterable": true, "sortable": true, "aggregatable": ["sum", "avg", "min", "max", "count"], "physical": { "sql": { "column": "amount" } } },
+    "active":  { "type": "boolean", "filterable": true, "sortable": true, "physical": { "sql": { "column": "active" } } },
+    "status":  { "type": "string",  "filterable": true, "sortable": true, "physical": { "sql": { "column": "status" } } },
+    "region":  { "type": "string",  "filterable": true, "sortable": true, "physical": { "sql": { "column": "region" } } },
+    "country": { "type": "string",  "filterable": true, "sortable": true, "groupable": true, "physical": { "sql": { "column": "country" } } }
+  }
+}

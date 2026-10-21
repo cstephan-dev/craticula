@@ -1,0 +1,2 @@
+SELECT * FROM "orders" WHERE (NOT ("status" COLLATE craticula_ci = $1) OR "status" IS NULL) ORDER BY "id" ASC NULLS LAST LIMIT $2 OFFSET $3
+-- parameters: 'blocked', 100, 0

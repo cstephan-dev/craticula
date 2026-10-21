@@ -45,6 +45,11 @@
       "source": "site/pages/index-guidance.md"
     },
     {
+      "slug": "odata-migration",
+      "title": "Migrating from OData",
+      "source": "site/pages/odata-migration.md"
+    },
+    {
       "slug": "overview",
       "title": "Overview",
       "source": "README.md"

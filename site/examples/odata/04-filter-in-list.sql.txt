@@ -1,0 +1,2 @@
+SELECT * FROM "orders" WHERE "status" COLLATE craticula_ci = ANY($1) ORDER BY "id" ASC NULLS LAST LIMIT $2 OFFSET $3
+-- parameters: ['active', 'pending'], 100, 0

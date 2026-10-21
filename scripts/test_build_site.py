@@ -586,6 +586,21 @@ class ThisRepository(unittest.TestCase):
                 body = (sample / name).read_text(encoding="utf-8").rstrip("\n")
                 self.assertIn(html.escape(body, quote=False), page, f"{name} is not on the quickstart page as it is")
 
+    def test_the_odata_guide_shows_every_example_request_and_its_statement(self):
+        """DoD of #2835: each construct has its request and its compiled statement on the page, as the files the C# test compiles."""
+        with tempfile.TemporaryDirectory() as out:
+            self.assertEqual(bs.build(ROOT, Path(out)), [])
+            page = (Path(out) / "odata-migration.html").read_text(encoding="utf-8")
+            folder = ROOT / "site" / "examples" / "odata"
+            names = sorted(p.stem for p in folder.glob("[0-9]*.json"))
+            self.assertGreaterEqual(len(names), 8)
+            for name in names:
+                for suffix in (".json", ".sql.txt"):
+                    body = (folder / (name + suffix)).read_text(encoding="utf-8").rstrip("\n")
+                    self.assertTrue(body, f"{name}{suffix} is empty")
+                    self.assertIn(html.escape(body, quote=False), page, f"{name}{suffix} is not on the OData guide")
+            self.assertIn(html.escape((folder / "schema.json").read_text(encoding="utf-8").rstrip("\n"), quote=False), page)
+
     def test_no_page_claims_a_package_is_published(self):
         """DoD of #2834: the stubs and the quickstart say nothing is published and give no install command."""
         with tempfile.TemporaryDirectory() as out:
