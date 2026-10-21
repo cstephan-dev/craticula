@@ -17,10 +17,11 @@ internal static class PointInTime
         string idKey;
         if (flavour == SearchEngineFlavour.Elasticsearch)
         {
+            // Relative paths, like the generated calls: a leading slash would drop a base path in the cluster URL (a reverse proxy at /es/).
             // The generic call refuses a query string in the path; the keep_alive parameter is the same one OpenSearch's call takes.
             response = await client
                 .DoRequestAsync<StringResponse>(
-                    global::OpenSearch.Net.HttpMethod.POST, $"/{Uri.EscapeDataString(index)}/_pit", cancellationToken,
+                    global::OpenSearch.Net.HttpMethod.POST, $"{Uri.EscapeDataString(index)}/_pit", cancellationToken,
                     requestParameters: new CreatePitRequestParameters { KeepAlive = keepAlive })
                 .ConfigureAwait(false);
             idKey = "id";
@@ -56,7 +57,7 @@ internal static class PointInTime
                 var body = new JsonObject { ["id"] = pitId };
                 await client
                     .DoRequestAsync<StringResponse>(
-                        global::OpenSearch.Net.HttpMethod.DELETE, "/_pit", CancellationToken.None, PostData.String(body.ToJsonString()))
+                        global::OpenSearch.Net.HttpMethod.DELETE, "_pit", CancellationToken.None, PostData.String(body.ToJsonString()))
                     .ConfigureAwait(false);
             }
             else

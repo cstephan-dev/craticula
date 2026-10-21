@@ -13,7 +13,7 @@ namespace Craticula.OpenSearch.Client.Tests;
 /// </summary>
 public sealed class SearchEngineFlavourTests
 {
-    private sealed record Call(string Method, string Path, string? Body);
+    private sealed record Call(string Method, string Path, string? Body, string Url);
 
     /// <summary>Answers the create call with the engine's own key, the close with 200 and every search with no hits.</summary>
     private sealed class RecordingEngine(string createdKey) : InMemoryConnection
@@ -31,7 +31,7 @@ public sealed class SearchEngineFlavourTests
                 sent = Encoding.UTF8.GetString(stream.ToArray());
             }
 
-            Calls.Add(new Call(requestData.Method.ToString(), path, sent));
+            Calls.Add(new Call(requestData.Method.ToString(), path, sent, requestData.Uri.ToString()));
 
             var isCreate = requestData.Method == global::OpenSearch.Net.HttpMethod.POST && (path.Contains("point_in_time", StringComparison.Ordinal) || path.Contains("/_pit", StringComparison.Ordinal));
             var body = isCreate
@@ -42,8 +42,8 @@ public sealed class SearchEngineFlavourTests
         }
     }
 
-    private static IOpenSearchLowLevelClient ClientOn(RecordingEngine engine) =>
-        new OpenSearchClient(new ConnectionSettings(new SingleNodeConnectionPool(new Uri("http://localhost:9200")), engine)).LowLevel;
+    private static IOpenSearchLowLevelClient ClientOn(RecordingEngine engine, string baseUrl = "http://localhost:9200") =>
+        new OpenSearchClient(new ConnectionSettings(new SingleNodeConnectionPool(new Uri(baseUrl)), engine)).LowLevel;
 
     private static async Task ExportAsync(IOpenSearchLowLevelClient client, SearchEngineFlavour? flavour)
     {
@@ -82,11 +82,11 @@ public sealed class SearchEngineFlavourTests
         var engine = new RecordingEngine("id");
         await ExportAsync(ClientOn(engine), SearchEngineFlavour.Elasticsearch);
 
-        var create = Assert.Single(engine.Calls, c => c.Method == "POST" && c.Path.Contains("/_pit", StringComparison.Ordinal));
-        Assert.Matches(@"^/[^/]+/_pit\?keep_alive=\d+[smh]$", create.Path);
+        var create = Assert.Single(engine.Calls, c => c.Method == "POST" && c.Path.Contains("_pit", StringComparison.Ordinal));
+        Assert.Matches(@"^/?[^/]+/_pit\?keep_alive=\d+[smh]$", create.Path);
         Assert.DoesNotContain(engine.Calls, c => c.Path.Contains("point_in_time", StringComparison.Ordinal));
         var close = Assert.Single(engine.Calls, c => c.Method == "DELETE");
-        Assert.Equal("/_pit", close.Path);
+        Assert.EndsWith("/_pit", close.Url, StringComparison.Ordinal);
         Assert.Equal("{\"id\":\"pit-1\"}", close.Body);
 
         var search = Assert.Single(engine.Calls, c => c.Method == "POST" && c.Path.Contains("_search", StringComparison.Ordinal));
@@ -99,7 +99,7 @@ public sealed class SearchEngineFlavourTests
         var engine = new RecordingEngine("id");
         await DeepPageAsync(ClientOn(engine), SearchEngineFlavour.Elasticsearch);
 
-        Assert.Single(engine.Calls, c => c.Method == "POST" && c.Path.Contains("/_pit", StringComparison.Ordinal));
+        Assert.Single(engine.Calls, c => c.Method == "POST" && c.Path.Contains("_pit", StringComparison.Ordinal));
         Assert.DoesNotContain(engine.Calls, c => c.Path.Contains("point_in_time", StringComparison.Ordinal));
     }
 
@@ -110,7 +110,7 @@ public sealed class SearchEngineFlavourTests
         await DeepPageAsync(ClientOn(engine), flavour: null);
 
         Assert.Single(engine.Calls, c => c.Method == "POST" && c.Path.Contains("point_in_time", StringComparison.Ordinal));
-        Assert.DoesNotContain(engine.Calls, c => c.Path.Contains("/_pit", StringComparison.Ordinal));
+        Assert.DoesNotContain(engine.Calls, c => c.Path.Contains("_pit", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -118,5 +118,23 @@ public sealed class SearchEngineFlavourTests
     {
         var engine = new RecordingEngine("pit_id");
         await Assert.ThrowsAnyAsync<Exception>(() => ExportAsync(ClientOn(engine), SearchEngineFlavour.Elasticsearch));
+    }
+
+    [Fact]
+    public async Task The_Elasticsearch_Flavour_Keeps_A_Base_Path_In_The_Cluster_Url()
+    {
+        var engine = new RecordingEngine("id");
+        await ExportAsync(ClientOn(engine, "http://proxy:9200/es/"), SearchEngineFlavour.Elasticsearch);
+
+        Assert.StartsWith("http://proxy:9200/es/", engine.Calls.Single(c => c.Method == "POST" && c.Path.Contains("_pit", StringComparison.Ordinal)).Url, StringComparison.Ordinal);
+        Assert.Equal("http://proxy:9200/es/_pit", engine.Calls.Single(c => c.Method == "DELETE").Url);
+    }
+
+    [Fact]
+    public async Task A_Flavour_Outside_The_Enum_Is_Refused_Before_Any_Call()
+    {
+        var engine = new RecordingEngine("pit_id");
+        await Assert.ThrowsAsync<OpenSearchClientCompilationException>(() => ExportAsync(ClientOn(engine), (SearchEngineFlavour)7));
+        Assert.Empty(engine.Calls);
     }
 }

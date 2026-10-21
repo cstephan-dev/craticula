@@ -51,6 +51,11 @@ public sealed record OpenSearchDeepPagingOptions
 
     internal void Validate()
     {
+        if (!Enum.IsDefined(Flavour))
+        {
+            throw new OpenSearchClientCompilationException($"Flavour {(int)Flavour} is not a SearchEngineFlavour (OpenSearch or Elasticsearch).");
+        }
+
         if (MaxResultWindow <= 0)
         {
             throw new OpenSearchClientCompilationException(

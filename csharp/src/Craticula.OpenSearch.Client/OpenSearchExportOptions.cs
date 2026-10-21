@@ -30,6 +30,11 @@ public sealed record OpenSearchExportOptions
 
     internal void Validate()
     {
+        if (!Enum.IsDefined(Flavour))
+        {
+            throw new OpenSearchClientCompilationException($"Flavour {(int)Flavour} is not a SearchEngineFlavour (OpenSearch or Elasticsearch).");
+        }
+
         if (ChunkSize <= 0)
         {
             throw new OpenSearchClientCompilationException(
