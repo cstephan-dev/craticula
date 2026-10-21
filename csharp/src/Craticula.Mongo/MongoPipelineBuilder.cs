@@ -1006,8 +1006,16 @@ public static class MongoPipelineBuilder
 
     /// <summary>One resolved sort key: which synthetic bucket field emulates its null placement, what
     /// the pipeline actually sorts on, and the two directions.</summary>
+    /// <param name="Bucket">The synthetic field that emulates the key's null placement.</param>
+    /// <param name="Path">What the pipeline sorts on.</param>
+    /// <param name="Direction">The key's direction.</param>
+    /// <param name="NullsPosition">Where nulls sort.</param>
+    /// <param name="ExactField">MDB-10 / #2809: set only on SEM-6's appended exact tiebreaker when an earlier key of the same sort already
+    /// names the same path (a case-insensitive text stable key with keys after it). A <c>$sort</c> document cannot list a path twice, so the
+    /// exact key sorts on this synthetic field instead, which holds <c>$toHashedIndexKey</c> of the path: a non-string value, so the
+    /// query's collation cannot fold it, and a total, stable order on distinct strings (not a lexical one).</param>
     private readonly record struct SortKeyPlan(
-        string Bucket, string Path, SortDirection Direction, NullsPosition NullsPosition);
+        string Bucket, string Path, SortDirection Direction, NullsPosition NullsPosition, string? ExactField = null);
 
     /// <summary>
     /// SEM-6/SEM-3/GRP-4: the request's own keys in order, then a trailing tiebreaker unless the sort
@@ -1072,7 +1080,13 @@ public static class MongoPipelineBuilder
                 context.Collation.ExactStringSortKeys.Add(key.Field);
             }
 
-            plan.Add(new SortKeyPlan(bucket, path, key.Direction, key.NullsPosition));
+            // #2809: the appended exact tiebreaker on a path an earlier key already sorts on cannot be a second `$sort` entry on that path.
+            var repeatsAPath = provenance == SemanticsResolver.SortKeyProvenance.AppendedTiebreaker
+                && plan.Any(earlier => earlier.Path == path);
+
+            plan.Add(repeatsAPath
+                ? new SortKeyPlan(bucket, path, key.Direction, key.NullsPosition, ExactField: $"__{key.Field}ExactKey")
+                : new SortKeyPlan(bucket, path, key.Direction, key.NullsPosition));
         }
 
         return plan;
@@ -1180,6 +1194,22 @@ public static class MongoPipelineBuilder
 
         foreach (var key in keys)
         {
+            // #2809: the exact tiebreaker of a repeated path sorts on its own synthetic field. The user's key before it already carries
+            // the path's null bucket, so nothing is added for nulls: they tie there and the hash of a null is as stable as any other.
+            if (key.ExactField is { } exactField)
+            {
+                if (!claimed.TryAdd(exactField, key.Path))
+                {
+                    throw new MongoCompilationException(
+                        $"The sort key '{key.Path}' needs the exact-tiebreaker field '{exactField}' more than once (MDB-10).");
+                }
+
+                buckets[exactField] = new JsonObject { ["$toHashedIndexKey"] = FieldReference(key.Path) };
+                sort[exactField] = key.Direction == SortDirection.Asc ? 1 : -1;
+                unset.Add(exactField);
+                continue;
+            }
+
             // MDB-10: all three stages below are DOCUMENTS, whose repeated key is last-wins. A second
             // key landing on an already-claimed bucket therefore does not merely add nothing — it
             // overwrites the FIRST key's entry in `$sort`, promoting the later key to primary, and it
@@ -1194,10 +1224,7 @@ public static class MongoPipelineBuilder
             if (claimed.TryGetValue(key.Bucket, out var owner))
             {
                 throw new MongoCompilationException(owner == key.Path
-                    ? $"The sort needs '{key.Path}' twice: once as the key the request names and once as the exact " +
-                      "tiebreaker SEM-6 appends (the stable key is case-insensitive text, so ties between case variants " +
-                      "need an exact key after it). MongoDB's $sort is a document and cannot hold one key twice, so " +
-                      "this shape is not supported here (MDB-10; declare the stable key case-sensitive, or sort by it last)."
+                    ? $"The sort names '{key.Path}' twice outside SEM-6's exact tiebreaker (MDB-10): a $sort document holds a path once."
                     : $"The sort key '{key.Path}' and the sort key '{owner}' both emulate null placement " +
                       $"through the bucket field '{key.Bucket}', which can only hold one of them. " +
                       $"'{GroupKeyBucket}' is reserved for a grouped level's own _id key (MDB-10); rename the " +

@@ -258,11 +258,12 @@ public class MongoPipelineSortAndPagingTests
 
     /// <summary>
     /// SEM-6's exception (#2809): a case-insensitive TEXT stable key with a key after it keeps the user's key and appends the exact tiebreaker on the
-    /// same field, which a `$sort` document cannot hold twice (MDB-10). The request is refused, and the message names the real cause: the user named
-    /// the stable key once. Numeric and case-sensitive stable keys stop at the key and are not affected.
+    /// same field, which a `$sort` document cannot hold twice (MDB-10). The tiebreaker sorts on its own synthetic field, a
+    /// <c>$toHashedIndexKey</c> of the path (a non-string, which the query's collation cannot fold), added with the null buckets and unset
+    /// afterwards. Numeric and case-sensitive stable keys stop at the key and are not affected.
     /// </summary>
     [Fact]
-    public void A_CaseInsensitive_Text_StableKey_With_A_Key_After_It_Is_Refused_With_A_Message_That_Names_The_Cause()
+    public void A_CaseInsensitive_Text_StableKey_With_A_Key_After_It_Sorts_The_Exact_Tiebreaker_On_Its_Own_Field()
     {
         var textKeySchema = Schema with
         {
@@ -274,7 +275,7 @@ public class MongoPipelineSortAndPagingTests
             }
         };
 
-        var exception = Assert.Throws<MongoCompilationException>(() => MongoPipelineBuilder.Build(new MongoQueryRequest
+        var query = MongoPipelineBuilder.Build(new MongoQueryRequest
         {
             Schema = textKeySchema,
             Sort =
@@ -283,10 +284,16 @@ public class MongoPipelineSortAndPagingTests
                 Key("salary", SortDirection.Asc, NullsPosition.Last)
             ],
             Page = new RangePage { StartRow = 0, EndRow = 100 }
-        }));
+        });
 
-        Assert.Contains("needs 'lastName' twice", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("exact tiebreaker", exception.Message, StringComparison.Ordinal);
+        var addFields = query.Pipeline[0]["$addFields"]!.AsObject();
+        Assert.Equal("$lastName", addFields["__lastNameExactKey"]!["$toHashedIndexKey"]!.GetValue<string>());
+
+        var sort = query.Pipeline[1]["$sort"]!.AsObject();
+        Assert.Equal(["__lastNameNullBucket", "lastName", "__salaryNullBucket", "salary", "__lastNameExactKey"], sort.Select(entry => entry.Key));
+
+        var unset = query.Pipeline[2]["$unset"]!.AsArray().Select(name => name!.GetValue<string>());
+        Assert.Contains("__lastNameExactKey", unset);
     }
 
     [Fact]

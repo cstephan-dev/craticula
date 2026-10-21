@@ -700,11 +700,21 @@ field resolves case-insensitively unless the field declares otherwise, and `'aB3
 equal under it (the blockquote below makes the same argument against collating the *appended* key). Such a
 sort is not total, so **nothing after it is dropped and the exact tiebreaker is appended as before**. One
 gap predates this rule and is left as it was: a sort that already *ends* in the case-insensitive key
-(`[code]`, `[age, code]`) gets no tiebreaker, because appending one would name the column twice, which
-SQL Server and MongoDB refuse (follow-up bug #2809 tracks the whole shape). Rule 1 applies regardless.
-Where the exact tiebreaker *is* appended the ordering names the stable key's column twice (the user's
-collated key and the exact tiebreaker), which SQL Server refuses (error 169) and MongoDB refuses (MDB-10);
-that shape stays unsupported on those two arms.
+(`[code]`, `[age, code]`) gets no tiebreaker, because the user's key already names the column and nothing separates
+case variants there (the rows tie in the engine's own order; a host that needs more declares the key case-sensitive). Rule 1 applies regardless.
+Where the exact tiebreaker *is* appended **after an earlier key on the same column** (the user's collated key, then the
+exact tiebreaker), two arms cannot list a column twice, and each spells the tiebreaker as a different expression instead
+(Bug #2809; fixture `sort-paging/017` carries both arms): **SQL Server** spells the repeated tiebreaker with the field's
+case-*sensitive* mechanism, SC-3's own spelling, `[code] COLLATE Latin1_General_CS_AS`, **and** carries that collation inside
+the tiebreaker's null-bucket `CASE` (SQL Server refuses an `ORDER BY` expression identical to an earlier one, error 169, and
+accepts the same column under a different collation; measured on SQL Server 2022); **MongoDB** sorts the tiebreaker on a
+synthetic field holding `{$toHashedIndexKey: "$code"}` (a non-string, which the query's collation cannot fold), added with the
+null buckets and unset after the `$sort`. The other three SQL dialects accept a repeated column and render the same
+case-sensitive spelling, which is what makes the tiebreaker exact on an engine whose default folds case. **The tie order among
+case variants is stable but is not promised to be the same on every arm:** PostgreSQL and the Search arm order them
+binary, SQL Server by `CS_AS` (lowercase first) and MongoDB by hash. That order is the tiebreaker's whole job (paging stays
+stable and no variant is dropped or repeated); no rule says which of two case variants that tie on every earlier key comes first,
+and no fixture's expected rows depend on it. The user's own null placement is not repeated for it: a null ties on the earlier key already.
 
 **A dropped key is never a way around the allowlist.** The reductions run only on a sort **every key of
 which the query knows**: on a row query, a field of the schema; on a grouped level, the group column or one
@@ -2402,15 +2412,16 @@ changes the answer:
   that repeats a colId no longer reaches this check and the first entry, the user's primary, stays primary.
   It was a rejection when this rule was written; such a request is now served on every arm. **One shape
   still reaches it:** a case-insensitive text stable key with keys after it (SEM-6's exception) lists the
-  stable key's column twice, the user's key and the exact tiebreaker, and is still refused here (#2809);
+  stable key's column twice, the user's key and the exact tiebreaker, and is served since #2809 by sorting the tiebreaker on its own
+  synthetic field (`__<field>ExactKey`, a `$toHashedIndexKey` of the path) instead of refusing;
 - **an aggregate whose output name is `group`** — its bucket is `__groupNullBucket`, which the group
   key also claims, so `_id` becomes the primary sort key, a null sorts last where nulls-first was
   requested, and `$unset` lists one name twice;
 - **two aggregates with one output name** — the second accumulator replaces the first in `$group`,
   and the grid reads one column holding another column's number.
 
-The second and third MUST be rejected, and so MUST the one shape of the first that remains (the first
-otherwise no longer arises). Renaming either side is not an alternative: the emitted bucket name would
+The second and third MUST be rejected (the first no longer arises: SEM-6's reduction removes a repeat, and its one exception, a
+case-insensitive text stable key, gets the synthetic tiebreaker field above). Renaming either side is not an alternative: the emitted bucket name would
 then depend on what else the request happened to contain, which is a worse oracle than an error.
 There is no SQL counterpart to any of this — the SQL compiler renders null placement as an inline
 expression rather than as a named field, and a repeated `ORDER BY` key is merely redundant on most of

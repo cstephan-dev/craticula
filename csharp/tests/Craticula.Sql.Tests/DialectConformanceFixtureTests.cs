@@ -66,7 +66,7 @@ public class DialectConformanceFixtureTests
     /// </summary>
     private static readonly (string Name, ISqlDialect Dialect, int Expected)[] Dialects =
     [
-        ("mssql", MssqlDialect.Instance, 50),
+        ("mssql", MssqlDialect.Instance, 51),
         ("mysql", MySqlDialect.Instance, 47),
         ("oracle", OracleDialect.Instance, 45),
         ("sqlite", SqliteDialect.Instance, 47)
@@ -224,7 +224,7 @@ public class DialectConformanceFixtureTests
         // which is what makes BM-2's "identical grouping protocol across all four dialects"
         // checkable at all. This number going up without the per-dialect table above changing with
         // it means an arm was added and went unexercised.
-        Assert.Equal(189, Arms.Count);
+        Assert.Equal(190, Arms.Count);
     }
 
     [Fact]

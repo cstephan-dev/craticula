@@ -750,6 +750,7 @@ public static class SqlQueryBuilder
             : SemanticsResolver.GroupingMode.Grouped;
 
         var rendered = new List<string>(keys.Count);
+        var orderedColumns = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < keys.Count; i++)
         {
             var key = keys[i];
@@ -767,6 +768,16 @@ public static class SqlQueryBuilder
             var caseSensitivity = SemanticsResolver
                 .ResolveOrderingAndGroupKeyCaseSensitivity(field, ordering, provenance)
                 .Mode;
+
+            // #2809 (SEM-6's exception): the appended exact tiebreaker on a column an earlier key already orders by. SQL Server refuses
+            // one expression twice (error 169) and accepts the second spelled with a collation, so the repeated tiebreaker is
+            // rendered with the field's case-SENSITIVE mechanism (SC-3's own spelling, the dialect's collation where it has one), which is
+            // also what makes it exact on an engine whose default folds case. The dialect renders it; nothing here names a collation.
+            var firstUseOfColumn = orderedColumns.Add(column);
+            if (provenance == SemanticsResolver.SortKeyProvenance.AppendedTiebreaker && !firstUseOfColumn)
+            {
+                caseSensitivity = SemanticsResolver.CaseSensitivityMode.Sensitive;
+            }
 
             rendered.Add(context.Dialect.RenderSortKey(column, key.Direction, key.NullsPosition, caseSensitivity));
         }
