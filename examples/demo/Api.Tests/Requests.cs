@@ -174,6 +174,17 @@ internal static class Requests
         }
         """;
 
+    /// <summary>GRP-7: the leaf rows of the group whose country is null (the seed has no country on some orders), in id order.</summary>
+    public const string DrillDownNullCountry = """
+        {
+          "startRow": 0, "endRow": 100,
+          "rowGroupCols": [ { "id": "country", "displayName": "Country", "field": "country" } ],
+          "valueCols": [], "pivotCols": [], "pivotMode": false, "groupKeys": [ { "type": "null" } ],
+          "filterModel": null,
+          "sortModel": [ { "colId": "id", "sort": "asc" } ]
+        }
+        """;
+
     /// <summary>A contains filter in capitals with a non-ASCII letter; the seed has "Müller, Söhne &amp; Co".</summary>
     public static string NonAsciiContains => FirstPage(
         """{ "customer": { "filterType": "text", "type": "contains", "filter": "SÖHNE" } }""");

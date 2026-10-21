@@ -451,12 +451,24 @@ public class SqlQueryBuilderOperatorTests
     }
 
     [Fact]
-    public void A_Null_Scalar_Value_Stays_A_Bound_Null_Under_The_Cast()
+    public void A_Null_Ordering_Value_Stays_A_Bound_Null_Under_The_Cast()
     {
-        var (where, parameters) = Where(Comparison("unitCost", ComparisonOperator.Eq, new NullValue()));
+        var (where, parameters) = Where(Comparison("unitCost", ComparisonOperator.Gt, new NullValue()));
 
-        Assert.Equal("\"unit_cost\" = $1::numeric", where);
+        Assert.Equal("\"unit_cost\" > $1::numeric", where);
         Assert.Equal([null], parameters);
+    }
+
+    /// <summary>GRP-7: <c>eq</c> / <c>neq</c> against a nullValue is the null test, with no parameter.</summary>
+    [Theory]
+    [InlineData(ComparisonOperator.Eq, "\"unit_cost\" IS NULL")]
+    [InlineData(ComparisonOperator.Neq, "\"unit_cost\" IS NOT NULL")]
+    public void Equality_With_A_NullValue_Is_The_Null_Test(ComparisonOperator op, string expected)
+    {
+        var (where, parameters) = Where(Comparison("unitCost", op, new NullValue()));
+
+        Assert.Equal(expected, where);
+        Assert.Empty(parameters);
     }
 
     [Theory]

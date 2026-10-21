@@ -1,0 +1,8 @@
+{
+  "dialect": "postgres",
+  "sql": "SELECT \"id\", \"region\", \"segment\", \"product\", \"fiscal_year\" AS \"fiscalYear\", \"amount\", \"quantity\" FROM \"sales_fact\" WHERE \"region\" IS NULL ORDER BY \"id\" ASC NULLS LAST LIMIT $1 OFFSET $2",
+  "params": [
+    100,
+    0
+  ]
+}

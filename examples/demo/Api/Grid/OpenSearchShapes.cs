@@ -21,18 +21,7 @@ internal static class OpenSearchShapes
             return;
         }
 
-        // 1. Expanding the group whose key is null. The compiled drill-down is `term { value: null }`, which the engine rejects with HTTP 400
-        //    ("value cannot be null"); PostgreSQL's `= NULL` matches no row. (A library gap: the null group has no drill-down on any provider.)
-        var nullKey = group.GroupKeys.ToList().FindIndex(key => key is NullValue);
-        if (nullKey >= 0)
-        {
-            var column = group.GroupCols[nullKey];
-            throw new UnsupportedShapeException(
-                $"{engine} cannot expand the group whose '{column}' value is empty (null): the query it would run has a null term, which the engine rejects. " +
-                $"Use the '{column}' column's blank filter to list those rows.");
-        }
-
-        // 2. Ordering the groups by an aggregate. A composite aggregation lists groups in key order only (OSE-11(c)); sorting the first page would
+        // Ordering the groups by an aggregate. A composite aggregation lists groups in key order only (OSE-11(c)); sorting the first page would
         //    answer "the first groups by key, rearranged", not "the top groups". Counted so that an ambiguous sort key (two aggregates under one
         //    column id) stays the compiler's refusal that every provider gives.
         var groupColumn = group.GroupKeys.Count < group.GroupCols.Count ? group.GroupCols[group.GroupKeys.Count] : null;

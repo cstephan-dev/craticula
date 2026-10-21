@@ -1,0 +1,8 @@
+{
+  "dialect": "sqlite",
+  "sql": "SELECT \"segment\" AS \"segment\", COALESCE(SUM(\"amount\"), 0) AS \"amount_sum\" FROM \"sales_fact\" WHERE \"region\" IS NULL GROUP BY \"segment\" ORDER BY \"segment\" ASC NULLS LAST LIMIT ? OFFSET ?",
+  "params": [
+    100,
+    0
+  ]
+}

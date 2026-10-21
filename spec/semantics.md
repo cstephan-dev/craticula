@@ -1639,6 +1639,30 @@ unknown-field case: each one *is* the question (or, for a consumed key, changes 
 come back under the label the client asked for), not a condition narrowing it, so there is no
 narrower answer left to give once it is gone.
 
+**GRP-7. A `nullValue` group key drills into the null group: `eq` against it is the null test, on every backend.**
+A grouped level buckets rows whose group column is null into **one** group (AR-8/BM-2; GRP-4 sorts it with
+`nullsPosition`), so the level below it must be reachable: `groupKeys` carries that group's key as a `nullValue`
+(AR-7), and GRP-5 turns it into `eq` against the group column. Compiled as ordinary equality it expands nothing: SQL's
+`= NULL` matches no row, an engine's `term` with a null value is refused, and a compiler that binds it as a parameter
+answers 0 rows where MongoDB, whose `$eq: null` is the null test, answered the group's rows. The rule that replaces all
+of those: **`eq` with a `nullValue` operand selects exactly the rows whose column is null, and `neq` exactly those
+whose column is not**, with no bound parameter and no null-inclusive disjunct (the null test already is the answer).
+It selects `NULL` and nothing else: the empty string is a different group at a grouped level (`blank` would merge the
+two, and the child level would then no longer sum to its parent's bucket), so `eq null` is **not** `blank`.
+
+| Backend | Rendering |
+|---|---|
+| SQL (all five dialects) | `<col> IS NULL` / `<col> IS NOT NULL` |
+| MongoDB | `{<path>: {$eq: null}}` (matches null and a missing path, the same set MDB-8's null bucket holds) |
+| ES / OpenSearch | `{bool: {must_not: [{exists: {field}}]}}` / `{exists: {field}}` on the raw field |
+| EF Core | `column == null` / `column != null`, which EF translates to `IS NULL` / `IS NOT NULL` |
+
+Every other operator against a `nullValue` keeps its meaning (a bound NULL parameter that matches no row on SQL, and
+EF's refusal): GRP-7 gives the null test one spelling, `eq`, and nothing else. A leaf drill-down, a grouped level below a
+null key, and an export of a drilled group (EXP-2) all inherit it, because they all read the drill-down GRP-5 builds.
+Fixtures `group-aggregation/024` (leaf rows under the null key) and `/025` (a grouped level under a null first key)
+pin it, with a row whose key is the empty string beside the null ones.
+
 **Cross-links.** `$defs/groupSpec` (`groupCols`, `groupKeys`), `$defs/aggregation`,
 `$defs/sortItem`, `$defs/setValuesSpec`, AGG-1..AGG-4 (AGG-4 pins the `terms` ordering GRP-6(a)'s
 ES/OpenSearch arm depends on), SEM-1, SEM-5, SEM-6, SEM-7, SQL-2, SQL-6, and BM-2/BM-3/AR-8/AR-9 in

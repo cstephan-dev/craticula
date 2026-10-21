@@ -1,0 +1,48 @@
+[
+  {
+    "$match": {
+      "region": {
+        "$eq": null
+      }
+    }
+  },
+  {
+    "$group": {
+      "_id": "$segment",
+      "amount_sum": {
+        "$sum": "$amount"
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "__groupNullBucket": {
+        "$cond": [
+          {
+            "$eq": [
+              "$_id",
+              null
+            ]
+          },
+          1,
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$sort": {
+      "__groupNullBucket": 1,
+      "_id": 1
+    }
+  },
+  {
+    "$unset": "__groupNullBucket"
+  },
+  {
+    "$skip": 0
+  },
+  {
+    "$limit": 100
+  }
+]
