@@ -3,7 +3,7 @@
 Backs `spec/fixtures/README.md`'s category index row: "AG-3/EXP-2 page spec, EXP-1 export +
 EXP-4/EXP-5/EXP-8 byte-exact writer output + EXP-6 hostile CSV values" (~20 target, 26 authored — see
 022, 023, 024, 025 and 026 below). Requirement ids referenced below are
-[TRD](../../../docs/TRD-grid-query-compiler.md) §6 (`AG-3`) and §6.1 (`EXP-1`..`EXP-8`); the
+the maintainers' private TRD §6 (`AG-3`) and §6.1 (`EXP-1`..`EXP-8`); the
 compile-time half of them is pinned normatively in `spec/semantics.md`'s **EXP-1/EXP-2** addendum,
 which this category is the artifact oracle for. The *writer* half (EXP-4..EXP-8) is deliberately not
 in `semantics.md` — it has no compiled form — so the TRD §6.1 prose is its normative home and the

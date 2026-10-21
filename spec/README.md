@@ -1,6 +1,6 @@
 # `spec/` — the language-neutral source of truth
 
-Per **AR-1** of the [Technical Requirements Document](../docs/TRD-grid-query-compiler.md), this
+Per **AR-1** of the maintainers' technical requirements document (TRD, kept privately), this
 project is specification-first: `spec/` is not tied to any single language's type system, and
 every language implementation (C#, TypeScript, Python, Go — see AR-2, ML-1/ML-2) conforms to what
 lives here. The spec never conforms to an implementation. If a language port needs a shape the

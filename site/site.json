@@ -1,0 +1,10 @@
+{
+  "title": "Craticula",
+  "repo": "https://github.com/pluries/craticula",
+  "branch": "main",
+  "pages": [
+    { "slug": "index", "title": "Home", "source": "site/pages/index.md" },
+    { "slug": "overview", "title": "Overview", "source": "README.md" },
+    { "slug": "spec", "title": "The spec", "source": "spec/README.md" }
+  ]
+}

@@ -1,6 +1,6 @@
 # `spec/semantics.md` — Semantics specification (SEM-1..SEM-8)
 
-Normative per **AR-1** ([TRD](../docs/TRD-grid-query-compiler.md) §7): this document, not any single
+Normative per **AR-1** (the maintainers' private TRD, §7): this document, not any single
 compiler, is where these behaviors are decided (SEM-1..SEM-7 from the TRD, SEM-8 added in #2455). A backend compiler that disagrees with a rule
 below has a bug, not an alternative opinion. Every rule here is the target of conformance fixtures
 (`spec/fixtures/`, TRD T-1) authored in a later work item (#1630) — this document states the rule
