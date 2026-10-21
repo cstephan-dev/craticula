@@ -11,7 +11,7 @@ namespace Demo.Api.Grid;
 /// the SQLite arm). EF's own SQLite mapping writes a <see cref="DateTime"/> parameter as <c>yyyy-MM-dd HH:mm:ss</c> (a space, no <c>Z</c>), and on the
 /// bound's own date <c>T</c> sorts after a space, so every row of that date counts as later than a bound at noon: range filters with a non-midnight
 /// bound and the keyset walk of a CSV export sorted by a datetime then returned wrong rows (measured). This context therefore maps every
-/// datetime to and from the stored text form.</para>
+/// datetime to and from the stored text form: the host obligation the adapter documents (<c>EfCoreProviderSemantics</c>, SEM-4, #2805).</para>
 /// </summary>
 public sealed class SqliteOrdersDbContext(DbContextOptions<SqliteOrdersDbContext> options, GridSchema schema)
     : SchemaDbContext<SqliteOrdersDbContext>(options, schema)

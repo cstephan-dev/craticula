@@ -455,7 +455,10 @@ Today `Craticula.Dapper` (`DapperValueReaderDatetimeTests`) and `Craticula.Entit
 `EfCoreDatetimeKindTests`) are covered by such tests; MongoDB's and OpenSearch's readers return UTC by construction.
 **EF Core:** the adapter has no reader of its own, so it applies the same table to every `DateTime` or `DateTimeOffset`
 cell of a page or an export row after EF has materialised it, whatever the provider; a host therefore needs no UTC
-value converter for the result side. The comparison side stays the host's obligation as above.
+value converter for the result side. The comparison side stays the host's obligation as above. For SQLite that obligation includes the **binding**: EF binds a `DateTime` in its own
+`yyyy-MM-dd HH:mm:ss` form, so the host maps every datetime to and from the stored `yyyy-MM-ddTHH:mm:ss.fffZ` text on its
+`DbContext`, or a non-midnight bound and a datetime-sorted export return wrong rows without an error (Bug #2805,
+`EfCoreHostObligationTests`).
 
 **MongoDB representation of `dateValue` (pinned): a plain ISO date string, never a BSON `Date`.**
 MongoDB's `Date` type has no "calendar date, no time-of-day" concept — every BSON `Date` is an

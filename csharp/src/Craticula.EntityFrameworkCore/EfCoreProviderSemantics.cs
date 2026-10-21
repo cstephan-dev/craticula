@@ -39,6 +39,26 @@ namespace Craticula.EntityFrameworkCore;
 /// case the other way. The remarks on each member state what a host must supply for the other four
 /// engines and which <c>Craticula.Sql</c> dialect to read for the corresponding SQL-side rendering;
 /// a host declares its own, once, next to its <c>DbContext</c>.</para>
+///
+/// <para><b>Two obligations that run without error and return wrong rows (Bug #2805).</b> The adapter documents them and does not
+/// guard against them, because the thing that is wrong lives in the host's model or in the database, which the adapter neither sees
+/// nor owns. Each is pinned by <c>EfCoreHostObligationTests</c>, wrong without it and right with it.
+/// <list type="number">
+/// <item><description><b>SQLite instants.</b> SEM-4's SQLite arm has a host store a <c>datetime</c> as the fixed-width UTC text
+/// <c>yyyy-MM-ddTHH:mm:ss.fffZ</c>. EF's own SQLite mapping binds a <see cref="DateTime"/> parameter as <c>yyyy-MM-dd HH:mm:ss</c>
+/// (a space, no <c>Z</c>), and SQLite compares TEXT character by character, where <c>'T'</c> sorts after <c>' '</c>. So a range
+/// filter with a bound that is not at midnight counts every row of the bound's date as later (13,335 rows for 13,321 on the demo's
+/// 20,000), and a keyset export sorted by a datetime repeats or drops rows at the chunk boundaries (20,060 and 19,947 rows for
+/// 20,000). The host maps every datetime to and from the stored text in its <c>DbContext</c>
+/// (<c>ConfigureConventions</c>, <c>Properties&lt;DateTime&gt;().HaveConversion&lt;…&gt;()</c>). On a database whose values EF itself
+/// wrote, the two forms agree and nothing is needed.</description></item>
+/// <item><description><b><see cref="PatternMatchFoldsCase"/> is <see langword="false"/> unless every searchable column's collation
+/// folds case.</b> <see langword="true"/> sends a bare <c>LIKE</c>, which follows the column's own collation: on a binary-collated
+/// column (the demo's SQL Server grouping columns are <c>Latin1_General_100_BIN2</c>) a <c>contains "germ"</c> finds no
+/// <c>Germany</c> (0 rows for 1,933). <see langword="false"/> lowers both sides and is right whatever the collation, at the cost of
+/// the column's index. Set <see langword="true"/> only for an engine whose <c>LIKE</c> folds case itself (SQLite, MySQL) or after
+/// checking the collation of every column a user can search.</description></item>
+/// </list></para>
 /// </summary>
 public sealed record EfCoreProviderSemantics
 {
@@ -111,6 +131,10 @@ public sealed record EfCoreProviderSemantics
     /// <see cref="EfCoreQueryBuilder"/> for why refusing beats the two silent
     /// alternatives.</description></item>
     /// </list>
+    ///
+    /// <para><b>Host obligation (#2805).</b> Leave this <see langword="false"/> unless every searchable column's collation folds case:
+    /// <see langword="true"/> is a bare <c>LIKE</c>, so on a binary-collated column the match is exact-case and returns wrong rows
+    /// without an error. See the type's remarks.</para>
     /// </summary>
     public bool PatternMatchFoldsCase { get; init; }
 

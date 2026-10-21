@@ -34,6 +34,20 @@ public static class Example
 }
 ```
 
+## Two host obligations that fail silently
+
+Both run without error and return wrong rows, so the adapter documents them; it cannot see the host's model or collations.
+
+- **SQLite instants.** Store a `datetime` as `yyyy-MM-ddTHH:mm:ss.fffZ` text (SEM-4) and map every `DateTime` to and from that text in your
+  `DbContext` (`configurationBuilder.Properties<DateTime>().HaveConversion<YourStoredInstantConverter>()`). EF's own mapping binds a
+  bound as `yyyy-MM-dd HH:mm:ss`; on the bound's own date `'T'` sorts after a space, so a non-midnight range bound counts the whole
+  date as later and a datetime-sorted export repeats or drops rows at chunk edges.
+- **`PatternMatchFoldsCase = false`** unless every searchable column's collation folds case. `true` sends a bare `LIKE` that follows the
+  column's collation, so a binary-collated column (SQL Server `..._BIN2`) matches exact case only: `contains "germ"` finds no `Germany`.
+  `false` lowers both sides and is right for every column.
+
+`EfCoreHostObligationTests` shows each: wrong rows without it, right rows with it.
+
 ## Datetime cells
 
 A `datetime` cell leaves a page or an export row as a UTC instant, whatever kind the provider materialised (SEM-4, result side): a

@@ -194,7 +194,7 @@ needs the Engineering Lead's approval (compliance rule 4); that approval is stil
 The EF Core adapter also runs on two more engines, next to the PostgreSQL `ef` route. Both reuse `EfGridService<TContext>` (`Api/Grid/EfGridService.cs`; `ef` is a thin subclass of it) with one
 context per engine: `SqliteOrdersDbContext` and `SqlServerOrdersDbContext`, both on the shared `SchemaDbContext<T>` (`Api/Grid/OrdersDbContext.cs`).
 
-- **`ef-sqlite`** is always on, over the same file as `sqlite`. It uses the adapter's own SQLite preset (`EfCoreProviderSemantics.Sqlite`), so there are no engine facts to declare. It does need **a datetime converter on the context**
+- **`ef-sqlite`** is always on, over the same file as `sqlite`. It uses the adapter's own SQLite preset (`EfCoreProviderSemantics.Sqlite`), so there are no engine facts to declare. It does need **a datetime converter on the context** (a host obligation the adapter documents, bug #2805)
   (`SqliteOrdersDbContext`): the seed stores datetimes as `yyyy-MM-ddTHH:mm:ss.fffZ` text and SQLite compares text, but EF's own SQLite mapping writes a `DateTime` parameter as `yyyy-MM-dd HH:mm:ss` (a space, no `Z`). Without the converter
   (measured) a range filter with a bound that is not at midnight counts every row of the bound's date as later (13,335 rows for `orderedAt > 2025-06-01T12:00Z` instead of 13,321) and a CSV export sorted by a datetime repeats or drops rows at
   the chunk boundaries (20,060 and 19,947 rows instead of 20,000). With it, rows, groups, drill-down, set values and CSV equal PostgreSQL with no rule beyond the ones `sqlite` already has; tests cover non-midnight bounds and both export directions.
