@@ -567,27 +567,16 @@ public sealed class OpenSearchProviderTests(OpenSearchApiFixture api)
         }
     }
 
-    /// <summary>Expanding the group whose key is null: PostgreSQL's <c>= NULL</c> matches nothing, OpenSearch would send a term with a null
-    /// value and the engine rejects it. At the top level and under another key, as a leaf and as the next level.</summary>
-    [Theory]
-    [InlineData("country", "null", "id")]
-    [InlineData("category", "Germany|null", "id")]
-    public async Task ExpandingTheNullGroup_Is400UnsupportedShape_NamingTheColumn(string nullColumn, string keys, string sortColId)
+    /// <summary>GRP-7: expanding the group whose key is null is the null test on every provider, so the leaf rows equal PostgreSQL's.</summary>
+    [RequiresEngineFact(Engine)]
+    public async Task ExpandingTheNullGroup_EqualsPostgres()
     {
-        var (app, client) = await StartWithClosedEngineAsync();
-        await using (app)
-        using (client)
-        {
-            var columns = keys.Contains('|') ? new[] { "country", "category" } : new[] { "country" };
-            var (status, json) = await ApiHostFixture.PostJsonAsync(
-                client, "opensearch", "rows", GroupBody(columns, keys.Split('|'), sortColId, aggs: "none"));
+        await AssertRowsEqualPostgres(Requests.DrillDownNullCountry);
 
-            Assert.Equal(HttpStatusCode.BadRequest, status);
-            Assert.Equal("unsupported-shape", json.GetProperty("error").GetProperty("kind").GetString());
-            var message = json.GetProperty("error").GetProperty("message").GetString()!;
-            Assert.Contains($"'{nullColumn}' value is empty (null)", message);
-            Assert.Contains("blank filter", message);
-        }
+        var page = await RowsOk("opensearch", Requests.DrillDownNullCountry);
+        var rows = page.GetProperty("rows").EnumerateArray().ToList();
+        Assert.NotEmpty(rows);
+        Assert.All(rows, row => Assert.Equal(JsonValueKind.Null, row.GetProperty("country").ValueKind));
     }
 
     /// <summary>A refusal every provider gives stays the compiler's: a sort on a column the grouped level does not produce, and a sort key

@@ -1,0 +1,88 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": "n01",
+        "region": null,
+        "segment": "Enterprise",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "100.00",
+        "quantity": 1
+      },
+      "why": "null region, Enterprise bucket"
+    },
+    {
+      "row": {
+        "id": "n02",
+        "region": null,
+        "segment": "Enterprise",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "25.50",
+        "quantity": 1
+      },
+      "why": "null region, Enterprise bucket: sums with n01 to 125.50"
+    },
+    {
+      "row": {
+        "id": "n03",
+        "region": null,
+        "segment": "SMB",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "40.00",
+        "quantity": 1
+      },
+      "why": "null region, SMB bucket"
+    },
+    {
+      "row": {
+        "id": "n04",
+        "region": null,
+        "segment": null,
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "7.00",
+        "quantity": 1
+      },
+      "why": "null region and null segment: the null bucket of the level below the null group, sorted last"
+    },
+    {
+      "row": {
+        "id": "n05",
+        "region": null,
+        "segment": "Consumer",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": null,
+        "quantity": 1
+      },
+      "why": "null region, a bucket whose only amount is null: AGG-6 sum is 0"
+    },
+    {
+      "row": {
+        "id": "n06",
+        "region": "",
+        "segment": "Enterprise",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "1000.00",
+        "quantity": 1
+      },
+      "why": "excluded: the empty string is a different group from null (GRP-7), so this must not reach the Enterprise bucket"
+    },
+    {
+      "row": {
+        "id": "n07",
+        "region": "EMEA",
+        "segment": "SMB",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "70.00",
+        "quantity": 1
+      },
+      "why": "excluded: a real region"
+    }
+  ]
+}

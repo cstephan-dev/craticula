@@ -1,0 +1,8 @@
+{
+  "dialect": "mssql",
+  "sql": "SELECT [segment] AS [segment], COALESCE(SUM([amount]), 0) AS [amount_sum] FROM [sales_fact] WHERE [region] IS NULL GROUP BY [segment] ORDER BY CASE WHEN [segment] IS NULL THEN 1 ELSE 0 END ASC, [segment] ASC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY",
+  "params": [
+    0,
+    100
+  ]
+}

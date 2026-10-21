@@ -213,8 +213,13 @@ public sealed class MssqlDialect : ISqlDialect
         // own direction, which is what makes `salary DESC NULLS FIRST` reachable at all.
         var nullBucket = nullsPosition == NullsPosition.First ? "DESC" : "ASC";
 
+        // #2809: a case-sensitive key carries its collation inside the null-bucket expression too. SQL Server refuses a second ORDER BY
+        // expression identical to an earlier one (error 169), and SEM-6's exact tiebreaker on a case-insensitive text stable key that
+        // already sorts first is exactly that: the user's CI key and the tiebreaker would have identical null buckets. A collation on
+        // the bucket's operand makes it a different expression and changes nothing about which rows are null.
         var key = new StringBuilder("CASE WHEN ")
             .Append(quotedColumn)
+            .Append(caseSensitivity == SemanticsResolver.CaseSensitivityMode.Sensitive ? Collation(caseSensitivity) : string.Empty)
             .Append(" IS NULL THEN 1 ELSE 0 END ")
             .Append(nullBucket)
             .Append(", ")

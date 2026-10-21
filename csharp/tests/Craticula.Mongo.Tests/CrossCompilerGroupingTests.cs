@@ -328,7 +328,8 @@ public class CrossCompilerGroupingTests
             ComputesBuckets: groupBy is not null || isDistinct,
             BucketKeyFoldsCase: bucketKey?.Contains("COLLATE", StringComparison.Ordinal) == true
                 || (bucketKey is not null && orderBy?.Split(',')[0].Contains("COLLATE", StringComparison.Ordinal) == true),
-            DrillDownPredicates: context.ConsumedSqlColumns.Count(column => where?.Contains($"\"{column}\" = $") == true),
+            DrillDownPredicates: context.ConsumedSqlColumns.Count(column =>
+                where?.Contains($"\"{column}\" = $") == true || where?.Contains($"\"{column}\" IS NULL") == true), // GRP-7: a null key is the null test
             DrillDownComposes: where?.StartsWith('(') == true,
             TiebreakerIsStableKey: isDistinct
                 ? null

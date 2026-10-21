@@ -10,7 +10,7 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 ```
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
-is up) ends with `all 25 scenarios are equal on all 5 providers (postgres, ef, ef-sqlite, mongo, sqlite)`. (SQLite is a file the seed creates; see
+is up) ends with `all 26 scenarios are equal on all 5 providers (postgres, ef, ef-sqlite, mongo, sqlite)`. (SQLite is a file the seed creates; see
 [SQLite](#sqlite-the-sqlite-provider) for the two documented differences, and [EF Core on SQLite and SQL Server](#ef-core-on-sqlite-and-sql-server-the-ef-sqlite-and-ef-sqlserver-providers) for the two extra EF routes.) SQL Server, MySQL, OpenSearch and Elasticsearch are optional providers that start only on request:
 see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), [Elasticsearch](#elasticsearch-the-elasticsearch-provider), or [all ten at once](#all-ten-providers-at-once).
 
@@ -399,7 +399,7 @@ docker compose --profile opensearch stop opensearch      # when done: stops only
 | Any of them with text, number, set and date filters | **Equal** |
 | Blocks after the first (`startRow` above 0) of a grouped level | **Equal** (the composite aggregation's `after` key is kept in the shared cache; blocks read in order or newest first add up to the whole level) |
 | The groups ordered by an aggregate (a sum, descending) | **Unsupported**: HTTP 400, kind `unsupported-shape`. A composite aggregation lists groups in key order only, so the result would be the first groups by key, not the top ones (OSE-11(c)); sort by the group column instead |
-| Expanding the group whose key is empty (null) | **Unsupported**: HTTP 400, kind `unsupported-shape`. The query would carry a null term, which the engine rejects; PostgreSQL's `= NULL` matches no row either (a library gap, reported); use the column's blank filter |
+| Expanding the group whose key is empty (null) | **Equal** (GRP-7: the library renders it as the null test, `must_not exists`; before #2522 the engine rejected a null term) |
 | A sort on a column the grouped level does not produce, or on a key two aggregates share | Refused by every provider with `compilation-failed`, OpenSearch included (not an OpenSearch limit) |
 
 The page shows an `unsupported-shape` answer as a banner that reads "Not supported on this provider" followed by the message, which names the shape and what to do instead.
@@ -443,9 +443,9 @@ CSV export failed with HTTP 400. The library now knows both spellings (spec OSE-
 
 **Differences from PostgreSQL** are the OpenSearch ones, measured here again, with the same `smoke.sh` rules (it names them in its last lines):
 
-1. **A row count above 10,000 is unknown** (`lastRow` is null; the grid keeps asking until a short block). Elasticsearch can count exactly with `track_total_hits: true` (19,425 on a filter); the client does not ask for it (bug #2524).
+1. **A row count above 10,000 is unknown** (`lastRow` is null; the grid keeps asking until a short block). Elasticsearch can count exactly with `track_total_hits: true` (19,425 on a filter): the client does that when the host sets `ExactRowCount` (OSE-16, #2524), at the price of counting every match on each first-block request. The demo keeps the cheap default.
 2. **The null group of a grouped level sits at the other end**, and the distinct values leave out null.
-3. **Two grouped shapes are unsupported** and answer HTTP 400 `unsupported-shape`, naming Elasticsearch: a group ordered by an aggregate, and expanding the group whose key is null (bug #2522).
+3. **One grouped shape is unsupported** and answers HTTP 400 `unsupported-shape`, naming Elasticsearch: a group ordered by an aggregate. Expanding the group whose key is null works (GRP-7, #2522).
 4. Everything else is equal to PostgreSQL: rows, sort, every filter, groups, drill-down, the query panel (the compiled search body as JSON), CSV, and the typed 4xx. A stopped container answers 503, so does an overloaded one (HTTP 503 or 429).
 
 ## Optional providers and seeding a subset
@@ -490,11 +490,11 @@ export DEMO_OPENSEARCH=http://127.0.0.1:59200
 export DEMO_ELASTICSEARCH=http://127.0.0.1:59201
 dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch elasticsearch
 dotnet run --project Api                                 # /api/health lists all ten
-bash smoke.sh                                            # in another terminal: all 25 scenarios equal on all 10 providers
+bash smoke.sh                                            # in another terminal: all 26 scenarios equal on all 10 providers
 docker compose --profile engines stop sqlserver mysql opensearch elasticsearch   # when done: keeps the data, leaves PostgreSQL and MongoDB up
 ```
 
-`smoke.sh` ends with `all 25 scenarios are equal on all 10 providers (postgres, ef, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
+`smoke.sh` ends with `all 26 scenarios are equal on all 10 providers (postgres, ef, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
 It also prints the places where an engine was equal only by a documented rule (SQL Server and MySQL `quantity_avg`, the OpenSearch
 differences, the same ones on Elasticsearch) and the one scenario OpenSearch and Elasticsearch answer with `unsupported-shape`. If one engine is not up, name the ones to compare:
 `DEMO_SMOKE_PROVIDERS=postgres,ef,mongo,sqlite bash smoke.sh`; a name the API does not list stops the run with exit 2.
@@ -527,7 +527,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `seed opensearch` says `DEMO_OPENSEARCH is not set`, or a red banner for `opensearch` | Start the profile (`docker compose --profile opensearch up -d --wait`), set `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)), run `seed opensearch`, restart the API. |
 | `seed elasticsearch` says `DEMO_ELASTICSEARCH is not set`, or a red banner for `elasticsearch` | Start the profile (`docker compose --profile elasticsearch up -d --wait`), set `DEMO_ELASTICSEARCH` (see [Elasticsearch](#elasticsearch-the-elasticsearch-provider)), run `seed elasticsearch`, restart the API. |
 | The OpenSearch container exits at start | Read `docker logs demo-opensearch-1`. A `vm.max_map_count` message: `sudo sysctl -w vm.max_map_count=262144`. It also needs about 1.5 GB of free RAM (the container idles near 1 GiB). |
-| A banner "Not supported on this provider" on `opensearch` | Expected for the two grouped shapes the README lists as unsupported; the message says what to do instead. |
+| A banner "Not supported on this provider" on `opensearch` | Expected for the one grouped shape the README lists as unsupported (a group ordered by an aggregate); the message says what to do instead. |
 | The OpenSearch grid shows no total, only "more rows" | Expected above 10,000 rows: the count is unknown there (see [OpenSearch](#opensearch-the-opensearch-provider)). |
 | `API: unreachable` in the header | The API is not running on port 5080. Start it (step 3). |
 | A watermark and console warnings | Normal: AG Grid Enterprise evaluation mode (see above). |

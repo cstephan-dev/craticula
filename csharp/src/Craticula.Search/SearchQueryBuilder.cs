@@ -399,6 +399,10 @@ public static class SearchQueryBuilder
             ComparisonOperator.False =>
                 RenderTerm(target, node.Field, ComparisonOperator.Eq, new BooleanValue { Value = false }, context),
 
+            // GRP-7: an equality against a nullValue is the null test. A `term` with a null value is a 400 on the engine; the null group
+            // of a grouped level is expanded with this.
+            ComparisonOperator.Eq when node.Value is NullValue => MustNot(Exists(target.Raw)),
+
             ComparisonOperator.Eq or ComparisonOperator.Neq =>
                 NullInclusive(RenderTerm(target, node.Field, node.Op, RequireValue(node), context), node.Op, target),
 

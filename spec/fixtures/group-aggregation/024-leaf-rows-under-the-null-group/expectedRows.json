@@ -1,0 +1,40 @@
+{
+  "columns": [
+    "id",
+    "region",
+    "segment",
+    "product",
+    "fiscalYear",
+    "amount",
+    "quantity"
+  ],
+  "rows": [
+    [
+      "n01",
+      null,
+      "Enterprise",
+      "Widget",
+      2024,
+      "100.50",
+      5
+    ],
+    [
+      "n03",
+      null,
+      "SMB",
+      "Gadget",
+      2023,
+      "12.00",
+      null
+    ],
+    [
+      "n05",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ]
+}

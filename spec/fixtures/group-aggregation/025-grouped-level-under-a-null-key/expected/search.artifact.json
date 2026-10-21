@@ -1,0 +1,42 @@
+{
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "bool": {
+            "must_not": {
+              "exists": {
+                "field": "region"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "size": 0,
+  "aggs": {
+    "segment": {
+      "composite": {
+        "size": 100,
+        "sources": [
+          {
+            "segment": {
+              "terms": {
+                "field": "segment.keyword",
+                "missing_bucket": true
+              }
+            }
+          }
+        ]
+      },
+      "aggs": {
+        "amount_sum": {
+          "sum": {
+            "field": "amount"
+          }
+        }
+      }
+    }
+  }
+}

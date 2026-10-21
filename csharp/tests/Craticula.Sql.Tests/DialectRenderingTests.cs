@@ -347,7 +347,8 @@ public class DialectRenderingTests
             $"[c] COLLATE {collation} IN (@p2, @p3)",
             target.RenderSetMembership("[c]", negated: false, ["a", "b"], FieldType.String, mode, sink));
         Assert.Equal(
-            $"CASE WHEN [c] IS NULL THEN 1 ELSE 0 END ASC, [c] COLLATE {collation} ASC",
+            // #2809: a case-sensitive key carries its collation inside the null bucket too (a different expression from an earlier key's).
+            $"CASE WHEN [c]{(mode == SemanticsResolver.CaseSensitivityMode.Sensitive ? $" COLLATE {collation}" : string.Empty)} IS NULL THEN 1 ELSE 0 END ASC, [c] COLLATE {collation} ASC",
             target.RenderSortKey("[c]", SortDirection.Asc, NullsPosition.Last, mode));
         Assert.StartsWith(
             $"[c] COLLATE {collation} LIKE ",

@@ -107,6 +107,7 @@ scenarios=(
   "one-bound range becomes greater-than|rows|in-range-one-bound.json|rows"
   "group by country: sum, avg, count|rows|group-by-country.json|rows"
   "group ordered by an aggregate (sum, descending)|rows|group-sort-by-aggregate.json|rows"
+  "leaf rows of the null country group (GRP-7)|rows|group-null-drill-down.json|rows"
   "page past the end|rows|past-the-end.json|rows"
   "set values for country|values|set-values-country.json|values"
   "csv export, status filter|export.csv|export-status.json|csv"

@@ -1,0 +1,61 @@
+{
+  "pipeline": [
+    {
+      "$addFields": {
+        "__codeNullBucket": {
+          "$cond": [
+            {
+              "$eq": [
+                "$code",
+                null
+              ]
+            },
+            1,
+            0
+          ]
+        },
+        "__ageNullBucket": {
+          "$cond": [
+            {
+              "$eq": [
+                "$age",
+                null
+              ]
+            },
+            1,
+            0
+          ]
+        },
+        "__codeExactKey": {
+          "$toHashedIndexKey": "$code"
+        }
+      }
+    },
+    {
+      "$sort": {
+        "__codeNullBucket": 1,
+        "code": 1,
+        "__ageNullBucket": 1,
+        "age": 1,
+        "__codeExactKey": 1
+      }
+    },
+    {
+      "$unset": [
+        "__codeNullBucket",
+        "__ageNullBucket",
+        "__codeExactKey"
+      ]
+    },
+    {
+      "$skip": 0
+    },
+    {
+      "$limit": 100
+    }
+  ],
+  "collation": {
+    "locale": "en",
+    "strength": 2
+  }
+}

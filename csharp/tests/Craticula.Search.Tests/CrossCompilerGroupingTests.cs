@@ -155,7 +155,8 @@ public class CrossCompilerGroupingTests
             Buckets: query.Sql.Contains("GROUP BY", StringComparison.Ordinal)
                 || query.Sql.Contains("SELECT DISTINCT", StringComparison.Ordinal),
             DrillDownPredicates: consumed.Count(column =>
-                where.Contains($"\"{PhysicalSqlColumn(column)}\" = $", StringComparison.Ordinal)),
+                where.Contains($"\"{PhysicalSqlColumn(column)}\" = $", StringComparison.Ordinal)
+                || where.Contains($"\"{PhysicalSqlColumn(column)}\" IS NULL", StringComparison.Ordinal)), // GRP-7: a null key
             BucketKeyIsExact: !GroupKeyText(query.Sql).Contains("COLLATE", StringComparison.Ordinal),
             DrillDownIsExact: consumed.All(column =>
                 !where.Contains($"\"{PhysicalSqlColumn(column)}\" COLLATE", StringComparison.Ordinal)),
@@ -186,7 +187,10 @@ public class CrossCompilerGroupingTests
         return new Decisions(
             Buckets: aggregation is not null,
             DrillDownPredicates: consumed.Count(column => filter.Any(clause =>
-                clause?["term"] is JsonObject term && term.Any(entry => entry.Key.StartsWith(column, StringComparison.Ordinal)))),
+                (clause?["term"] is JsonObject term && term.Any(entry => entry.Key.StartsWith(column, StringComparison.Ordinal)))
+                // GRP-7: a null key is the null test, `must_not exists` on the column's field.
+                || (clause?["bool"]?["must_not"]?["exists"]?["field"]?.GetValue<string>() is { } existsField
+                    && existsField.StartsWith(column, StringComparison.Ordinal)))),
             // A composite source and a `terms` aggregation have no `case_insensitive` parameter at
             // all, so the bucket key is exact by construction — the assertion below is a REGRESSION
             // GUARD (nobody could add one) rather than a discriminator, and it is documented as such

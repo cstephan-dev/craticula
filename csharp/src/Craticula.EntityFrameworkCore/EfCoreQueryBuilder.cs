@@ -472,6 +472,9 @@ public static class EfCoreQueryBuilder
             ComparisonOperator.True => Scalar(property, field, ComparisonOperator.Eq, new BooleanValue { Value = true }, context),
             ComparisonOperator.False => Scalar(property, field, ComparisonOperator.Eq, new BooleanValue { Value = false }, context),
 
+            // GRP-7: an equality against a nullValue is the null test (EF translates a comparison with a null constant to IS NULL), which is how the null group of a grouped level is expanded.
+            ComparisonOperator.Eq when node.Value is NullValue => Expression.Equal(property, Expression.Constant(null, property.Type)),
+
             ComparisonOperator.Eq or ComparisonOperator.Neq
                 or ComparisonOperator.Gt or ComparisonOperator.Gte
                 or ComparisonOperator.Lt or ComparisonOperator.Lte =>
@@ -1385,16 +1388,11 @@ public static class EfCoreQueryBuilder
     /// the schema's DECLARED type rather than from the value's surface shape — asserted here rather
     /// than trusted, since a caller may have skipped <see cref="TypeCoercionValidator"/>.
     ///
-    /// <para><b>A <c>nullValue</c> in a comparison is refused, and this is the one place #1645 chose an
-    /// exception over matching the SQL compiler's behaviour.</b> That compiler binds it as a NULL
-    /// parameter, rendering <c>"col" = $1</c> — which under three-valued logic matches no row — and
-    /// says it declines to rewrite that into <c>IS NULL</c> because no spec text or oracle states such
-    /// a semantics. This path cannot make the same choice: EF collapses a comparison against a null
-    /// parameter to <c>IS NULL</c> (measured — even when the null arrives boxed as a parameter it
-    /// cannot see the value of), so the two paths would answer the same request with "no rows" and
-    /// "the null rows" respectively, silently, on every fixture that never covers it. Refusing names
-    /// the divergence at the one moment someone can act on it, and costs nothing: no fixture carries
-    /// this shape, and SEM-2's <c>blank</c>/<c>notBlank</c> is the operator for null.</para>
+    /// <para><b>A <c>nullValue</c> is the null test for <c>eq</c> (GRP-7) and is refused for every other
+    /// operator.</b> <c>eq</c> never reaches here: it is built as <c>column == null</c> before the value is encoded. Any other operator would bind the null as a parameter, which
+    /// <c>SqlQueryBuilder</c> renders as a comparison matching no row under three-valued logic, while EF collapses a comparison
+    /// against a null parameter to <c>IS NULL</c>; the two paths would answer the same request differently and silently, so it
+    /// is refused. SEM-2's <c>blank</c>/<c>notBlank</c> is the operator for "null or empty".</para>
     /// </summary>
     private static object? EncodeValue(TypedValue value, FieldConfig field, Type clrType)
     {
@@ -1403,11 +1401,9 @@ public static class EfCoreQueryBuilder
         if (value is NullValue)
         {
             throw new EfCoreCompilationException(
-                "A 'nullValue' cannot be compared on the EF Core path. Craticula.Sql binds it as a NULL parameter, " +
-                "which matches no row under SQL's three-valued logic; EF compiles a comparison against a null " +
-                "parameter to IS NULL, which matches exactly the null rows. Rather than pick one and have the two " +
-                "paths disagree silently (AR-4), this is refused: use the 'blank'/'notBlank' operators, which are " +
-                "SEM-2's defined null handling.");
+                "A 'nullValue' can only be compared with eq on the EF Core path (GRP-7: the null test). Every other operator would " +
+                "bind it as a NULL parameter, which matches no row under SQL's three-valued logic, so it is refused: use the " +
+                "'blank'/'notBlank' operators, which are SEM-2's defined null handling.");
         }
 
         RequireDeclaredType(value, field);

@@ -700,11 +700,23 @@ field resolves case-insensitively unless the field declares otherwise, and `'aB3
 equal under it (the blockquote below makes the same argument against collating the *appended* key). Such a
 sort is not total, so **nothing after it is dropped and the exact tiebreaker is appended as before**. One
 gap predates this rule and is left as it was: a sort that already *ends* in the case-insensitive key
-(`[code]`, `[age, code]`) gets no tiebreaker, because appending one would name the column twice, which
-SQL Server and MongoDB refuse (follow-up bug #2809 tracks the whole shape). Rule 1 applies regardless.
-Where the exact tiebreaker *is* appended the ordering names the stable key's column twice (the user's
-collated key and the exact tiebreaker), which SQL Server refuses (error 169) and MongoDB refuses (MDB-10);
-that shape stays unsupported on those two arms.
+(`[code]`, `[age, code]`) gets no tiebreaker, because the user's key already names the column and nothing separates
+case variants there (the rows tie in the engine's own order; a host that needs more declares the key case-sensitive). Rule 1 applies regardless.
+Where the exact tiebreaker *is* appended **after an earlier key on the same column** (the user's collated key, then the
+exact tiebreaker), two arms cannot list a column twice, and each spells the tiebreaker as a different expression instead
+(Bug #2809; fixture `sort-paging/017` carries both arms): **SQL Server** spells the repeated tiebreaker with the field's
+case-*sensitive* mechanism, SC-3's own spelling, `[code] COLLATE Latin1_General_CS_AS`, **and** carries that collation inside
+the tiebreaker's null-bucket `CASE` (SQL Server refuses an `ORDER BY` expression identical to an earlier one, error 169, and
+accepts the same column under a different collation; measured on SQL Server 2022); **MongoDB** sorts the tiebreaker on a
+synthetic field holding `{$toHashedIndexKey: "$code"}` (a non-string, which the query's collation cannot fold), added with the
+null buckets and unset after the `$sort`. The other four SQL dialects accept a repeated column and render the same
+case-sensitive spelling where they have one (SQLite, Oracle); PostgreSQL renders it bare (its column default) and MySQL has no
+collation to spell, so there a case-insensitive column keeps folding case in the tiebreaker, which is the DDL-side host
+obligation GRP-2 and SC-3 already record: the host declares such a stable key case-sensitive or on a binary collation. **The
+tie order among case variants is not promised to be the same on every arm:** PostgreSQL and the Search arm order them by
+the column's default and the keyword field, SQL Server by `CS_AS` (lowercase first) and MongoDB by hash. Where the tiebreaker is
+exact, that order is stable and no variant is dropped or repeated; no rule says which of two case variants that tie on every
+earlier key comes first, and no fixture's expected rows depend on it. The user's own null placement is not repeated for it: a null ties on the earlier key already.
 
 **A dropped key is never a way around the allowlist.** The reductions run only on a sort **every key of
 which the query knows**: on a row query, a field of the schema; on a grouped level, the group column or one
@@ -1639,6 +1651,31 @@ unknown-field case: each one *is* the question (or, for a consumed key, changes 
 come back under the label the client asked for), not a condition narrowing it, so there is no
 narrower answer left to give once it is gone.
 
+**GRP-7. A `nullValue` group key drills into the null group: `eq` against it is the null test, on every backend.**
+A grouped level buckets rows whose group column is null into **one** group (AR-8/BM-2; GRP-4 sorts it with
+`nullsPosition`), so the level below it must be reachable: `groupKeys` carries that group's key as a `nullValue`
+(AR-7), and GRP-5 turns it into `eq` against the group column. Compiled as ordinary equality it expands nothing: SQL's
+`= NULL` matches no row, an engine's `term` with a null value is refused, and a compiler that binds it as a parameter
+answers 0 rows where MongoDB, whose `$eq: null` is the null test, answered the group's rows. The rule that replaces all
+of those: **`eq` with a `nullValue` operand selects exactly the rows whose column is null**, with no bound parameter (the null test
+already is the answer).
+It selects `NULL` and nothing else: the empty string is a different group at a grouped level (`blank` would merge the
+two, and the child level would then no longer sum to its parent's bucket), so `eq null` is **not** `blank`.
+
+| Backend | Rendering |
+|---|---|
+| SQL (all five dialects) | `<col> IS NULL` |
+| MongoDB | `{<path>: {$eq: null}}` (matches null and a missing path, the same set MDB-8's null bucket holds) |
+| ES / OpenSearch | `{bool: {must_not: {exists: {field}}}}` on the raw field |
+| EF Core | `column == null`, which EF translates to `IS NULL` |
+
+Every other operator against a `nullValue` keeps its meaning (SEM-2's null-inclusive `neq` among them, a bound NULL
+parameter that matches no row on SQL, and EF's refusal): GRP-7 gives the null test one spelling, `eq`, and nothing else, because
+GRP-5 emits nothing else. A leaf drill-down, a grouped level below a
+null key, and an export of a drilled group (EXP-2) all inherit it, because they all read the drill-down GRP-5 builds.
+Fixtures `group-aggregation/024` (leaf rows under the null key) and `/025` (a grouped level under a null first key)
+pin it, with a row whose key is the empty string beside the null ones.
+
 **Cross-links.** `$defs/groupSpec` (`groupCols`, `groupKeys`), `$defs/aggregation`,
 `$defs/sortItem`, `$defs/setValuesSpec`, AGG-1..AGG-4 (AGG-4 pins the `terms` ordering GRP-6(a)'s
 ES/OpenSearch arm depends on), SEM-1, SEM-5, SEM-6, SEM-7, SQL-2, SQL-6, and BM-2/BM-3/AR-8/AR-9 in
@@ -2378,15 +2415,16 @@ changes the answer:
   that repeats a colId no longer reaches this check and the first entry, the user's primary, stays primary.
   It was a rejection when this rule was written; such a request is now served on every arm. **One shape
   still reaches it:** a case-insensitive text stable key with keys after it (SEM-6's exception) lists the
-  stable key's column twice, the user's key and the exact tiebreaker, and is still refused here (#2809);
+  stable key's column twice, the user's key and the exact tiebreaker, and is served since #2809 by sorting the tiebreaker on its own
+  synthetic field (`__<field>ExactKey`, a `$toHashedIndexKey` of the path) instead of refusing;
 - **an aggregate whose output name is `group`** — its bucket is `__groupNullBucket`, which the group
   key also claims, so `_id` becomes the primary sort key, a null sorts last where nulls-first was
   requested, and `$unset` lists one name twice;
 - **two aggregates with one output name** — the second accumulator replaces the first in `$group`,
   and the grid reads one column holding another column's number.
 
-The second and third MUST be rejected, and so MUST the one shape of the first that remains (the first
-otherwise no longer arises). Renaming either side is not an alternative: the emitted bucket name would
+The second and third MUST be rejected (the first no longer arises: SEM-6's reduction removes a repeat, and its one exception, a
+case-insensitive text stable key, gets the synthetic tiebreaker field above). Renaming either side is not an alternative: the emitted bucket name would
 then depend on what else the request happened to contain, which is a worse oracle than an error.
 There is no SQL counterpart to any of this — the SQL compiler renders null placement as an inline
 expression rather than as a named field, and a repeated `ORDER BY` key is merely redundant on most of
@@ -2926,6 +2964,16 @@ setting** (`OpenSearch`, the default, or `Elasticsearch`) and applies it only to
 reaches `search.artifact.json`, the compiler or a fixture; a conformance harness does not see it. An adapter that
 cannot tell which engine it talks to uses `OpenSearch`, and against Elasticsearch fails loudly (HTTP 400), never
 silently. The close stays best-effort and the keep-alive is still sent on every search (OSE-10).
+
+**OSE-16. The row count above `max_result_window` is unknown by default, and a host may opt in to the exact count.**
+PERF-3 asks for a bounded count, and the one a search engine gives cheaply is capped: `track_total_hits: <window>` clamps the
+reported `value` at the window and reports `relation: "gte"` once the true total is larger. The adapter therefore reports **no
+count** (`RowCount` null, so the grid's `lastRow` stays unknown and the grid keeps asking for blocks, PERF-2) when the total exceeds
+`max_result_window`, and the exact one below it; it never reports the clamped number as if it were exact. The default stays, because
+the exact count costs the cluster a count of every matching document on each first-block request. A host that wants the total opts in
+with one setting (`ExactRowCount`), which changes **only** the count request to `track_total_hits: true`: the page query, the
+point-in-time walk and the compiled artifact are unchanged, so no fixture and no other backend is affected. A grouped level's count
+is a `cardinality` aggregation (approximate beyond its precision threshold) and is not affected by the setting.
 
 **Cross-links.** `spec/fixtures/schemas/search-artifact.schema.json` (the member set OSE-13 rests on),
 `$defs/andNode`, `$defs/orNode`, `$defs/notNode`, `$defs/unaryOperator`, `$defs/binaryOperator`,

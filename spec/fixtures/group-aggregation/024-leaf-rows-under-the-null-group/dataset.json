@@ -1,0 +1,64 @@
+{
+  "rows": [
+    {
+      "row": {
+        "id": "n03",
+        "region": null,
+        "segment": "SMB",
+        "product": "Gadget",
+        "fiscalYear": 2023,
+        "amount": "12.00",
+        "quantity": null
+      },
+      "why": "leaf row of the null group; seeded out of id order so the tiebreaker has work"
+    },
+    {
+      "row": {
+        "id": "n01",
+        "region": null,
+        "segment": "Enterprise",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "100.50",
+        "quantity": 5
+      },
+      "why": "leaf row of the null group"
+    },
+    {
+      "row": {
+        "id": "n02",
+        "region": "",
+        "segment": "Enterprise",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "20.00",
+        "quantity": 1
+      },
+      "why": "excluded: the empty string is a different group from null (GRP-7), so this is not blank"
+    },
+    {
+      "row": {
+        "id": "n04",
+        "region": "EMEA",
+        "segment": "SMB",
+        "product": "Widget",
+        "fiscalYear": 2024,
+        "amount": "1.00",
+        "quantity": 1
+      },
+      "why": "excluded: a real region"
+    },
+    {
+      "row": {
+        "id": "n05",
+        "region": null,
+        "segment": null,
+        "product": null,
+        "fiscalYear": null,
+        "amount": null,
+        "quantity": null
+      },
+      "why": "leaf row of the null group: every other column null too"
+    }
+  ]
+}

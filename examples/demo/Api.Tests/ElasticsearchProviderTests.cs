@@ -11,7 +11,7 @@ namespace Demo.Api.Tests;
 /// <c>Elasticsearch</c> flavour for the point-in-time calls (OSE-15; the library proves the calls offline). The comparisons with <c>postgres</c> run only when <c>DEMO_ELASTICSEARCH</c> is set and the
 /// engine answers; the stopped-engine and stub-server tests need no cluster. The documented differences are the OpenSearch ones, measured in
 /// #2556 and #2557 on Elasticsearch 8.17.4: the row count above 10,000 is unknown (<c>lastRow</c> null), the null group sits at the other end,
-/// the distinct values leave out null, and two grouped shapes are unsupported. Everything else is exact, including the deep pages past 10,000
+/// the distinct values leave out null, and one grouped shape is unsupported. Everything else is exact, including the deep pages past 10,000
 /// rows and the CSV export, which are the paths that need the flavour. Acceptance ids (docs/feat-breakdown/2494): AC-1 rows, AC-2 groups,
 /// AC-3 CSV, AC-6 typed 4xx and 503.
 /// </summary>
@@ -401,31 +401,16 @@ public sealed class ElasticsearchProviderTests(ElasticsearchApiFixture api)
         }
     }
 
-    /// <summary>The unsupported shapes are refused before any call to the engine, so this needs no cluster: expanding the null group answers a typed 400 that names Elasticsearch.</summary>
-    [Fact]
-    public async Task ExpandingTheNullGroup_IsAnUnsupportedShape_NamingElasticsearch_WithoutACluster()
+    /// <summary>GRP-7: expanding the group whose key is null is the null test on every provider, so the leaf rows equal PostgreSQL's.</summary>
+    [RequiresEngineFact(Engine)]
+    public async Task ExpandingTheNullGroup_EqualsPostgres()
     {
-        var (app, client) = await ApiHostFixture.StartAsync(null, builder =>
-            builder.Configuration[DemoSettings.ElasticsearchEnvVar] = $"http://127.0.0.1:{ApiHostFixture.FreePort()}");
-        await using (app)
-        using (client)
-        {
-            const string body = """
-                {
-                  "startRow": 0, "endRow": 50,
-                  "rowGroupCols": [ { "id": "country", "displayName": "Country", "field": "country" }, { "id": "category", "displayName": "Category", "field": "category" } ],
-                  "valueCols": [ { "id": "amount", "displayName": "Amount", "field": "amount", "aggFunc": "sum" } ],
-                  "pivotCols": [], "pivotMode": false, "groupKeys": [ { "type": "null" } ],
-                  "filterModel": null, "sortModel": []
-                }
-                """;
-            using var response = await client.PostAsync($"/api/{Provider}/rows", new StringContent(body, Encoding.UTF8, "application/json"));
-            var error = await ErrorBody(response);
+        await AssertRowsEqualPostgres(Requests.DrillDownNullCountry);
 
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Equal("unsupported-shape", error.GetProperty("kind").GetString());
-            Assert.StartsWith("Elasticsearch cannot expand the group whose 'country' value is empty", error.GetProperty("message").GetString());
-        }
+        var page = await RowsOk(Provider, Requests.DrillDownNullCountry);
+        var rows = page.GetProperty("rows").EnumerateArray().ToList();
+        Assert.NotEmpty(rows);
+        Assert.All(rows, row => Assert.Equal(JsonValueKind.Null, row.GetProperty("country").ValueKind));
     }
 
     [Fact]

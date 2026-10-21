@@ -37,6 +37,13 @@ public static class Example
 }
 ```
 
+## Row count above 10,000
+
+By default a count above the window (`MaxResultWindow`, 10,000) is reported as unknown (`RowCount` is `null`), which is cheap and lets
+the grid keep asking for blocks. To get the total, opt in: `new OpenSearchDeepPagingOptions { ExactRowCount = true }` makes the
+count request send `track_total_hits: true`. The engine then counts every matching document on each first-block request, so choose it
+knowingly. The page query and the compiled request do not change.
+
 ## Elasticsearch
 
 The compiled request is the same for OpenSearch and Elasticsearch (OSE-14). Only the point-in-time calls that deep paging and

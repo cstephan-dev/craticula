@@ -485,6 +485,10 @@ public static class SqlQueryBuilder
             ComparisonOperator.True => RenderScalar(column, field, ComparisonOperator.Eq, new BooleanValue { Value = true }, context),
             ComparisonOperator.False => RenderScalar(column, field, ComparisonOperator.Eq, new BooleanValue { Value = false }, context),
 
+            // GRP-7: an equality against a nullValue is the null test, exactly and with no parameter. It is how the null group of a
+            // grouped level is expanded (DrillDownFilter), where `= NULL` would match no row. Only `eq`: GRP-5 emits nothing else.
+            ComparisonOperator.Eq when node.Value is NullValue => $"{column} IS NULL",
+
             ComparisonOperator.Eq or ComparisonOperator.Neq
                 or ComparisonOperator.Gt or ComparisonOperator.Gte
                 or ComparisonOperator.Lt or ComparisonOperator.Lte =>
@@ -745,6 +749,7 @@ public static class SqlQueryBuilder
             : SemanticsResolver.GroupingMode.Grouped;
 
         var rendered = new List<string>(keys.Count);
+        var orderedColumns = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < keys.Count; i++)
         {
             var key = keys[i];
@@ -762,6 +767,16 @@ public static class SqlQueryBuilder
             var caseSensitivity = SemanticsResolver
                 .ResolveOrderingAndGroupKeyCaseSensitivity(field, ordering, provenance)
                 .Mode;
+
+            // #2809 (SEM-6's exception): the appended exact tiebreaker on a column an earlier key already orders by. SQL Server refuses
+            // one expression twice (error 169) and accepts the second spelled with a collation, so the repeated tiebreaker is
+            // rendered with the field's case-SENSITIVE mechanism (SC-3's own spelling, the dialect's collation where it has one), which is
+            // also what makes it exact on an engine whose default folds case. The dialect renders it; nothing here names a collation.
+            var firstUseOfColumn = orderedColumns.Add(column);
+            if (provenance == SemanticsResolver.SortKeyProvenance.AppendedTiebreaker && !firstUseOfColumn && field.Type == FieldType.String)
+            {
+                caseSensitivity = SemanticsResolver.CaseSensitivityMode.Sensitive;
+            }
 
             rendered.Add(context.Dialect.RenderSortKey(column, key.Direction, key.NullsPosition, caseSensitivity));
         }
@@ -944,10 +959,8 @@ public static class SqlQueryBuilder
             DateValue d => d.Value,
             DatetimeValue dt => NormalizeInstant(dt.Value, dialect.DatetimeBoundsAreFixedWidth, rounding),
 
-            // AR-7's nullValue. No fixture pins a comparison against it (SEM-2's null handling goes
-            // through blank/notBlank, which never carry a value), so it is bound as a NULL parameter
-            // rather than rewritten into an IS NULL predicate — rewriting would be inventing a
-            // semantics no spec text or oracle states.
+            // AR-7's nullValue. An eq against it never reaches here: GRP-7 renders it as IS NULL. The other
+            // operators bind it as a NULL parameter, which matches no row under SQL's three-valued logic.
             NullValue => null,
 
             _ => throw new SqlCompilationException($"Unknown TypedValue type '{value.GetType().Name}'.")
