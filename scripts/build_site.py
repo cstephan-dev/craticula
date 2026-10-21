@@ -8,8 +8,10 @@ or `spec/README.md` that the site renders as it is). The output is a folder of s
 The build also checks every link of every page, and fails (exit 1) on:
   * a link to a file that does not exist in the repository;
   * a link to a heading anchor that does not exist (in a page of the site, or in another Markdown file of the repository);
-  * a link into the private part of the repository (`docs/`, `.claude/`, `CLAUDE.md`, ...), which the public mirror does not carry;
-  * a link that leaves the repository.
+  * a link into the private part of the repository (the PRIVATE list of `scripts/publish-github.sh`, which the public mirror
+    does not carry, written out below), as a file or as a bare directory;
+  * a link that leaves the repository, or uses a scheme other than http, https or mailto;
+  * the same for an image (`![alt](path)`), whose relative path is also rewritten to its public address.
 A link to an existing repository file that has no page on the site is rewritten to its public GitHub address.
 External `http(s)` links are not fetched (the build must work offline).
 
@@ -28,9 +30,14 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PRIVATE_PREFIXES = ("docs/", ".claude/", ".githooks/", ".azuredevops/", ".sonarlint/", ".vscode/", "github/")
-PRIVATE_FILES = ("CLAUDE.md", ".mcp.json")
+# The private paths of scripts/publish-github.sh (its PRIVATE array): what the public mirror does not carry, so a link to one is
+# dead there. test_build_site.py pins this tuple to the real array where that script exists (the private repository).
+PRIVATE_PATHS = ("docs", ".claude", "CLAUDE.md", ".mcp.json", ".githooks", ".azuredevops", ".sonarlint", ".vscode",
+                 "scripts/publish-github.sh", "scripts/sync-release-commit.sh", "scripts/apply-public-change.sh",
+                 "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py")
 EXTERNAL = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)")
+ALLOWED_SCHEMES = ("http:", "https:", "mailto:")
+SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 class BuildError(Exception):
@@ -41,20 +48,28 @@ class BuildError(Exception):
 
 def slugify(text: str) -> str:
     """GitHub's heading slug: lower case, drop punctuation, spaces to hyphens (so existing `#...` links keep working)."""
-    text = re.sub(r"<[^>]+>", "", text).strip().lower()
+    text = re.sub(r"</?[a-zA-Z][^>]*>", "", text).strip().lower()
     text = re.sub(r"[^\w\- ]", "", text, flags=re.UNICODE)
     return text.replace(" ", "-")
 
 
 class Slugger:
+    """GitHub's de-duplication: the first `same` is `same`, then `same-1`, `same-2`; a suffix that is already taken (by a
+    heading literally called `same 1`) is skipped, so every id on the page is unique."""
+
     def __init__(self) -> None:
-        self.seen: dict[str, int] = {}
+        self.used: set[str] = set()
+        self.counts: dict[str, int] = {}
 
     def __call__(self, text: str) -> str:
         base = slugify(text)
-        n = self.seen.get(base, 0)
-        self.seen[base] = n + 1
-        return base if n == 0 else f"{base}-{n}"
+        candidate = base
+        while candidate in self.used:
+            n = self.counts.get(base, 0) + 1
+            self.counts[base] = n
+            candidate = f"{base}-{n}"
+        self.used.add(candidate)
+        return candidate
 
 
 # ---------------------------------------------------------------- Markdown
@@ -105,6 +120,8 @@ def _inline(text: str, line: int, out: Rendered, resolve, holes: list[str] | Non
         bang, label, href = match.group(1), match.group(2), match.group(3)
         label_html = _inline(label, line, out, resolve, holes)
         if bang:
+            out.links.append((line, href))
+            href = resolve(href, True)
             return hold(f'<img alt="{html.escape(re.sub(r"<[^>]+>", "", restore(label_html)))}" src="{html.escape(href)}">')
         out.links.append((line, href))
         return hold(f'<a href="{html.escape(resolve(href))}">{label_html}</a>')
@@ -116,7 +133,7 @@ def _inline(text: str, line: int, out: Rendered, resolve, holes: list[str] | Non
     return text if nested else restore(text)
 
 
-_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+_HEADING = re.compile(r"^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$")
 _FENCE = re.compile(r"^(\s*)(```+|~~~+)\s*([\w+-]*)")
 _LIST = re.compile(r"^(\s*)([-*+]|\d+[.)])\s+(.*)")
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
@@ -132,9 +149,10 @@ def _cells(row: str) -> list[str]:
     return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", row)]
 
 
-def render_markdown(source: str, resolve=lambda href: href) -> Rendered:
+def render_markdown(source: str, resolve=lambda href, image=False: href) -> Rendered:
     """Markdown to HTML for the subset the repository's documents use (headings, paragraphs, lists, tables, fenced code,
     block quotes, rules, inline code, links, emphasis). Raw HTML in the source is escaped, never passed through."""
+    source = source.replace("\x00", "\ufffd")  # NUL marks this converter's placeholders
     out = Rendered(html="")
     slugs = Slugger()
     body: list[str] = []
@@ -169,10 +187,10 @@ def render_markdown(source: str, resolve=lambda href: href) -> Rendered:
         heading = _HEADING.match(line)
         if heading:
             level, text = len(heading.group(1)), heading.group(2)
-            anchor = slugs(re.sub(r"[`*_]", "", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)))
+            anchor = slugs(re.sub(r"[`*]", "", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)))
             out.anchors.add(anchor)
             if level == 1 and not out.title:
-                out.title = re.sub(r"[`*_]", "", text)
+                out.title = re.sub(r"[`*]", "", text)
             body.append(f'<h{level} id="{anchor}">{inline(text, number)}</h{level}>')
             i += 1
             continue
@@ -277,21 +295,34 @@ def load_config(root: Path) -> dict:
     for key in ("title", "repo", "branch", "pages"):
         if key not in config:
             raise BuildError(f"{path}: missing '{key}'")
-    slugs = [p.get("slug") for p in config["pages"]]
+    for entry in config["pages"]:
+        if not isinstance(entry, dict) or not all(isinstance(entry.get(k), str) for k in ("slug", "title", "source")):
+            raise BuildError(f"{path}: every page needs a string 'slug', 'title' and 'source'")
+        if not SLUG.match(entry["slug"]):
+            raise BuildError(f"{path}: page slug '{entry['slug']}' must match [a-z0-9][a-z0-9-]*")
+        source = entry["source"]
+        normal = os.path.normpath(source).replace(os.sep, "/")
+        if os.path.isabs(source) or normal.startswith("../") or normal == ".." or _is_private(normal):
+            raise BuildError(f"{path}: page '{entry['slug']}': source '{source}' must be a public file inside the repository")
+    slugs = [p["slug"] for p in config["pages"]]
     if len(set(slugs)) != len(slugs) or "index" not in slugs:
         raise BuildError(f"{path}: page slugs must be unique and include 'index'")
     return config
 
 
 def _is_private(rel: str) -> bool:
-    return rel in PRIVATE_FILES or rel.startswith(PRIVATE_PREFIXES) or rel.startswith("_")
+    """True for a path the public mirror does not carry: a PRIVATE entry itself (file or bare directory) or anything under it."""
+    rel = rel.strip("/")
+    return any(rel == entry or rel.startswith(entry + "/") for entry in PRIVATE_PATHS)
 
 
 def resolve_link(href: str, source: str, pages_by_source: dict[str, Page], root: Path, config: dict,
-                 anchors_of, errors: list[str], line: int, own_anchors: set[str]) -> str:
+                 anchors_of, errors: list[str], line: int, own_anchors: set[str], raw: bool = False) -> str:
     """The href to emit for `href` found in `source`, or the original one after recording an error."""
     where = f"{source}:{line}"
     if EXTERNAL.match(href):
+        if not href.lower().startswith(ALLOWED_SCHEMES):
+            errors.append(f"{where}: link '{href[:40]}' uses a scheme other than http, https or mailto")
         return href
     path_part, _, fragment = href.partition("#")
     if not path_part:
@@ -316,7 +347,7 @@ def resolve_link(href: str, source: str, pages_by_source: dict[str, Page], root:
         return href
     if fragment and target.endswith(".md") and fragment not in anchors_of(target):
         errors.append(f"{where}: dead anchor '#{fragment}' in {target}")
-    kind = "tree" if full.is_dir() else "blob"
+    kind = "tree" if full.is_dir() else ("raw" if raw else "blob")
     return f"{config['repo'].rstrip('/')}/{kind}/{config['branch']}/{target.rstrip('/')}" + (f"#{fragment}" if fragment else "")
 
 
@@ -333,46 +364,51 @@ def build(root: Path, out_dir: Path) -> list[str]:
         if rel not in anchor_cache:
             try:
                 anchor_cache[rel] = render_markdown((root / rel).read_text(encoding="utf-8")).anchors
-            except OSError:
+            except (OSError, UnicodeDecodeError):
                 anchor_cache[rel] = set()
         return anchor_cache[rel]
 
     template = (root / "site" / "template.html").read_text(encoding="utf-8")
     style = (root / "site" / "style.css").read_text(encoding="utf-8")
     out_dir.mkdir(parents=True, exist_ok=True)
+    for stale in out_dir.glob("*.html"):  # a page removed from site.json must not linger in the output
+        stale.unlink()
     (out_dir / "style.css").write_text(style, encoding="utf-8")
 
-    nav = "".join(f'<li><a href="{p.slug}.html">{html.escape(p.title)}</a></li>' for p in pages)
+    nav = "".join(f'<li><a href="{html.escape(p.slug)}.html">{html.escape(p.title)}</a></li>' for p in pages)
 
     for page in pages:
         try:
             text = (root / page.source).read_text(encoding="utf-8")
-        except OSError as error:
+        except (OSError, UnicodeDecodeError) as error:
             errors.append(f"site/site.json: page '{page.slug}': cannot read {page.source}: {error}")
             continue
         own = render_markdown(text).anchors
         link_errors: list[str] = []
         rendered = render_markdown(
             text,
-            resolve=lambda href, source=page.source, own=own, sink=link_errors: href)
+            resolve=lambda href, image=False: href)
         # Second pass with the real resolver, now that the page's own anchors are known; the line of each link is taken
         # from the first pass's record, in order.
         lines = iter(line for line, _ in rendered.links)
 
-        def resolver(href: str, source=page.source, own=own, sink=link_errors, lines=lines) -> str:
-            return resolve_link(href, source, pages_by_source, root, config, anchors_of, sink, next(lines, 0), own)
+        def resolver(href: str, image: bool = False, source=page.source, own=own, sink=link_errors, lines=lines) -> str:
+            return resolve_link(href, source, pages_by_source, root, config, anchors_of, sink, next(lines, 0), own, raw=image)
 
         rendered = render_markdown(text, resolve=resolver)
         errors.extend(link_errors)
         page.rendered = rendered
 
-        page_html = (template
-                     .replace("{{site_title}}", html.escape(config["title"]))
-                     .replace("{{page_title}}", html.escape(page.title))
-                     .replace("{{nav}}", nav)
-                     .replace("{{content}}", rendered.html)
-                     .replace("{{source}}", html.escape(page.source))
-                     .replace("{{source_url}}", html.escape(f"{config['repo'].rstrip('/')}/blob/{config['branch']}/{page.source}")))
+        values = {
+            "site_title": html.escape(config["title"]),
+            "page_title": html.escape(page.title),
+            "nav": nav,
+            "content": rendered.html,
+            "source": html.escape(page.source),
+            "source_url": html.escape(f"{config['repo'].rstrip('/')}/blob/{config['branch']}/{page.source}"),
+        }
+        # One pass: a value that itself contains {{...}} (page content may) is never substituted again.
+        page_html = re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), template)
         (out_dir / f"{page.slug}.html").write_text(page_html, encoding="utf-8")
 
     return errors
@@ -392,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     except BuildError as error:
         print(f"build_site: {error}", file=sys.stderr)
         return 2
-    except OSError as error:
+    except (OSError, UnicodeDecodeError) as error:
         print(f"build_site: {error}", file=sys.stderr)
         return 2
 
