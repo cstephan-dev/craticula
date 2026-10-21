@@ -17,6 +17,10 @@
          GridFilterPipeline -> SqlQueryBuilder), so the test project references the adapter even
          though Craticula.Sql itself deliberately does not. -->
     <ProjectReference Include="../../src/Craticula.AgGrid/Craticula.AgGrid.csproj" />
+
+    <!-- The docs site's C# quickstart (#2834): QuickstartSampleTests runs its entry point and compares the output with the file the
+         quickstart page shows, so the page cannot show stale SQL. -->
+    <ProjectReference Include="../../samples/Craticula.Quickstart/Craticula.Quickstart.csproj" />
   </ItemGroup>
 
 </Project>

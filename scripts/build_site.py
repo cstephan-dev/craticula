@@ -15,6 +15,10 @@ The build also checks every link of every page, and fails (exit 1) on:
 A link to an existing repository file that has no page on the site is rewritten to its public GitHub address.
 External `http(s)` links are not fetched (the build must work offline).
 
+A page may include a repository file as a code block with a line `{{include <path> <language>}}`: the file is the single source of
+the code the page shows (a quickstart program that the solution builds cannot drift from its page). The path must be a public
+file inside the repository.
+
 Pages are Markdown files, or generated from a repository file: `"generator": "schema-reference"` renders a JSON Schema as
 reference tables, `"generator": "rules-index"` lists every rule id of the rule source (`spec/semantics.md`) with a link to its
 anchor. A paragraph that opens with a bold rule id (`**GRP-7. ...**`) and a heading that opens with one (`## SEM-1. ...`) get an
@@ -528,6 +532,44 @@ def rules_index(text: str, rules_page: str) -> str:
         "| Rule | Starts with |", "|---|---|", *rows, ""])
 
 
+_INCLUDE = re.compile(r"^\{\{include\s+(\S+)\s+([\w-]*)\}\}\s*$")
+_FENCE_LINE = re.compile(r"^\s*(`{3,}|~{3,})")
+
+
+def expand_includes(text: str, root: Path, source: str) -> str:
+    """Replace each `{{include path language}}` line by the file as a fenced code block, the fence one backtick longer than the
+    longest backtick run in the file (at least four), so a file that holds a fence of its own survives. A line that starts with
+    `{{include` but is not well formed, and an unreadable, private or outside path, are configuration errors (exit 2). A line
+    inside a code fence of the page itself is left alone (it is an example of the directive)."""
+    out: list[str] = []
+    fence: str | None = None
+    for number, line in enumerate(text.split("\n"), 1):
+        opener = _FENCE_LINE.match(line)
+        if opener:
+            marker = opener.group(1)
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+        if fence is not None or not line.startswith("{{include"):
+            out.append(line)
+            continue
+        match = _INCLUDE.match(line)
+        if not match:
+            raise BuildError(f"{source}:{number}: malformed include (expected `{{{{include <path> <language>}}}}`): {line[:60]}")
+        rel = os.path.normpath(match.group(1)).replace(os.sep, "/")
+        if os.path.isabs(match.group(1)) or rel.startswith("../") or rel == ".." or _is_private(rel):
+            raise BuildError(f"{source}:{number}: include '{match.group(1)}' must be a public file inside the repository")
+        try:
+            body = (root / rel).read_text(encoding="utf-8").replace("\r\n", "\n").rstrip("\n")
+        except (OSError, UnicodeDecodeError) as error:
+            raise BuildError(f"{source}:{number}: cannot include '{rel}': {error}") from error
+        longest = max((len(run) for run in re.findall(r"`+", body)), default=0)
+        ticks = "`" * max(4, longest + 1)
+        out.append(f"{ticks}{match.group(2)}\n{body}\n{ticks}")
+    return "\n".join(out)
+
+
 def check_rule_ids(texts: dict[str, str], rule_text: str, prefixes: list[str]) -> list[str]:
     """Every `PREFIX-n` mentioned on a page must be defined by the rule source (heading or bold opener)."""
     if not prefixes:
@@ -617,7 +659,7 @@ def build(root: Path, out_dir: Path) -> list[str]:
                 semantics = next((p for p in pages if p.source == config["ruleSource"] and p.generator is None), None)
                 text_cache[page.slug] = rules_index(read(page.source), semantics.slug if semantics else "semantics")
             else:
-                text_cache[page.slug] = read(page.source)
+                text_cache[page.slug] = expand_includes(read(page.source), root, page.source)
         return text_cache[page.slug]
 
     anchor_cache: dict[str, set[str]] = {}

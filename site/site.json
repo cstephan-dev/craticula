@@ -3,14 +3,78 @@
   "repo": "https://github.com/pluries/craticula",
   "branch": "main",
   "ruleSource": "spec/semantics.md",
-  "ruleIdPrefixes": ["SEM", "AGG", "GRP", "SQL", "MDB", "OSE", "XEQ", "PAR"],
+  "ruleIdPrefixes": [
+    "SEM",
+    "AGG",
+    "GRP",
+    "SQL",
+    "MDB",
+    "OSE",
+    "XEQ",
+    "PAR"
+  ],
   "pages": [
-    { "slug": "index", "title": "Home", "source": "site/pages/index.md" },
-    { "slug": "overview", "title": "Overview", "source": "README.md" },
-    { "slug": "spec", "title": "The spec", "source": "spec/README.md" },
-    { "slug": "semantics", "title": "Semantics", "source": "spec/semantics.md" },
-    { "slug": "rules", "title": "Rule index", "generator": "rules-index" },
-    { "slug": "grid-schema", "title": "GridSchema reference", "generator": "schema-reference", "schema": "spec/grid-schema.schema.json" },
-    { "slug": "ir-schema", "title": "IR reference", "generator": "schema-reference", "schema": "spec/ir.schema.json" }
+    {
+      "slug": "index",
+      "title": "Home",
+      "source": "site/pages/index.md"
+    },
+    {
+      "slug": "quickstart-csharp",
+      "title": "Quickstart: C#",
+      "source": "site/pages/quickstart-csharp.md"
+    },
+    {
+      "slug": "quickstart-typescript",
+      "title": "TypeScript",
+      "source": "site/pages/quickstart-typescript.md"
+    },
+    {
+      "slug": "quickstart-python",
+      "title": "Python",
+      "source": "site/pages/quickstart-python.md"
+    },
+    {
+      "slug": "quickstart-go",
+      "title": "Go",
+      "source": "site/pages/quickstart-go.md"
+    },
+    {
+      "slug": "index-guidance",
+      "title": "Index guidance",
+      "source": "site/pages/index-guidance.md"
+    },
+    {
+      "slug": "overview",
+      "title": "Overview",
+      "source": "README.md"
+    },
+    {
+      "slug": "spec",
+      "title": "The spec",
+      "source": "spec/README.md"
+    },
+    {
+      "slug": "semantics",
+      "title": "Semantics",
+      "source": "spec/semantics.md"
+    },
+    {
+      "slug": "rules",
+      "title": "Rule index",
+      "generator": "rules-index"
+    },
+    {
+      "slug": "grid-schema",
+      "title": "GridSchema reference",
+      "generator": "schema-reference",
+      "schema": "spec/grid-schema.schema.json"
+    },
+    {
+      "slug": "ir-schema",
+      "title": "IR reference",
+      "generator": "schema-reference",
+      "schema": "spec/ir.schema.json"
+    }
   ]
 }
