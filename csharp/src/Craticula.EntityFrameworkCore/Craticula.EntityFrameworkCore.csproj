@@ -49,6 +49,9 @@
          this package's own code, so the "second grid vendor drives this adapter through IR alone" claim
          still holds unmodified. -->
     <ProjectReference Include="../Craticula.Core/Craticula.Core.csproj" />
+
+    <!-- EfCoreValueNormalizer (SEM-4's result side, #2798) is internal; its conversion table is unit-tested directly, as Craticula.Dapper does. -->
+    <InternalsVisibleTo Include="Craticula.EntityFrameworkCore.Tests" />
   </ItemGroup>
 
 </Project>

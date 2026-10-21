@@ -204,6 +204,7 @@ public static class EfCoreExportStream
                 }
 
                 rowsInChunk++;
+                EfCoreValueNormalizer.NormalizeInPlace(cells, columns.Count);
                 yield return new ExportRow(new ArraySegment<object?>(cells, 0, columns.Count));
             }
 

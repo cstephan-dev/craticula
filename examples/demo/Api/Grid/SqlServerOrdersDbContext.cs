@@ -2,7 +2,6 @@ using Craticula.Core.Schema;
 using Craticula.EntityFrameworkCore;
 using Craticula.Sql;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Demo.Api.Grid;
 
@@ -28,16 +27,4 @@ public sealed class SqlServerOrdersDbContext(DbContextOptions<SqlServerOrdersDbC
         // Only Oracle treats '' as NULL.
         EmptyStringIsNull = false
     };
-
-    /// <summary>
-    /// SQL Server's <c>datetime2</c> carries no zone, so EF hands back a <see cref="DateTime"/> of unspecified kind and the JSON would lose the
-    /// trailing <c>Z</c> every other route sends. The EF adapter has no reader of its own to normalise it (bug #2798); until that is decided
-    /// the host states the kind, as EF Core's documentation advises for UTC columns: this converter reads every datetime as UTC and writes it unchanged.
-    /// The seed stores UTC instants.
-    /// </summary>
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
-        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
-
-    private sealed class UtcDateTimeConverter()
-        : ValueConverter<DateTime, DateTime>(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
 }

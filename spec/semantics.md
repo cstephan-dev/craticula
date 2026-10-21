@@ -451,10 +451,11 @@ zone-less value with an *unspecified* kind (a serialiser then drops the `Z`, and
 it in the server process's local zone (SEM-4 already forbids that for the way in), or treat it as local and convert it to
 UTC (that would shift every instant by the server's offset). A `date` cell is unaffected (a local date has no zone).
 This rule is checked by each execution adapter's own tests, not by compile fixtures: a compiler never reads a result.
-Today `Craticula.Dapper` is covered by such tests (`DapperValueReaderDatetimeTests`); MongoDB's and OpenSearch's readers
-return UTC by construction. **Recorded exception (Bug #2798):** `Craticula.EntityFrameworkCore` has no reader of its own,
-its cells are what EF materialises from the host's model, so on SQL Server and MySQL they carry an unspecified kind until
-that bug decides between normalising in the adapter and making a UTC value converter the host's documented obligation.
+Today `Craticula.Dapper` (`DapperValueReaderDatetimeTests`) and `Craticula.EntityFrameworkCore` (Bug #2798,
+`EfCoreDatetimeKindTests`) are covered by such tests; MongoDB's and OpenSearch's readers return UTC by construction.
+**EF Core:** the adapter has no reader of its own, so it applies the same table to every `DateTime` or `DateTimeOffset`
+cell of a page or an export row after EF has materialised it, whatever the provider; a host therefore needs no UTC
+value converter for the result side. The comparison side stays the host's obligation as above.
 
 **MongoDB representation of `dateValue` (pinned): a plain ISO date string, never a BSON `Date`.**
 MongoDB's `Date` type has no "calendar date, no time-of-day" concept — every BSON `Date` is an
