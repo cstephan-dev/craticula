@@ -455,7 +455,10 @@ Today `Craticula.Dapper` (`DapperValueReaderDatetimeTests`) and `Craticula.Entit
 `EfCoreDatetimeKindTests`) are covered by such tests; MongoDB's and OpenSearch's readers return UTC by construction.
 **EF Core:** the adapter has no reader of its own, so it applies the same table to every `DateTime` or `DateTimeOffset`
 cell of a page or an export row after EF has materialised it, whatever the provider; a host therefore needs no UTC
-value converter for the result side. The comparison side stays the host's obligation as above.
+value converter for the result side. The comparison side stays the host's obligation as above. For SQLite that obligation includes the **binding**: EF binds a `DateTime` in its own
+`yyyy-MM-dd HH:mm:ss` form, so the host maps every datetime to and from the stored `yyyy-MM-ddTHH:mm:ss.fffZ` text on its
+`DbContext`, or an `eq`, a range bound and a datetime-sorted export return wrong rows without an error (a walk that meets the row its previous chunk ended on stops with an exception) (Bug #2805,
+`EfCoreHostObligationTests`).
 
 **MongoDB representation of `dateValue` (pinned): a plain ISO date string, never a BSON `Date`.**
 MongoDB's `Date` type has no "calendar date, no time-of-day" concept — every BSON `Date` is an
@@ -527,8 +530,10 @@ often diverge from what the grid itself shows the user.
   SQL Server, MySQL and Oracle compare a typed instant, not text, and keep the form of SEM-4 above
   (`...:00Z` for a whole second). The obligation covers the path that sends the bound as text
   (`Craticula.Sql` and the Dapper adapter on top of it); the EF Core adapter hands its provider a
-  `DateTime` and the provider's own text mapping applies (AR-4's EF Core exception; the divergence is
-  recorded in `SqliteTypeAffinityDivergenceTests`).
+  `DateTime`, so a host that stores the form above maps every datetime to and from it on its `DbContext` (SEM-4's EF
+  paragraph, Bug #2805; the divergence without it is recorded in `SqliteTypeAffinityDivergenceTests` and
+  `EfCoreHostObligationTests`). That mapping writes millisecond text, so a finer-than-millisecond bound is truncated there, not
+  floored or ceiled as above.
 - **MongoDB** — an instant field (`datetimeValue`) compares against BSON `Date` values built from
   the full instant string (see the pinned representation above); a local-date field (`dateValue`)
   compares against the plain ISO date string instead, never a `Date`:

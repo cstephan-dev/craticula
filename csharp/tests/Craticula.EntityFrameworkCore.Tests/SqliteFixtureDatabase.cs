@@ -49,12 +49,12 @@ internal sealed class SqliteFixtureDatabase : IDisposable
     public int SeededRowCount { get; }
 
     private SqliteFixtureDatabase(
-        SqliteConnection connection, GridSchema schema, int seededRowCount)
+        SqliteConnection connection, GridSchema schema, int seededRowCount, bool mapStoredInstants)
     {
         this.connection = connection;
         Schema = schema;
         SeededRowCount = seededRowCount;
-        context = new PropertyBagContext(connection, schema, executedCommands.Add);
+        context = new PropertyBagContext(connection, schema, executedCommands.Add, mapStoredInstants);
     }
 
     /// <summary>
@@ -63,16 +63,21 @@ internal sealed class SqliteFixtureDatabase : IDisposable
     /// NULL).
     /// </summary>
     public static SqliteFixtureDatabase Create(
-        GridSchema schema, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows)
+        GridSchema schema, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows, bool storedInstantText = false, bool mapStoredInstants = false)
     {
         var connection = new SqliteConnection("DataSource=:memory:");
         connection.Open();
 
         CreateTable(connection, schema);
-        Insert(connection, schema, rows);
+        Insert(connection, schema, rows, storedInstantText);
 
-        return new SqliteFixtureDatabase(connection, schema, rows.Count);
+        return new SqliteFixtureDatabase(connection, schema, rows.Count, mapStoredInstants);
     }
+
+    /// <summary>SEM-4's SQLite form of an instant, the one a host stores: <c>yyyy-MM-ddTHH:mm:ss.fffZ</c>, UTC.</summary>
+    internal static string StoredInstant(DateTime value) =>
+        (value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value)
+            .ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
     /// <summary>The EF path's <c>FROM</c> target: the property-bag entity the adapter's own
     /// <see cref="GridSchemaPropertyBag.Configure"/> registered.</summary>
@@ -309,7 +314,7 @@ internal sealed class SqliteFixtureDatabase : IDisposable
     };
 
     private static void Insert(
-        SqliteConnection connection, GridSchema schema, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows)
+        SqliteConnection connection, GridSchema schema, IReadOnlyList<IReadOnlyDictionary<string, object?>> rows, bool storedInstantText)
     {
         foreach (var row in rows)
         {
@@ -330,6 +335,11 @@ internal sealed class SqliteFixtureDatabase : IDisposable
                 values.Append("$v").Append(index);
 
                 row.TryGetValue(field, out var value);
+                if (storedInstantText && value is DateTime instant)
+                {
+                    value = StoredInstant(instant);
+                }
+
                 command.Parameters.AddWithValue($"$v{index}", value ?? DBNull.Value);
             }
 
@@ -403,7 +413,7 @@ internal sealed class SqliteFixtureDatabase : IDisposable
     /// problem — see that class for the two errors it produces.</para>
     /// </summary>
     private sealed class PropertyBagContext(
-        SqliteConnection connection, GridSchema schema, Action<string> commandSink) : DbContext, IGridSchemaModel
+        SqliteConnection connection, GridSchema schema, Action<string> commandSink, bool mapStoredInstants) : DbContext, IGridSchemaModel
     {
         public GridSchema Schema { get; } = schema;
 
@@ -413,7 +423,22 @@ internal sealed class SqliteFixtureDatabase : IDisposable
                 .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>()
                 .LogTo(commandSink, [RelationalEventId.CommandExecuted]);
 
+        /// <summary>EF caches the model by (context type, schema instance): reuse one schema instance for a mapped and an unmapped database and
+        /// the first model wins, so load the fixture afresh for each. The host obligation of #2805: with <paramref name="mapStoredInstants"/> the context maps every datetime to and from the
+        /// stored text form, so a bound EF binds compares like the text a host stored (SEM-4, the SQLite arm).</summary>
+        protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        {
+            if (mapStoredInstants)
+            {
+                configurationBuilder.Properties<DateTime>().HaveConversion<StoredInstantConverter>();
+            }
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder) =>
             GridSchemaPropertyBag.Configure(modelBuilder, Schema);
+
+        private sealed class StoredInstantConverter() : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, string>(
+            value => StoredInstant(value),
+            text => DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal));
     }
 }

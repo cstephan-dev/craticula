@@ -157,6 +157,12 @@ public static class EfCoreExportStream
             var rowsInChunk = 0;
             var probed = false;
 
+            // The key the previous chunk ended on. A correct walk never meets it again: the boundary predicate is "strictly
+            // after" it. Meeting it means the predicate compared the boundary against the stored value in a different form
+            // (Bug #2805: SQLite text a host stored as 'T…Z' against EF's own 'yyyy-MM-dd HH:mm:ss' binding), and the walk
+            // would restart at the same row for ever once a calendar date holds a chunk's worth of rows.
+            var previousChunkEnd = walked ? boundary[stableKeyIndex] : null;
+
             await foreach (var cells in chunk.AsAsyncEnumerable()
                 .WithCancellation(cancellationToken).ConfigureAwait(false))
             {
@@ -174,6 +180,11 @@ public static class EfCoreExportStream
                 // false positive — SC-5 declares the key unique, so two equal values are a schema defect
                 // whether or not this particular export would have dropped anything.
                 var stableKey = cells[columns.Count + stableKeyIndex];
+
+                if (walked && Equals(stableKey, previousChunkEnd))
+                {
+                    throw RepeatedRow(request.Schema.StableKey, stableKey);
+                }
 
                 if (rowsInChunk == chunking.ChunkSize)
                 {
@@ -231,6 +242,13 @@ public static class EfCoreExportStream
     /// <para>It cannot produce a false positive: SC-5 declares the key unique, so two equal values are a
     /// schema defect whether or not this particular export would have dropped anything.</para>
     /// </summary>
+    private static EfCoreCompilationException RepeatedRow(string stableKeyField, object? value) =>
+        new($"The export met the row with stable key '{stableKeyField}' = '{value}' again after emitting it: the keyset predicate " +
+            "did not exclude the row the previous chunk ended on, so the walk would repeat for ever. The usual cause is a sort key " +
+            "whose bound parameter is written differently from the stored value (SQLite datetimes: the host must map every " +
+            "datetime to and from the stored 'yyyy-MM-ddTHH:mm:ss.fffZ' text, see EfCoreProviderSemantics). Stopping instead of " +
+            "returning a long, wrong export.");
+
     private static EfCoreCompilationException DuplicateStableKey(string stableKeyField, object? value) =>
         new($"Two rows share the stable key '{stableKeyField}' (value '{value}'). SC-5 declares that key " +
             "unique and EXP-3's keyset chunking relies on it: it is the last key of every ordering this " +
