@@ -218,7 +218,7 @@ public class EfCoreQueryBuilderTests
 
     /// <summary>
     /// The one documented divergence this adapter turns into an exception, now for the ordering operators only. GRP-7 gives
-    /// <c>eq</c> / <c>neq</c> against a <c>nullValue</c> one meaning on every backend (the null test); every other operator
+    /// <c>eq</c> against a <c>nullValue</c> one meaning on every backend (the null test); every other operator
     /// would bind it as a NULL parameter on <c>SqlQueryBuilder</c>, which matches no row under three-valued logic, while EF
     /// collapses a comparison against a null parameter to <c>IS NULL</c>. Silently picking one would make the two paths
     /// answer the same request differently, so it is refused.
@@ -229,21 +229,25 @@ public class EfCoreQueryBuilderTests
         var node = Comparison("name", ComparisonOperator.Gt, new NullValue());
 
         var exception = Assert.Throws<EfCoreCompilationException>(() => Sql(Request(node)));
-        Assert.Contains("eq or neq", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("with eq on the EF Core path", exception.Message, StringComparison.Ordinal);
         Assert.Contains("blank", exception.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>GRP-7: <c>eq</c> / <c>neq</c> against a nullValue is the null test, which is how the null group of a grouped level is
-    /// expanded; EF translates a comparison with a null constant to <c>IS NULL</c> / <c>IS NOT NULL</c>.</summary>
-    [Theory]
-    [InlineData(ComparisonOperator.Eq, "IS NULL")]
-    [InlineData(ComparisonOperator.Neq, "IS NOT NULL")]
-    public void Equality_With_A_NullValue_Is_The_Null_Test(ComparisonOperator op, string expected)
+    /// <summary>GRP-7: <c>eq</c> against a nullValue is the null test, which is how the null group of a grouped level is expanded; EF
+    /// translates a comparison with a null constant to <c>IS NULL</c>. <c>neq</c> is refused as before.</summary>
+    [Fact]
+    public void Equality_With_A_NullValue_Is_The_Null_Test()
     {
-        var sql = Sql(Request(Comparison("name", op, new NullValue())));
+        var sql = Sql(Request(Comparison("name", ComparisonOperator.Eq, new NullValue())));
 
-        Assert.Contains(expected, sql, StringComparison.Ordinal);
+        Assert.Contains("IS NULL", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("= NULL", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Inequality_With_A_NullValue_Is_Still_Refused()
+    {
+        Assert.Throws<EfCoreCompilationException>(() => Sql(Request(Comparison("name", ComparisonOperator.Neq, new NullValue()))));
     }
 
     /// <summary>

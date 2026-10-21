@@ -486,9 +486,8 @@ public static class SqlQueryBuilder
             ComparisonOperator.False => RenderScalar(column, field, ComparisonOperator.Eq, new BooleanValue { Value = false }, context),
 
             // GRP-7: an equality against a nullValue is the null test, exactly and with no parameter. It is how the null group of a
-            // grouped level is expanded (DrillDownFilter), where `= NULL` would match no row.
+            // grouped level is expanded (DrillDownFilter), where `= NULL` would match no row. Only `eq`: GRP-5 emits nothing else.
             ComparisonOperator.Eq when node.Value is NullValue => $"{column} IS NULL",
-            ComparisonOperator.Neq when node.Value is NullValue => $"{column} IS NOT NULL",
 
             ComparisonOperator.Eq or ComparisonOperator.Neq
                 or ComparisonOperator.Gt or ComparisonOperator.Gte
@@ -774,7 +773,7 @@ public static class SqlQueryBuilder
             // rendered with the field's case-SENSITIVE mechanism (SC-3's own spelling, the dialect's collation where it has one), which is
             // also what makes it exact on an engine whose default folds case. The dialect renders it; nothing here names a collation.
             var firstUseOfColumn = orderedColumns.Add(column);
-            if (provenance == SemanticsResolver.SortKeyProvenance.AppendedTiebreaker && !firstUseOfColumn)
+            if (provenance == SemanticsResolver.SortKeyProvenance.AppendedTiebreaker && !firstUseOfColumn && field.Type == FieldType.String)
             {
                 caseSensitivity = SemanticsResolver.CaseSensitivityMode.Sensitive;
             }
@@ -960,7 +959,7 @@ public static class SqlQueryBuilder
             DateValue d => d.Value,
             DatetimeValue dt => NormalizeInstant(dt.Value, dialect.DatetimeBoundsAreFixedWidth, rounding),
 
-            // AR-7's nullValue. An eq or neq against it never reaches here: GRP-7 renders it as IS NULL / IS NOT NULL. The other
+            // AR-7's nullValue. An eq against it never reaches here: GRP-7 renders it as IS NULL. The other
             // operators bind it as a NULL parameter, which matches no row under SQL's three-valued logic.
             NullValue => null,
 

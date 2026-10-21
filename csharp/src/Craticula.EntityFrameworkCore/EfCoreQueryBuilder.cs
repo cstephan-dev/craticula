@@ -472,10 +472,8 @@ public static class EfCoreQueryBuilder
             ComparisonOperator.True => Scalar(property, field, ComparisonOperator.Eq, new BooleanValue { Value = true }, context),
             ComparisonOperator.False => Scalar(property, field, ComparisonOperator.Eq, new BooleanValue { Value = false }, context),
 
-            // GRP-7: an equality against a nullValue is the null test (EF translates a comparison with a null constant to IS NULL /
-            // IS NOT NULL), which is how the null group of a grouped level is expanded.
+            // GRP-7: an equality against a nullValue is the null test (EF translates a comparison with a null constant to IS NULL), which is how the null group of a grouped level is expanded.
             ComparisonOperator.Eq when node.Value is NullValue => Expression.Equal(property, Expression.Constant(null, property.Type)),
-            ComparisonOperator.Neq when node.Value is NullValue => Expression.NotEqual(property, Expression.Constant(null, property.Type)),
 
             ComparisonOperator.Eq or ComparisonOperator.Neq
                 or ComparisonOperator.Gt or ComparisonOperator.Gte
@@ -1390,9 +1388,8 @@ public static class EfCoreQueryBuilder
     /// the schema's DECLARED type rather than from the value's surface shape — asserted here rather
     /// than trusted, since a caller may have skipped <see cref="TypeCoercionValidator"/>.
     ///
-    /// <para><b>A <c>nullValue</c> is the null test for <c>eq</c> / <c>neq</c> (GRP-7) and is refused for every other
-    /// operator.</b> The two equality operators never reach here: they are built as <c>column == null</c> /
-    /// <c>column != null</c> before the value is encoded. Any other operator would bind the null as a parameter, which
+    /// <para><b>A <c>nullValue</c> is the null test for <c>eq</c> (GRP-7) and is refused for every other
+    /// operator.</b> <c>eq</c> never reaches here: it is built as <c>column == null</c> before the value is encoded. Any other operator would bind the null as a parameter, which
     /// <c>SqlQueryBuilder</c> renders as a comparison matching no row under three-valued logic, while EF collapses a comparison
     /// against a null parameter to <c>IS NULL</c>; the two paths would answer the same request differently and silently, so it
     /// is refused. SEM-2's <c>blank</c>/<c>notBlank</c> is the operator for "null or empty".</para>
@@ -1404,7 +1401,7 @@ public static class EfCoreQueryBuilder
         if (value is NullValue)
         {
             throw new EfCoreCompilationException(
-                "A 'nullValue' can only be compared with eq or neq on the EF Core path (GRP-7: the null test). Every other operator would " +
+                "A 'nullValue' can only be compared with eq on the EF Core path (GRP-7: the null test). Every other operator would " +
                 "bind it as a NULL parameter, which matches no row under SQL's three-valued logic, so it is refused: use the " +
                 "'blank'/'notBlank' operators, which are SEM-2's defined null handling.");
         }

@@ -459,16 +459,23 @@ public class SqlQueryBuilderOperatorTests
         Assert.Equal([null], parameters);
     }
 
-    /// <summary>GRP-7: <c>eq</c> / <c>neq</c> against a nullValue is the null test, with no parameter.</summary>
-    [Theory]
-    [InlineData(ComparisonOperator.Eq, "\"unit_cost\" IS NULL")]
-    [InlineData(ComparisonOperator.Neq, "\"unit_cost\" IS NOT NULL")]
-    public void Equality_With_A_NullValue_Is_The_Null_Test(ComparisonOperator op, string expected)
+    /// <summary>GRP-7: <c>eq</c> against a nullValue is the null test, with no parameter; <c>neq</c> keeps its SEM-2 meaning.</summary>
+    [Fact]
+    public void Equality_With_A_NullValue_Is_The_Null_Test()
     {
-        var (where, parameters) = Where(Comparison("unitCost", op, new NullValue()));
+        var (where, parameters) = Where(Comparison("unitCost", ComparisonOperator.Eq, new NullValue()));
 
-        Assert.Equal(expected, where);
+        Assert.Equal("\"unit_cost\" IS NULL", where);
         Assert.Empty(parameters);
+    }
+
+    [Fact]
+    public void Inequality_With_A_NullValue_Keeps_Its_Null_Inclusive_Meaning()
+    {
+        var (where, parameters) = Where(Comparison("unitCost", ComparisonOperator.Neq, new NullValue()));
+
+        Assert.Contains("OR \"unit_cost\" IS NULL", where, StringComparison.Ordinal);
+        Assert.Equal([null], parameters);
     }
 
     [Theory]

@@ -1215,8 +1215,8 @@ public static class MongoPipelineBuilder
             // overwrites the FIRST key's entry in `$sort`, promoting the later key to primary, and it
             // lists the same name twice in `$unset`. Three ways to get there: AGG-2 lets
             // `valueCols[].id` name the reserved `__groupNullBucket`; two different fields could claim
-            // one bucket; and a case-insensitive TEXT stable key with keys after it, where SEM-6 keeps
-            // the user's key and appends the exact tiebreaker on the same field (#2809). A repeated
+            // one bucket. (A case-insensitive TEXT stable key with keys after it, where SEM-6 keeps the user's key and appends the
+            // exact tiebreaker on the same field, no longer reaches here: it takes the ExactField branch above, #2809.) A repeated
             // colId in `sortModel` no longer reaches this point: SEM-6's reduction (Bug #2565) drops
             // a later occurrence of a field first. Renaming one side would make the emitted bucket name
             // depend on the rest of the request, so the request is refused instead — GRP-4's "a sort key

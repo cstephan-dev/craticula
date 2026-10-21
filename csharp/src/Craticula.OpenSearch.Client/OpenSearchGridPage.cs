@@ -70,7 +70,7 @@ public sealed record OpenSearchGridPage
     /// </list>
     ///
     /// <para><b>Opt-in exact count (OSE-16).</b> With <see cref="OpenSearchDeepPagingOptions.ExactRowCount"/> the count request sends
-    /// <c>track_total_hits: true</c>, so the engine reports <c>relation: "eq"</c> and case 2 below no longer arises; the cost is a count of every
+    /// <c>track_total_hits: true</c>, so the engine reports <c>relation: "eq"</c> and case 2 above no longer arises; the cost is a count of every
     /// matching document on each first-block request.</para>
     ///
     /// <para><b>A host wiring this into a response must not assume <c>includeRowCount: true</c> always
@@ -78,8 +78,8 @@ public sealed record OpenSearchGridPage
     /// returns <see langword="null"/> rather than the clamped value once <c>relation</c> stops being
     /// <c>"eq"</c>.</para>
     ///
-    /// <para><b>Ungrouped: <c>track_total_hits</c>, CAPPED (PERF-3) — never the uncapped
-    /// <see langword="true"/>.</b> This backend defaults <see cref="LastRow"/>'s strategy to
+    /// <para><b>Ungrouped: <c>track_total_hits</c>, CAPPED (PERF-3) by default; the uncapped
+    /// <see langword="true"/> only on the host's opt-in (OSE-16).</b> This backend defaults <see cref="LastRow"/>'s strategy to
     /// <c>Lazy</c>, so a caller asking for <see cref="RowCount"/> here is deliberately opting INTO the
     /// <c>Exact</c> path every other adapter defaults to — inverted, not skipped. The cap reused is
     /// <see cref="OpenSearchDeepPagingOptions.MaxResultWindow"/>: PERF-3 asks only that the count be

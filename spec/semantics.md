@@ -709,12 +709,14 @@ case-*sensitive* mechanism, SC-3's own spelling, `[code] COLLATE Latin1_General_
 the tiebreaker's null-bucket `CASE` (SQL Server refuses an `ORDER BY` expression identical to an earlier one, error 169, and
 accepts the same column under a different collation; measured on SQL Server 2022); **MongoDB** sorts the tiebreaker on a
 synthetic field holding `{$toHashedIndexKey: "$code"}` (a non-string, which the query's collation cannot fold), added with the
-null buckets and unset after the `$sort`. The other three SQL dialects accept a repeated column and render the same
-case-sensitive spelling, which is what makes the tiebreaker exact on an engine whose default folds case. **The tie order among
-case variants is stable but is not promised to be the same on every arm:** PostgreSQL and the Search arm order them
-binary, SQL Server by `CS_AS` (lowercase first) and MongoDB by hash. That order is the tiebreaker's whole job (paging stays
-stable and no variant is dropped or repeated); no rule says which of two case variants that tie on every earlier key comes first,
-and no fixture's expected rows depend on it. The user's own null placement is not repeated for it: a null ties on the earlier key already.
+null buckets and unset after the `$sort`. The other four SQL dialects accept a repeated column and render the same
+case-sensitive spelling where they have one (SQLite, Oracle); PostgreSQL renders it bare (its column default) and MySQL has no
+collation to spell, so there a case-insensitive column keeps folding case in the tiebreaker, which is the DDL-side host
+obligation GRP-2 and SC-3 already record: the host declares such a stable key case-sensitive or on a binary collation. **The
+tie order among case variants is not promised to be the same on every arm:** PostgreSQL and the Search arm order them by
+the column's default and the keyword field, SQL Server by `CS_AS` (lowercase first) and MongoDB by hash. Where the tiebreaker is
+exact, that order is stable and no variant is dropped or repeated; no rule says which of two case variants that tie on every
+earlier key comes first, and no fixture's expected rows depend on it. The user's own null placement is not repeated for it: a null ties on the earlier key already.
 
 **A dropped key is never a way around the allowlist.** The reductions run only on a sort **every key of
 which the query knows**: on a row query, a field of the schema; on a grouped level, the group column or one
@@ -1655,20 +1657,21 @@ A grouped level buckets rows whose group column is null into **one** group (AR-8
 (AR-7), and GRP-5 turns it into `eq` against the group column. Compiled as ordinary equality it expands nothing: SQL's
 `= NULL` matches no row, an engine's `term` with a null value is refused, and a compiler that binds it as a parameter
 answers 0 rows where MongoDB, whose `$eq: null` is the null test, answered the group's rows. The rule that replaces all
-of those: **`eq` with a `nullValue` operand selects exactly the rows whose column is null, and `neq` exactly those
-whose column is not**, with no bound parameter and no null-inclusive disjunct (the null test already is the answer).
+of those: **`eq` with a `nullValue` operand selects exactly the rows whose column is null**, with no bound parameter (the null test
+already is the answer).
 It selects `NULL` and nothing else: the empty string is a different group at a grouped level (`blank` would merge the
 two, and the child level would then no longer sum to its parent's bucket), so `eq null` is **not** `blank`.
 
 | Backend | Rendering |
 |---|---|
-| SQL (all five dialects) | `<col> IS NULL` / `<col> IS NOT NULL` |
+| SQL (all five dialects) | `<col> IS NULL` |
 | MongoDB | `{<path>: {$eq: null}}` (matches null and a missing path, the same set MDB-8's null bucket holds) |
-| ES / OpenSearch | `{bool: {must_not: [{exists: {field}}]}}` / `{exists: {field}}` on the raw field |
-| EF Core | `column == null` / `column != null`, which EF translates to `IS NULL` / `IS NOT NULL` |
+| ES / OpenSearch | `{bool: {must_not: {exists: {field}}}}` on the raw field |
+| EF Core | `column == null`, which EF translates to `IS NULL` |
 
-Every other operator against a `nullValue` keeps its meaning (a bound NULL parameter that matches no row on SQL, and
-EF's refusal): GRP-7 gives the null test one spelling, `eq`, and nothing else. A leaf drill-down, a grouped level below a
+Every other operator against a `nullValue` keeps its meaning (SEM-2's null-inclusive `neq` among them, a bound NULL
+parameter that matches no row on SQL, and EF's refusal): GRP-7 gives the null test one spelling, `eq`, and nothing else, because
+GRP-5 emits nothing else. A leaf drill-down, a grouped level below a
 null key, and an export of a drilled group (EXP-2) all inherit it, because they all read the drill-down GRP-5 builds.
 Fixtures `group-aggregation/024` (leaf rows under the null key) and `/025` (a grouped level under a null first key)
 pin it, with a row whose key is the empty string beside the null ones.
