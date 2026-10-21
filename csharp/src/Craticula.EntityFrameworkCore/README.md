@@ -40,11 +40,16 @@ Both run without error and return wrong rows, so the adapter documents them; it 
 
 - **SQLite instants.** Store a `datetime` as `yyyy-MM-ddTHH:mm:ss.fffZ` text (SEM-4) and map every `DateTime` to and from that text in your
   `DbContext` (`configurationBuilder.Properties<DateTime>().HaveConversion<YourStoredInstantConverter>()`). EF's own mapping binds a
-  bound as `yyyy-MM-dd HH:mm:ss`; on the bound's own date `'T'` sorts after a space, so a non-midnight range bound counts the whole
-  date as later and a datetime-sorted export repeats or drops rows at chunk edges.
-- **`PatternMatchFoldsCase = false`** unless every searchable column's collation folds case. `true` sends a bare `LIKE` that follows the
-  column's collation, so a binary-collated column (SQL Server `..._BIN2`) matches exact case only: `contains "germ"` finds no `Germany`.
-  `false` lowers both sides and is right for every column.
+  value as `yyyy-MM-dd HH:mm:ss`; on the value's own date `'T'` sorts after a space. Without the mapping an `eq` at a stored time finds
+  nothing, a `neq` finds every row, a range bound counts the whole bound date as later (13,335 rows for 13,321 on the demo), and a
+  datetime-sorted export repeats or drops rows at chunk edges (20,060 and 19,947 rows for 20,000). An export whose walk meets the row
+  the previous chunk ended on stops with an exception rather than loop. The mapping writes millisecond text, so a finer-than-millisecond
+  bound is truncated, not floored or ceiled as the SQL compiler does (SEM-4).
+- **`PatternMatchFoldsCase`** says what the engine's `LIKE` does. SQLite: `true` (its `LIKE` folds ASCII case whatever the column is, and `true`
+  is what makes a `caseSensitivity: "sensitive"` field refuse instead of answering case-insensitively). SQL Server and MySQL: `false`, unless
+  every searchable column's collation folds case, because `true` sends a bare `LIKE` that follows the column's collation and a
+  binary-collated column (`..._BIN2`, `utf8mb4_bin`) then matches exact case only: `contains "germ"` finds no `Germany`. `false` lowers both
+  sides and is right for every case-insensitive field.
 
 `EfCoreHostObligationTests` shows each: wrong rows without it, right rows with it.
 

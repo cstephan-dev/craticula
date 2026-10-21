@@ -104,10 +104,12 @@ public class EfCoreHostObligationTests
         Assert.False(threw);
         Assert.Equal([1L, 2L, 3L, 4L, 5L, 6L], withMapping);
 
-        // Without it the keyset boundary binds in EF's own form and compares wrong against the stored text: rows repeat or
-        // drop at the chunk boundaries (the demo measured 20,060 and 19,947 rows for 20,000), or the duplicate-key check stops it.
+        // Without it the keyset boundary binds in EF's own form and compares wrong against the stored text, so the walk meets
+        // the row the previous chunk ended on (chunk sizes 1 and 2 here: ids 1,1,1... and 1,2,1,2...). The adapter stops with
+        // an exception instead of looping (the demo measured 20,060 and 19,947 rows for 20,000 at the default chunk size).
         var (withoutMapping, stopped) = await ExportIdsAsync(mapped: false, chunkSize);
-        Assert.True(stopped || !withoutMapping.SequenceEqual([1L, 2L, 3L, 4L, 5L, 6L]));
+        Assert.True(stopped);
+        Assert.True(withoutMapping.Count < 6);
     }
 
     [Fact]

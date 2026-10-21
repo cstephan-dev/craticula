@@ -13,8 +13,8 @@ namespace Craticula.EntityFrameworkCore;
 /// <c>SQL_Latin1_General_CP1_CS_AS</c> on SQL Server), and on some engines the default collation
 /// already folds case so the mechanism must be spelled for the SENSITIVE direction instead. SEM-7's
 /// substring family has the same problem one level up: <c>EF.Functions.Like</c> compiles to the
-/// engine's own <c>LIKE</c>, which folds ASCII case unconditionally on SQLite and MySQL and folds
-/// none at all on PostgreSQL. SEC-4 then adds a third: T-SQL's <c>LIKE</c> has a metacharacter the
+/// engine's own <c>LIKE</c>, which folds ASCII case unconditionally on SQLite, follows the column's
+/// collation on SQL Server and MySQL, and folds none at all on PostgreSQL. SEC-4 then adds a third: T-SQL's <c>LIKE</c> has a metacharacter the
 /// other four engines do not.</para>
 ///
 /// <para><b>This is NOT a second <c>ISqlDialect</c>, and the difference is structural rather than a
@@ -49,15 +49,19 @@ namespace Craticula.EntityFrameworkCore;
 /// (a space, no <c>Z</c>), and SQLite compares TEXT character by character, where <c>'T'</c> sorts after <c>' '</c>. So a range
 /// filter with a bound that is not at midnight counts every row of the bound's date as later (13,335 rows for 13,321 on the demo's
 /// 20,000), and a keyset export sorted by a datetime repeats or drops rows at the chunk boundaries (20,060 and 19,947 rows for
-/// 20,000). The host maps every datetime to and from the stored text in its <c>DbContext</c>
+/// 20,000), and it never ends when a calendar date holds a chunk's worth of rows; the export stops with an exception when its walk
+/// meets the row the previous chunk ended on. The host maps every datetime to and from the stored text in its <c>DbContext</c>
 /// (<c>ConfigureConventions</c>, <c>Properties&lt;DateTime&gt;().HaveConversion&lt;…&gt;()</c>). On a database whose values EF itself
 /// wrote, the two forms agree and nothing is needed.</description></item>
-/// <item><description><b><see cref="PatternMatchFoldsCase"/> is <see langword="false"/> unless every searchable column's collation
-/// folds case.</b> <see langword="true"/> sends a bare <c>LIKE</c>, which follows the column's own collation: on a binary-collated
-/// column (the demo's SQL Server grouping columns are <c>Latin1_General_100_BIN2</c>) a <c>contains "germ"</c> finds no
-/// <c>Germany</c> (0 rows for 1,933). <see langword="false"/> lowers both sides and is right whatever the collation, at the cost of
-/// the column's index. Set <see langword="true"/> only for an engine whose <c>LIKE</c> folds case itself (SQLite, MySQL) or after
-/// checking the collation of every column a user can search.</description></item>
+/// <item><description><b><see cref="PatternMatchFoldsCase"/> says what the engine's <c>LIKE</c> does, and the host must not claim
+/// more than is true.</b> <see langword="true"/> sends a bare <c>LIKE</c>. That is right where the <c>LIKE</c> folds case whatever the
+/// column is (SQLite, ASCII only), and on SQL Server or MySQL only if <b>every</b> searchable column's collation folds case: on a
+/// binary-collated column (the demo's SQL Server grouping columns are <c>Latin1_General_100_BIN2</c>; MySQL's <c>utf8mb4_bin</c>) a
+/// <c>contains "germ"</c> finds no <c>Germany</c> (0 rows for 1,933). <see langword="false"/> lowers both sides and is right for every
+/// <b>case-insensitive</b> field whatever the collation, at the cost of the column's index. It is not right for a field declared
+/// <c>caseSensitivity: "sensitive"</c> on an engine whose <c>LIKE</c> folds (SQLite): there <see langword="true"/> is what makes the
+/// adapter refuse the request (SC-3) instead of answering case-insensitively. So: SQLite <see langword="true"/>; SQL Server, MySQL and
+/// PostgreSQL <see langword="false"/> unless the collations are checked.</description></item>
 /// </list></para>
 /// </summary>
 public sealed record EfCoreProviderSemantics
@@ -132,9 +136,9 @@ public sealed record EfCoreProviderSemantics
     /// alternatives.</description></item>
     /// </list>
     ///
-    /// <para><b>Host obligation (#2805).</b> Leave this <see langword="false"/> unless every searchable column's collation folds case:
-    /// <see langword="true"/> is a bare <c>LIKE</c>, so on a binary-collated column the match is exact-case and returns wrong rows
-    /// without an error. See the type's remarks.</para>
+    /// <para><b>Host obligation (#2805).</b> <see langword="true"/> is a bare <c>LIKE</c>: claim it only where the <c>LIKE</c> folds
+    /// case itself (SQLite) or every searchable column's collation does (SQL Server, MySQL); on a binary-collated column the match is
+    /// exact-case and returns wrong rows without an error. See the type's remarks.</para>
     /// </summary>
     public bool PatternMatchFoldsCase { get; init; }
 

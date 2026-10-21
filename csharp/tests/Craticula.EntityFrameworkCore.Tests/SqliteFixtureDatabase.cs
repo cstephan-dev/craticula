@@ -423,7 +423,8 @@ internal sealed class SqliteFixtureDatabase : IDisposable
                 .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>()
                 .LogTo(commandSink, [RelationalEventId.CommandExecuted]);
 
-        /// <summary>The host obligation of #2805: with <paramref name="mapStoredInstants"/> the context maps every datetime to and from the
+        /// <summary>EF caches the model by (context type, schema instance): reuse one schema instance for a mapped and an unmapped database and
+        /// the first model wins, so load the fixture afresh for each. The host obligation of #2805: with <paramref name="mapStoredInstants"/> the context maps every datetime to and from the
         /// stored text form, so a bound EF binds compares like the text a host stored (SEM-4, the SQLite arm).</summary>
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
         {
