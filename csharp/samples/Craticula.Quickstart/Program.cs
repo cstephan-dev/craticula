@@ -73,7 +73,7 @@ try
     GridFilterPipeline.Process(bad.NativeFilter, bad.CustomFilters, bad.Page, schema, new ResourceLimits(), bad.Group, bad.Aggregations);
     Console.WriteLine("-- the unknown column was NOT refused");
 }
-catch (Exception error)
+catch (UnknownFieldException error)
 {
     Console.WriteLine($"-- refused: {error.GetType().Name}: {error.Message}");
 }

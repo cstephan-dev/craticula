@@ -37,24 +37,27 @@ schema.
 
 - `ILIKE` and `COLLATE Latin1_General_CI_AS` are how each database spells the default case-insensitive match
   ([SEM-1](semantics.html#sem-1)); the two statements agree on which rows they return.
-- `ORDER BY "amount" DESC NULLS FIRST, "id" ASC` ends in `id`, the schema's stable key, so paging is deterministic
+- `ORDER BY "amount" DESC NULLS FIRST, "id" ASC NULLS LAST` ends in `id`, the schema's stable key, so paging is deterministic
   ([SEM-6](semantics.html#sem-6)). SQL Server has no `NULLS FIRST`, so it spells the same order with a leading `CASE`
   ([SEM-3](semantics.html#sem-3)).
+- The decimal `100` is printed `'100'` because a decimal parameter is carried as a string, so no precision is lost on the way
+  to the driver (AR-7). Bind it as a decimal in your driver.
 - `"password"` was refused because the schema lists no such column; the request never reached a compiler.
 
 ## Run it on a real database
 
-Compile and run in one call with an execution adapter, which takes an open connection or a `DbContext` from you:
+Compile and run in one call with an execution adapter, which takes an open connection or a `DbContext` from you. Their READMEs show
+the install line for when packages are published; today you reference the projects from the repository instead.
 
-- [`Craticula.Dapper`](https://github.com/pluries/craticula/blob/main/csharp/src/Craticula.Dapper/README.md): runs the statement
+- [`Craticula.Dapper`](../../csharp/src/Craticula.Dapper/README.md): runs the statement
   on an `IDbConnection`, with paging, row counts and streamed CSV export.
-- [`Craticula.EntityFrameworkCore`](https://github.com/pluries/craticula/blob/main/csharp/src/Craticula.EntityFrameworkCore/README.md):
+- [`Craticula.EntityFrameworkCore`](../../csharp/src/Craticula.EntityFrameworkCore/README.md):
   builds `IQueryable` expression trees; read its two host obligations first.
 - MongoDB and OpenSearch have their own compilers and clients (`Craticula.Mongo`, `Craticula.MongoDB.Driver`,
   `Craticula.Search`, `Craticula.OpenSearch.Client`).
 
 For the whole path with a browser grid, ten providers on seven database engines and a script that compares them against each other, follow the
-[demo](https://github.com/pluries/craticula/blob/main/examples/demo/README.md).
+[demo](../../examples/demo/README.md).
 
 ## Next
 

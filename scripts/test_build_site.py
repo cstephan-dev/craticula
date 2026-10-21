@@ -105,6 +105,28 @@ class Includes(unittest.TestCase):
         self.assertIn('<pre><code class="language-csharp">var x = 1 &lt; 2;\n```\nnot a fence end\n```</code></pre>', page)
         self.assertIn("<p>after</p>", page)
 
+    def test_the_fence_is_longer_than_any_backtick_run_in_the_file(self):
+        files = {"index.md": "# Home\n\n{{include a.txt text}}\n", "a.txt": "x\n````\ny\n"}
+        errors, out = run_build(files, [INDEX])
+        self.assertEqual(errors, [])
+        page = (out / "index.html").read_text(encoding="utf-8")
+        self.assertIn("x\n````\ny</code></pre>", page)
+
+    def test_a_malformed_include_is_an_error_not_literal_text(self):
+        for bad in ("{{include a.txt}}", "{{include}}", "{{include a.txt a b}}", "{{include a.txt c#}}"):
+            with self.subTest(bad=bad):
+                root = make_repo({"index.md": f"# Home\n\n{bad}\n", "a.txt": "x"}, [INDEX])
+                with self.assertRaises(bs.BuildError):
+                    bs.build(root, root / "_out")
+
+    def test_a_hyphenated_language_works_and_an_example_inside_a_fence_is_left_alone(self):
+        files = {"index.md": "# Home\n\n{{include a.txt shell-session}}\n\n```\n{{include nothing.txt text}}\n```\n", "a.txt": "x"}
+        errors, out = run_build(files, [INDEX])
+        self.assertEqual(errors, [])
+        page = (out / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="language-shell-session"', page)
+        self.assertIn("{{include nothing.txt text}}", page)
+
     def test_a_missing_private_or_outside_include_is_a_configuration_error(self):
         for bad in ("src/missing.cs", "docs/x.md", "../outside.md", "/etc/hostname"):
             with self.subTest(bad=bad):
