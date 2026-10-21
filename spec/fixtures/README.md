@@ -1,6 +1,6 @@
 # `spec/fixtures/` — the conformance fixture suite
 
-Per **T-1** ([TRD](../../docs/TRD-grid-query-compiler.md) §11): this is the shared,
+Per **T-1** (the maintainers' private TRD, §11): this is the shared,
 language-agnostic contract every backend compiler, in every language port, is graded against. If a
 fixture and an implementation disagree, the implementation has a bug — see `spec/semantics.md`'s
 own framing of the same principle for the rules these fixtures enforce.

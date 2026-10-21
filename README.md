@@ -4,9 +4,9 @@
 > secure backend queries — SQL, MongoDB, OpenSearch/Elasticsearch — from one canonical IR,
 > across four languages.
 
-**Status:** early design — see [`docs/TRD-grid-query-compiler.md`](docs/TRD-grid-query-compiler.md)
-for the full technical requirements document (architecture, semantics spec, security model,
-roadmap, and open questions).
+**Status:** early design. The maintainers keep a technical requirements document (TRD: architecture,
+security model, roadmap, open questions) privately; its requirement ids (AR-1, SEM-1, GRP-7 and so on)
+are cited throughout this repository, and the normative rules are in [`spec/semantics.md`](spec/semantics.md).
 
 ## Why
 
@@ -43,9 +43,7 @@ separate, optional per-ecosystem adapter packages.
   paging) are normative and enforced by a shared, language-agnostic conformance fixture suite.
 - CSV/TSV streaming export shares the same compile-only input model.
 
-See [§2.2 Non-goals](docs/TRD-grid-query-compiler.md#22-non-goals) and
-[§14 Roadmap](docs/TRD-grid-query-compiler.md#14-roadmap-post-10) for what's explicitly out of
-scope for v1.
+The TRD's §2.2 (non-goals) and §14 (roadmap) say what is explicitly out of scope for v1.
 
 ## Repository layout (planned)
 

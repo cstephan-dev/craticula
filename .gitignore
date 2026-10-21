@@ -60,3 +60,6 @@ coverage/
 
 # --- Reference clones (local-only) ---
 github/
+
+# --- docs site build output ---
+site/_build/
