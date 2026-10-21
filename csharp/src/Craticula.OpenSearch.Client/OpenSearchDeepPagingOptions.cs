@@ -41,6 +41,16 @@ public sealed record OpenSearchDeepPagingOptions
     public TimeSpan PitKeepAlive { get; init; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
+    /// OSE-16: ask the engine for the <b>exact</b> row count (<c>track_total_hits: true</c>) when the caller asks for a count
+    /// (<c>includeRowCount</c>). Default <see langword="false"/>: the count is capped at <see cref="MaxResultWindow"/> and reported as unknown
+    /// (<see cref="OpenSearchGridPage.RowCount"/> <see langword="null"/>) once the true total exceeds it, which is cheap and lets
+    /// the grid keep asking for blocks. <see langword="true"/> makes the count request count every matching document, which costs the
+    /// cluster work proportional to the matches on every first-block request; a host that wants a total above 10,000 opts in, knowingly.
+    /// It changes the count request only, never the page query or the compiled artifact.
+    /// </summary>
+    public bool ExactRowCount { get; init; }
+
+    /// <summary>
     /// Which engine this client talks to (OSE-15): only the point-in-time create and close calls differ.
     /// Default <see cref="SearchEngineFlavour.OpenSearch"/>; against Elasticsearch 8 set
     /// <see cref="SearchEngineFlavour.Elasticsearch"/>.

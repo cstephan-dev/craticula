@@ -2951,6 +2951,16 @@ reaches `search.artifact.json`, the compiler or a fixture; a conformance harness
 cannot tell which engine it talks to uses `OpenSearch`, and against Elasticsearch fails loudly (HTTP 400), never
 silently. The close stays best-effort and the keep-alive is still sent on every search (OSE-10).
 
+**OSE-16. The row count above `max_result_window` is unknown by default, and a host may opt in to the exact count.**
+PERF-3 asks for a bounded count, and the one a search engine gives cheaply is capped: `track_total_hits: <window>` clamps the
+reported `value` at the window and reports `relation: "gte"` once the true total is larger. The adapter therefore reports **no
+count** (`RowCount` null, so the grid's `lastRow` stays unknown and the grid keeps asking for blocks, PERF-2) when the total exceeds
+`max_result_window`, and the exact one below it; it never reports the clamped number as if it were exact. The default stays, because
+the exact count costs the cluster a count of every matching document on each first-block request. A host that wants the total opts in
+with one setting (`ExactRowCount`), which changes **only** the count request to `track_total_hits: true`: the page query, the
+point-in-time walk and the compiled artifact are unchanged, so no fixture and no other backend is affected. A grouped level's count
+is a `cardinality` aggregation (approximate beyond its precision threshold) and is not affected by the setting.
+
 **Cross-links.** `spec/fixtures/schemas/search-artifact.schema.json` (the member set OSE-13 rests on),
 `$defs/andNode`, `$defs/orNode`, `$defs/notNode`, `$defs/unaryOperator`, `$defs/binaryOperator`,
 `$defs/setOperator`, `$defs/rangeComparisonNode`, `$defs/sortItem`, `$defs/setValuesSpec`, SEM-1,

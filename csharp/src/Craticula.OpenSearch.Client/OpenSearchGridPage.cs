@@ -69,6 +69,10 @@ public sealed record OpenSearchGridPage
     /// short of its real row count right at PERF-2's own deep-paging boundary.</description></item>
     /// </list>
     ///
+    /// <para><b>Opt-in exact count (OSE-16).</b> With <see cref="OpenSearchDeepPagingOptions.ExactRowCount"/> the count request sends
+    /// <c>track_total_hits: true</c>, so the engine reports <c>relation: "eq"</c> and case 2 below no longer arises; the cost is a count of every
+    /// matching document on each first-block request.</para>
+    ///
     /// <para><b>A host wiring this into a response must not assume <c>includeRowCount: true</c> always
     /// yields a non-null result</b> — case 2 above is exactly why <see cref="OpenSearchGridQuery.CountRowsAsync"/>
     /// returns <see langword="null"/> rather than the clamped value once <c>relation</c> stops being

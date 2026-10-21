@@ -374,9 +374,9 @@ public static class OpenSearchGridQuery
         var compiled = SearchQueryBuilder.Build(request with { Page = new RangePage { StartRow = 0, EndRow = 0 } });
         var body = compiled.ToArtifact();
 
-        // PERF-3: capped, never the uncapped `true` — see OpenSearchGridPage.RowCount's own remarks for
-        // why MaxResultWindow is reused as the cap rather than a second, independent knob.
-        body["track_total_hits"] = options.MaxResultWindow;
+        // PERF-3: capped by default, never the uncapped `true` unless the host opted in (OSE-16, ExactRowCount) — see
+        // OpenSearchGridPage.RowCount's own remarks for why MaxResultWindow is reused as the cap rather than a second knob.
+        body["track_total_hits"] = options.ExactRowCount ? true : options.MaxResultWindow;
 
         var response = await client.SearchAsync<StringResponse>(request.Schema.Source, PostData.String(body.ToJsonString()), null, cancellationToken)
             .ConfigureAwait(false);

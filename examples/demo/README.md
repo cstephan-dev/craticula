@@ -443,7 +443,7 @@ CSV export failed with HTTP 400. The library now knows both spellings (spec OSE-
 
 **Differences from PostgreSQL** are the OpenSearch ones, measured here again, with the same `smoke.sh` rules (it names them in its last lines):
 
-1. **A row count above 10,000 is unknown** (`lastRow` is null; the grid keeps asking until a short block). Elasticsearch can count exactly with `track_total_hits: true` (19,425 on a filter); the client does not ask for it (bug #2524).
+1. **A row count above 10,000 is unknown** (`lastRow` is null; the grid keeps asking until a short block). Elasticsearch can count exactly with `track_total_hits: true` (19,425 on a filter): the client does that when the host sets `ExactRowCount` (OSE-16, #2524), at the price of counting every match on each first-block request. The demo keeps the cheap default.
 2. **The null group of a grouped level sits at the other end**, and the distinct values leave out null.
 3. **One grouped shape is unsupported** and answers HTTP 400 `unsupported-shape`, naming Elasticsearch: a group ordered by an aggregate. Expanding the group whose key is null works (GRP-7, #2522).
 4. Everything else is equal to PostgreSQL: rows, sort, every filter, groups, drill-down, the query panel (the compiled search body as JSON), CSV, and the typed 4xx. A stopped container answers 503, so does an overloaded one (HTTP 503 or 429).
