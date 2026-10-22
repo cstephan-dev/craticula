@@ -350,6 +350,35 @@ class RealWorkflowTests(unittest.TestCase):
             with self.subTest(job=job):
                 self.assertRegex(text, rf"(?m)^  {job}:$")
 
+    # --- docs.yml (task #2836): the docs site build and the Pages deploy ---
+
+    def test_docs_workflow_has_a_build_and_a_deploy_job(self):
+        text = (WORKFLOWS / "docs.yml").read_text(encoding="utf-8")
+        for job in ("build", "deploy"):
+            with self.subTest(job=job):
+                self.assertRegex(text, rf"(?m)^  {job}:$")
+
+    def test_docs_workflow_is_read_only_except_in_the_deploy_job(self):
+        text = (WORKFLOWS / "docs.yml").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^permissions:\n  contents: read\n(?!  )")
+        build, deploy = text.split("\n  deploy:\n")
+        self.assertNotRegex(build, r"(?m)^    permissions:")
+        self.assertRegex(deploy, r"(?m)^    permissions:\n      pages: write\n      id-token: write\n(?!      )")
+        self.assertNotRegex(text, r"(?m)^\s+(?:contents|actions|pull-requests|packages|statuses|checks): write")
+
+    def test_docs_workflow_uses_no_secret(self):
+        self.assertEqual([], secret_references((WORKFLOWS / "docs.yml").read_text(encoding="utf-8")))
+
+    def test_docs_deploy_runs_only_on_a_push_and_only_when_pages_is_switched_on(self):
+        text = (WORKFLOWS / "docs.yml").read_text(encoding="utf-8")
+        deploy = text.split("\n  deploy:\n")[1]
+        self.assertIn("if: github.event_name != 'pull_request' && vars.DOCS_PAGES == 'true'", deploy)
+
+    def test_docs_build_runs_the_generator_tests_and_the_build(self):
+        text = (WORKFLOWS / "docs.yml").read_text(encoding="utf-8")
+        self.assertIn("python3 scripts/test_build_site.py", text)
+        self.assertIn("python3 scripts/build_site.py", text)
+
 
 if __name__ == "__main__":
     unittest.main()

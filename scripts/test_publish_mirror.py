@@ -122,6 +122,7 @@ class ScriptTests(unittest.TestCase):
         self.git("remote", "add", "origin", str(self.origin))
         self.write(".claude/rules.md", "private\n")
         self.write("docs/d.md", "private\n")
+        self.write("site/site.json", "{}\n")      # the docs site is public (task #2836); docs/ above is not
         self.write("README.md", "# scratch\n")
         self.write(PROPS, "<Project><PropertyGroup>\n<Version>1.0.0</Version>\n</PropertyGroup></Project>\n")
         self.commit("Initial commit")
@@ -229,7 +230,7 @@ class ScriptTests(unittest.TestCase):
         boundary_public = self.public_tip()
         self.assertEqual(self.public_subjects(), ["TECHNICAL #1 the published boundary", "Initial commit"])
         self.assertEqual(self.git("ls-tree", "-r", "--name-only", "main", cwd=self.pub).stdout.split(),
-                         ["README.md", "a.txt", PROPS])    # no .claude, no docs
+                         ["README.md", "a.txt", PROPS, "site/site.json"])    # site/ is public; no .claude, no docs
 
         self.write("b.txt", "b\n")
         self.commit("FEATURE #2 add thing\n\nBREAKING CHANGE: changes the shape")
