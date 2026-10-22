@@ -271,7 +271,7 @@ public sealed class EfMySqlProviderTests(MySqlApiFixture api)
     /// <summary>A host whose MySQL points at a port nothing listens on: it needs no container. Oracle's driver throws its own <c>MySqlException</c> type, which <c>EngineFailures</c> must know.</summary>
     [Theory]
     [InlineData("rows")]
-    [InlineData("values")]
+    [InlineData("values")] // set values go through MySqlConnector, not Oracle's driver: a regression guard only
     [InlineData("export.csv")]
     public async Task AnEngineThatIsNotListening_Is503BackendUnavailable(string route)
     {
@@ -311,7 +311,7 @@ public sealed class EfMySqlProviderTests(MySqlApiFixture api)
     [InlineData(1049, false)]
     [InlineData(1064, false)]
     [InlineData(1146, false)]
-    public void EngineFailures_OraclesDriver_ListsTheConnectionNumber_AndNoLoginOrStatementErrors(int number, bool unavailable) =>
+    public void EngineFailures_ConnectionNumberSet_ListsOnly1042_AndNoLoginOrStatementErrors(int number, bool unavailable) =>
         Assert.Equal(unavailable, EngineFailures.MySqlConnectionFailureNumbers.Contains(number));
 
     /// <summary>A refused login is a setting error: 1045 through Oracle's driver stays a 500, not a 503.</summary>

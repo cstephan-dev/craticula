@@ -53,7 +53,9 @@ public static class OptionalProviders
             "ef-mysql",
             DemoSettings.MySqlEnvVar,
             RegisterEfMySql,
-            setting => MySqlGridService.Normalise(setting),
+            // Oracle's driver refuses settings MySqlConnector accepts (Allow Public Key Retrieval, DateTime Kind, Pipelining, GUID Format):
+            // parse with its builder too, so a bad setting stops the start instead of answering 500 on every ef-mysql request.
+            setting => _ = new MySql.Data.MySqlClient.MySqlConnectionStringBuilder(MySqlGridService.Normalise(setting)).ConnectionString,
             "MySQL"),
         new OptionalProvider(
             "opensearch",

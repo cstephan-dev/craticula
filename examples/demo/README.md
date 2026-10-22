@@ -269,7 +269,8 @@ context per engine: `SqliteOrdersDbContext`, `SqlServerOrdersDbContext` and `MyS
 1. **Two defects of the provider, two workarounds in `MySqlOrdersDbContext`.**
    - *Substring filters.* The provider writes every `contains`, `startsWith` and `endsWith` as ``LOWER(`o`.`customer`) LIKE '%gmbh%' ESCAPE '\'`` with **one** backslash, which MySQL reads as an escaped quote, so the statement fails with a syntax error (HTTP 500).
      The context therefore adds an interceptor (`MySqlSessionInterceptor`) that runs `SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')` each time a connection is opened (pooled ones too: one extra statement per request, not measured). With that mode the backslash is an ordinary character and the literal is valid.
-     Values never travel inside the text (they are parameters), and filters that contain `%`, `_`, a backslash or a quote still match literally (tests compare them with PostgreSQL).
+     This is safe only because of how `MySql.Data` 26.10.0 behaves, which is internal to the driver: it writes parameter values into the statement text on the client, and it re-reads the server's "no backslash escapes" status on every reply, so with the mode on it doubles quotes instead of backslashes (checked with the server's general log: a quote in a filter value stays inside its literal). Filters with `%`, `_`, a backslash or a quote give no error and no wildcard leak (tests compare them with PostgreSQL; the rows they compare are empty).
+     The mode **stays on a pooled connection** (the driver does not reset the session), so keep the pool to this context: other `MySql.Data` code on the same connection string that builds its own literals with `MySqlHelper.EscapeString` would escape for the wrong mode.
    - *Dates.* The driver returns a `DATE` as a `DateTime` and the provider has no `DateOnly` reader, so any request that reads `shipped_on` fails with an `InvalidCastException`. The context declares a `DateOnly` to `DateTime` value converter for every date column.
    A provider update can remove or change either defect; `smoke.sh` and `EfMySqlProviderTests` are the guard, and the package is pinned at 10.0.12.
 2. **The query panel's text is valid only with that session mode.** The panel shows the provider's own SQL (`ToQueryString()`), so a substring filter reads `ESCAPE '\'` with one backslash. Pasted into a MySQL session as it is, it fails with error 1064; run `SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')` first and it returns the same rows.
@@ -560,11 +561,11 @@ export DEMO_OPENSEARCH=http://127.0.0.1:59200
 export DEMO_ELASTICSEARCH=http://127.0.0.1:59201
 dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch elasticsearch
 dotnet run --project Api                                 # /api/health lists all eleven
-bash smoke.sh                                            # in another terminal: all 26 scenarios equal on all 11 providers
+bash smoke.sh                                            # in another terminal: all 26 scenarios equal on every provider that is up (all 11 listed below)
 docker compose --profile engines stop sqlserver mysql opensearch elasticsearch   # when done: keeps the data, leaves PostgreSQL and MongoDB up
 ```
 
-`smoke.sh` ends with `all 26 scenarios are equal on all 11 providers (postgres, ef, ef-mysql, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
+With all eleven up, `smoke.sh` ends with `all 26 scenarios are equal on all 11 providers (postgres, ef, ef-mysql, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
 It also prints the places where an engine was equal only by a documented rule (SQL Server, MySQL and EF Core on MySQL `quantity_avg`, the OpenSearch
 differences, the same ones on Elasticsearch) and the one scenario OpenSearch and Elasticsearch answer with `unsupported-shape`. If one engine is not up, name the ones to compare:
 `DEMO_SMOKE_PROVIDERS=postgres,ef,mongo,sqlite bash smoke.sh`; a name the API does not list stops the run with exit 2.
