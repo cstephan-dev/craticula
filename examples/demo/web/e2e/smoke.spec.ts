@@ -17,7 +17,7 @@ test('the page loads against a running API', async ({ page }) => {
   await expect(page.getByText('API: up')).toBeVisible();
 });
 
-for (const provider of (['mongo', 'ef', 'sqlite', 'ef-sqlite', 'sqlserver', 'ef-sqlserver', 'mysql', 'opensearch', 'elasticsearch'] as const)) {
+for (const provider of (['mongo', 'ef', 'sqlite', 'ef-sqlite', 'sqlserver', 'ef-sqlserver', 'mysql', 'ef-mysql', 'opensearch', 'elasticsearch'] as const)) {
   test(`${provider} shows the same first block as ${BASELINE}`, async ({ page, request }) => {
     skipUnlessServed(provider);
     const grid = new GridPage(page);

@@ -24,6 +24,7 @@ const FINDS: Partial<Record<Provider, Record<Search, boolean>>> = {
   'ef-sqlserver': { 'söhne': true, 'SÖHNE': true, sohne: false },
   // The stock MySQL collation ignores accents.
   mysql: { 'söhne': true, 'SÖHNE': true, sohne: true },
+  'ef-mysql': { 'söhne': true, 'SÖHNE': true, sohne: true },
   // Search engines fold ASCII letters only and are accent sensitive.
   opensearch: { 'söhne': true, 'SÖHNE': false, sohne: false },
   elasticsearch: { 'söhne': true, 'SÖHNE': false, sohne: false },
