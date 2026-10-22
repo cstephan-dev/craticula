@@ -29,6 +29,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="MySql.EntityFrameworkCore" />
     <!-- The low-level client (IOpenSearchLowLevelClient) the OpenSearch provider owns; Craticula.OpenSearch.Client never builds one. -->
     <PackageReference Include="OpenSearch.Client" />
     <!-- Not used by name: lifts SqlClient's transitive System.Security.Cryptography.Pkcs to a patched version (Directory.Packages.props). -->

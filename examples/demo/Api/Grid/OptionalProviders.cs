@@ -48,6 +48,13 @@ public static class OptionalProviders
                 new MySqlGridService(setting, provider.GetRequiredService<GridRequestPreparer>())),
             setting => MySqlGridService.Normalise(setting),
             "MySQL"),
+        // EF Core on the same MySQL database (route ef-mysql) through Oracle's MySql.EntityFrameworkCore: same setting as the Dapper route.
+        new OptionalProvider(
+            "ef-mysql",
+            DemoSettings.MySqlEnvVar,
+            RegisterEfMySql,
+            setting => MySqlGridService.Normalise(setting),
+            "MySQL"),
         new OptionalProvider(
             "opensearch",
             DemoSettings.OpenSearchEnvVar,
@@ -79,6 +86,22 @@ public static class OptionalProviders
             SqlServerOrdersDbContext.Semantics,
             provider.GetRequiredService<IDbContextFactory<SqlServerOrdersDbContext>>(),
             new SqlServerGridService(setting, provider.GetRequiredService<GridRequestPreparer>()).FetchSetValuesAsync,
+            provider.GetRequiredService<GridRequestPreparer>()));
+    }
+
+    private static void RegisterEfMySql(IServiceCollection services, string setting)
+    {
+        var normalised = MySqlGridService.Normalise(setting);
+        services.AddDbContextFactory<MySqlOrdersDbContext>(options => options
+            .UseMySQL(normalised)
+            .AddInterceptors(new MySqlSessionInterceptor())
+            .ReplaceService<IModelCacheKeyFactory, GridSchemaModelCacheKeyFactory>());
+        services.AddSingleton<IGridService>(provider => new EfGridService<MySqlOrdersDbContext>(
+            "ef-mysql",
+            "ef-mysql",
+            MySqlOrdersDbContext.Semantics,
+            provider.GetRequiredService<IDbContextFactory<MySqlOrdersDbContext>>(),
+            new MySqlGridService(setting, provider.GetRequiredService<GridRequestPreparer>()).FetchSetValuesAsync,
             provider.GetRequiredService<GridRequestPreparer>()));
     }
 

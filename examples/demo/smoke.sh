@@ -159,7 +159,7 @@ ENV_ERROR, DIFFERENT = 2, 1
 # Everything not listed here is exact (except the avg rule below, for all).
 TRUNCATE = "truncate"
 ROUND4 = ("round", 4)
-RULES = {"sqlite": {"_sum": 1e-9}, "sqlserver": {"quantity_avg": TRUNCATE}, "mysql": {"quantity_avg": ROUND4}}
+RULES = {"sqlite": {"_sum": 1e-9}, "sqlserver": {"quantity_avg": TRUNCATE}, "mysql": {"quantity_avg": ROUND4}, "ef-mysql": {"quantity_avg": ROUND4}}
 AVG_RULE = {"_avg": 1e-6}
 # The two search engines share the compiler, the client and the rules below (Elasticsearch: measured in tasks #2556 and #2557).
 SEARCH_ENGINES = ("opensearch", "elasticsearch")
