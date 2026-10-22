@@ -1675,6 +1675,8 @@ GRP-5 emits nothing else. A leaf drill-down, a grouped level below a
 null key, and an export of a drilled group (EXP-2) all inherit it, because they all read the drill-down GRP-5 builds.
 Fixtures `group-aggregation/024` (leaf rows under the null key) and `/025` (a grouped level under a null first key)
 pin it, with a row whose key is the empty string beside the null ones.
+On Oracle that row is not a different group: SQL-7 stores `''` as NULL, so `IS NULL` selects it with the null group and both
+fixtures declare an XEQ-4 `rows` divergence for `oracle` (XEQ-2 requires the entry).
 
 **Cross-links.** `$defs/groupSpec` (`groupCols`, `groupKeys`), `$defs/aggregation`,
 `$defs/sortItem`, `$defs/setValuesSpec`, AGG-1..AGG-4 (AGG-4 pins the `terms` ordering GRP-6(a)'s

@@ -11,3 +11,6 @@ sent a `term` with a null value (refused by the engine with HTTP 400) and EF Cor
 answered the group's rows. The dataset also holds a row whose region is the **empty string**: it is a different group at the
 grouped level, so it must not appear here (`blank` would have returned it). The null group's rows come back in `id` order,
 the SEM-6 tiebreaker, one of them with every other column null as well.
+
+**On Oracle.** SQL-7 stores the empty string as NULL, so `n02` joins the null group there: the oracle arm returns
+`n01`, `n02`, `n03`, `n05`, declared as an XEQ-4 `rows` divergence in `expectedRows.json`.

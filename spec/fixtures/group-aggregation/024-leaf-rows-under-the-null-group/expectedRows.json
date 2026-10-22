@@ -36,5 +36,61 @@
       null,
       null
     ]
+  ],
+  "allowedDivergence": [
+    {
+      "backend": "oracle",
+      "reason": "SQL-7: Oracle stores the empty string as NULL, so the seeded '' region of n02 loads as null there and \"region\" IS NULL (GRP-7) selects it with the null group; stated as an entry because XEQ-2 requires it for a seeded ''",
+      "outcome": "rows",
+      "expected": {
+        "columns": [
+          "id",
+          "region",
+          "segment",
+          "product",
+          "fiscalYear",
+          "amount",
+          "quantity"
+        ],
+        "rows": [
+          [
+            "n01",
+            null,
+            "Enterprise",
+            "Widget",
+            2024,
+            "100.50",
+            5
+          ],
+          [
+            "n02",
+            null,
+            "Enterprise",
+            "Widget",
+            2024,
+            "20.00",
+            1
+          ],
+          [
+            "n03",
+            null,
+            "SMB",
+            "Gadget",
+            2023,
+            "12.00",
+            null
+          ],
+          [
+            "n05",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ]
+      }
+    }
   ]
 }

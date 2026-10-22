@@ -23,6 +23,35 @@
   ],
   "allowedDivergence": [
     {
+      "backend": "oracle",
+      "reason": "SQL-7: Oracle stores the empty string as NULL, so the seeded '' region of n06 loads as null there and \"region\" IS NULL (GRP-7) puts its 1000.00 into the Enterprise bucket (125.50 + 1000.00); stated as an entry because XEQ-2 requires it for a seeded ''",
+      "outcome": "rows",
+      "expected": {
+        "columns": [
+          "segment",
+          "amount"
+        ],
+        "rows": [
+          [
+            "Consumer",
+            "0"
+          ],
+          [
+            "Enterprise",
+            "1125.50"
+          ],
+          [
+            "SMB",
+            "40.00"
+          ],
+          [
+            null,
+            "7.00"
+          ]
+        ]
+      }
+    },
+    {
       "backend": "search",
       "reason": "AGG-5: ES/OpenSearch's composite aggregation has no missing_order control, so the null bucket (the null segment) sorts first on an ascending request regardless of SEM-3, where the SQL dialects and MongoDB put it last; the buckets and their aggregates are otherwise identical",
       "outcome": "rows",
