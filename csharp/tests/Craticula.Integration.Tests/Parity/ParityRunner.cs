@@ -108,8 +108,8 @@ internal sealed class SearchParityEngine(SearchEngineFixture engine) : ParityEng
 }
 
 /// <summary>
-/// The seven engines, started and seeded once per run (one table, collection or index from the parity schema and dataset;
-/// nothing is recreated per case). Oracle is excluded (PAR-1's engine list). Containers start concurrently; the elapsed
+/// The eight engines, started and seeded once per run (one table, collection or index from the parity schema and dataset;
+/// nothing is recreated per case). PAR-1's engine list includes Oracle since #2880. Containers start concurrently; the elapsed
 /// time of start plus seed is kept apart from the case loop's.
 /// </summary>
 public sealed class ParityEngines : IAsyncLifetime
@@ -150,6 +150,7 @@ public sealed class ParityEngines : IAsyncLifetime
                 new SqlParityEngine(new PostgresEngine(), "postgres"),
                 new SqlParityEngine(new MssqlEngine(), "mssql"),
                 new SqlParityEngine(new MySqlEngine(), "mysql"),
+                new SqlParityEngine(new OracleEngine(), "oracle"),
                 new SqlParityEngine(new SqliteEngine(), "sqlite"),
                 new MongoParityEngine(new MongoEngineFixture()),
                 new SearchParityEngine(new OpenSearchEngineFixture()),
@@ -182,12 +183,12 @@ public sealed class ParityEngines : IAsyncLifetime
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class ParityCollection : ICollectionFixture<ParityEngines>
 {
-    public const string Name = "Parity: seven engines";
+    public const string Name = "Parity: eight engines";
 }
 
 /// <summary>
 /// T-3 (<c>spec/semantics.md</c> PAR-1): for one seeded dataset and N generated requests, every engine returns the same
-/// stableKey sequence, window included, on all 21 engine pairs. Configuration and replay: <c>Parity/README.md</c>.
+/// stableKey sequence, window included, on all 28 engine pairs. Configuration and replay: <c>Parity/README.md</c>.
 /// </summary>
 [Collection(ParityCollection.Name)]
 public sealed class ParityPropertyTests(ParityEngines engines, ITestOutputHelper output)

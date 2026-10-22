@@ -3093,8 +3093,8 @@ values, in order, window included**: the rows `startRow` up to `endRow` of the o
 Order is total over such a key (SEM-6's tiebreaker, SEM-3's null placement), so two correct engines cannot differ in it
 (XEQ-3). **All engine pairs are compared**, not one reference engine against the rest: each engine runs the case once and
 every pair of its id sequences must be equal, so a failure names the two engines that disagree. **The engines are the
-seven of T-2** (TRD §11): PostgreSQL, SQL Server, MySQL, SQLite, MongoDB, OpenSearch and Elasticsearch, so 21 pairs;
-Oracle is not part of the property (OQ-6). A backend that refuses
+eight of T-2** (TRD §11): PostgreSQL, SQL Server, MySQL, Oracle, SQLite, MongoDB, OpenSearch and Elasticsearch, so 28 pairs
+(Oracle joined with #2880 once OQ-6 was closed; the first runs, below, were on the other seven and 21 pairs). A backend that refuses
 a request the generator produced (an error, or a compile rejection) fails the property, because the generator only
 produces requests inside SEC-3's limits and the profile of PAR-3. The property is stated at the **IR level**: the case
 is an AG Grid wire request, parsed and validated by the real adapter and filter pipeline into the IR every compiler
