@@ -9,8 +9,9 @@ namespace Craticula.Sql;
 /// The Oracle Database dialect (#1642), and the one dialect this project ships as
 /// <b>community-tested</b>: it is graded by the T-1a artifact suite exactly like the other four —
 /// every rendering here is pinned byte-for-byte by
-/// <c>spec/fixtures/{dialect-parity,group-aggregation}/*/expected/oracle.artifact.json</c> — but no
-/// CI job runs it against a real Oracle instance and no release is blocked on it. Nothing in
+/// <c>spec/fixtures/{dialect-parity,group-aggregation}/*/expected/oracle.artifact.json</c> — and, since #2880,
+/// the 45 arms also run against a real Oracle Database Free 23ai in the execution-equality tier. That tier is
+/// not part of the pull-request gate, no release is blocked on it, and Oracle 12.2 to 21c were not run. Nothing in
 /// <c>spec/fixtures/README.md</c>'s support tiering should be read as promising more than that.
 ///
 /// <para><b>This dialect assumes Oracle Database 12.2 or later</b> (with <c>COMPATIBLE &gt;= 12.2</c>

@@ -19,7 +19,7 @@ Two kinds of obligation appear below, and the difference matters:
 | SQL Server | binary or case-sensitive collation on grouping columns; `datetime2` holding UTC | silent: `EMEA` and `emea` share a group |
 | MySQL / MariaDB | `_bin` or `_as_cs` collation on case-sensitive and grouping columns; `DATETIME` holding UTC | silent: the declaration is ignored |
 | SQLite | version 3.30.0 or later; datetimes stored as `yyyy-MM-ddTHH:mm:ss.fffZ` | loud for the version, silent for the datetime text |
-| Oracle | 12.2 or later with two settings; quoted identifiers; binary collation on grouping columns | loud for the first two, silent for the last |
+| Oracle | 12.2 or later; quoted identifiers; binary collation on grouping columns (the default session setting) | loud for the first two, silent for the last |
 | MongoDB | server 4.2 or later | loud: the pipeline is rejected |
 | OpenSearch / Elasticsearch | `keyword` sub-fields, a normalizer for case-insensitive sorting, a precise number type for decimals | silent for a missing `keyword` sub-field in a filter (no rows match), loud in a sort; silent for rounding |
 
@@ -125,14 +125,19 @@ Case sensitivity there belongs to the **column's** collation, which a statement 
 
 ## Oracle
 
-- **Server 12.2 or later**, with `COMPATIBLE >= 12.2` and `MAX_STRING_SIZE = EXTENDED`. The statements use `COLLATE BINARY_CI`
-  and `COLLATE BINARY`; an older or differently configured server rejects them (`ORA-43929`).
+- **Server 12.2 or later.** The statements use `COLLATE BINARY_CI` and `COLLATE BINARY`; an older server rejects them.
+  Oracle documents `COMPATIBLE >= 12.2` and `MAX_STRING_SIZE = EXTENDED` as the prerequisite of data-bound collation.
+- **What was verified.** The compiled statements were run against Oracle Database Free 23.26.3 in a container
+  (`gvenzl/oracle-free:23.26.3-slim-faststart`, `COMPATIBLE = 23.6.0`, `MAX_STRING_SIZE = STANDARD`): all 45 Oracle fixtures
+  return the expected rows, and the cross-backend parity property passes with Oracle among eight engines. On that server the
+  `COLLATE` operator inside a statement works without `EXTENDED`; only **declaring** a collation on a column fails
+  (`ORA-43929`). Oracle 12.2 to 21c were **not** run: the floor above is Oracle's documentation, not a measurement.
 - **Quoted identifiers.** Create the table and every column with quoted names that match the schema's `source` and `column`
   spelling exactly. Oracle upper-cases an unquoted name, and the compiled statement quotes every identifier
   (`ORA-00942` if they differ).
-- **Grouping columns, silent obligation.** Declare each groupable column and the stable key with `COLLATE BINARY`, or run the
-  session with `NLS_COMP = BINARY`; the default collation follows the session and can fold case. The column definition is, for
-  example:
+- **Grouping columns, silent obligation.** Run the session with `NLS_COMP = BINARY` (the default; the verified setup), or, on a
+  server with `MAX_STRING_SIZE = EXTENDED`, declare each groupable column and the stable key with `COLLATE BINARY`. The default
+  collation follows the session and can fold case. The column definition is, for example:
 
   ```sql
   "country" VARCHAR2(100) COLLATE BINARY
