@@ -1,7 +1,7 @@
 # Docs site (story #1666, task #2836): builds the static site from the repository's own Markdown (scripts/build_site.py) on every
 # pull request and every push to main, and fails on a dead, private or unresolved link. Its own workflow, not a job of ci.yml,
 # because the branch ruleset requires the ci.yml checks `build` and `test` by name and scripts/test_workflows.py pins them.
-# The `deploy` job publishes to GitHub Pages only on a push to main and only when the repository variable DOCS_PAGES is "true",
+# The `site` job builds and checks; the `deploy` job publishes to GitHub Pages only on a push to main and only when the repository variable DOCS_PAGES is "true",
 # so a repository whose Pages are not switched on stays green (docs/compliance/pages-craticula.md has the maker's steps).
 # No secret, a read-only token except in `deploy`, every action pinned to a commit SHA (scripts/test_workflows.py checks that).
 name: docs
@@ -18,10 +18,13 @@ permissions:
 
 concurrency:
   group: docs-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request run is replaced by the next push; a run on main is never cancelled, so a Pages deployment is not cut off.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  # Named `site`, not `build`: the branch ruleset requires ci.yml's check `build` by name, and a second check run with that name would
+  # make the requirement ambiguous.
+  site:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -40,17 +43,14 @@ jobs:
       - name: Build the site
         run: python3 scripts/build_site.py --out site/_build
 
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-        if: github.event_name != 'pull_request' && vars.DOCS_PAGES == 'true'
-
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        if: github.event_name != 'pull_request' && vars.DOCS_PAGES == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DOCS_PAGES == 'true'
         with:
           path: site/_build
 
   deploy:
-    needs: build
-    if: github.event_name != 'pull_request' && vars.DOCS_PAGES == 'true'
+    needs: site
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DOCS_PAGES == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
