@@ -90,7 +90,7 @@ outside T-1a:
 | Tier | Dialects | What that means |
 |---|---|---|
 | **v1 supported** (§5) | Postgres, SQL Server, MySQL/MariaDB, SQLite | Graded by T-1a; on the release path; execution-equality (T-1b, Feature #1624) will cover them. |
-| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 41 arms across `dialect-parity/006`-`023` (18) and all of `group-aggregation/` (23) — and, since #2880, run against a real **Oracle Database Free 23ai** container in the execution tier (T-1b, all 45 arms) and in the parity property (T-3). That tier is the Docker one: it is not part of the pull-request gate and no release is blocked on it, and **12.2 to 21c were not run** (OQ-6 is closed on that footing). Its host obligations (12.2+, quoted DDL, binary grouping columns) are recorded in `dialect-parity/README.md` and in the index guidance. |
+| **Community-tested** | **Oracle** (added #1642) | Graded by T-1a exactly like the four above — 45 arms across `dialect-parity/` (20) and all of `group-aggregation/` (25) — and, since #2880, run against a real **Oracle Database Free 23ai** container in the execution tier (T-1b, all 45 arms) and in the parity property (T-3). That tier is the Docker one: it is not part of the pull-request gate, the release workflow does run it (a failing Oracle test stops a release), and **12.2 to 21c were not run** (OQ-6 is closed on that footing). Its host obligations (12.2+, quoted DDL, binary grouping columns) are recorded in `dialect-parity/README.md` and in the index guidance. |
 
 An Oracle artifact disagreeing with a compiler is still a bug in one of the two, on the same terms as
 any other arm; the tier is about *coverage beyond the artifact*, not about how seriously the artifact

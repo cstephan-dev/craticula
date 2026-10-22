@@ -11,7 +11,7 @@ namespace Craticula.Sql;
 /// every rendering here is pinned byte-for-byte by
 /// <c>spec/fixtures/{dialect-parity,group-aggregation}/*/expected/oracle.artifact.json</c> — and, since #2880,
 /// the 45 arms also run against a real Oracle Database Free 23ai in the execution-equality tier. That tier is
-/// not part of the pull-request gate, no release is blocked on it, and Oracle 12.2 to 21c were not run. Nothing in
+/// not part of the pull-request gate (the release workflow does run it, so a failing Oracle test stops a release), and Oracle 12.2 to 21c were not run. Nothing in
 /// <c>spec/fixtures/README.md</c>'s support tiering should be read as promising more than that.
 ///
 /// <para><b>This dialect assumes Oracle Database 12.2 or later</b> (with <c>COMPATIBLE &gt;= 12.2</c>

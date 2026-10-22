@@ -9,7 +9,7 @@
   "properties": {
     "dialect": {
       "enum": ["postgres", "mssql", "mysql", "oracle", "sqlite"],
-      "description": "Which SQL dialect this artifact targets. Four are v1-supported (§5); 'oracle' was added in #1642 and is COMMUNITY-TESTED — it is graded by this artifact suite exactly like the other four and, since #2880, also run against a real Oracle Database Free 23ai in the execution tier; that tier is not part of the pull-request gate and no release is blocked on it, and Oracle 12.2 to 21c were not run (OQ-6 is closed on that footing). See spec/fixtures/README.md's support tiering."
+      "description": "Which SQL dialect this artifact targets. Four are v1-supported (§5); 'oracle' was added in #1642 and is COMMUNITY-TESTED — it is graded by this artifact suite exactly like the other four and, since #2880, also run against a real Oracle Database Free 23ai in the execution tier; that tier is not part of the pull-request gate, the release workflow does run it (a failing Oracle test stops a release), and Oracle 12.2 to 21c were not run (OQ-6 is closed on that footing). See spec/fixtures/README.md's support tiering."
     },
     "sql": {
       "type": "string",

@@ -263,7 +263,7 @@ public sealed record EngineResult(IReadOnlyList<string> Columns, IReadOnlyList<I
 /// <item><c>drop-collate</c>: removes every <c>COLLATE &lt;name&gt;</c> from the compiled SQL before it is sent (and, on MySQL,
 /// which spells no collation in SQL, declares the string columns <c>utf8mb4_bin</c> instead, the DDL equivalent);</item>
 /// <item><c>drop-nulls</c>: removes every <c>NULLS FIRST</c> / <c>NULLS LAST</c> (SEM-3's null placement) from the SQL of the engines that
-/// spell it that way, PostgreSQL and SQLite, leaving each engine's own default;</item>
+/// spell it that way, PostgreSQL, Oracle and SQLite, leaving each engine's own default;</item>
 /// <item><c>drop-tiebreaker</c>: removes the final stableKey key SEM-6 appends to an ORDER BY that has other keys, on every SQL engine.</item>
 /// </list>
 /// </summary>
@@ -559,7 +559,8 @@ public sealed class MySqlEngine : SqlEngine
 /// obligation for bucket keys). SQL-7: the empty string is NULL, so a seeded <c>''</c> loads as NULL (fixtures 024 and 025
 /// declare that divergence). Tables and columns are created quoted, because the dialect always quotes (ORA-00942 otherwise).
 /// The compiler binds date and datetime filter values as text (AR-7) and adds no cast on this engine, so each connection
-/// sets the session's date and timestamp formats to the canonical wire forms (SEM-4), the host obligation this harness meets.
+/// pins the session's NLS settings (date and timestamp text forms, decimal point, binary comparison and sort), the host
+/// obligation this harness meets; they are listed in <c>spec/fixtures/dialect-parity/README.md</c>.
 /// The driver is referenced as <c>global::Oracle.ManagedDataAccess</c> because the loader namespace
 /// <c>Craticula.Integration.Tests.Oracle</c> would capture a bare <c>Oracle.</c>.
 /// </summary>
@@ -592,11 +593,14 @@ public sealed class OracleEngine : SqlEngine
         var connection = new global::Oracle.ManagedDataAccess.Client.OracleConnection(_container!.GetConnectionString());
         await connection.OpenAsync();
 
-        // The compiled text binds a date as 'yyyy-MM-dd' and a datetime as 'yyyy-MM-ddTHH:mm:ss.fffZ' (SEM-4, AR-7); the
-        // default DD-MON-RR format would raise ORA-01861 on them.
+        // The compiler binds a date as 'yyyy-MM-dd', a datetime as ISO 8601 UTC text ('...:ssZ' for whole seconds, up to
+        // seven trimmed fractional digits otherwise) and a decimal as text (SEM-4, AR-7), and adds no cast. The default
+        // DD-MON-RR format would raise ORA-01861; FF (not FF3) takes any fraction; the decimal point and the binary
+        // comparison and sort are pinned so the client's culture cannot change the rows (ORA-01722, or a folded ORDER BY).
         await ExecuteAsync(
             connection,
-            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD' NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"'");
+            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD' NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS.FF\"Z\"' " +
+            "NLS_NUMERIC_CHARACTERS = '.,' NLS_COMP = BINARY NLS_SORT = BINARY");
         return connection;
     }
 

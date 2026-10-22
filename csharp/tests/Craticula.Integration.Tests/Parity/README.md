@@ -87,12 +87,12 @@ have rows below them; the dataset has 300 rows.
 ## Mutations the property catches
 
 `CRATICULA_XEQ_MUTATION` damages the SQL the SQL engines are sent (`Sql/SqlEngine.cs`, `SqlMutation`, test code only), and
-the run fails. Default seed, 200 cases:
+the run fails. Default seed, 200 cases, re-measured on all eight engines on 2026-10-22 (#2880; the first measurement, on seven engines on 2026-10-10, gave 25, 136 and 127):
 
 | Value | Damage | Failing cases |
 |---|---|---|
-| `drop-collate` | every `COLLATE` removed (MySQL: binary string columns) | 25 |
-| `drop-nulls` | every `NULLS FIRST` / `NULLS LAST` removed (PostgreSQL, SQLite) | 136 (SQLite against the other six) |
-| `drop-tiebreaker` | the trailing stableKey sort key removed | 127 |
+| `drop-collate` | every `COLLATE` removed (MySQL: binary string columns) | 17 |
+| `drop-nulls` | every `NULLS FIRST` / `NULLS LAST` removed (PostgreSQL, Oracle, SQLite) | 124 |
+| `drop-tiebreaker` | the trailing stableKey sort key removed | 114 |
 
 Never set one outside a check like this.

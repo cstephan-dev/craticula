@@ -53,7 +53,7 @@ internal sealed record ParityStrengthReport(
 /// back, how many, whether a multi-key sort has a first-key tie for the tiebreaker to break (SEM-6), whether a sort key is
 /// NULL in the result (SEM-3's placement), and whether the window cuts the ordered result in the middle (PAR-1's
 /// "window included"). The result is one engine's view, which is enough: the metrics are about the request, and the property
-/// itself says the seven engines agree on it.
+/// itself says the eight engines agree on it.
 /// </summary>
 internal static class ParityStrength
 {

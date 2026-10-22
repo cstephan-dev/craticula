@@ -135,7 +135,12 @@ Case sensitivity there belongs to the **column's** collation, which a statement 
 - **Quoted identifiers.** Create the table and every column with quoted names that match the schema's `source` and `column`
   spelling exactly. Oracle upper-cases an unquoted name, and the compiled statement quotes every identifier
   (`ORA-00942` if they differ).
-- **Grouping columns, silent obligation.** Run the session with `NLS_COMP = BINARY` (the default; the verified setup), or, on a
+- **Session settings.** The compiled statements pass dates, datetimes and decimals as text and add no cast, so Oracle converts
+  them by the session's settings. Set `NLS_DATE_FORMAT = 'YYYY-MM-DD'`,
+  `NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'` and `NLS_NUMERIC_CHARACTERS = '.,'` on the connection; without them
+  every date, datetime or decimal filter fails (`ORA-01861`, `ORA-01722`), and a client culture with a comma decimal can cause
+  it only on some machines.
+- **Grouping columns, silent obligation.** Run the session with `NLS_COMP = BINARY` and `NLS_SORT = BINARY` (the defaults for an English client; the verified setup), or, on a
   server with `MAX_STRING_SIZE = EXTENDED`, declare each groupable column and the stable key with `COLLATE BINARY`. The default
   collation follows the session and can fold case. The column definition is, for example:
 

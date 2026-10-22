@@ -1259,7 +1259,7 @@ direction must be spelled `COLLATE BINARY` there): on all three, a grouped strin
 and `"EMEA"`/`"emea"` land in one bucket. A host that wants exact buckets on those engines must
 declare the groupable column with a binary / `_as_cs` / `BINARY` collation in its DDL — or, on
 Oracle, run the session with `NLS_COMP = BINARY` (the default, and what the execution tier runs on; a column-level `COLLATE
-BINARY` needs `MAX_STRING_SIZE = EXTENDED`, measured in SQL-6 above) — the same kind of obligation SQL-6 already records
+BINARY` needs `MAX_STRING_SIZE = EXTENDED`, measured in SQL-6 below) — the same kind of obligation SQL-6 already records
 for MySQL's case-sensitive direction, and for the same reason (no portable in-statement spelling
 exists that does not break the `GROUP BY`). Recorded here as a documented divergence rather than
 papered over; the execution-equality tier (T-1b, #1624) is what can grade it, and T-1a cannot see it
