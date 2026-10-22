@@ -63,28 +63,28 @@ test.describe('In range filter', () => {
   test('a range joined to another condition by OR shows the unsupported-filter message', async ({ page }) => {
     const grid = new GridPage(page);
     await startOn(grid, BASELINE);
-    const popup = await grid.openFilter('amount');
-    await popup.locator(GRID.operatorPicker).first().click();
-    await page.getByRole('option', { name: 'Between', exact: true }).click();
-    await popup.locator(GRID.filterRangeFrom).fill('100');
-    await popup.locator(GRID.filterTo).first().fill('500');
-    await popup.getByRole('radio', { name: 'OR' }).check();
-    // The second condition: Equals 5 (its operator picker is the second one; Equals is the default).
     const rowsCalls: string[] = [];
     page.on('request', (call) => {
       if (call.method() === 'POST' && call.url().includes(`/api/${BASELINE}/rows`)) {
         rowsCalls.push(call.postData() ?? '');
       }
     });
+    const popup = await grid.openFilter('amount');
+    await popup.locator(GRID.operatorPicker).first().click();
+    await page.getByRole('option', { name: 'Between', exact: true }).click();
+    await popup.locator(GRID.filterRangeFrom).fill('100');
+    await popup.locator(GRID.filterTo).first().fill('500');
+    await popup.getByRole('radio', { name: 'OR' }).check();
+    // The second condition: Equals 5 (Equals is the default).
     await popup.locator(GRID.filterFrom).nth(0).fill('5');
     await expect(grid.errorBanner()).toContainText('unsupported-filter');
     await expect(grid.errorBanner()).toContainText(/OR/);
-    // The page refuses before it asks the API: nothing was posted for the OR model.
-    expect(rowsCalls.filter((body) => body.includes('"customFilters"') && body.includes('"inRange"'))).toHaveLength(0);
+    // The page refuses before it asks the API: no request, from the first fill on, carries an OR model.
+    expect(rowsCalls.filter((body) => /"operator"\s*:\s*"OR"/.test(body))).toHaveLength(0);
     await closePopup(page);
   });
 
-  test('a one-sided or later change of the range keeps the grid answering', async ({ page, request }) => {
+  test('narrowing the upper bound of a range keeps the grid answering', async ({ page, request }) => {
     const grid = new GridPage(page);
     await startOn(grid, BASELINE);
     const first = await rangeFilter(grid, BASELINE, 'amount', 'number', '100', '500');

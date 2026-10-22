@@ -20,6 +20,7 @@ npm run e2e:install                       # once: downloads Chromium (about 150 
 npm run e2e                               # every provider the API lists; the others are skipped with a reason
 E2E_DESTRUCTIVE=1 npm run e2e             # also the error banners: stops and restarts database containers
 npx playwright test enterprise-grouping   # one spec; -g "mysql" for one provider
+npm run e2e:unit                          # the self-tests of the row comparison (e2e/support/*.spec.ts): no browser, no demo needed
 ```
 
 - Settings: `DEMO_WEB_URL` (default `http://localhost:5173`), `DEMO_API_URL` (default `http://127.0.0.1:5080`). Viewport 1920 wide (the grid draws only the

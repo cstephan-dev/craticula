@@ -17,7 +17,7 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 | Open the Country set filter: the values come from the API; untick some and the grid narrows | `enterprise-providers.spec.ts` (set filter) | `<p>` |
 | Clear every Country value in the set filter: an empty grid and no error banner | `enterprise-providers.spec.ts` (set filter) | `<p>` |
 | Number (Quantity greater than 8), date (Shipped on, Ordered at) and boolean (Priority) filters, combined | `enterprise-providers.spec.ts` (filters by column type) | `<p>`; counts equal PostgreSQL's |
-| Sort by clicking a header; shift-click a second and a third column (Id first, Id in the middle, a column twice) | `enterprise-sorting.spec.ts` | `<p>`; includes the Id-then-Amount and Amount, Id, Country orders |
+| Sort by clicking a header; shift-click a second and a third column (Id first, Id in the middle) | `enterprise-sorting.spec.ts` | `<p>`; includes the Id-then-Amount and Amount, Id, Country orders |
 | Scroll down a long list: blocks of 100 load, the grid reaches the end, rows past 10,000 load | `enterprise-sorting.spec.ts` | `<p>`; a search engine has no total, so the list grows block by block and the test allows for it |
 | Group by Country then Category, add Amount and Quantity as values, choose sum, avg and count, open a group and then a Category | `enterprise-grouping.spec.ts` | `<p>`; every level equals PostgreSQL's answer to the same request |
 | Group, then order the groups by an aggregate: a "Not supported on this provider" banner, the grid stays | `enterprise-grouping.spec.ts` | OpenSearch and Elasticsearch only |
@@ -27,7 +27,7 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 | The Columns panel has no Pivot Mode switch and no Pivot drop zone | `enterprise-paging.spec.ts` | |
 | In range on Amount and on Ordered at: both bounds exclusive, the count equals two plain conditions joined by AND | `enterprise-in-range.spec.ts` | PostgreSQL, MongoDB and SQLite on the Enterprise page; every provider on the Community page |
 | In range joined to another condition by OR: the `unsupported-filter` message | `enterprise-in-range.spec.ts` | |
-| Change or clear a range afterwards: the grid keeps answering | `enterprise-in-range.spec.ts` | |
+| Narrow the upper bound of a range afterwards: the grid keeps answering | `enterprise-in-range.spec.ts` | |
 | Customer contains `söhne`, `SÖHNE` and `sohne`: each engine finds what its collation says (accent and case rules per engine) | `enterprise-collation.spec.ts` | `<p>` |
 | Export CSV with a filter and a sort: the file equals PostgreSQL's | `export.spec.ts` | `<p>`; the file is read cell by cell |
 | Export CSV with no filter: 20,000 rows once each, a cell starting with `=` saved with a leading `'` | `export.spec.ts` | `<p>` |

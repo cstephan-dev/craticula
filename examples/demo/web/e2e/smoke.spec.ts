@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { GridPage } from './pages/grid';
 import { captureRows, fetchBaselineFor } from './support/rows';
 import { expectSameRows } from './support/compare';
-import { BASELINE, served, skipUnlessServed } from './support/providers';
+import { BASELINE, skipUnlessServed } from './support/providers';
 
 // The smallest check that the harness drives the demo: the page loads, the API is up, the first block of rows arrives, and
 // each served provider answers the same first block as the baseline.
@@ -17,7 +17,7 @@ test('the page loads against a running API', async ({ page }) => {
   await expect(page.getByText('API: up')).toBeVisible();
 });
 
-for (const provider of served(['mongo', 'ef', 'sqlite', 'ef-sqlite', 'sqlserver', 'ef-sqlserver', 'mysql', 'opensearch', 'elasticsearch'])) {
+for (const provider of (['mongo', 'ef', 'sqlite', 'ef-sqlite', 'sqlserver', 'ef-sqlserver', 'mysql', 'opensearch', 'elasticsearch'] as const)) {
   test(`${provider} shows the same first block as ${BASELINE}`, async ({ page, request }) => {
     skipUnlessServed(provider);
     const grid = new GridPage(page);

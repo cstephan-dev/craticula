@@ -3,7 +3,6 @@ import { GRID, GridPage } from './pages/grid';
 import { BASELINE, OTHER_PROVIDERS, apiUrl, skipUnlessServed } from './support/providers';
 import { captureRows } from './support/rows';
 import {
-  closePopup,
   expectMatchesBaseline,
   expectVisibleCells,
   openSetFilter,
@@ -119,5 +118,4 @@ test('the Enterprise page shows the evaluation watermark', async ({ page }) => {
   await startOn(grid, BASELINE);
   await expect(grid.watermark()).toBeAttached();
   await expect(page.getByText('evaluation mode')).toBeVisible();
-  await closePopup(page).catch(() => undefined);
 });

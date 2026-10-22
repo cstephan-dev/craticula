@@ -13,7 +13,6 @@ export const GRID = {
   row: '.ag-row',
   /** A row group; it carries `ag-row-group-contracted` or `ag-row-group-expanded`. */
   groupRow: '.ag-row-group',
-  expander: '.ag-group-contracted, .ag-group-expanded',
   contractedGroup: '.ag-group-contracted',
   /** The grouping column AG Grid adds in front of the data columns. */
   autoGroupColId: 'ag-Grid-AutoColumn',
@@ -34,11 +33,9 @@ export const GRID = {
   filterTo: 'input[aria-label="Filter to Value"]',
   /** The first bound of a number filter set to "Between" (a date filter keeps `filterFrom` for both bounds). */
   filterRangeFrom: 'input[aria-label="Filter from value"]',
-  filterJoin: '[role="radio"]',
   /** The column drop zone that holds the value (aggregation) columns, inside the Columns panel. */
   valueZone: '.ag-column-drop-vertical-aggregation',
   rowGroupZone: '.ag-column-drop-vertical-rowgroup',
-  dropPill: '.ag-column-drop-cell',
   dropPillText: '.ag-column-drop-cell-text',
   operatorPicker: '[aria-label="Filtering operator"]',
   setFilterItem: '.ag-set-filter-item',
@@ -81,10 +78,6 @@ export class GridPage {
     return this.providerSwitch().getByRole('button', { name: providerLabel(provider), exact: true });
   }
 
-  async visibleProviderLabels(): Promise<string[]> {
-    return this.providerSwitch().getByRole('button').allInnerTexts();
-  }
-
   exportButton(): Locator {
     return this.page.getByRole('button', { name: /^Export CSV|^Exporting/ });
   }
@@ -103,10 +96,6 @@ export class GridPage {
 
   errorBanner(): Locator {
     return this.page.getByRole('alert');
-  }
-
-  dismissError(): Locator {
-    return this.page.getByRole('button', { name: 'Dismiss the error' });
   }
 
   // The grid.

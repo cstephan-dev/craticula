@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "vitest",
     "e2e": "playwright test",
+    "e2e:unit": "playwright test --config playwright.unit.config.ts",
     "e2e:install": "playwright install chromium"
   },
   "dependencies": {

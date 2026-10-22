@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import { expect, test } from '@playwright/test';
 import type { Provider } from '../src/api';
 import { GridPage } from './pages/grid';
-import { BASELINE, apiUrl, isServed, served } from './support/providers';
+import { apiUrl, isServed, served } from './support/providers';
 import { captureRows, fetchRowsFor } from './support/rows';
 import { startOn } from './support/actions';
 
@@ -59,10 +59,11 @@ test.describe('a database that is down', () => {
       return;
     }
     try {
-      await compose(engine, 'up', '-d', '--wait', engine.service);
+      // --no-recreate: only start the stopped container; a plain `up` would recreate it from the default compose config (e.g. the default port) when the demo was started with moved ports.
+      await compose(engine, 'up', '-d', '--wait', '--no-recreate', engine.service);
     } catch (error) {
       throw new Error(
-        `The container "${engine.service}" was stopped by this test and could not be started again (${error instanceof Error ? error.message : String(error)}). Start it yourself: ${command(engine, 'up -d --wait')}`,
+        `The container "${engine.service}" was stopped by this test and could not be started again (${error instanceof Error ? error.message : String(error)}). Start it yourself: ${command(engine, 'up -d --wait --no-recreate')}`,
         { cause: error },
       );
     }
@@ -79,7 +80,7 @@ test.describe('a database that is down', () => {
       test.setTimeout(420_000);
       const grid = new GridPage(page);
       // The page is loaded and the provider answers while its database is up; then the database is stopped.
-      await startOn(grid, provider === BASELINE ? BASELINE : provider);
+      await startOn(grid, provider);
       await expect(grid.errorBanner()).toHaveCount(0);
 
       stopped = engine;

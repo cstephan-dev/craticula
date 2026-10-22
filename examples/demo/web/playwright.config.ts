@@ -25,7 +25,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: /errors\.spec\.ts/,
+      testIgnore: [/errors\.spec\.ts/, /support\/.*\.spec\.ts/],
       use: {
         ...devices['Desktop Chrome'],
         // Wide enough that every column is drawn: the grid only renders the columns in view.
