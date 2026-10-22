@@ -63,14 +63,16 @@ public static class EngineFailures
     ];
 
     /// <summary>
-    /// A <see cref="PostgresException"/> that means "the server cannot be reached now": SQLSTATE class 57 operator intervention
-    /// that ends or refuses connections (57P01 admin shutdown, 57P02 crash shutdown, 57P03 cannot connect now; measured: the first
-    /// request on a pooled connection after <c>docker compose stop</c> fails with 57P01 "terminating connection due to administrator
-    /// command") and class 08 connection exceptions. 57014 (a cancelled statement), 28P01 (a refused login) and every statement
-    /// error are not listed: they are settings or bugs and stay a 500.
+    /// A <see cref="PostgresException"/> that means "the server cannot be reached now": the class 57 operator-intervention states that
+    /// end or refuse connections (57P01 admin shutdown, 57P02 crash shutdown, 57P03 cannot connect now, 57P05 idle-session timeout;
+    /// measured: the first request on a pooled connection after <c>docker compose stop</c> fails with 57P01 "terminating connection due
+    /// to administrator command"), 53300 (too many connections) and the connection exceptions Npgsql itself calls transient (08000,
+    /// 08001, 08003, 08004, 08006, 08007; not 08P01, a protocol violation, which is a bug). 57014 (a cancelled statement), a refused
+    /// login (28P01, 28000), a missing database (3D000) and every statement error are not listed: they are settings or bugs.
     /// </summary>
     public static bool IsPostgresUnavailable(PostgresException exception) =>
-        exception.SqlState is "57P01" or "57P02" or "57P03" || exception.SqlState?.StartsWith("08", StringComparison.Ordinal) == true;
+        exception.SqlState is "57P01" or "57P02" or "57P03" or "57P05" or "53300"
+            or "08000" or "08001" or "08003" or "08004" or "08006" or "08007";
 
     /// <summary>A <see cref="SqlException"/> that is a connection failure: a declared error number, or a refused/unreachable socket.
     /// Anything else (a bad statement, a missing table, an untrusted certificate: a configuration error) is not.</summary>
