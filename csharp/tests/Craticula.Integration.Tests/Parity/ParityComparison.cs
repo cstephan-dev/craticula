@@ -29,7 +29,7 @@ internal sealed record DisagreeingPair(string First, string Second);
 internal static class ParityComparer
 {
     /// <summary>
-    /// Every unordered pair of engines (n*(n-1)/2, 21 for seven) whose answers are not equal. Two refusals are not listed as
+    /// Every unordered pair of engines (n*(n-1)/2, 28 for eight) whose answers are not equal. Two refusals are not listed as
     /// a pair (each is a failure on its own, see <see cref="Refusals"/>), so a pair means: both returned and the id
     /// sequences differ in value, length or order, or exactly one refused.
     /// </summary>

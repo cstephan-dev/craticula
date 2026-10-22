@@ -5,7 +5,7 @@ namespace Craticula.Integration.Tests.Parity;
 /// </summary>
 public sealed class ParityReportTests
 {
-    private static readonly string[] Engines = ["postgres", "mssql", "mysql", "sqlite", "mongo", "opensearch", "elasticsearch"];
+    private static readonly string[] Engines = ["postgres", "mssql", "mysql", "oracle", "sqlite", "mongo", "opensearch", "elasticsearch"];
 
     private static IReadOnlyList<EngineRun> Runs(Func<string, EngineOutcome> outcome) =>
         [.. Engines.Select(engine => new EngineRun(engine, outcome(engine)))];
@@ -19,24 +19,24 @@ public sealed class ParityReportTests
     }
 
     [Fact]
-    public void One_odd_engine_disagrees_with_each_of_the_other_six_and_with_none_of_them_alone()
+    public void One_odd_engine_disagrees_with_each_of_the_other_seven_and_with_none_of_them_alone()
     {
         var runs = Runs(engine => EngineOutcome.Returned(engine == "mongo" ? [3, 2, 1] : [3, 1, 2]));
         var pairs = ParityComparer.DisagreeingPairs(runs);
 
-        Assert.Equal(6, pairs.Count);
+        Assert.Equal(7, pairs.Count);
         Assert.All(pairs, pair => Assert.True(pair.First == "mongo" || pair.Second == "mongo"));
         Assert.True(ParityComparer.Fails(new ParityCase(0, "{}", runs)));
     }
 
     [Fact]
-    public void All_21_pairs_are_compared()
+    public void All_28_pairs_are_compared()
     {
         var runs = Runs(engine => EngineOutcome.Returned([Array.IndexOf(Engines, engine)]));
         var pairs = ParityComparer.DisagreeingPairs(runs);
 
-        Assert.Equal(21, pairs.Count);
-        Assert.Equal(21, pairs.Select(pair => (pair.First, pair.Second)).Distinct().Count());
+        Assert.Equal(28, pairs.Count);
+        Assert.Equal(28, pairs.Select(pair => (pair.First, pair.Second)).Distinct().Count());
     }
 
     [Theory]
@@ -61,7 +61,7 @@ public sealed class ParityReportTests
         var runs = Runs(engine => engine == "sqlite" ? EngineOutcome.Refuse("boom") : EngineOutcome.Returned([1]));
 
         Assert.Single(ParityComparer.Refusals(runs));
-        Assert.Equal(6, ParityComparer.DisagreeingPairs(runs).Count);
+        Assert.Equal(7, ParityComparer.DisagreeingPairs(runs).Count);
         Assert.True(ParityComparer.Fails(new ParityCase(0, "{}", runs)));
     }
 

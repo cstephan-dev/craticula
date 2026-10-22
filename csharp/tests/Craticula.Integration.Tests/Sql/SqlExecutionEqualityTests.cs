@@ -3,7 +3,7 @@ using Craticula.Integration.Tests.Docker;
 namespace Craticula.Integration.Tests.Containers.Sql;
 
 // One collection (and so one container) per engine for the whole run; xUnit runs a collection's tests one at a time,
-// which is what lets every fixture reuse the one table name. The four collections run in parallel with each other.
+// which is what lets every fixture reuse the one table name. The five collections run in parallel with each other.
 
 [CollectionDefinition(Name)]
 public sealed class PostgresCollection : ICollectionFixture<PostgresEngine>
@@ -21,6 +21,12 @@ public sealed class MssqlCollection : ICollectionFixture<MssqlEngine>
 public sealed class MySqlCollection : ICollectionFixture<MySqlEngine>
 {
     public const string Name = "xeq-mysql";
+}
+
+[CollectionDefinition(Name)]
+public sealed class OracleCollection : ICollectionFixture<OracleEngine>
+{
+    public const string Name = "xeq-oracle";
 }
 
 [CollectionDefinition(Name)]
@@ -60,6 +66,17 @@ public class MySqlExecutionEqualityTests(MySqlEngine engine)
     [DockerTheory]
     [MemberData(nameof(Fixtures))]
     public Task Fixture_Returns_The_Expected_Rows_On_MySql(string name) => SqlExecutionRunner.AssertMatchesOracleAsync(engine, name);
+}
+
+/// <summary>T-1b on Oracle Database Free 23ai (<c>gvenzl/oracle-free:23.26.3-slim-faststart</c>): every fixture with an <c>expected/oracle.artifact.json</c>.</summary>
+[Collection(OracleCollection.Name)]
+public class OracleExecutionEqualityTests(OracleEngine engine)
+{
+    public static IEnumerable<object[]> Fixtures() => SqlExecutionRunner.FixturesFor("oracle");
+
+    [DockerTheory]
+    [MemberData(nameof(Fixtures))]
+    public Task Fixture_Returns_The_Expected_Rows_On_Oracle(string name) => SqlExecutionRunner.AssertMatchesOracleAsync(engine, name);
 }
 
 /// <summary>T-1b on SQLite, in-process (no Docker): every fixture with an <c>expected/sqlite.artifact.json</c>.</summary>

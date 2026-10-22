@@ -12,7 +12,7 @@ namespace Craticula.Integration.Tests.Parity;
 
 /// <summary>
 /// Offline guards for two PAR-3 facts of the generator: set membership (<c>in</c>, <c>notIn</c>) is produced on all seven field types
-/// (decimal, date and datetime since Bug #2304 was fixed), and every request it produces is compiled by all seven compilers (the four SQL dialects,
+/// (decimal, date and datetime since Bug #2304 was fixed), and every request it produces is compiled by all eight compilers (the five SQL dialects,
 /// MongoDB, and the one Search compiler both Search engines share) and by the real parser and pipeline without a refusal.
 /// It also holds the SEC-3 depth guarantee (<c>FilterDepth</c> of a generated tree is at most 8) over a 100,000-case sweep.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class ParitySetOperatorTests(ITestOutputHelper output)
     private static readonly long[] Seeds = [20261010, 1, 402, 604, 720, 1218, 1366];
 
     private static readonly ISqlDialect[] Dialects =
-        [PostgresDialect.Instance, MssqlDialect.Instance, MySqlDialect.Instance, SqliteDialect.Instance];
+        [PostgresDialect.Instance, MssqlDialect.Instance, MySqlDialect.Instance, OracleDialect.Instance, SqliteDialect.Instance];
 
     [Fact]
     public void In_and_notIn_are_generated_per_field_type_on_all_seven_types()
@@ -60,7 +60,7 @@ public sealed class ParitySetOperatorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Every_generated_request_with_a_set_operator_compiles_on_all_seven_compilers()
+    public void Every_generated_request_with_a_set_operator_compiles_on_all_eight_compilers()
     {
         var compiled = 0;
         var perType = new Dictionary<FieldType, int>();

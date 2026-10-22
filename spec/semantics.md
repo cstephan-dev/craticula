@@ -1258,7 +1258,8 @@ through the *session*'s `NLS_COMP`/`NLS_SORT` — the same fact SQL-6 cites as w
 direction must be spelled `COLLATE BINARY` there): on all three, a grouped string column folds case
 and `"EMEA"`/`"emea"` land in one bucket. A host that wants exact buckets on those engines must
 declare the groupable column with a binary / `_as_cs` / `BINARY` collation in its DDL — or, on
-Oracle, run the session with `NLS_COMP = BINARY` — the same kind of obligation SQL-6 already records
+Oracle, run the session with `NLS_COMP = BINARY` (the default, and what the execution tier runs on; a column-level `COLLATE
+BINARY` needs `MAX_STRING_SIZE = EXTENDED`, measured in SQL-6 below) — the same kind of obligation SQL-6 already records
 for MySQL's case-sensitive direction, and for the same reason (no portable in-statement spelling
 exists that does not break the `GROUP BY`). Recorded here as a documented divergence rather than
 papered over; the execution-equality tier (T-1b, #1624) is what can grade it, and T-1a cannot see it
@@ -2054,6 +2055,12 @@ mechanism to choose and it has to serve the exact-match family, ordering, set me
   `COMPATIBLE >= 12.2` and `MAX_STRING_SIZE = EXTENDED`, data-bound collation's documented
   prerequisite) — a hard version floor of the same kind SQLite's 3.30.0 `NULLS FIRST/LAST` floor is,
   and equally a loud failure when unmet (ORA-43929) rather than a silent one.
+  *Measured (#2880, 2026-10-22), on Oracle Database Free 23.26.3 with `COMPATIBLE = 23.6.0` and `MAX_STRING_SIZE = STANDARD`:*
+  the statement-level operator (`COLLATE BINARY_CI` and `COLLATE BINARY` on a column, in `=`, `LIKE ... ESCAPE`, `IN` and
+  `ORDER BY`) runs and returns the pinned rows for all 45 `oracle` fixture arms, so on 23ai it needs **no** `EXTENDED` setting.
+  Only a column **declared** with a collation in its DDL fails there (`ORA-43929: Collation cannot be specified if parameter
+  MAX_STRING_SIZE=STANDARD is set`). The 12.2 floor itself, and `EXTENDED` as the prerequisite on 12.2 to 21c, are Oracle's
+  documented requirements and were **not run**: no image of those versions is in the tier.
 - **`NLSSORT(col, 'NLS_SORT=BINARY_CI')`** — works back to 9i and pins no version, and is **rejected**:
   it cannot express a case-insensitive *substring* match, because a collation key of a substring is
   not a substring of that string's collation key. The substring family would have to fall back to
@@ -3093,8 +3100,8 @@ values, in order, window included**: the rows `startRow` up to `endRow` of the o
 Order is total over such a key (SEM-6's tiebreaker, SEM-3's null placement), so two correct engines cannot differ in it
 (XEQ-3). **All engine pairs are compared**, not one reference engine against the rest: each engine runs the case once and
 every pair of its id sequences must be equal, so a failure names the two engines that disagree. **The engines are the
-seven of T-2** (TRD §11): PostgreSQL, SQL Server, MySQL, SQLite, MongoDB, OpenSearch and Elasticsearch, so 21 pairs;
-Oracle is not part of the property (OQ-6). A backend that refuses
+eight of T-2** (TRD §11): PostgreSQL, SQL Server, MySQL, Oracle, SQLite, MongoDB, OpenSearch and Elasticsearch, so 28 pairs
+(Oracle joined with #2880 once OQ-6 was closed; the first runs, below, were on the other seven and 21 pairs). A backend that refuses
 a request the generator produced (an error, or a compile rejection) fails the property, because the generator only
 produces requests inside SEC-3's limits and the profile of PAR-3. The property is stated at the **IR level**: the case
 is an AG Grid wire request, parsed and validated by the real adapter and filter pipeline into the IR every compiler
