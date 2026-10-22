@@ -16,8 +16,8 @@ interface Expectation {
 }
 
 /**
- * What the panel shows after a Customer "contains" filter, per provider. The SQL Server and MySQL rows come from the demo
- * README's description of their compiled text (`@p1` with COLLATE; `?` without), as do the search engines' (JSON).
+ * What the panel shows after a Customer "contains" filter, per provider, as measured on every engine: the dialect name the API
+ * reports (`mssql` for SQL Server), `@p1` with COLLATE for SQL Server, `?` without it for MySQL, JSON for the search engines.
  */
 const EXPECTED: Record<Provider, Expectation> = {
   postgres: { kind: 'sql', dialect: 'postgres', contains: ['$1', 'ILIKE'], lacks: ['COLLATE'] },
@@ -25,9 +25,9 @@ const EXPECTED: Record<Provider, Expectation> = {
   ef: { kind: 'sql', dialect: 'ef-npgsql', contains: ['SELECT', 'lower('], note: /EF Core inlines parameter values/ },
   sqlite: { kind: 'sql', dialect: 'sqlite', contains: ['?', 'LIKE'], lacks: ['COLLATE'] },
   'ef-sqlite': { kind: 'sql', dialect: 'ef-sqlite', contains: ['SELECT'], note: /EF Core inlines parameter values/ },
-  sqlserver: { kind: 'sql', dialect: /sqlserver/i, contains: ['@p1', 'COLLATE'] },
+  sqlserver: { kind: 'sql', dialect: 'mssql', contains: ['@p1', 'COLLATE'] },
   'ef-sqlserver': { kind: 'sql', dialect: 'ef-sqlserver', contains: ['SELECT'], note: /EF Core inlines parameter values/ },
-  mysql: { kind: 'sql', dialect: /mysql/i, contains: ['?'], lacks: ['COLLATE'] },
+  mysql: { kind: 'sql', dialect: 'mysql', contains: ['?'], lacks: ['COLLATE'] },
   opensearch: { kind: 'json', dialect: 'opensearch', contains: ['"query"'], note: /compiled search request/ },
   elasticsearch: { kind: 'json', dialect: 'elasticsearch', contains: ['"query"'], note: /compiled search request/ },
 };

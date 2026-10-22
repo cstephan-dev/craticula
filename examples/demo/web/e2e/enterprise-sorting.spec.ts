@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { GridPage } from './pages/grid';
 import { BASELINE, OTHER_PROVIDERS, skipUnlessServed } from './support/providers';
+import { SEARCH_ENGINES } from './support/divergences';
 import { captureRows } from './support/rows';
 import { expectMatchesBaseline, expectVisibleCells, lastDrawnRowIndex, scrollPast, sent, startOn } from './support/actions';
 
@@ -10,6 +11,10 @@ test.describe('sorting', () => {
   for (const provider of EVERY_PROVIDER) {
     test(`${provider}: scrolling to the end of the table sorted by Id loads past 10,000 rows`, async ({ page }) => {
       skipUnlessServed(provider);
+      // A search engine does not count above 10,000 rows, so the list grows one block of 100 rows per scroll: about 100 blocks
+      // (measured: a block a second on a quiet machine, slower with every worker busy) before the grid is past row 10,000.
+      const growsByBlocks = SEARCH_ENGINES.includes(provider);
+      test.setTimeout(growsByBlocks ? 300_000 : 60_000);
       const grid = new GridPage(page);
       await startOn(grid, provider);
       const sorted = await captureRows(page, provider, () => grid.clickHeader('id'), { where: (r) => (sent(r).sortModel?.length ?? 0) === 1 });
@@ -17,7 +22,7 @@ test.describe('sorting', () => {
       await expect.poll(() => grid.sortOf('id')).toBe('ascending');
 
       // A provider that counts jumps to the last row; one that cannot count above 10,000 grows block by block until it is reached.
-      await scrollPast(grid, 10_000);
+      await scrollPast(grid, 10_000, growsByBlocks ? 240_000 : 90_000);
       await expect(grid.errorBanner()).toHaveCount(0);
       expect(await lastDrawnRowIndex(grid)).toBeGreaterThan(10_000);
       // The rows drawn at the bottom are the rows the baseline holds for that block.

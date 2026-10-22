@@ -45,17 +45,23 @@ test.describe('grouping and aggregation', () => {
       await expectMatchesBaseline(request, 'Amount count by Country', amountCount);
 
       // The group rows on screen carry the group keys the API sent.
-      const firstKey = amountCount.rows.find((row) => Object.values(row)[0] !== null);
-      if (firstKey) {
-        await expect(grid.page.getByRole('gridcell', { name: String(Object.values(firstKey)[0]), exact: true }).first()).toBeVisible();
+      const keyOf = (row: Record<string, unknown>): unknown => Object.values(row)[0];
+      const firstIndex = amountCount.rows.findIndex((row) => keyOf(row) !== null);
+      expect(firstIndex, `${provider}: a Country group with a key`).toBeGreaterThanOrEqual(0);
+      const firstRow = amountCount.rows[firstIndex];
+      if (firstRow) {
+        await expect(grid.page.getByRole('gridcell', { name: String(keyOf(firstRow)), exact: true }).first()).toBeVisible();
       }
 
-      // Open a group: its children are the next group level, and then the orders themselves.
-      const children = await openGroupAt(grid, provider, 0, 1);
+      // Open a group: its children are the next group level, and then the orders themselves. The group with no key is skipped:
+      // AG Grid sends nothing when it is clicked, on every provider, and a search engine lists it first where PostgreSQL lists it last.
+      const children = await openGroupAt(grid, provider, firstIndex, 1);
       await expectMatchesBaseline(request, 'children of the first Country group', children);
       expect(sent(children.request).groupKeys).toHaveLength(1);
       expect(children.rows.length).toBeGreaterThan(0);
-      const leaves = await openGroupAt(grid, provider, 1, 2);
+      const childIndex = children.rows.findIndex((row) => keyOf(row) !== null);
+      expect(childIndex, `${provider}: a Category group with a key`).toBeGreaterThanOrEqual(0);
+      const leaves = await openGroupAt(grid, provider, firstIndex + 1 + childIndex, 2);
       await expectMatchesBaseline(request, 'orders of the first Country and Category group', leaves);
       expect(leaves.rows.length).toBeGreaterThan(0);
       expect(leaves.columns).toContain('customer');

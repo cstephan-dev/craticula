@@ -9,9 +9,8 @@ const NAME = 'Müller, Söhne & Co';
 type Search = 'söhne' | 'SÖHNE' | 'sohne';
 
 /**
- * Whether a "contains" filter finds the customer `Müller, Söhne & Co`, per engine and typed text. SQL Server, MySQL and
- * OpenSearch come from the demo README's documented collation rules (their engines are not in the default stack); the
- * others were measured on the default stack and agree with the README.
+ * Whether a "contains" filter finds the customer `Müller, Söhne & Co`, per engine and typed text. Measured on all ten
+ * providers (SQL Server 2022, MySQL 8.4, OpenSearch 2.19, Elasticsearch 8.17 included); the results agree with the demo README.
  */
 const FINDS: Partial<Record<Provider, Record<Search, boolean>>> = {
   postgres: { 'söhne': true, 'SÖHNE': true, sohne: false },
