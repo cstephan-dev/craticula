@@ -25,9 +25,21 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /errors\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         // Wide enough that every column is drawn: the grid only renders the columns in view.
+        viewport: { width: 1920, height: 1080 },
+      },
+    },
+    {
+      // Stops database containers (only with E2E_DESTRUCTIVE=1), so it runs alone, after every other test has finished.
+      name: 'destructive',
+      testMatch: /errors\.spec\.ts/,
+      dependencies: ['chromium'],
+      fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
         viewport: { width: 1920, height: 1080 },
       },
     },
