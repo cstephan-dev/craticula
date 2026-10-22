@@ -91,8 +91,9 @@ jobs:
           --filter "FullyQualifiedName!~MongoDB.Driver.Tests&FullyQualifiedName!~OpenSearch.Client.Tests&FullyQualifiedName!~Integration.Tests.Containers"
 
       # Execution-equality tier and parity property tests on all engines in containers (TRD P-3, "on release"): the
-      # same run as the nightly pipeline. "on" makes a missing Docker daemon fail instead of skipping. The Oracle engine
-      # has no container tests in this project (OQ-6), so nothing is excluded here.
+      # same run as the nightly pipeline. "on" makes a missing Docker daemon fail instead of skipping. Oracle Free 23ai is
+      # one of the engines since #2880 (OQ-6), so a failing Oracle test stops the release and the runner pulls the Oracle
+      # image (about 6.5 GB unpacked) next to the SQL Server and search ones.
       - name: Integration tier (containers and parity)
         run: dotnet test csharp/tests/Craticula.Integration.Tests -c Release
         env:
