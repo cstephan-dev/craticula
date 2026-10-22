@@ -350,6 +350,57 @@ class RealWorkflowTests(unittest.TestCase):
             with self.subTest(job=job):
                 self.assertRegex(text, rf"(?m)^  {job}:$")
 
+    # --- docs.yml (task #2836): the docs site build and the Pages deploy ---
+
+    @staticmethod
+    def docs_text() -> str:
+        """docs.yml without its comment lines, so a mutation hidden in a comment cannot satisfy an assertion."""
+        lines = (WORKFLOWS / "docs.yml").read_text(encoding="utf-8").splitlines()
+        return "\n".join(line for line in lines if not line.strip().startswith("#")) + "\n"
+
+    def test_docs_workflow_has_a_site_and_a_deploy_job_and_none_named_like_a_required_check(self):
+        text = self.docs_text()
+        for job in ("site", "deploy"):
+            with self.subTest(job=job):
+                self.assertRegex(text, rf"(?m)^  {job}:$")
+        for job in ("build", "test"):
+            with self.subTest(forbidden=job):
+                self.assertNotRegex(text, rf"(?m)^  {job}:$")    # ci.yml's required checks keep their names
+
+    def test_docs_workflow_runs_on_pull_requests_and_on_pushes_to_main(self):
+        text = self.docs_text()
+        self.assertRegex(text, r"(?m)^  pull_request:\n    branches: \[main\]$")
+        self.assertRegex(text, r"(?m)^  push:\n    branches: \[main\]$")
+
+    def test_docs_workflow_is_read_only_except_in_the_deploy_job(self):
+        text = self.docs_text()
+        self.assertRegex(text, r"(?m)^permissions:\n  contents: read\n(?!  )")
+        site, deploy = text.split("\n  deploy:\n")
+        self.assertNotRegex(site, r"(?m)^    permissions:")
+        self.assertRegex(deploy, r"(?m)^    permissions:\n      pages: write\n      id-token: write\n(?!      )")
+        self.assertNotRegex(text, r"(?m)^\s+(?:contents|actions|pull-requests|packages|statuses|checks): write")
+
+    def test_docs_workflow_uses_no_secret(self):
+        self.assertEqual([], secret_references(self.docs_text()))
+
+    def test_docs_deploy_runs_only_on_a_push_to_main_with_pages_switched_on_after_the_site_job(self):
+        text = self.docs_text()
+        gate = "if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DOCS_PAGES == 'true'"
+        deploy = text.split("\n  deploy:\n")[1]
+        self.assertIn(f"\n    {gate}\n", "\n" + deploy)
+        self.assertRegex(deploy, r"(?m)^    needs: site$")
+        self.assertRegex(deploy, r"(?m)^    environment:\n      name: github-pages$")
+        # the artifact is uploaded under the same gate, and no step needs the Pages API (configure-pages would need pages: read)
+        self.assertIn(f"\n        {gate}\n        with:\n          path: site/_build\n", text)
+        self.assertNotIn("configure-pages", text)
+
+    def test_docs_site_job_runs_the_generator_tests_and_builds_into_the_folder_the_artifact_reads(self):
+        text = self.docs_text()
+        self.assertRegex(text, r"(?m)^        run: python3 scripts/test_build_site\.py$")
+        self.assertRegex(text, r"(?m)^        run: python3 scripts/build_site\.py --out site/_build$")
+        self.assertNotIn("|| true", text)
+        self.assertNotIn("continue-on-error", text)
+
 
 if __name__ == "__main__":
     unittest.main()
