@@ -41,7 +41,10 @@ public static class EngineFailures
     // Order does not matter: the first predicate that matches wins and every match means the same thing.
     private static ImmutableArray<Func<Exception, bool>> declared =
     [
-        exception => exception is NpgsqlException,
+        // PostgreSQL: a driver failure to reach the server, or a server error that says the server is going away or refusing
+        // connections, see IsPostgresUnavailable. Any other PostgresException (a bad statement, a missing table, a refused login) is a bug.
+        exception => exception is NpgsqlException and not PostgresException,
+        exception => exception is PostgresException postgres && IsPostgresUnavailable(postgres),
         exception => exception is MongoException,
         // SQLite: the file cannot be opened (missing, no permission) or another connection holds the lock (primary result
         // codes 14 SQLITE_CANTOPEN, 5 SQLITE_BUSY, 6 SQLITE_LOCKED). Any other SqliteException is a bug and stays a 500.
@@ -58,6 +61,18 @@ public static class EngineFailures
         exception => exception is TimeoutException,
         exception => exception is SocketException
     ];
+
+    /// <summary>
+    /// A <see cref="PostgresException"/> that means "the server cannot be reached now": the class 57 operator-intervention states that
+    /// end or refuse connections (57P01 admin shutdown, 57P02 crash shutdown, 57P03 cannot connect now, 57P05 idle-session timeout;
+    /// measured: the first request on a pooled connection after <c>docker compose stop</c> fails with 57P01 "terminating connection due
+    /// to administrator command"), 53300 (too many connections) and the connection exceptions Npgsql itself calls transient (08000,
+    /// 08001, 08003, 08004, 08006, 08007; not 08P01, a protocol violation, which is a bug). 57014 (a cancelled statement), a refused
+    /// login (28P01, 28000), a missing database (3D000) and every statement error are not listed: they are settings or bugs.
+    /// </summary>
+    public static bool IsPostgresUnavailable(PostgresException exception) =>
+        exception.SqlState is "57P01" or "57P02" or "57P03" or "57P05" or "53300"
+            or "08000" or "08001" or "08003" or "08004" or "08006" or "08007";
 
     /// <summary>A <see cref="SqlException"/> that is a connection failure: a declared error number, or a refused/unreachable socket.
     /// Anything else (a bad statement, a missing table, an untrusted certificate: a configuration error) is not.</summary>

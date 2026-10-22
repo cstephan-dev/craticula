@@ -14,6 +14,41 @@ public sealed class SeedCommandTests
     private static SeedTarget Down(string name) =>
         Target(name, _ => throw new TimeoutException($"{name} is down"));
 
+    // A refused password, a refused connection and a missing database are setting problems (like MySQL 1045): the provider fails with its hint
+    // and the next one still runs. A statement error is a bug and ends the command.
+    [Theory]
+    [InlineData("28P01", 2)]
+    [InlineData("28000", 2)]
+    [InlineData("3D000", 2)]
+    [InlineData("57P01", 2)]
+    public async Task Run_WhenPostgresRefusesOrIsGoingAway_TheNextStillRunsAndTheExitIs2(string sqlState, int expectedExit)
+    {
+        var next = false;
+        var targets = new[]
+        {
+            Target("postgres", _ => throw new Npgsql.PostgresException("the server said so", "FATAL", "FATAL", sqlState)),
+            Target("mongo", rows => { next = true; return Task.FromResult((long)rows.Count); })
+        };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = await SeedCommand.RunAsync([], targets, output, error);
+
+        Assert.Equal(expectedExit, exit);
+        Assert.True(next);
+        Assert.Contains("hint for postgres", error.ToString());
+    }
+
+    [Fact]
+    public async Task Run_WhenPostgresSaysAStatementIsWrong_TheCommandEnds()
+    {
+        var targets = new[] { Target("postgres", _ => throw new Npgsql.PostgresException("syntax error", "ERROR", "ERROR", "42601")) };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => SeedCommand.RunAsync([], targets, output, error));
+    }
+
     [Fact]
     public void Parse_WithNoArgument_GivesTheDefaultTargetsOnly()
     {

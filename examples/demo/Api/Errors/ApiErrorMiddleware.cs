@@ -87,7 +87,6 @@ public sealed class ApiErrorMiddleware(RequestDelegate next, ILogger<ApiErrorMid
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } => (
                 StatusCodes.Status413PayloadTooLarge, "request-too-large", "The request body is larger than the 1 MiB limit."),
             BadHttpRequestException => (bad, "bad-request", "The request could not be read."),
-            PostgresException => Internal(),
             // Which exceptions are connection failures is declared once, in EngineFailures.
             _ when EngineFailures.IsUnavailable(exception) => (
                 StatusCodes.Status503ServiceUnavailable, "backend-unavailable", "The database is not reachable."),

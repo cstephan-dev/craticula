@@ -112,6 +112,48 @@ public sealed class OptionalProviderTests
         }
     }
 
+    // Bug #2914: PostgreSQL closes a pooled connection while it shuts down ("terminating connection due to administrator command",
+    // SQLSTATE 57P01); the first request after `docker compose stop` surfaced it as a PostgresException and answered 500.
+    [Theory]
+    [InlineData(FakeGridService.ThrowPostgresShutdown, HttpStatusCode.ServiceUnavailable, "backend-unavailable")]
+    [InlineData(FakeGridService.ThrowPostgresCrashShutdown, HttpStatusCode.ServiceUnavailable, "backend-unavailable")]
+    [InlineData(FakeGridService.ThrowPostgresCannotConnectNow, HttpStatusCode.ServiceUnavailable, "backend-unavailable")]
+    [InlineData(FakeGridService.ThrowPostgresConnectionFailure, HttpStatusCode.ServiceUnavailable, "backend-unavailable")]
+    [InlineData(FakeGridService.ThrowPostgresBadStatement, HttpStatusCode.InternalServerError, "internal-error")]
+    [InlineData(FakeGridService.ThrowPostgresLoginRefused, HttpStatusCode.InternalServerError, "internal-error")]
+    public async Task APostgresExceptionAnswersByItsSqlState(string setting, HttpStatusCode status, string kind)
+    {
+        var (app, client) = await ApiHostFixture.StartAsync([Fake], builder => builder.Configuration[FakeEnvVar] = setting);
+        await using (app)
+        using (client)
+        {
+            using var response = await client.PostAsync("/api/fake/rows", new StringContent(Requests.PageSize(10), Encoding.UTF8, "application/json"));
+            var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+
+            Assert.Equal(status, response.StatusCode);
+            Assert.Equal(kind, json.GetProperty("error").GetProperty("kind").GetString());
+        }
+    }
+
+    [Theory]
+    [InlineData("57P01", true)]
+    [InlineData("57P02", true)]
+    [InlineData("57P03", true)]
+    [InlineData("08006", true)]
+    [InlineData("08001", true)]
+    [InlineData("08000", true)]
+    [InlineData("57P05", true)]
+    [InlineData("53300", true)]
+    [InlineData("08P01", false)]
+    [InlineData("3D000", false)]
+    [InlineData("28000", false)]
+    [InlineData("42601", false)]
+    [InlineData("42P01", false)]
+    [InlineData("28P01", false)]
+    [InlineData("57014", false)]
+    public void EngineFailures_ClassifiesAPostgresExceptionBySqlState(string sqlState, bool unavailable) =>
+        Assert.Equal(unavailable, EngineFailures.IsUnavailable(FakeGridService.Postgres(sqlState)));
+
     [Fact]
     public async Task MongoDown_Answers503BackendUnavailable()
     {
@@ -145,13 +187,24 @@ public sealed class OptionalProviderTests
     private sealed class FakeGridService(string setting) : IGridService
     {
         public const string ThrowUndeclared = "throw-undeclared";
+        public const string ThrowPostgresShutdown = "throw-pg-57p01";
+        public const string ThrowPostgresCrashShutdown = "throw-pg-57p02";
+        public const string ThrowPostgresCannotConnectNow = "throw-pg-57p03";
+        public const string ThrowPostgresConnectionFailure = "throw-pg-08006";
+        public const string ThrowPostgresBadStatement = "throw-pg-42601";
+        public const string ThrowPostgresLoginRefused = "throw-pg-28p01";
+
+        public static Npgsql.PostgresException Postgres(string sqlState) =>
+            new("the server said so", "FATAL", "FATAL", sqlState);
 
         public string Name => "fake";
 
         public Task<GridPageResult> FetchRowsAsync(PreparedRows request, CancellationToken cancellationToken) =>
             setting == ThrowUndeclared
                 ? throw new InvalidOperationException("not an engine failure")
-                : throw new FakeEngineDownException("the fake engine is down");
+                : setting.StartsWith("throw-pg-", StringComparison.Ordinal)
+                    ? throw Postgres(setting["throw-pg-".Length..].ToUpperInvariant())
+                    : throw new FakeEngineDownException("the fake engine is down");
 
         public Task<IReadOnlyList<object?>> FetchSetValuesAsync(PreparedSetValues request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
