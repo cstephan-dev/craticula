@@ -15,9 +15,12 @@
     <PackageReference Include="Testcontainers.MongoDb" />
     <PackageReference Include="Testcontainers.OpenSearch" />
     <PackageReference Include="Testcontainers.Elasticsearch" />
+    <PackageReference Include="Testcontainers.Oracle" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- Oracle's driver, test code only (#2882, ADR 0003): its terms are not open source, so no package under csharp/src/ may reference it. -->
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" />
     <!-- Not used by name: lifts SqlClient's transitive System.Security.Cryptography.Pkcs to a patched version
          (NuGetAudit, #1660; the advisories and the removal condition are in Directory.Packages.props). -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
