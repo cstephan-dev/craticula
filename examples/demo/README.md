@@ -103,6 +103,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
 ## Click-through checklist
 
 Do these in the browser. Each should work on all the providers the API lists (PostgreSQL is the Dapper route, EF Core is the Entity Framework route).
+Most of them are also run by script: see [Browser tests](#browser-tests-optional).
 
 1. **Switch provider.** Use the provider switch in the header (PostgreSQL, MongoDB, EF Core, SQLite). Apply a filter and a sort, then switch: the same
    rows appear.
@@ -119,6 +120,41 @@ Do these in the browser. Each should work on all the providers the API lists (Po
    starts with `=` is saved with a leading `'` so a spreadsheet does not run it as a formula.
 8. **Query panel.** Click Query panel. It shows the SQL (PostgreSQL) or the aggregation pipeline (MongoDB) with its
    parameters for the current view.
+
+## Browser tests (optional)
+
+The click-through above can be run by a script: [Playwright](https://playwright.dev) tests in `web/e2e` open the page in Chromium, once per provider
+the API lists, and check what you would check by hand (filters, sorts, groups, pages, In range, CSV export, query panel, the Community page, error
+banners). For each scenario the rows the grid received must equal PostgreSQL's answer to the same request, and a provider that differs fails the run
+and is named. They run on your machine only; no pipeline runs them. [web/e2e/COVERAGE.md](web/e2e/COVERAGE.md) lists what they cover and what stays
+manual, so keep the checklist above as the fallback for those and for a look at the page.
+
+```bash
+cd web
+npm install
+npm run e2e:install     # once: downloads Chromium (about 150 to 300 MB from Microsoft's CDN, needs internet the first time)
+npm run e2e             # the demo must be up: the four steps of "Run it, step by step"
+```
+
+- **Install.** `npm run e2e:install` fetches only the browser. If Chromium then fails to start for missing system libraries (a bare Linux machine or
+  container), `npx playwright install --with-deps chromium` also installs them, but needs `sudo`, so it is not scripted.
+- **The demo must be running** (databases seeded, API on 5080, page on 5173). If it is not, the run stops at once and prints the steps. Another address:
+  `DEMO_WEB_URL=http://localhost:5174 DEMO_API_URL=http://127.0.0.1:5081 npm run e2e`.
+- **Providers.** The tests use whatever `/api/health` lists (the page offers exactly that). A test for a provider that is not listed is skipped, with the
+  reason in the report: with the default five (PostgreSQL, EF Core, MongoDB, SQLite, EF Core on SQLite) the run takes about two minutes. Start the optional
+  engines as described in their sections and the tests cover them too.
+- **All ten providers need about 10 GB of free RAM**, so run them in two batches. First `--profile sqlserver --profile mysql`, with `DEMO_SQLSERVER`,
+  `DEMO_MYSQL` and the seed from their sections; `npm run e2e`; then stop those two containers (`docker compose --profile sqlserver --profile mysql stop sqlserver mysql`).
+  Then `--profile opensearch --profile elasticsearch` with `DEMO_OPENSEARCH` and `DEMO_ELASTICSEARCH`, restart the API, `npm run e2e`. Each batch takes
+  about three to four minutes (the search engines have no row total, so scrolling past 10,000 rows grows the list block by block, about two minutes on its own).
+- **One provider or one spec.** `npx playwright test enterprise-grouping`, `npx playwright test -g "mysql"`, `npx playwright test --project=chromium e2e/export.spec.ts`.
+  `npx playwright test --ui` opens Playwright's own runner.
+- **Error banners (opt-in).** `E2E_DESTRUCTIVE=1 npm run e2e` also runs `errors.spec.ts`, which **stops database containers with `docker compose stop`**
+  (PostgreSQL, MongoDB and whichever optional engine the API lists), checks the `backend-unavailable` banner and that another provider keeps working, and
+  **starts each container again** and waits until it is healthy, even if the test fails. Without the variable that spec is skipped. Run it alone with
+  `E2E_DESTRUCTIVE=1 npx playwright test --project=destructive --no-deps`. If a run is killed half-way, `docker compose ps` shows what to start again.
+- **Reports.** `test-results/` (screenshots and traces of failed tests) and `playwright-report/` (open with `npx playwright show-report`) are git-ignored; traces
+  embed what the page received, so do not attach them to an issue without looking.
 
 ## What to expect
 
@@ -540,6 +576,7 @@ Stop the API and the page with Ctrl+C in their terminals.
 | `Api/` | ASP.NET Core minimal API: routes (`rows`, `values`, `export.csv`, `query`, `health`), the library calls (`Api/Grid/`: `PostgresGridService` for Dapper, `EfGridService` and `OrdersDbContext` for Entity Framework Core, `MongoGridService`, `SqlServerGridService`, `MySqlGridService`, `OpenSearchGridService`), the seed (`Api/Seed/`) |
 | `Api.Tests/` | xUnit tests that start the real API against the databases and a temporary SQLite file (the ones that need PostgreSQL or MongoDB skip when they are down; the SQL Server, MySQL, OpenSearch and Elasticsearch comparisons run when `DEMO_SQLSERVER`, `DEMO_MYSQL`, `DEMO_OPENSEARCH` or `DEMO_ELASTICSEARCH` is set and the engine answers, and skip with one reason otherwise; the SQL Server seeder tests also need `DEMO_SQLSERVER_ADMIN`) |
 | `web/` | Vite + React + TypeScript page (see [web/README.md](web/README.md) for the AG Grid version and the page's requests) |
+| `web/e2e/` | Playwright browser tests of the page (see [Browser tests](#browser-tests-optional) and [web/e2e/COVERAGE.md](web/e2e/COVERAGE.md)) |
 | `orders.schema.json` | The GridSchema: the columns the grid may touch, with their SQL, MongoDB and OpenSearch mappings |
 | `smoke.sh`, `smoke/` | The cross-provider check and its request files |
 | `docker-compose.yml` | PostgreSQL 16 and MongoDB 7; SQL Server 2022, MySQL 8.4 and OpenSearch 2.19 behind their own profiles and `engines` |

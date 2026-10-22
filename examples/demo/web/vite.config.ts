@@ -1,10 +1,12 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // The API listens on 127.0.0.1:5080; proxying /api keeps the browser on one origin, so no CORS is involved in dev.
 export default defineConfig({
   plugins: [react()],
   server: {
+    // The browser tests write traces and reports into the project folder; a change there must not reload the page under test.
+    watch: { ignored: ['**/test-results/**', '**/playwright-report/**', '**/blob-report/**'] },
     proxy: {
       '/api': 'http://127.0.0.1:5080',
     },
@@ -20,5 +22,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // e2e/ holds Playwright specs (run by `npm run e2e`), not unit tests.
+    exclude: [...configDefaults.exclude, 'e2e/**'],
   },
 });
