@@ -12,6 +12,7 @@ using Npgsql;
 using NpgsqlTypes;
 using Testcontainers.MsSql;
 using Testcontainers.MySql;
+using Testcontainers.Oracle;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -19,7 +20,7 @@ namespace Craticula.Integration.Tests.Containers.Sql;
 
 /// <summary>
 /// One SQL engine of the execution-equality tier (T-1b, #2206): the engine's own DDL, its own seed insert and its own
-/// ADO driver, behind one shape so the runner is the same for all four. A container engine starts its container once,
+/// ADO driver, behind one shape so the runner is the same for all five. A container engine starts its container once,
 /// lazily on the first fixture, so a run without Docker (every test skipped) never pulls an image; the xUnit collection
 /// fixture disposes it at the end. Every fixture gets a fresh table (dropped, created, seeded).
 ///
@@ -68,6 +69,12 @@ public abstract class SqlEngine : IAsyncLifetime
     protected virtual string PrepareSql(string sql, int parameterCount) => sql;
 
     protected abstract DbCommand CreateCommand(DbConnection connection);
+
+    /// <summary>The statement that drops the fixture's table when it exists (Oracle below 23ai has no <c>IF EXISTS</c>, so it overrides).</summary>
+    protected virtual string DropTableSql(string quotedTable) => $"DROP TABLE IF EXISTS {quotedTable}";
+
+    /// <summary>Reads one non-null cell; a driver whose native type does not fit a CLR one (Oracle's 38-digit NUMBER) overrides.</summary>
+    protected virtual object ReadCell(DbDataReader reader, int index) => reader.GetValue(index);
 
     async Task IAsyncLifetime.InitializeAsync() => await Task.CompletedTask;
 
@@ -159,7 +166,7 @@ public abstract class SqlEngine : IAsyncLifetime
             var cells = new object?[reader.FieldCount];
             for (var index = 0; index < cells.Length; index++)
             {
-                cells[index] = await reader.IsDBNullAsync(index) ? null : reader.GetValue(index);
+                cells[index] = await reader.IsDBNullAsync(index) ? null : ReadCell(reader, index);
             }
 
             rows.Add(cells);
@@ -173,7 +180,7 @@ public abstract class SqlEngine : IAsyncLifetime
         var schema = fixture.Schema;
         var table = Quote(schema.Source);
 
-        await ExecuteAsync(connection, $"DROP TABLE IF EXISTS {table}");
+        await ExecuteAsync(connection, DropTableSql(table));
 
         var ddl = new StringBuilder("CREATE TABLE ").Append(table).Append(" (");
         for (var index = 0; index < schema.FieldOrder.Count; index++)
@@ -542,6 +549,114 @@ public sealed class MySqlEngine : SqlEngine
         }
 
         command.Parameters.Add(new MySqlParameter { ParameterName = $"p{index}", Value = value ?? DBNull.Value });
+    }
+}
+
+/// <summary>
+/// Oracle Database Free 23ai (<c>gvenzl/oracle-free</c>, slim, pre-built database so the start takes seconds, #2880).
+/// SQL-6: both case directions are spelled in the statement (<c>COLLATE BINARY_CI</c> / <c>BINARY</c>), so the DDL needs no
+/// collation and a text column keeps the engine default, which compares BINARY (<c>NLS_COMP = BINARY</c>, GRP-2's host
+/// obligation for bucket keys). SQL-7: the empty string is NULL, so a seeded <c>''</c> loads as NULL (fixtures 024 and 025
+/// declare that divergence). Tables and columns are created quoted, because the dialect always quotes (ORA-00942 otherwise).
+/// The compiler binds date and datetime filter values as text (AR-7) and adds no cast on this engine, so each connection
+/// sets the session's date and timestamp formats to the canonical wire forms (SEM-4), the host obligation this harness meets.
+/// The driver is referenced as <c>global::Oracle.ManagedDataAccess</c> because the loader namespace
+/// <c>Craticula.Integration.Tests.Oracle</c> would capture a bare <c>Oracle.</c>.
+/// </summary>
+public sealed class OracleEngine : SqlEngine
+{
+    public const string Image = "gvenzl/oracle-free:23.26.3-slim-faststart";
+
+    private OracleContainer? _container;
+
+    public override string Backend => "oracle";
+
+    public override ISqlDialect Dialect => OracleDialect.Instance;
+
+    protected override async Task StartAsync()
+    {
+        _container = new OracleBuilder(Image).Build();
+        await _container.StartAsync();
+    }
+
+    protected override async Task StopAsync()
+    {
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
+    }
+
+    protected override async Task<DbConnection> OpenConnectionAsync()
+    {
+        var connection = new global::Oracle.ManagedDataAccess.Client.OracleConnection(_container!.GetConnectionString());
+        await connection.OpenAsync();
+
+        // The compiled text binds a date as 'yyyy-MM-dd' and a datetime as 'yyyy-MM-ddTHH:mm:ss.fffZ' (SEM-4, AR-7); the
+        // default DD-MON-RR format would raise ORA-01861 on them.
+        await ExecuteAsync(
+            connection,
+            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD' NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"'");
+        return connection;
+    }
+
+    protected override string Quote(string identifier) => $"\"{identifier.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+
+    protected override string ColumnType(FieldType type) => type switch
+    {
+        FieldType.Int64 => "NUMBER(19)",
+        FieldType.Double => "BINARY_DOUBLE",
+        FieldType.Decimal => "NUMBER(18,4)",
+        FieldType.Boolean => "NUMBER(1)",
+        FieldType.String => "VARCHAR2(450 CHAR)",
+        FieldType.Date => "DATE",
+        FieldType.Datetime => "TIMESTAMP(3)",
+        _ => throw new InvalidOperationException($"Unmapped FieldType '{type}'.")
+    };
+
+    protected override string SeedPlaceholder(int index) => $":p{index + 1}";
+
+    protected override DbCommand CreateCommand(DbConnection connection) =>
+        new global::Oracle.ManagedDataAccess.Client.OracleCommand { Connection = (global::Oracle.ManagedDataAccess.Client.OracleConnection)connection, BindByName = false };
+
+    // The table name is quoted, so the PL/SQL string literal doubles every quote once more; ORA-00942 (no such table) is the
+    // only error swallowed, which is what IF EXISTS does on 23ai and what 12.2 to 21c need spelled out.
+    protected override string DropTableSql(string quotedTable) =>
+        $"BEGIN EXECUTE IMMEDIATE 'DROP TABLE {quotedTable.Replace("'", "''", StringComparison.Ordinal)} PURGE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;";
+
+    // Positional (BindByName false): the compiled :p1..:pn ascend in first-appearance order. bool has no ODP.NET mapping to a
+    // NUMBER(1), so it is bound as 0/1; a DateOnly is a DATE; a string stays text and is converted by the session formats.
+    protected override void Bind(DbCommand command, int index, object? value)
+    {
+        object bound = value switch
+        {
+            null => DBNull.Value,
+            bool flag => flag ? 1 : 0,
+            DateOnly date => date.ToDateTime(TimeOnly.MinValue),
+            DateTime instant => DateTime.SpecifyKind(instant, DateTimeKind.Unspecified),
+            IReadOnlyList<object?> => throw new NotSupportedException("Oracle's compiled text flattens a set membership; a list parameter is a compiler change."),
+            _ => value
+        };
+
+        command.Parameters.Add(new global::Oracle.ManagedDataAccess.Client.OracleParameter { ParameterName = $"p{index + 1}", Value = bound });
+    }
+
+    // NUMBER reads as decimal; an AVG can carry 38 digits, which overflows decimal's 28, so that cell falls back to double (the driver wraps the OverflowException in an InvalidCastException).
+    protected override object ReadCell(DbDataReader reader, int index)
+    {
+        if (reader is not global::Oracle.ManagedDataAccess.Client.OracleDataReader oracle || oracle.GetFieldType(index) != typeof(decimal))
+        {
+            return reader.GetValue(index);
+        }
+
+        try
+        {
+            return oracle.GetDecimal(index);
+        }
+        catch (Exception exception) when (exception is OverflowException || exception.InnerException is OverflowException)
+        {
+            return (double)oracle.GetOracleDecimal(index);
+        }
     }
 }
 
