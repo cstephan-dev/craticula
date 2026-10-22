@@ -5,6 +5,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [react()],
   server: {
+    // The browser tests write traces and reports into the project folder; a change there must not reload the page under test.
+    watch: { ignored: ['**/test-results/**', '**/playwright-report/**', '**/blob-report/**'] },
     proxy: {
       '/api': 'http://127.0.0.1:5080',
     },

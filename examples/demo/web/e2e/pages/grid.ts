@@ -14,7 +14,7 @@ export const GRID = {
   /** A row group; it carries `ag-row-group-contracted` or `ag-row-group-expanded`. */
   groupRow: '.ag-row-group',
   expander: '.ag-group-contracted, .ag-group-expanded',
-  contractedExpander: '.ag-group-contracted',
+  contractedGroup: '.ag-group-contracted',
   /** The grouping column AG Grid adds in front of the data columns. */
   autoGroupColId: 'ag-Grid-AutoColumn',
   /** The element that scrolls the body vertically. */
@@ -32,6 +32,14 @@ export const GRID = {
   filterBody: '.ag-filter',
   filterFrom: 'input[aria-label="Filter Value"]',
   filterTo: 'input[aria-label="Filter to Value"]',
+  /** The first bound of a number filter set to "Between" (a date filter keeps `filterFrom` for both bounds). */
+  filterRangeFrom: 'input[aria-label="Filter from value"]',
+  filterJoin: '[role="radio"]',
+  /** The column drop zone that holds the value (aggregation) columns, inside the Columns panel. */
+  valueZone: '.ag-column-drop-vertical-aggregation',
+  rowGroupZone: '.ag-column-drop-vertical-rowgroup',
+  dropPill: '.ag-column-drop-cell',
+  dropPillText: '.ag-column-drop-cell-text',
   operatorPicker: '[aria-label="Filtering operator"]',
   setFilterItem: '.ag-set-filter-item',
   menuOption: '.ag-menu-option',
@@ -40,8 +48,8 @@ export const GRID = {
   /** The horizontal "row groups" bar above the grid (the vertical one lives in the Columns panel). */
   rowGroupBar: '.ag-column-drop-horizontal-rowgroup',
   rowGroupPill: '.ag-column-drop-cell',
-  /** The pivot drop zone exists in the DOM but stays hidden (`ag-hidden`) because the page suppresses pivoting. */
-  visiblePivotZone: '[class*="column-drop"][class*="pivot"]:not(.ag-hidden)',
+  /** The pivot drop zones (the bar above the grid and the one in the Columns panel); the page suppresses pivoting, so none may show. */
+  pivotZone: '.ag-column-drop-pivot',
 } as const;
 
 export const PAGE_SIZE = 100;

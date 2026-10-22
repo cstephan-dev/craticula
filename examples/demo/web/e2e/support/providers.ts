@@ -7,6 +7,9 @@ export const PROVIDERS_ENV = 'DEMO_E2E_PROVIDERS';
 /** The provider every other one is compared with. */
 export const BASELINE: Provider = 'postgres';
 
+/** Every provider except the baseline, in catalogue order: the ones the specs compare with it. */
+export const OTHER_PROVIDERS: readonly Provider[] = PROVIDERS.map((item) => item.id).filter((id) => id !== BASELINE);
+
 /** Where the API answers: the same address `global-setup.ts` probed. */
 export function apiUrl(): string {
   return (process.env.DEMO_API_URL ?? 'http://127.0.0.1:5080').replace(/\/$/, '');
