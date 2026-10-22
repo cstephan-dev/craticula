@@ -7,6 +7,7 @@ using Craticula.OpenSearch.Client;
 using MongoDB.Driver;
 using MySqlConnector;
 using Npgsql;
+using OracleMySqlException = MySql.Data.MySqlClient.MySqlException;
 
 namespace Demo.Api.Errors;
 
@@ -38,6 +39,19 @@ public static class EngineFailures
     /// </summary>
     public static readonly ImmutableHashSet<int> MySqlConnectionFailureNumbers = [(int)MySqlErrorCode.UnableToConnectToHost];
 
+    /// <summary>
+    /// The <c>ef-mysql</c> route runs on Oracle's driver (<c>MySql.Data</c>), whose <c>MySqlException</c> is another type than MySqlConnector's:
+    /// the two namespaces are never imported together, this file uses an alias for the Oracle one. Measured against MySQL 8.4.11 with
+    /// MySql.Data 26.10.0, directly and through EF (EF does not wrap it): a refused port and a stopped container (inner
+    /// <see cref="SocketException"/> ConnectionRefused), an address with no route (inner SocketException HostUnreachable) and a host name
+    /// that does not resolve (inner <see cref="ArgumentException"/>) are all <c>Number</c> 1042, the same number as MySqlConnector, so
+    /// the set above applies. A wrong password is 1045 and a database the user may not open is 1044 (not 1049): settings, a 500, as on
+    /// the Dapper route. A server that accepts the connection and never answers raises nothing within 100 s whatever <c>Connection
+    /// Timeout</c> says (the driver's connect timeout does not cover the handshake read), so no number or timeout maps that case.
+    /// </summary>
+    public static bool IsOracleMySqlUnavailable(OracleMySqlException exception) =>
+        MySqlConnectionFailureNumbers.Contains(exception.Number);
+
     // Order does not matter: the first predicate that matches wins and every match means the same thing.
     private static ImmutableArray<Func<Exception, bool>> declared =
     [
@@ -56,6 +70,8 @@ public static class EngineFailures
         // MySQL: the server cannot be reached, see MySqlConnectionFailureNumbers. Any other MySqlException (a refused login, a bad
         // statement, a missing table) stays a 500.
         exception => exception is MySqlException mysql && MySqlConnectionFailureNumbers.Contains(mysql.Number),
+        // MySQL through Oracle's driver (route ef-mysql): the same numbers, another exception type, see IsOracleMySqlUnavailable.
+        exception => exception is OracleMySqlException oracle && IsOracleMySqlUnavailable(oracle),
         // OpenSearch: the low-level client does not throw, the adapter wraps a failed call; see IsOpenSearchUnavailable.
         exception => exception is OpenSearchClientCompilationException opensearch && IsOpenSearchUnavailable(opensearch),
         exception => exception is TimeoutException,
