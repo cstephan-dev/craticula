@@ -13,7 +13,7 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 
 | Scenario (what you see or do) | Spec | Notes |
 |---|---|---|
-| Pick a provider in the header with a Customer filter and an Amount sort: the same rows as PostgreSQL | `enterprise-providers.spec.ts` (provider switch) | every provider, including the two EF Core routes on SQLite and SQL Server |
+| Pick a provider in the header with a Customer filter and an Amount sort: the same rows as PostgreSQL | `enterprise-providers.spec.ts` (provider switch) | every provider, including the four EF Core routes (`ef`, `ef-sqlite`, `ef-sqlserver`, `ef-mysql`) |
 | Open the Country set filter: the values come from the API; untick some and the grid narrows | `enterprise-providers.spec.ts` (set filter) | `<p>` |
 | Clear every Country value in the set filter: an empty grid and no error banner | `enterprise-providers.spec.ts` (set filter) | `<p>` |
 | Number (Quantity greater than 8), date (Shipped on, Ordered at) and boolean (Priority) filters, combined | `enterprise-providers.spec.ts` (filters by column type) | `<p>`; counts equal PostgreSQL's |
@@ -32,7 +32,7 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 | Export CSV with a filter and a sort: the file equals PostgreSQL's | `export.spec.ts` | `<p>`; the file is read cell by cell |
 | Export CSV with no filter: 20,000 rows once each, a cell starting with `=` saved with a leading `'` | `export.spec.ts` | `<p>` |
 | Export CSV after a multi-sort | `export.spec.ts` | `<p>` |
-| Query panel: SQL with its parameters (PostgreSQL `$1`, SQL Server `@p1` with `COLLATE`, MySQL and SQLite `?`), the MongoDB pipeline, the search engines' JSON; the note on the EF Core routes; Copy query | `query-panel.spec.ts` | `<p>`; the panel can be closed and opened again |
+| Query panel: SQL with its parameters (PostgreSQL `$1`, SQL Server `@p1` with `COLLATE`, MySQL and SQLite `?`, the EF Core routes' own text), the MongoDB pipeline, the search engines' JSON; the note on the EF Core routes; Copy query | `query-panel.spec.ts` | `<p>`; the panel can be closed and opened again |
 | Community page: the grid loads with no Enterprise package, no watermark, no set filter, no grouping | `community.spec.ts` | |
 | Community page: sort, text, number and date filters, scrolling | `community.spec.ts` | |
 | Community page: switch provider keeps the filter and the sort and answers like PostgreSQL | `community.spec.ts` | every provider but the baseline |
@@ -66,7 +66,7 @@ and the key named. Anything else that differs fails the run.
 |---|---|---|
 | SQLite | a grouped `amount` sum can differ in its last digits (floating point), relative 1e-9 | `NUMBER_RULES` |
 | SQL Server | the average of a whole-number column is an integer: PostgreSQL's value cut toward zero | `NUMBER_RULES` |
-| MySQL | the average of a whole-number column has four decimals: PostgreSQL's value rounded half up | `NUMBER_RULES` |
+| MySQL, EF Core (MySQL) | the average of a whole-number column has four decimals: PostgreSQL's value rounded half up | `NUMBER_RULES` |
 | every provider | an average can differ in the 7th significant digit (relative 1e-6) | `NUMBER_RULES` |
 | OpenSearch, Elasticsearch | the row count above 10,000 is unknown, so `lastRow` is null where PostgreSQL's is larger | `LAST_ROW_UNKNOWN` |
 | OpenSearch, Elasticsearch | the group with no key sits at the other end of a grouped level | `NULL_GROUP_AT_OTHER_END` |

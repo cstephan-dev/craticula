@@ -45,10 +45,10 @@ export const NUMBER_RULES: readonly NumberRule[] = [
   },
   {
     id: 'mysql-integer-average',
-    providers: ['mysql'],
+    providers: ['mysql', 'ef-mysql'],
     keySuffix: 'quantity_avg',
     mode: { kind: 'round', places: 4 },
-    reason: 'MySQL\'s AVG over an integer column returns a DECIMAL with 4 extra decimals, so 25.349264 arrives as 25.3493',
+    reason: 'MySQL\'s AVG over an integer column (also through the EF Core route, which reads the same server) returns a DECIMAL with 4 extra decimals, so 25.349264 arrives as 25.3493',
   },
   {
     id: 'average-tolerance',

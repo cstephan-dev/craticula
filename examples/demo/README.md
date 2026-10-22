@@ -1,6 +1,6 @@
 # Craticula demo
 
-One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL (through Dapper or through Entity Framework Core), MongoDB or SQLite (a file, no container), and, when you start them, from SQL Server, MySQL or OpenSearch. A small C# API turns each grid
+One AG Grid page that reads the same 20,000 synthetic orders from PostgreSQL (through Dapper or through Entity Framework Core), MongoDB or SQLite (a file, no container), and, when you start them, from SQL Server, MySQL (through Dapper or through Entity Framework Core), OpenSearch or Elasticsearch. A small C# API turns each grid
 request into a native query with the Craticula library. To run it (three terminals, from this folder):
 
 ```bash
@@ -11,8 +11,8 @@ cd web && npm install && npm run dev                       # terminal 3: the pag
 
 It works when http://localhost:5173 shows a grid with rows, and `bash smoke.sh` (run in a fourth terminal, while the API
 is up) ends with `all 26 scenarios are equal on all 5 providers (postgres, ef, ef-sqlite, mongo, sqlite)`. (SQLite is a file the seed creates; see
-[SQLite](#sqlite-the-sqlite-provider) for the two documented differences, and [EF Core on SQLite and SQL Server](#ef-core-on-sqlite-and-sql-server-the-ef-sqlite-and-ef-sqlserver-providers) for the two extra EF routes.) SQL Server, MySQL, OpenSearch and Elasticsearch are optional providers that start only on request:
-see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), [Elasticsearch](#elasticsearch-the-elasticsearch-provider), or [all ten at once](#all-ten-providers-at-once).
+[SQLite](#sqlite-the-sqlite-provider) for the two documented differences, and [EF Core on SQLite, SQL Server and MySQL](#ef-core-on-sqlite-sql-server-and-mysql-the-ef-sqlite-ef-sqlserver-and-ef-mysql-providers) for the three extra EF routes.) SQL Server, MySQL, OpenSearch and Elasticsearch are optional providers that start only on request:
+see [SQL Server](#sql-server-the-sqlserver-provider), [MySQL](#mysql-the-mysql-provider) and [OpenSearch](#opensearch-the-opensearch-provider), [Elasticsearch](#elasticsearch-the-elasticsearch-provider), or [all eleven at once](#all-eleven-providers-at-once).
 
 This is a showcase, not a published package. It references the library by project reference (`../../csharp/src`) until
 the first release is on nuget.org. It is not part of `csharp/Craticula.sln`.
@@ -143,7 +143,7 @@ npm run e2e             # the demo must be up: the four steps of "Run it, step b
 - **Providers.** The tests use whatever `/api/health` lists (the page offers exactly that). A test for a provider that is not listed is skipped, with the
   reason in the report: with the default five (PostgreSQL, EF Core, MongoDB, SQLite, EF Core on SQLite) the run takes about two minutes. Start the optional
   engines as described in their sections and the tests cover them too.
-- **All ten providers need about 10 GB of free RAM**, so run them in two batches. First `--profile sqlserver --profile mysql`, with `DEMO_SQLSERVER`,
+- **All eleven providers need about 10 GB of free RAM**, so run them in two batches. First `--profile sqlserver --profile mysql`, with `DEMO_SQLSERVER`,
   `DEMO_MYSQL` and the seed from their sections; `npm run e2e`; then stop those two containers (`docker compose --profile sqlserver --profile mysql stop sqlserver mysql`).
   Then `--profile opensearch --profile elasticsearch` with `DEMO_OPENSEARCH` and `DEMO_ELASTICSEARCH`, restart the API, `npm run e2e`. Each batch takes
   about three to four minutes (the search engines have no row total, so scrolling past 10,000 rows grows the list block by block, about two minutes on its own).
@@ -225,10 +225,10 @@ CSV export uses `EfCoreExportStream.StreamAsync` the same way.
 **Package.** The demo adds `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (central version in `Directory.Packages.props`). It is a new library and
 needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
 
-## EF Core on SQLite and SQL Server (the `ef-sqlite` and `ef-sqlserver` providers)
+## EF Core on SQLite, SQL Server and MySQL (the `ef-sqlite`, `ef-sqlserver` and `ef-mysql` providers)
 
-The EF Core adapter also runs on two more engines, next to the PostgreSQL `ef` route. Both reuse `EfGridService<TContext>` (`Api/Grid/EfGridService.cs`; `ef` is a thin subclass of it) with one
-context per engine: `SqliteOrdersDbContext` and `SqlServerOrdersDbContext`, both on the shared `SchemaDbContext<T>` (`Api/Grid/OrdersDbContext.cs`).
+The EF Core adapter also runs on three more engines, next to the PostgreSQL `ef` route. All reuse `EfGridService<TContext>` (`Api/Grid/EfGridService.cs`; `ef` is a thin subclass of it) with one
+context per engine: `SqliteOrdersDbContext`, `SqlServerOrdersDbContext` and `MySqlOrdersDbContext`, all on the shared `SchemaDbContext<T>` (`Api/Grid/OrdersDbContext.cs`).
 
 - **`ef-sqlite`** is always on, over the same file as `sqlite`. It uses the adapter's own SQLite preset (`EfCoreProviderSemantics.Sqlite`), so there are no engine facts to declare. It does need **a datetime converter on the context** (a host obligation the adapter documents, bug #2805)
   (`SqliteOrdersDbContext`): the seed stores datetimes as `yyyy-MM-ddTHH:mm:ss.fffZ` text and SQLite compares text, but EF's own SQLite mapping writes a `DateTime` parameter as `yyyy-MM-dd HH:mm:ss` (a space, no `Z`). Without the converter
@@ -254,10 +254,45 @@ context per engine: `SqliteOrdersDbContext` and `SqlServerOrdersDbContext`, both
 6. **The set filter** reuses the compiled statement of the same engine's Dapper route (`SqlServerGridService`, `SqliteGridService`), because the adapter has no distinct-values call.
 7. **CSV** goes through `EfCoreExportStream` and equals PostgreSQL over the whole table (several keyset chunks).
 
-**EF Core on MySQL is not offered.** The only MIT-licensed provider, Pomelo.EntityFrameworkCore.MySql, stops at EF Core 9: its 9.0.0 restores next to the demo's EF Core 10 with a warning (`NU1608`) but fails at the first call with a `MissingMethodException` (EF Core 10 removed a method it uses). MySQL is served by the Dapper route (`mysql`). The route will be added when Pomelo ships an EF Core 10 build; Oracle's provider is excluded by the dependency licence policy.
+- **`ef-mysql`** is on when `DEMO_MYSQL` is set, the same setting as `mysql` (no new variable; `seed mysql` fills the table both routes read). It runs on **Oracle's `MySql.EntityFrameworkCore`** (10.0.12), the only EF Core 10 provider for MySQL the demo can use:
+  Pomelo.EntityFrameworkCore.MySql, the MIT-licensed alternative, stops at EF Core 9 (its 9.0.0 restores next to the demo's EF Core 10 with a warning, `NU1608`, but fails at the first call with a `MissingMethodException`). Read the [licence note](#licence-of-the-ef-mysql-route) before you copy this code. Its engine facts, in `MySqlOrdersDbContext.Semantics`:
 
-**Packages.** The demo adds `Microsoft.EntityFrameworkCore.SqlServer` and `Microsoft.EntityFrameworkCore.Sqlite`, both 10.0.11 (the version of `Microsoft.EntityFrameworkCore` the Npgsql provider already brings; central versions in
-`Directory.Packages.props`). They are new libraries and need the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
+| Setting | Value on MySQL | Why |
+|---|---|---|
+| `CaseInsensitiveCollation`, `CaseSensitiveCollation` | `null` | case and accent handling is the column's collation (the table DDL): the table default is `utf8mb4_0900_ai_ci`, and `country`, `category` and `status` are `utf8mb4_bin`, so the adapter writes none |
+| `PatternMatchFoldsCase` | `false` | the grouping columns are `utf8mb4_bin`, so a bare `LIKE` would match case exactly there; with `false` the adapter lowers both sides and every column folds case |
+| `PatternMatchTreatsLeftBracketAsMetacharacter` | `false` | only T-SQL's `LIKE` does (SEC-4) |
+| `EmptyStringIsNull` | `false` | only Oracle (the database) does |
+
+**Measured on MySQL 8.4.11 with `MySql.EntityFrameworkCore` 10.0.12 (driver `MySql.Data` 26.10.0)**
+
+1. **Two defects of the provider, two workarounds in `MySqlOrdersDbContext`.**
+   - *Substring filters.* The provider writes every `contains`, `startsWith` and `endsWith` as ``LOWER(`o`.`customer`) LIKE '%gmbh%' ESCAPE '\'`` with **one** backslash, which MySQL reads as an escaped quote, so the statement fails with a syntax error (HTTP 500).
+     The context therefore adds an interceptor (`MySqlSessionInterceptor`) that runs `SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')` each time a connection is opened (pooled ones too: one extra statement per request, not measured). With that mode the backslash is an ordinary character and the literal is valid.
+     This is safe only because of how `MySql.Data` 26.10.0 behaves, which is internal to the driver: it writes parameter values into the statement text on the client, and it re-reads the server's "no backslash escapes" status on every reply, so with the mode on it doubles quotes instead of backslashes (checked with the server's general log: a quote in a filter value stays inside its literal). Filters with `%`, `_`, a backslash or a quote give no error and no wildcard leak (tests compare them with PostgreSQL; the rows they compare are empty).
+     The mode **stays on a pooled connection** (the driver does not reset the session), so keep the pool to this context: other `MySql.Data` code on the same connection string that builds its own literals with `MySqlHelper.EscapeString` would escape for the wrong mode.
+   - *Dates.* The driver returns a `DATE` as a `DateTime` and the provider has no `DateOnly` reader, so any request that reads `shipped_on` fails with an `InvalidCastException`. The context declares a `DateOnly` to `DateTime` value converter for every date column.
+   A provider update can remove or change either defect; `smoke.sh` and `EfMySqlProviderTests` are the guard, and the package is pinned at 10.0.12.
+2. **The query panel's text is valid only with that session mode.** The panel shows the provider's own SQL (`ToQueryString()`), so a substring filter reads `ESCAPE '\'` with one backslash. Pasted into a MySQL session as it is, it fails with error 1064; run `SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_BACKSLASH_ESCAPES')` first and it returns the same rows.
+3. **Case folding differs from the Dapper `mysql` route (declared choice).** With `PatternMatchFoldsCase` false, a substring filter on the case-exact columns folds case on `ef-mysql`, like PostgreSQL: `contains "GERM"` on `country` finds the Germany rows on `ef-mysql` and on PostgreSQL and **none** on `mysql`, whose bare `LIKE` is case-exact on a `utf8mb4_bin` column
+   (measured; the same for `startsWith "GERMANY"` and `contains "SHIP"` on `status`). `equals` stays case-exact on both MySQL routes (the column's collation decides). On `customer` (`utf8mb4_0900_ai_ci`) both routes ignore case and accents (`sohne` finds `Müller, Söhne & Co`; PostgreSQL does not).
+   The choice is `false` because that is what the adapter's remarks recommend for binary-collated columns; setting `true` would make `ef-mysql` equal to `mysql` instead. No smoke scenario filters a binary column by substring, so the two choices cannot differ there; the API tests record the behaviour.
+4. **`AVG` over a whole-number column has four decimals**, as on `mysql` (MySQL's `div_precision_increment`): the `smoke.sh` rule for `quantity_avg` applies to `ef-mysql` too. Decimals (`DECIMAL(12,2)`: equals, ranges, sums to the cent) and `DATETIME(3)` (bounds with milliseconds) match PostgreSQL exactly.
+5. **Datetimes are UTC instants.** `DATETIME` has no zone and the driver returns an unspecified-kind value; the adapter reads it as UTC (SEM-4, result side, the seed stores UTC instants), so no converter is needed and the JSON has the trailing `Z`.
+6. **Stopped server: 503 through Oracle's driver.** The driver throws its own `MySqlException` type (not MySqlConnector's), which `EngineFailures` maps with the same number as the Dapper route: a refused port, a stopped container, an address with no route and a host name that does not resolve are all number 1042 (measured; EF does not wrap it). A refused login (1045) and a database the user may not open (1044) stay a 500, as on `mysql`.
+   One case is **not** covered: a server that accepts the connection and never answers did not raise any error within 100 seconds in a measurement, whatever `Connection Timeout` says (the Dapper route's driver times out after 5 seconds). The request then waits until the client gives up.
+7. **The set filter** reuses the compiled statement of the Dapper route (`MySqlGridService`), because the adapter has no distinct-values call. **CSV** goes through `EfCoreExportStream` and equals PostgreSQL over the whole table.
+
+How to run it: the same steps as [MySQL](#mysql-the-mysql-provider) (profile `mysql`, `DEMO_MYSQL`, `seed mysql`); once the API lists `ef-mysql`, `smoke.sh` and the browser tests compare it with PostgreSQL like every other provider.
+
+### Licence of the `ef-mysql` route
+
+`MySql.EntityFrameworkCore` and the `MySql.Data` driver it brings are licensed **GPL-2.0-only with the Universal FOSS Exception 1.0**. The demo uses them only for the `ef-mysql` route (the Dapper `mysql` route uses MySqlConnector, MIT). The exception lets this Apache-2.0 demo be combined with them,
+but it does **not** cover copying the demo into a closed-source product: if you take `MySqlOrdersDbContext` or the project reference to that package into your own code, check the licence terms for your case first. The Craticula packages themselves do not depend on either package, so using the library does not bring them in; only building this demo does.
+Pomelo (MIT) is the alternative once it ships an EF Core 10 build.
+
+**Packages.** The demo adds `Microsoft.EntityFrameworkCore.SqlServer` and `Microsoft.EntityFrameworkCore.Sqlite`, both 10.0.12, and Oracle's `MySql.EntityFrameworkCore` 10.0.12 (central versions in
+`Directory.Packages.props`). The two Microsoft providers moved from 10.0.11 to 10.0.12 so that all EF Core providers in the demo resolve to one EF Core version, the one `MySql.EntityFrameworkCore` needs. They are new libraries and need the Engineering Lead's approval (compliance rule 4); the approval for the SQL Server and SQLite providers is still pending at the time of writing, `MySql.EntityFrameworkCore` is approved for this use.
 
 ## SQLite (the `sqlite` provider)
 
@@ -345,7 +380,7 @@ wider than the approved stack's wording for it (the integration tests); the Engi
 ## MySQL (the `mysql` provider)
 
 An optional provider that reads the same orders from **MySQL 8.4** through `Craticula.Dapper` and `MySqlDialect`. It starts only on request and the API lists it only when
-`DEMO_MYSQL` is set. The code is `Api/Grid/MySqlGridService.cs`, `Api/Grid/MySqlBinding.cs` (the bare-`?` binding for the set-values call) and `Api/Seed/MySqlSeeder.cs`.
+`DEMO_MYSQL` is set; the same setting also switches on `ef-mysql`, the EF Core route over the same table (see [EF Core on SQLite, SQL Server and MySQL](#ef-core-on-sqlite-sql-server-and-mysql-the-ef-sqlite-ef-sqlserver-and-ef-mysql-providers)). The code is `Api/Grid/MySqlGridService.cs`, `Api/Grid/MySqlBinding.cs` (the bare-`?` binding for the set-values call) and `Api/Seed/MySqlSeeder.cs`.
 **MariaDB is not covered**: its collations and some behaviour differ from MySQL's, and the library has no dialect fixtures for it. Use MySQL 8.4.
 
 **Licence.** MySQL Community needs no licence acceptance. The `demo` / `demo` user in `docker-compose.yml` is a local throw-away credential like the PostgreSQL one; the port listens on `127.0.0.1` only,
@@ -374,7 +409,7 @@ docker compose --profile mysql stop mysql                # when done: stops it, 
 **Differences from PostgreSQL, measured on MySQL 8.4.11 and handled in the open**
 
 1. **`AVG` over a whole-number column has four decimals.** MySQL adds `div_precision_increment` (4) decimals to the average of an integer type: the grouped `quantity` average is 25.3493 where PostgreSQL gives
-   25.34926470588235. `smoke.sh` (rule for `mysql` only, key `quantity_avg`) and `Api.Tests` require the baseline value rounded half up to 4 decimals, exactly; the scenario "group by country" carries that average, and the line after
+   25.34926470588235. `smoke.sh` (rule for `mysql` and `ef-mysql`, key `quantity_avg`) and `Api.Tests` require the baseline value rounded half up to 4 decimals, exactly; the scenario "group by country" carries that average, and the line after
    the table names where the rule was used. It is the only key that needed a rule.
 2. **`AVG` over the decimal column has six decimals** (12428.503752 against 12428.50375198728), inside the 1e-6 relative tolerance every provider's `_avg` already has.
 3. **The stock collation ignores accents.** A contains filter for `SÖHNE`, `söhne` or `Söhne` finds `Müller, Söhne & Co` on MySQL and PostgreSQL; `sohne` and `SOHNE` find it **only on MySQL**
@@ -488,7 +523,7 @@ CSV export failed with HTTP 400. The library now knows both spellings (spec OSE-
 
 PostgreSQL, MongoDB, EF Core, SQLite and EF Core on SQLite are always on (SQLite is a file, so it needs no setting). Further engines are optional: an engine is switched on by its connection setting
 (an environment variable), and without it the API does not register that provider, so `/api/health` does not list it and the
-page does not offer it. This lets you run the demo with any subset of its databases. Four optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`), MySQL (`DEMO_MYSQL`, profile `mysql`), OpenSearch (`DEMO_OPENSEARCH`, profile `opensearch`) and Elasticsearch (`DEMO_ELASTICSEARCH`, profile `elasticsearch`); the
+page does not offer it. This lets you run the demo with any subset of its databases. Four optional engines ship today, SQL Server (`DEMO_SQLSERVER`, profile `sqlserver`), MySQL (`DEMO_MYSQL`, profile `mysql`; it switches on the Dapper route `mysql` and the EF Core route `ef-mysql` together, like SQL Server and `ef-sqlserver`), OpenSearch (`DEMO_OPENSEARCH`, profile `opensearch`) and Elasticsearch (`DEMO_ELASTICSEARCH`, profile `elasticsearch`); the
 provider sections of this README name each engine's variable and compose profile. Compose profiles (`docker compose --profile <name> up -d`)
 start the heavy engines only on request; the umbrella profile name is `engines`.
 
@@ -499,7 +534,7 @@ dotnet run --project Api -- seed                  # the default: postgres, mongo
 dotnet run --project Api -- seed mongo            # only MongoDB
 dotnet run --project Api -- seed sqlite           # only the SQLite file (no Docker needed)
 dotnet run --project Api -- seed sqlserver        # only SQL Server (needs the profile, DEMO_SQLSERVER and DEMO_SQLSERVER_ADMIN)
-dotnet run --project Api -- seed mysql            # only MySQL (needs the profile and DEMO_MYSQL)
+dotnet run --project Api -- seed mysql            # only MySQL, the table both mysql and ef-mysql read (needs the profile and DEMO_MYSQL)
 dotnet run --project Api -- seed opensearch       # only OpenSearch (needs the profile and DEMO_OPENSEARCH)
 dotnet run --project Api -- seed elasticsearch    # only Elasticsearch (needs the profile and DEMO_ELASTICSEARCH)
 dotnet run --project Api -- seed nosuch           # exit 2, lists the known providers
@@ -511,7 +546,7 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 `bash smoke.sh` compares every provider the API lists with the postgres baseline. To compare a chosen list, set
 `DEMO_SMOKE_PROVIDERS=postgres,ef` (postgres is always required); a name the API does not list stops it with exit 2 and a clear message.
 
-## All ten providers at once
+## All eleven providers at once
 
 To see every provider side by side (and to run the full parity check), start the four optional engines together. This needs about
 5 GB of free RAM (SQL Server about 2 GB, OpenSearch and Elasticsearch about 1 GiB each, MySQL about 0.5 GiB) and accepts Microsoft's SQL Server licence
@@ -525,13 +560,13 @@ export DEMO_MYSQL="Server=127.0.0.1;Port=53306;User ID=demo;Password=demo;Databa
 export DEMO_OPENSEARCH=http://127.0.0.1:59200
 export DEMO_ELASTICSEARCH=http://127.0.0.1:59201
 dotnet run --project Api -- seed postgres mongo sqlite sqlserver mysql opensearch elasticsearch
-dotnet run --project Api                                 # /api/health lists all ten
-bash smoke.sh                                            # in another terminal: all 26 scenarios equal on all 10 providers
+dotnet run --project Api                                 # /api/health lists all eleven
+bash smoke.sh                                            # in another terminal: all 26 scenarios equal on every provider that is up (all 11 listed below)
 docker compose --profile engines stop sqlserver mysql opensearch elasticsearch   # when done: keeps the data, leaves PostgreSQL and MongoDB up
 ```
 
-`smoke.sh` ends with `all 26 scenarios are equal on all 10 providers (postgres, ef, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
-It also prints the places where an engine was equal only by a documented rule (SQL Server and MySQL `quantity_avg`, the OpenSearch
+With all eleven up, `smoke.sh` ends with `all 26 scenarios are equal on all 11 providers (postgres, ef, ef-mysql, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
+It also prints the places where an engine was equal only by a documented rule (SQL Server, MySQL and EF Core on MySQL `quantity_avg`, the OpenSearch
 differences, the same ones on Elasticsearch) and the one scenario OpenSearch and Elasticsearch answer with `unsupported-shape`. If one engine is not up, name the ones to compare:
 `DEMO_SMOKE_PROVIDERS=postgres,ef,mongo,sqlite bash smoke.sh`; a name the API does not list stops the run with exit 2.
 
@@ -559,7 +594,8 @@ Stop the API and the page with Ctrl+C in their terminals.
 | The SQL Server container exits at start | It needs about 2 GB of RAM; check `docker logs demo-sqlserver-1`. |
 | `seed mysql` says `DEMO_MYSQL is not set`, or a red banner for `mysql` | Start the profile (`docker compose --profile mysql up -d --wait`), set `DEMO_MYSQL` (see [MySQL](#mysql-the-mysql-provider)), run `seed mysql`, restart the API. |
 | `seed mysql` says `Access denied` | `DEMO_MYSQL` has another user or password than the compose file (`demo` / `demo`), or a volume from an earlier run holds other credentials: remove only that container and its volume (`docker compose --profile mysql rm -sf mysql`, then `docker volume rm` of the `demo-mysql-data` volume from `docker volume ls`), never `down -v`, which also removes the PostgreSQL and MongoDB data. |
-| A contains filter finds a name without the accent on `mysql` only | Expected: MySQL's default collation ignores accents (see [MySQL](#mysql-the-mysql-provider)). |
+| A contains filter finds a name without the accent on the two MySQL routes only | Expected: MySQL's default collation ignores accents (see [MySQL](#mysql-the-mysql-provider)). |
+| `ef-mysql` answers 500 on a substring filter, or on any request that reads `shipped_on` | A workaround for one of the two Oracle-provider defects is missing or no longer works (see [EF Core on SQLite, SQL Server and MySQL](#ef-core-on-sqlite-sql-server-and-mysql-the-ef-sqlite-ef-sqlserver-and-ef-mysql-providers)); `bash smoke.sh` names the scenario. |
 | `seed opensearch` says `DEMO_OPENSEARCH is not set`, or a red banner for `opensearch` | Start the profile (`docker compose --profile opensearch up -d --wait`), set `DEMO_OPENSEARCH` (see [OpenSearch](#opensearch-the-opensearch-provider)), run `seed opensearch`, restart the API. |
 | `seed elasticsearch` says `DEMO_ELASTICSEARCH is not set`, or a red banner for `elasticsearch` | Start the profile (`docker compose --profile elasticsearch up -d --wait`), set `DEMO_ELASTICSEARCH` (see [Elasticsearch](#elasticsearch-the-elasticsearch-provider)), run `seed elasticsearch`, restart the API. |
 | The OpenSearch container exits at start | Read `docker logs demo-opensearch-1`. A `vm.max_map_count` message: `sudo sysctl -w vm.max_map_count=262144`. It also needs about 1.5 GB of free RAM (the container idles near 1 GiB). |

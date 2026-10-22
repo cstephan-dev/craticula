@@ -28,6 +28,7 @@ const EXPECTED: Record<Provider, Expectation> = {
   sqlserver: { kind: 'sql', dialect: 'mssql', contains: ['@p1', 'COLLATE'] },
   'ef-sqlserver': { kind: 'sql', dialect: 'ef-sqlserver', contains: ['SELECT'], note: /EF Core inlines parameter values/ },
   mysql: { kind: 'sql', dialect: 'mysql', contains: ['?'], lacks: ['COLLATE'] },
+  'ef-mysql': { kind: 'sql', dialect: 'ef-mysql', contains: ['SELECT'], note: /EF Core inlines parameter values/ },
   opensearch: { kind: 'json', dialect: 'opensearch', contains: ['"query"'], note: /compiled search request/ },
   elasticsearch: { kind: 'json', dialect: 'elasticsearch', contains: ['"query"'], note: /compiled search request/ },
 };

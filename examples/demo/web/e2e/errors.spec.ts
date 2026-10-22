@@ -28,6 +28,7 @@ const BACKING: Partial<Record<Provider, Engine>> = {
   sqlserver: { service: 'sqlserver', profile: 'sqlserver' },
   'ef-sqlserver': { service: 'sqlserver', profile: 'sqlserver' },
   mysql: { service: 'mysql', profile: 'mysql' },
+  'ef-mysql': { service: 'mysql', profile: 'mysql' },
   opensearch: { service: 'opensearch', profile: 'opensearch' },
   elasticsearch: { service: 'elasticsearch', profile: 'elasticsearch' },
 };

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Demo smoke test: sends the same fixed requests (smoke/*.json) to the running demo API for every provider it lists (PostgreSQL, MongoDB, the Entity
-# Framework Core routes (ef on PostgreSQL, ef-sqlite, and the optional ef-sqlserver), SQLite and the optional SQL Server, MySQL and OpenSearch) and checks that every provider answers the same as the postgres baseline. It starts nothing; run the quickstart in README.md first.
+# Framework Core routes (ef on PostgreSQL, ef-sqlite, and the optional ef-sqlserver and ef-mysql), SQLite and the optional SQL Server, MySQL and OpenSearch) and checks that every provider answers the same as the postgres baseline. It starts nothing; run the quickstart in README.md first.
 # Needs only bash, curl and python3 (3.8+).
 #
 #   bash smoke.sh [--api URL]        default URL: http://127.0.0.1:5080
@@ -16,12 +16,12 @@
 #
 # Every other provider is compared with postgres, the baseline. Equality is exact (numbers by value: 12877.0 equals 12877), except avg: PostgreSQL averages decimals with 16 digits and MongoDB with 28, so keys ending in
 # "_avg" are compared with a relative tolerance of 1e-6. The divergences are data: the RULES table at the top of the Python block
-# lists them per provider. Today it has three entries. For sqlite only, keys ending "_sum" compare with a relative tolerance of 1e-9
+# lists them per provider. Today it has four entries (sqlite, sqlserver, mysql, ef-mysql). For sqlite only, keys ending "_sum" compare with a relative tolerance of 1e-9
 # (|a-b| <= 1e-9 * max(1, |a|, |b|)), because SQLite stores NUMERIC as floating point and a sum can differ in the last digits.
 # For sqlserver only, the key "quantity_avg" (the average of a BIGINT column) must equal the baseline value truncated toward zero:
 # SQL Server's AVG over an integer type returns an integer, and the library renders AVG bare (no cast), so 25.418... arrives as 25.
 # The rule is exact, not a tolerance. (The average of the decimal column amount needs no rule: SQL Server returns 6 decimals,
-# inside the 1e-6 relative tolerance.) For mysql only, the key "quantity_avg" must equal the baseline value rounded half up to 4 decimals:
+# inside the 1e-6 relative tolerance.) For mysql and ef-mysql (the same table through Oracle's EF provider), the key "quantity_avg" must equal the baseline value rounded half up to 4 decimals:
 # MySQL's AVG over an integer type returns a DECIMAL with div_precision_increment (4) extra decimals, so 25.349264... arrives as 25.3493.
 # The rule is exact, not a tolerance. (amount_avg needs no rule: AVG over DECIMAL(12,2) has 6 decimals, inside the 1e-6 relative tolerance.)
 # For opensearch only (measured, docs/feat/2501/validation.md): a row count above 10,000 is unknown there, so lastRow may be null where the baseline's is
@@ -159,7 +159,7 @@ ENV_ERROR, DIFFERENT = 2, 1
 # Everything not listed here is exact (except the avg rule below, for all).
 TRUNCATE = "truncate"
 ROUND4 = ("round", 4)
-RULES = {"sqlite": {"_sum": 1e-9}, "sqlserver": {"quantity_avg": TRUNCATE}, "mysql": {"quantity_avg": ROUND4}}
+RULES = {"sqlite": {"_sum": 1e-9}, "sqlserver": {"quantity_avg": TRUNCATE}, "mysql": {"quantity_avg": ROUND4}, "ef-mysql": {"quantity_avg": ROUND4}}
 AVG_RULE = {"_avg": 1e-6}
 # The two search engines share the compiler, the client and the rules below (Elasticsearch: measured in tasks #2556 and #2557).
 SEARCH_ENGINES = ("opensearch", "elasticsearch")

@@ -150,6 +150,13 @@ test('the MySQL average is PostgreSQL\'s value rounded half up to four decimals,
   expect(compareRows({ scenario: 'avg', provider: 'mysql', baseline: one('quantity_avg', 25.34925), actual: one('quantity_avg', 25.3493) }).ok).toBe(true);
 });
 
+test('the EF Core (MySQL) route follows the MySQL average rule', () => {
+  const check = (actual: number) =>
+    compareRows({ scenario: 'avg', provider: 'ef-mysql', baseline: one('quantity_avg', 25.349264), actual: one('quantity_avg', actual) }).ok;
+  expect(check(25.3493)).toBe(true);
+  expect(check(25)).toBe(false);
+});
+
 test('the SQL Server average is PostgreSQL\'s value cut toward zero, and nothing else', () => {
   const check = (actual: number) =>
     compareRows({ scenario: 'avg', provider: 'sqlserver', baseline: one('quantity_avg', 25.9), actual: one('quantity_avg', actual) }).ok;
