@@ -87,23 +87,10 @@ test.describe('a database that is down', () => {
       await compose(engine, 'stop', engine.service);
       const what = `with the "${engine.service}" container stopped (${command(engine, 'stop')})`;
 
-      // A new request on the stopped provider: sorting asks the API again. A pooled connection that the server closed during
-      // the shutdown can surface as one HTTP 500 (PostgreSQL's "terminating connection" error) before the API answers 503, so
-      // the request is repeated; the report notes it when it happened.
-      const statuses: number[] = [];
-      let failed = await captureRows(page, provider, () => grid.clickHeader('amount'), { timeout: 90_000 });
-      statuses.push(failed.status);
-      for (let attempt = 0; attempt < 2 && failed.status !== 503; attempt += 1) {
-        failed = await captureRows(page, provider, () => grid.clickHeader('amount'), { timeout: 90_000 });
-        statuses.push(failed.status);
-      }
-      if (statuses.length > 1) {
-        test.info().annotations.push({
-          type: `divergence: ${provider}`,
-          description: `the first request after the container stopped answered HTTP ${statuses.slice(0, -1).join(', ')} before 503 (a pooled connection closed by the shutdown)`,
-        });
-      }
-      expect(failed.status, `${provider} ${what}: expected HTTP 503 (answers so far: ${statuses.join(', ')})`).toBe(503);
+      // A new request on the stopped provider: sorting asks the API again. The very first answer is 503, even when a pooled
+      // connection that the server closed during the shutdown is the one that fails.
+      const failed = await captureRows(page, provider, () => grid.clickHeader('amount'), { timeout: 90_000 });
+      expect(failed.status, `${provider} ${what}: expected HTTP 503 on the first answer`).toBe(503);
       expect(failed.error?.kind, `${provider} ${what}`).toBe('backend-unavailable');
       await expect(grid.errorBanner(), `${provider} ${what}: the banner`).toContainText('backend-unavailable');
       // The grid is still there, not a blank page.

@@ -41,7 +41,10 @@ public static class EngineFailures
     // Order does not matter: the first predicate that matches wins and every match means the same thing.
     private static ImmutableArray<Func<Exception, bool>> declared =
     [
-        exception => exception is NpgsqlException,
+        // PostgreSQL: a driver failure to reach the server, or a server error that says the server is going away or refusing
+        // connections, see IsPostgresUnavailable. Any other PostgresException (a bad statement, a missing table, a refused login) is a bug.
+        exception => exception is NpgsqlException and not PostgresException,
+        exception => exception is PostgresException postgres && IsPostgresUnavailable(postgres),
         exception => exception is MongoException,
         // SQLite: the file cannot be opened (missing, no permission) or another connection holds the lock (primary result
         // codes 14 SQLITE_CANTOPEN, 5 SQLITE_BUSY, 6 SQLITE_LOCKED). Any other SqliteException is a bug and stays a 500.
@@ -58,6 +61,16 @@ public static class EngineFailures
         exception => exception is TimeoutException,
         exception => exception is SocketException
     ];
+
+    /// <summary>
+    /// A <see cref="PostgresException"/> that means "the server cannot be reached now": SQLSTATE class 57 operator intervention
+    /// that ends or refuses connections (57P01 admin shutdown, 57P02 crash shutdown, 57P03 cannot connect now; measured: the first
+    /// request on a pooled connection after <c>docker compose stop</c> fails with 57P01 "terminating connection due to administrator
+    /// command") and class 08 connection exceptions. 57014 (a cancelled statement), 28P01 (a refused login) and every statement
+    /// error are not listed: they are settings or bugs and stay a 500.
+    /// </summary>
+    public static bool IsPostgresUnavailable(PostgresException exception) =>
+        exception.SqlState is "57P01" or "57P02" or "57P03" || exception.SqlState?.StartsWith("08", StringComparison.Ordinal) == true;
 
     /// <summary>A <see cref="SqlException"/> that is a connection failure: a declared error number, or a refused/unreachable socket.
     /// Anything else (a bad statement, a missing table, an untrusted certificate: a configuration error) is not.</summary>
