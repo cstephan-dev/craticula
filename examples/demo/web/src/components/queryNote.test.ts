@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { queryNote } from './queryNote';
 
 describe('queryNote', () => {
-  it.each(['ef-npgsql', 'ef-sqlite', 'ef-sqlserver'])('explains the EF Core text for %s', (dialect) => {
+  it.each(['ef-npgsql', 'ef-sqlite', 'ef-sqlserver', 'ef-mysql'])('explains the EF Core text for %s', (dialect) => {
     expect(queryNote(dialect)).toMatch(/EF Core/);
   });
 

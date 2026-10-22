@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Demo.Api.Tests;
 
 /// <summary>
-/// What the EF Core routes (<c>ef-sqlserver</c>, <c>ef-sqlite</c>) are held to against <c>postgres</c>: exact equality, numbers by value
+/// What the EF Core routes (<c>ef-sqlserver</c>, <c>ef-mysql</c>, <c>ef-sqlite</c>) are held to against <c>postgres</c>: exact equality, numbers by value
 /// (12877.0 equals 12877), except keys ending <c>_avg</c>, which every provider compares with a relative 1e-6 (PostgreSQL averages a
 /// decimal with sixteen digits, SQL Server with six). Measured on 2026-10-20: no key needs a rule beyond that on either EF route, because
 /// EF averages an integer column as a float; the Dapper SQL Server route's integer average (<c>quantity_avg</c>) does not occur here.

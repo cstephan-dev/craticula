@@ -1,4 +1,4 @@
-/** The dialects the EF Core providers report (`ef-npgsql`, `ef-sqlite`, `ef-sqlserver`); their query text is EF's own `ToQueryString()`. */
+/** The dialects the EF Core providers report (`ef-npgsql`, `ef-sqlite`, `ef-sqlserver`, `ef-mysql`); their query text is EF's own `ToQueryString()`. */
 export const isEfDialect = (dialect: string): boolean => dialect.startsWith('ef-');
 
 /** The dialects the search providers report (`opensearch`, `elasticsearch`); their query text is the compiled search body as JSON. */

@@ -68,6 +68,7 @@ describe('provider list', () => {
       { id: 'sqlserver', label: 'SQL Server' },
       { id: 'ef-sqlserver', label: 'EF Core (SQL Server)' },
       { id: 'mysql', label: 'MySQL' },
+      { id: 'ef-mysql', label: 'EF Core (MySQL)' },
       { id: 'opensearch', label: 'OpenSearch' },
       { id: 'elasticsearch', label: 'Elasticsearch' },
     ]);
