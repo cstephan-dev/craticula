@@ -1,0 +1,35 @@
+[
+  {
+    "PackageId": "Example.Permissive",
+    "PackageVersion": "1.0.0",
+    "PackageProjectUrl": "https://example.invalid/Example.Permissive",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "Example.Dual",
+    "PackageVersion": "2.0.0",
+    "PackageProjectUrl": "https://example.invalid/Example.Dual",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "MIT OR GPL-2.0-only",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "Example.Npg",
+    "PackageVersion": "3.0.0",
+    "PackageProjectUrl": "https://example.invalid/Example.Npg",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "PostgreSQL",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 0
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "overrides": [
+    {
+      "package": "Example.Unknown",
+      "version": "1.0.0",
+      "license": "Apache-2.0",
+      "reason": "Synthetic: valid in the src scope only.",
+      "scopes": [
+        "src"
+      ]
+    }
+  ]
+}

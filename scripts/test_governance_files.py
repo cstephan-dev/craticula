@@ -26,9 +26,13 @@ GATE_COPIES = (".claude/rules/git-branch-naming.md", "docs/compliance/isms-chang
 # What the governance stories add to the gate: a pull request touching these validates its own copy of the checks or changes
 # what the publish accepts, so the agent never completes it (the maker does).
 GATE_GOVERNANCE = (".github/CODEOWNERS", "scripts/check-dco*", "scripts/test_check_dco*", "scripts/apply-public-change*",
-                   "scripts/test_apply_public_change*", "scripts/test_governance_files*", ".githooks/", ".github/workflows/",
+                   "scripts/test_apply_public_change*", "scripts/test_governance_files*", ".githooks/", "docs/adr/", ".github/workflows/",
+                   # an ADR is what lets an MPL-2.0 package pass the license gate (FR-09), so editing one changes the gate
                    # what makes the lints run: the workflow and security-script tests, and the wrappers that run them in `dotnet test`
-                   "scripts/test_workflows*", "scripts/test_lint_sec2*", "scripts/test_coverage*", "csharp/tests/Craticula.Conformance.Tests/")
+                   "scripts/test_workflows*", "scripts/test_lint_sec2*", "scripts/test_coverage*", "csharp/tests/Craticula.Conformance.Tests/",
+                   # the license gate (ADR-0003, #1664): its script, policy, reviewed exceptions, fixtures and the tool pin
+                   "scripts/check-licenses*", "scripts/test_check_licenses*", "scripts/license-overrides.json",
+                   "scripts/license-allowlist.json", "scripts/license-fixtures/", "csharp/.config/dotnet-tools.json")
 
 
 def codeowners_rules(text: str) -> list[tuple[str, list[str]]]:

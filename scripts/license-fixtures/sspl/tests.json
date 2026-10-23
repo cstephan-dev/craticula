@@ -1,0 +1,13 @@
+[
+  {
+    "PackageId": "Example.Bad",
+    "PackageVersion": "4.5.6",
+    "PackageProjectUrl": "https://example.invalid/Example.Bad",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "SSPL-1.0",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 0
+  }
+]

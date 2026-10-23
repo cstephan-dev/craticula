@@ -1,0 +1,13 @@
+[
+  {
+    "PackageId": "Example.Apache",
+    "PackageVersion": "1.2.3",
+    "PackageProjectUrl": "https://example.invalid/Example.Apache",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "Apache-2.0",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 0
+  }
+]
