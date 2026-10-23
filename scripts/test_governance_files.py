@@ -18,14 +18,14 @@ SECURITY = ROOT / "SECURITY.md"
 # (`docs/`, not `docs`). A test pins this tuple to the real array where the publish script exists (the private repository).
 PRIVATE_PREFIXES = ("docs/", ".claude", "CLAUDE.md", ".mcp.json", ".githooks", ".azuredevops", ".sonarlint", ".vscode",
                     "scripts/publish-github.sh", "scripts/sync-release-commit.sh", "scripts/apply-public-change.sh",
-                    "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py")
+                    "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py", "Jenkinsfile", "jenkins/")
 PRIVATE_HOSTS = re.compile(r"dev\.azure\.com|visualstudio\.com", re.IGNORECASE)
 PUBLISH_SCRIPT = ROOT / "scripts" / "publish-github.sh"
 OWNER = re.compile(r"^(?:@[A-Za-z0-9][A-Za-z0-9-]*(?:/[A-Za-z0-9._-]+)?|[^@\s]+@[^@\s]+\.[A-Za-z]+)$")
 GATE_COPIES = (".claude/rules/git-branch-naming.md", "docs/compliance/isms-change-pr-pipeline.md", "docs/compliance/pipelines-craticula.md")
 # What the governance stories add to the gate: a pull request touching these validates its own copy of the checks or changes
 # what the publish accepts, so the agent never completes it (the maker does).
-GATE_GOVERNANCE = (".github/CODEOWNERS", "scripts/check-dco*", "scripts/test_check_dco*", "scripts/apply-public-change*",
+GATE_GOVERNANCE = (".github/CODEOWNERS", "Jenkinsfile", "jenkins/", "scripts/check-dco*", "scripts/test_check_dco*", "scripts/apply-public-change*",
                    "scripts/test_apply_public_change*", "scripts/test_governance_files*", ".githooks/", "docs/adr/", ".github/workflows/",
                    # an ADR is what lets an MPL-2.0 package pass the license gate (FR-09), so editing one changes the gate
                    # what makes the lints run: the workflow and security-script tests, and the wrappers that run them in `dotnet test`
@@ -301,6 +301,59 @@ class PrivateReferenceRuleTests(unittest.TestCase):
                      "mydocs/readme", "subdocs/x", "csharp/docs/x", "src/docs/x", "scripts/check-dco.sh and scripts/test_check_dco.py"):
             with self.subTest(line=line):
                 self.assertEqual([], private_references(line))
+
+
+class DependabotTests(unittest.TestCase):
+    """The Dependabot configuration: both ecosystems weekly and grouped, every deliberately held package held by a scoped ignore
+    (a bare ignore also suppresses security updates), and a two-week cooldown on NuGet. A text check always runs; the full parse
+    runs when PyYAML is installed (it is not a dependency of the repository)."""
+    PATH = ROOT / ".github" / "dependabot.yml"
+    HELD = ("System.Security.Cryptography.Pkcs", "Microsoft.Data.SqlClient", "Microsoft.EntityFrameworkCore.Relational",
+            "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.Data.Sqlite")
+
+    def text(self):
+        return self.PATH.read_text(encoding="utf-8")
+
+    def test_both_ecosystems_are_configured_weekly(self):
+        text = self.text()
+        self.assertIn("version: 2", text)
+        self.assertRegex(text, r"package-ecosystem: nuget\n\s+directory: /csharp\n\s+schedule:\n\s+interval: weekly")
+        self.assertRegex(text, r"package-ecosystem: github-actions\n\s+directory: /\n\s+schedule:\n\s+interval: weekly")
+        self.assertEqual(2, text.count("groups:"))
+
+    def test_the_cooldown_keeps_the_two_week_rule(self):
+        self.assertRegex(self.text(), r"cooldown:\n\s+default-days: 14")
+
+    def test_every_held_package_is_ignored_with_a_scope(self):
+        text = self.text()
+        for name in self.HELD:
+            with self.subTest(package=name):
+                self.assertRegex(text, rf"- dependency-name: {re.escape(name)}\n\s+(update-types|versions): \[")
+
+    def test_the_held_packages_are_still_named_in_the_props_file(self):
+        props = (ROOT / "csharp" / "Directory.Packages.props").read_text(encoding="utf-8")
+        for name in self.HELD:
+            with self.subTest(package=name):
+                self.assertIn(f'<PackageVersion Include="{name}"', props)
+
+    def test_the_file_parses_as_yaml(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML is not installed; the text checks above still run")
+        data = yaml.safe_load(self.text())
+        ecosystems = {u["package-ecosystem"]: u for u in data["updates"]}
+        self.assertEqual({"nuget", "github-actions"}, set(ecosystems))
+        self.assertEqual("/csharp", ecosystems["nuget"]["directory"])
+        for update in ecosystems.values():
+            self.assertEqual("weekly", update["schedule"]["interval"])
+            self.assertLessEqual(update["open-pull-requests-limit"], 10)
+        ignores = ecosystems["nuget"]["ignore"]
+        self.assertEqual(set(self.HELD), {i["dependency-name"] for i in ignores})
+        for entry in ignores:
+            self.assertTrue(entry.get("versions") or entry.get("update-types"),
+                            f"{entry['dependency-name']}: a bare ignore also blocks security updates")
+        self.assertEqual(14, ecosystems["nuget"]["cooldown"]["default-days"])
 
 
 class GatePathRuleTests(unittest.TestCase):

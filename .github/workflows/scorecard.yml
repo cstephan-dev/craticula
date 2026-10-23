@@ -1,0 +1,29 @@
+# OpenSSF Scorecard (spec FR-07): a weekly supply-chain score of this repository, published to the Scorecard API for the
+# README badge. It never runs on a pull request. No SARIF upload and no token: the Branch-Protection check stays
+# inconclusive without one, which is accepted. The action is pinned to the commit of release v2.5.0.
+name: scorecard
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.json
+          results_format: json
+          publish_results: true

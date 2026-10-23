@@ -402,5 +402,50 @@ class RealWorkflowTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", text)
 
 
+class ScorecardWorkflowTests(unittest.TestCase):
+    """scorecard.yml (spec FR-07): weekly and by hand, never on a pull request, the one job that may ask for an OIDC token."""
+
+    @staticmethod
+    def text() -> str:
+        lines = (WORKFLOWS / "scorecard.yml").read_text(encoding="utf-8").splitlines()
+        return "\n".join(line for line in lines if not line.strip().startswith("#")) + "\n"
+
+    def test_it_runs_weekly_and_by_hand_and_on_nothing_else(self):
+        text = self.text()
+        self.assertRegex(text, r'(?m)^on:\n  schedule:\n    - cron: "[^"]+"\n  workflow_dispatch:\n(?!  )')
+        for event in ("pull_request", "pull_request_target", "push"):
+            with self.subTest(event=event):
+                self.assertNotRegex(text, rf"(?m)^\s+{event}:")
+
+    def test_every_action_is_pinned_to_a_sha(self):
+        text = self.text()
+        self.assertEqual([], unpinned_uses(text))
+        self.assertRegex(text, r"(?m)^      - uses: ossf/scorecard-action@[0-9a-f]{40} # v2\.5\.0$")
+
+    def test_top_level_permissions_are_contents_read_only(self):
+        self.assertRegex(self.text(), r"(?m)^permissions:\n  contents: read\n(?!  )")
+
+    def test_the_analysis_job_has_exactly_the_two_permissions(self):
+        text = self.text()
+        self.assertRegex(text, r"(?m)^  analysis:$")
+        self.assertRegex(text, r"(?m)^    timeout-minutes: 15$")
+        self.assertRegex(text, r"(?m)^    permissions:\n      id-token: write\n      contents: read\n(?!      )")
+        self.assertEqual(1, len(re.findall(r"(?m)^\s+permissions:", text.split("\njobs:\n")[1])))
+        self.assertNotRegex(text, r"(?m)^\s+(?:actions|security-events|pull-requests|packages|statuses|checks|issues): ")
+
+    def test_it_publishes_json_and_uploads_no_sarif_or_artifact(self):
+        text = self.text()
+        self.assertRegex(text, r"(?m)^          results_format: json$")
+        self.assertRegex(text, r"(?m)^          publish_results: true$")
+        self.assertNotIn("sarif", text.lower())
+        self.assertNotIn("upload-artifact", text)
+        self.assertNotIn("codeql", text.lower())
+
+    def test_it_uses_no_secret_and_no_credential_is_kept_by_checkout(self):
+        text = self.text()
+        self.assertEqual([], secret_references(text))
+        self.assertRegex(text, r"(?m)^        with:\n          persist-credentials: false$")
+
+
 if __name__ == "__main__":
     unittest.main()
