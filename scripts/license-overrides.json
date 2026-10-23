@@ -1,0 +1,32 @@
+{
+  "_comment": "Reviewed license exceptions for scripts/check-licenses.py (ADR-0003). One entry per package, exact version: a version bump re-opens the review. Every entry needs a written reason; an entry that matches no package fails the check. 'license' is what the package really carries; a license that is neither allowed nor denied is accepted here as a reviewed exception. 'scopes' limits where the entry applies (src, tests, other).",
+  "overrides": [
+    {
+      "package": "Oracle.ManagedDataAccess.Core",
+      "version": "23.26.301",
+      "license": "Oracle Free Distribution, Hosting, and Use Terms",
+      "reason": "Declared as a LICENSE.txt file, not an SPDX id. Oracle's free-use terms: free to use, not open source. Accepted for test projects only, never under csharp/src (the checker enforces it); today Craticula.Integration.Tests.",
+      "scopes": [
+        "tests"
+      ]
+    },
+    {
+      "package": "Microsoft.Data.SqlClient.SNI.runtime",
+      "version": "7.1.0",
+      "license": "Microsoft Software License Terms (redistributable runtime)",
+      "reason": "Declared as a LICENSE.txt file, not an SPDX id. Microsoft's native runtime pulled in by Microsoft.Data.SqlClient (MIT); free to use and redistribute under Microsoft's terms. Test projects only (Craticula.Integration.Tests), not shipped in any package of csharp/src.",
+      "scopes": [
+        "tests"
+      ]
+    },
+    {
+      "package": "xunit.abstractions",
+      "version": "2.0.3",
+      "license": "Apache-2.0",
+      "reason": "Declares only a licenseUrl (the xunit repository's license.txt), no SPDX id. The xunit project is Apache-2.0. Pulled in by xunit; test projects only.",
+      "scopes": [
+        "tests"
+      ]
+    }
+  ]
+}
