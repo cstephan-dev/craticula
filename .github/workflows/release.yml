@@ -8,7 +8,8 @@
 # the environment must also be limited to the `main` branch, because a branch can edit this file).
 # Open point, unverified: when this file is called, the OIDC token's workflow claim names the calling file
 # (release-please.yml), so the nuget.org Trusted Publishing policy may have to name release-please.yml, not release.yml.
-# The last job, release-notes, adds the spec version line to the release notes in a separate non-blocking job.
+# The last two jobs, release-notes and sbom, are non-blocking: one adds the spec version line to the release notes, the other
+# attaches a CycloneDX SBOM per package.
 # Known deviations, in plain words: this workflow holds its own steps instead of calling shared organisation workflows
 # (the public repository has none); it is called by the release-please workflow instead of starting on a tag (a tag made
 # with the default token starts no workflow); the release tag is `dotnet-v<version>`; the repository belongs to a user,
@@ -160,7 +161,7 @@ jobs:
       # Tag name: `dotnet-v<version>` (TRD OS-2). In a called workflow github.event_name is the caller's event ('push'),
       # so only a manual dispatch creates the release; after a release pull request Release Please already created the
       # release and the tag, and the packages are attached to it (an existing asset of the same name fails the upload, nothing is overwritten).
-      # A CycloneDX SBOM (TRD OS-5) will be generated in the pack job and attached here as one more release asset.
+      # The CycloneDX SBOMs (TRD OS-5) are attached by the sbom job below, after this one.
       - name: GitHub release (manual dispatch)
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -216,5 +217,48 @@ jobs:
             echo "Release notes of dotnet-v$VERSION carry the spec version line"
           else
             echo "::warning::Could not add the spec version line to the notes of dotnet-v$VERSION; the release itself is published. Add it by hand: gh release edit."
+            exit 1
+          fi
+
+  # One CycloneDX SBOM per packed project, attached to the release (spec FR-05, NFR-04). Same shape as release-notes: after
+  # publish, a failure only raises a warning because the packages are already on nuget.org, `contents: write` only, no
+  # environment, no id-token, no stored token. The demo under examples/demo is not packed and gets no SBOM. A file that is
+  # already attached makes the upload fail instead of being overwritten; the maker adds a missing SBOM by hand with `gh release upload`.
+  sbom:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install the CycloneDX tool
+        run: dotnet tool install CycloneDX --version 6.3.1 --tool-path "$RUNNER_TEMP/tools"
+
+      - name: Generate and attach one SBOM per packed project
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir sbom
+          if (
+              set -e
+              for proj in csharp/src/*/*.csproj; do
+                name="$(basename "$proj" .csproj)"
+                "$RUNNER_TEMP/tools/dotnet-CycloneDX" "$proj" -o sbom -fn "$name.cdx.json" -F Json -sn "$name" -sv "$VERSION" -c Release
+              done
+            ) \
+            && gh release upload "dotnet-v$VERSION" sbom/*.cdx.json --repo "$GITHUB_REPOSITORY"; then
+            echo "SBOMs attached to dotnet-v$VERSION"
+          else
+            echo "::warning::Could not attach the SBOMs to dotnet-v$VERSION; the release itself is published. Add them by hand: gh release upload."
             exit 1
           fi

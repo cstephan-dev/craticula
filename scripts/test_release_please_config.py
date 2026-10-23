@@ -211,5 +211,38 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertEqual(name == "publish", other.get("permissions", {}).get("id-token") == "write", name)
 
 
+    def test_sbom_job_runs_after_publish_and_cannot_fail_the_release(self):
+        if yaml is None:
+            self.skipTest("PyYAML is not installed")
+        wf = yaml.safe_load(self.text)
+        job = wf["jobs"]["sbom"]
+        self.assertEqual("publish", job["needs"])
+        self.assertIs(True, job["continue-on-error"])
+        self.assertEqual({"contents": "write"}, job["permissions"])
+        self.assertNotIn("environment", job)
+        self.assertNotIn("id-token", str(job))
+        self.assertNotIn("secrets.", str(job))
+        self.assertNotIn("--clobber", str(job))
+        for step in job["steps"]:
+            if "uses" in step:
+                self.assertRegex(step["uses"], r"@[0-9a-f]{40}$")
+        self.assertIs(False, job["steps"][0]["with"]["persist-credentials"])
+
+    def test_sbom_job_pins_the_tool_covers_the_src_projects_and_passes_values_through_env(self):
+        if yaml is None:
+            self.skipTest("PyYAML is not installed")
+        job = yaml.safe_load(self.text)["jobs"]["sbom"]
+        install = [s for s in job["steps"] if s.get("name") == "Install the CycloneDX tool"]
+        self.assertEqual(1, len(install))
+        self.assertRegex(install[0]["run"], r"dotnet tool install CycloneDX --version \d+\.\d+\.\d+ ")
+        step = [s for s in job["steps"] if s.get("name") == "Generate and attach one SBOM per packed project"][0]
+        self.assertEqual({"GH_TOKEN": "${{ github.token }}", "VERSION": "${{ inputs.version }}"}, step["env"])
+        self.assertNotIn("${{", step["run"], "values reach the script through env only")
+        self.assertIn("csharp/src/*/*.csproj", step["run"])
+        self.assertNotIn("examples/", step["run"])
+        self.assertIn('gh release upload "dotnet-v$VERSION" sbom/*.cdx.json', step["run"])
+        self.assertIn("::warning::", step["run"])
+
+
 if __name__ == "__main__":
     unittest.main()
