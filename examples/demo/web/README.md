@@ -29,7 +29,7 @@ npm run e2e:unit                          # the self-tests of the row comparison
   (`actions.ts`), the capture of the rows the grid received (`rows.ts`), the comparison with PostgreSQL (`compare.ts`) and the list of accepted differences
   with their reasons (`divergences.ts`). A new provider needs a line in `src/api.ts` and, where its behaviour differs, a rule there.
 - [e2e/COVERAGE.md](e2e/COVERAGE.md) says which scenario each spec covers and what is not automated. The demo README ([../README.md](../README.md#browser-tests-optional))
-  has the full instructions, including the two-batch run for all ten providers (about 10 GB of RAM).
+  has the full instructions, including the two-batch run for all eleven providers.
 - Output goes to `test-results/` and `playwright-report/`, both git-ignored.
 
 ## The Community page

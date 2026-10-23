@@ -20,7 +20,7 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 | Sort by clicking a header; shift-click a second and a third column (Id first, Id in the middle) | `enterprise-sorting.spec.ts` | `<p>`; includes the Id-then-Amount and Amount, Id, Country orders |
 | Scroll down a long list: blocks of 100 load, the grid reaches the end, rows past 10,000 load | `enterprise-sorting.spec.ts` | `<p>`; a search engine has no total, so the list grows block by block and the test allows for it |
 | Group by Country then Category, add Amount and Quantity as values, choose sum, avg and count, open a group and then a Category | `enterprise-grouping.spec.ts` | `<p>`; every level equals PostgreSQL's answer to the same request |
-| Group by Country, open the group shown as "(blank)" (no country): its children equal PostgreSQL's answer for the null key | `enterprise-grouping.spec.ts` | `<p>`; the page shows a null group key as "(blank)" and sends a null key back; run on postgres, ef, mongo, sqlite and ef-sqlite; the other providers are skipped when not served |
+| Group by Country, open the group shown as "(blank)" (no country): its children equal PostgreSQL's answer for the null key | `enterprise-grouping.spec.ts` | `<p>`; the page shows a null group key as "(blank)" and sends a null key back; passed on all eleven providers (measured 2026-10-23, in two batches) |
 | Group, then order the groups by an aggregate: a "Not supported on this provider" banner, the grid stays | `enterprise-grouping.spec.ts` | OpenSearch and Elasticsearch only |
 | The Pages button: numbered pages (200 of 100 rows), the total, page 2 and the last page equal PostgreSQL's, then scrolling again | `enterprise-paging.spec.ts` | `<p>`; a search engine has no total and no last page, and the test says so |
 | A filter and then a sort bring a later page back to page 1 | `enterprise-paging.spec.ts` | |
@@ -40,7 +40,7 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 | Community page: In range on a number and a date column | `community.spec.ts` | `<p>` |
 | Community page: Copy request puts the flat request on the clipboard | `community.spec.ts` | |
 | The Enterprise page shows the evaluation watermark | `enterprise-providers.spec.ts` | |
-| A database that is stopped: the grid stays, a `backend-unavailable` banner (HTTP 503) appears, another provider still works, the provider answers again after the container restarts | `errors.spec.ts` | opt-in (`E2E_DESTRUCTIVE=1`): it stops and restarts containers. Not for the file-based providers, which have no container |
+| A database that is stopped: the grid stays, a `backend-unavailable` banner (HTTP 503) appears, another provider still works, the provider answers again after the container restarts | `errors.spec.ts` | opt-in (`E2E_DESTRUCTIVE=1`): it stops and restarts containers. Not for the file-based providers, which have no container. Last measured on sqlserver, ef-sqlserver, mysql, ef-mysql, opensearch and elasticsearch (each passed, containers healthy again afterwards); the postgres, ef and mongo cases were not part of that run |
 | The page loads against a running API and shows the same first block as PostgreSQL | `smoke.spec.ts` | `<p>` |
 | The demo is not running: the run stops at once and prints how to start it | `global-setup.ts` | not a test: the run exits before any spec |
 

@@ -96,7 +96,7 @@ use throw-away credentials (`demo` / `demo`) and listen on `127.0.0.1` only.
    npm run dev
    ```
 
-5. Optional check without a browser: `bash smoke.sh` posts 25 fixed requests (`smoke/*.json`) to every provider the API lists and prints
+5. Optional check without a browser: `bash smoke.sh` posts 26 fixed requests (`smoke/*.json`) to every provider the API lists and prints
    one row per scenario. Exit code 0 means every answer is equal; 1 means a difference or a missing `400`; 2 means the
    environment is wrong (API down, a database down). `bash smoke.sh --api URL` points it at another API.
 
@@ -143,10 +143,10 @@ npm run e2e             # the demo must be up: the four steps of "Run it, step b
 - **Providers.** The tests use whatever `/api/health` lists (the page offers exactly that). A test for a provider that is not listed is skipped, with the
   reason in the report: with the default five (PostgreSQL, EF Core, MongoDB, SQLite, EF Core on SQLite) the run takes about two minutes. Start the optional
   engines as described in their sections and the tests cover them too.
-- **All eleven providers need about 10 GB of free RAM**, so run them in two batches. First `--profile sqlserver --profile mysql`, with `DEMO_SQLSERVER`,
+- **All eleven providers: run them in two batches.** The four optional engines use about 3.5 GiB of RAM together (measured on a 14 GB machine, see [All eleven providers at once](#all-eleven-providers-at-once)), but the suite on all eleven at once was not stable there: it had two, then six, timeouts and 503 answers on the SQL Server routes, which passed when run alone. Two batches passed with no failure (batch 1: 168 passed, 45 skipped; batch 2: 136 passed, 77 skipped; skipped = a provider the API does not list, and the opt-in error tests). First `--profile sqlserver --profile mysql`, with `DEMO_SQLSERVER`,
   `DEMO_MYSQL` and the seed from their sections; `npm run e2e`; then stop those two containers (`docker compose --profile sqlserver --profile mysql stop sqlserver mysql`).
   Then `--profile opensearch --profile elasticsearch` with `DEMO_OPENSEARCH` and `DEMO_ELASTICSEARCH`, restart the API, `npm run e2e`. Each batch takes
-  about three to four minutes (the search engines have no row total, so scrolling past 10,000 rows grows the list block by block, about two minutes on its own).
+  about three to four minutes (3 m 10 s and 3 m 56 s measured; the search engines have no row total, so scrolling past 10,000 rows grows the list block by block, about two minutes on its own).
 - **One provider or one spec.** `npx playwright test enterprise-grouping`, `npx playwright test -g "mysql"`, `npx playwright test --project=chromium e2e/export.spec.ts`.
   `npx playwright test --ui` opens Playwright's own runner.
 - **Error banners (opt-in).** `E2E_DESTRUCTIVE=1 npm run e2e` also runs `errors.spec.ts`, which **stops database containers with `docker compose stop`**
@@ -549,7 +549,7 @@ everything requested was seeded, 1 when a count is wrong, and 2 when a provider 
 ## All eleven providers at once
 
 To see every provider side by side (and to run the full parity check), start the four optional engines together. This needs about
-5 GB of free RAM (SQL Server about 2 GB, OpenSearch and Elasticsearch about 1 GiB each, MySQL about 0.5 GiB) and accepts Microsoft's SQL Server licence
+3.5 GiB of free RAM for the four containers (measured with all eleven providers listed: SQL Server about 0.95 GiB, OpenSearch and Elasticsearch about 1.0 GiB each, MySQL about 0.45 GiB) and accepts Microsoft's SQL Server licence
 (see [SQL Server](#sql-server-the-sqlserver-provider)). From this folder:
 
 ```bash
@@ -567,7 +567,7 @@ docker compose --profile engines stop sqlserver mysql opensearch elasticsearch  
 
 With all eleven up, `smoke.sh` ends with `all 26 scenarios are equal on all 11 providers (postgres, ef, ef-mysql, ef-sqlite, ef-sqlserver, elasticsearch, mongo, mysql, opensearch, sqlite, sqlserver)`.
 It also prints the places where an engine was equal only by a documented rule (SQL Server, MySQL and EF Core on MySQL `quantity_avg`, the OpenSearch
-differences, the same ones on Elasticsearch) and the one scenario OpenSearch and Elasticsearch answer with `unsupported-shape`. If one engine is not up, name the ones to compare:
+differences, the same ones on Elasticsearch) and the one scenario OpenSearch and Elasticsearch answer with `unsupported-shape`. The browser tests (`npm run e2e`) are measured in two batches, not with all eleven at once (see [Browser tests](#browser-tests-optional)). If one engine is not up, name the ones to compare:
 `DEMO_SMOKE_PROVIDERS=postgres,ef,mongo,sqlite bash smoke.sh`; a name the API does not list stops the run with exit 2.
 
 ## Stop and reset
