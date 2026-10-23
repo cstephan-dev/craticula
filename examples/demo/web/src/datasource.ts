@@ -42,7 +42,7 @@ export function toGridRows(request: GridRequest, rows: Record<string, unknown>[]
   }
   return rows.map((row) => {
     const mapped = { ...row };
-    if (groupColumn !== undefined && mapped[groupColumn] === null) {
+    if (groupColumn !== undefined && mapped[groupColumn] == null) {
       mapped[groupColumn] = BLANK_GROUP_KEY;
     }
     for (const column of request.valueCols) {

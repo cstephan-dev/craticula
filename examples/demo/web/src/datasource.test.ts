@@ -191,13 +191,15 @@ describe('the group with no key', () => {
   it('does not collide with any value the demo seeds into a group column', () => {
     const generator = readFileSync(new URL('../../Api/Seed/OrderGenerator.cs', import.meta.url), 'utf8');
     const lists = [...generator.matchAll(/(?:Countries|Categories|Statuses)\s*=\s*\[([^\]]*)\]/g)];
-    expect(lists).toHaveLength(3);
+    // One seed list per groupable column: a fourth `enableRowGroup` column would fail here until its list is read too.
+    const groupableColumns = [...readFileSync(new URL('./columns.ts', import.meta.url), 'utf8').matchAll(/\bgroup\('/g)];
+    expect(lists).toHaveLength(groupableColumns.length);
     const values = lists.flatMap((match) => [...match[1].matchAll(/"([^"]*)"/g)].map((value) => value[1]));
     expect(values.length).toBeGreaterThan(10);
     expect(values).not.toContain(BLANK_GROUP_KEY);
   });
 
-  it('is not applied to the CSV export request, which keeps real nulls and no grouping', () => {
+  it('leaves the CSV export request alone: it never carries a group key or the placeholder', () => {
     const body = buildExportRequest(null, [], new Set(['id']));
     expect(body.groupKeys).toEqual([]);
     expect(body.rowGroupCols).toEqual([]);

@@ -46,6 +46,7 @@ test.describe('grouping and aggregation', () => {
 
       // The group rows on screen carry the group keys the API sent.
       const keyOf = (row: Record<string, unknown>): unknown => Object.values(row)[0];
+      // The group with no key is skipped here: its cell shows "(blank)", not the key; the next scenario opens it.
       const firstIndex = amountCount.rows.findIndex((row) => keyOf(row) !== null);
       expect(firstIndex, `${provider}: a Country group with a key`).toBeGreaterThanOrEqual(0);
       const firstRow = amountCount.rows[firstIndex];
@@ -76,7 +77,7 @@ test.describe('grouping and aggregation', () => {
 
       const byCountry = await addGroupColumn(grid, provider, 'country', 'Country', 1);
       // Wherever the provider lists it (a search engine lists it first, PostgreSQL last).
-      const blankIndex = byCountry.rows.findIndex((row) => Object.values(row)[0] === null);
+      const blankIndex = byCountry.rows.findIndex((row) => row.country === null);
       expect(blankIndex, `${provider}: a Country group with no key`).toBeGreaterThanOrEqual(0);
       await expect(grid.rowAt(blankIndex).getByText('(blank)', { exact: true })).toBeVisible();
 
