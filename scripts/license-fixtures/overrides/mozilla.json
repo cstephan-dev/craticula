@@ -1,0 +1,10 @@
+{
+  "overrides": [
+    {
+      "package": "Example.Mpl",
+      "version": "1.0.0",
+      "license": "MIT",
+      "reason": "Synthetic: an override cannot lift a license that needs an ADR."
+    }
+  ]
+}

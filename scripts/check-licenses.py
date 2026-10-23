@@ -17,22 +17,23 @@ The project named in a failure line is read from each project's obj/project.asse
 
 THE POLICY (policy file scripts/license-allowlist.json):
   - allowed SPDX id: accepted. A compound expression: `A OR B` needs one accepted side, `A AND B` needs both; `WITH <exception>`
-    and a trailing `+` are ignored.
+    never lifts the base license, and an exception that is itself denied (Commons-Clause) denies the term; a trailing `+` is ignored.
   - denied family (GPL, LGPL, AGPL, SSPL, BUSL, Elastic, Commons-Clause, any "non-commercial"): always a failure.
-  - case by case (MPL-2.0): accepted only when an ADR in docs/adr/ names the package and MPL-2.0. FR-09. If docs/adr/ does not
+  - case by case (MPL-2.0): accepted only when an ADR in docs/adr/ has `Status: Accepted`, names MPL-2.0 and names the package as a whole token. FR-09. If docs/adr/ does not
     exist (the public mirror has no docs/) the check FAILS CLOSED and says the folder is missing.
   - anything else (a license file, a bare URL, an id not on the list): a failure, unless an override covers the package.
   - forbidden package names (MySql.Data: "use MySqlConnector") fail whatever license they declare, and cannot be overridden.
   - test-only package names (Oracle.ManagedDataAccess.Core, Testcontainers.Oracle) fail in every scope but `tests`.
   - an override (scripts/license-overrides.json: package, exact version, license, reason) replaces what the tool read, for
     a package whose license the tool cannot parse. It needs a non-empty reason (exit 2 otherwise). Its license is judged by
-    the same policy, except that a license that is neither allowed nor denied (e.g. a vendor's free-use terms) is accepted
-    as a reviewed exception. An optional "scopes" list limits it to those scopes (the real entries say ["tests"]). An override that matches no package is stale and fails (exit 1), like a stale sec2 allowlist
+    the same policy (the denied scan includes license names in prose), and it cannot lift what the tool read as denied or as
+    MPL-2.0: such a package fails with "override cannot lift a denied license". An override license must be an allowed SPDX
+    id, or carry "vendor_terms": true (a vendor's own free-use terms, reviewed by name); the flag never excuses a denied name. An optional "scopes" list limits it to those scopes (the real entries say ["tests"]). An override that matches no package is stale and fails (exit 1), like a stale sec2 allowlist
     entry; a version bump therefore re-opens the review.
 
 Exit codes: 0 clean; 1 at least one policy failure or stale override, each printed as
 `<scope>: <package> <version>: license '<license>': <why> [project: <projects>]`; 2 usage or environment error: the tool is
-missing or prints nothing usable, a scope has no project, a malformed policy or overrides file.
+missing, exits non-zero, or prints nothing usable (no output, or an empty list for a scope whose projects name packages), a scope has no project, a malformed policy or overrides file.
 `--json-dir` reads `<scope>.json` (the tool's JSON array) instead of running the tool: the offline tests use it.
 """
 from __future__ import annotations
@@ -63,6 +64,10 @@ DEFAULT_TOOL = "dotnet tool run nuget-license --"
 TOOL_TIMEOUT_SECONDS = 150  # NFR-03: the whole check adds under 3 minutes; a hung tool fails visibly (spec threat model)
 
 OK, ADR, UNKNOWN, DENIED = 0, 1, 2, 3  # leaf verdicts, best to worst
+# License names as prose (a license file's text, a URL, an override written in words) are not SPDX ids, so they are scanned.
+PROSE_DENIED = ("general public", "affero", "server side public", "business source", "elastic license", "commons clause",
+                "commons-clause", "non commercial", "non-commercial", "noncommercial")
+PROSE_ADR = ("mozilla",)
 
 
 class CheckError(Exception):
@@ -100,14 +105,23 @@ class Policy:
             return ADR
         return UNKNOWN
 
+    def free_text(self, text: str) -> int | None:
+        """A verdict for text that is not an SPDX expression, when it names a denied family or MPL in words; else None."""
+        low = text.lower().replace("_", " ")
+        if (re.search(r"(?<![a-z])(a|l)?gpl(?![a-z])", low) or any(m in low for m in self.denied_markers)
+                or any(m in low for m in PROSE_DENIED)):
+            return DENIED
+        if any(m in low for m in PROSE_ADR) or re.search(r"(?<![a-z])mpl(?![a-z])", low):
+            return ADR
+        return None
+
     def verdict(self, expression: str) -> tuple[int, str]:
         """(verdict, the license id that decided it) for an SPDX expression or free text."""
         text = (expression or "").strip()
         if not text or not re.fullmatch(r"[A-Za-z0-9.+()\- ]+", text):
-            # empty, a URL or a file name is not an SPDX expression; a URL or text that names a GNU license is still denied
-            if re.search(r"(?<![a-z])(a|l)?gpl(?![a-z])", text.lower()) or any(m in text.lower() for m in self.denied_markers):
-                return DENIED, text
-            return UNKNOWN, text
+            # empty, a URL or a file name is not an SPDX expression; a URL or text that names a denied license is still denied
+            found = self.free_text(text)
+            return (found, text) if found is not None else (UNKNOWN, text)
         tokens = re.findall(r"\(|\)|[^\s()]+", text)
         pos = 0
 
@@ -145,17 +159,26 @@ class Policy:
                 return inner
             if token in (")",) or token.upper() in ("AND", "OR", "WITH"):
                 raise ValueError("unexpected operator")
-            if pos < len(tokens) and tokens[pos].upper() == "WITH":
-                pos += 2  # the exception id is ignored
             plain = token[:-1] if token.endswith("+") else token
-            return self.leaf(plain), plain
+            level, decided = self.leaf(plain), plain
+            if pos < len(tokens) and tokens[pos].upper() == "WITH":
+                if pos + 1 >= len(tokens):
+                    raise ValueError("WITH without an exception")
+                exception = tokens[pos + 1]
+                pos += 2
+                # an exception never lifts the base license (the worse verdict stays); an exception that is itself a denied
+                # family (Commons-Clause) denies the term
+                if self.leaf(exception) == DENIED:
+                    level, decided = DENIED, f"{plain} WITH {exception}"
+            return level, decided
 
         try:
             result = parse_or()
             if pos != len(tokens):
                 raise ValueError("trailing tokens")
         except ValueError:
-            return UNKNOWN, text
+            # not parseable: never allowed, and a denied name inside it is still named
+            return (DENIED if self.free_text(text) == DENIED else UNKNOWN), text
         return result
 
 
@@ -176,6 +199,10 @@ class Override:
         if scopes is not None and (not isinstance(scopes, list) or not scopes or not set(scopes) <= set(SCOPES)):
             raise CheckError(f"{path}: override for {self.package} has 'scopes' that is not a non-empty list of {sorted(SCOPES)}")
         self.scopes = scopes  # None = every scope
+        vendor = entry.get("vendor_terms", False)
+        if not isinstance(vendor, bool):
+            raise CheckError(f"{path}: override for {self.package} has a 'vendor_terms' that is not true or false")
+        self.vendor_terms = vendor  # the license is a vendor's own terms (not SPDX), reviewed and accepted by name
         self.used = False
 
     def matches(self, package: str, version: str, scope: str) -> bool:
@@ -191,14 +218,18 @@ def load_overrides(path: Path) -> list[Override]:
     return [Override(entry, index, path) for index, entry in enumerate(entries, 1)]
 
 
+ADR_ACCEPTED = re.compile(r"^[\s|*>#-]*status\b[\s*:|]*accepted\b", re.IGNORECASE | re.MULTILINE)
+
+
 def adr_names(adr_dir: Path, package: str) -> bool | None:
-    """True when an ADR names the package and MPL-2.0; False when none does; None when docs/adr/ is missing."""
+    """True when an ADR with `Status: Accepted` names the package as a whole token and names MPL-2.0; False when none does;
+    None when docs/adr/ is missing. The id `Foo` is not found in `Foo.Bar` or `My-Foo`; a final full stop is not part of it."""
     if not adr_dir.is_dir():
         return None
-    name = re.compile(r"(?<![A-Za-z0-9.])" + re.escape(package) + r"(?![A-Za-z0-9])", re.IGNORECASE)
+    name = re.compile(r"(?<![A-Za-z0-9._-])" + re.escape(package) + r"(?![A-Za-z0-9_-])(?!\.[A-Za-z0-9])", re.IGNORECASE)
     for adr in sorted(adr_dir.glob("*.md")):
         text = adr.read_text(encoding="utf-8", errors="replace")
-        if name.search(text) and "MPL-2.0" in text:
+        if ADR_ACCEPTED.search(text) and "MPL-2.0" in text and name.search(text):
             return True
     return False
 
@@ -221,6 +252,18 @@ def check_all_projects_in_scope(root: Path) -> None:
         raise CheckError(f"project outside the license scopes ({', '.join(f for s in SCOPES.values() for f in s)}): {names}")
 
 
+def scope_declares_packages(projects: list[Path]) -> bool:
+    """True when a project of the scope names a package (a PackageReference, or a package in its restored assets), so an
+    empty tool list cannot be right. A scope of project references only (csharp/tools, csharp/samples today) is empty."""
+    for project in projects:
+        if "PackageReference" in project.read_text(encoding="utf-8", errors="replace"):
+            return True
+        assets = project.parent / "obj" / "project.assets.json"
+        if assets.is_file() and '"type": "package"' in assets.read_text(encoding="utf-8", errors="replace"):
+            return True
+    return False
+
+
 def run_tool(tool: str, root: Path, scope: str) -> list[dict]:
     projects = scope_projects(root, scope)
     if not projects:
@@ -235,10 +278,15 @@ def run_tool(tool: str, root: Path, scope: str) -> list[dict]:
                                   timeout=TOOL_TIMEOUT_SECONDS)
         except (OSError, subprocess.TimeoutExpired) as error:
             raise CheckError(f"nuget-license could not run for scope '{scope}': {error}") from error
-        if not output.is_file():
-            raise CheckError(f"nuget-license (exit {done.returncode}) wrote no output for scope '{scope}': "
-                             f"{(done.stderr or done.stdout).strip()[:400]}")
-        return parse_tool_output(output.read_text(encoding="utf-8"), scope)
+        # the tool exits 0 on success (checked on the real tree), so any other exit is an environment error, output or not
+        if done.returncode != 0 or not output.is_file():
+            raise CheckError(f"nuget-license exited {done.returncode} for scope '{scope}'"
+                             f"{'' if output.is_file() else ' and wrote no output'}: {(done.stderr or done.stdout).strip()[:400]}")
+        packages = parse_tool_output(output.read_text(encoding="utf-8"), scope)
+        if not packages and scope_declares_packages(projects):
+            raise CheckError(f"nuget-license read no packages for scope '{scope}' ({len(projects)} project(s)): "
+                             "the projects name packages, so was the solution restored? An empty list would pass everything")
+        return packages
 
 
 def parse_tool_output(text: str, scope: str) -> list[dict]:
@@ -293,14 +341,29 @@ def evaluate_scope(scope: str, packages: list[dict], policy: Policy, overrides: 
             why = "accepted only in test projects under csharp/tests, never in csharp/src, csharp/tools or csharp/samples (ADR-0003, FR-08)"
         else:
             override = next((o for o in overrides if o.matches(package, version, scope)), None)
+            read_level = policy.verdict(declared)[0]
             if override is not None:
                 override.used = True
-                shown = f"{override.license} (override)"
-                declared = override.license
-            level, decided = policy.verdict(declared)
-            if override is not None and level == UNKNOWN:
-                level = OK  # a reviewed exception: the override carries the reason
-            if level == DENIED:
+            if override is not None and read_level in (DENIED, ADR):
+                # an override fixes a license the tool could not read; it never lifts one the tool read as refused
+                level, decided = read_level, ""
+                why = ("override cannot lift a denied license (the tool read "
+                       f"'{declared}', which is {'denied' if read_level == DENIED else 'accepted only with an ADR'}); "
+                       "remove the override (FR-08)")
+            else:
+                if override is not None:
+                    shown = f"{override.license} (override)"
+                    declared = override.license
+                level, decided = policy.verdict(declared)
+                if override is not None and level == UNKNOWN:
+                    if override.vendor_terms:
+                        level = OK  # a reviewed vendor license: the override carries the reason and the flag
+                    else:
+                        why = ("override license is not an allowed SPDX id; write the real SPDX id, or set "
+                               "\"vendor_terms\": true for a reviewed vendor license (FR-08)")
+            if why is not None:
+                pass
+            elif level == DENIED:
                 why = f"license {decided or 'text'} is denied (copyleft, source-available or non-commercial), FR-08"
             elif level == UNKNOWN:
                 why = ("license is not on the allowlist and not an SPDX id the policy knows; "

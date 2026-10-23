@@ -38,10 +38,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      # nuget-license reads each project's obj/project.assets.json, so the solution is restored first.
+      # nuget-license reads each project's obj/project.assets.json, so the solution is restored first. NuGetAudit is off for
+      # this job only: a package with a known advisory would fail the restore (NU1903/NU1904) before the license check could
+      # name its license. The advisory audit is its own check (the `build` job of ci.yml restores with it on).
       - name: Restore packages
         working-directory: csharp
-        run: dotnet restore Craticula.sln
+        run: dotnet restore Craticula.sln -p:NuGetAudit=false
 
       - name: Restore the pinned nuget-license tool
         run: dotnet tool restore --tool-manifest csharp/.config/dotnet-tools.json

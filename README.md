@@ -76,10 +76,14 @@ Every NuGet package under `csharp/`, transitive ones and test projects included,
   ([`scripts/license-allowlist.json`](scripts/license-allowlist.json)).
 - **Refused:** GPL, LGPL, AGPL, SSPL, BUSL, Elastic, Commons Clause and any non-commercial license. The failure line names the
   package, its version, the license and the project.
-- **MPL-2.0:** only when an ADR in `docs/adr/` names the package. A checkout without that folder fails closed.
+- **MPL-2.0:** only when an accepted ADR (a `Status: Accepted` line) in `docs/adr/` names MPL-2.0 and the package. This
+  public repository has no `docs/adr/`, so an MPL-2.0 package cannot pass the public check until ADRs are published here.
+  It fails closed by design.
 - **Overrides:** when the tool cannot read a license (a license file or a bare URL instead of an SPDX id), add an entry to
   [`scripts/license-overrides.json`](scripts/license-overrides.json) with the package, its exact version, the real license and a
-  written reason. An entry without a reason fails the check, and so does an entry that no longer matches a package.
+  written reason. The license must be an allowed SPDX id (or `"vendor_terms": true` for a vendor's own non-SPDX terms). An override
+  never lifts a license the tool read as denied or MPL-2.0. An entry without a reason fails the check, and so does an entry that
+  no longer matches a package.
 - **Traps:** `MySql.Data` (GPL) is rejected by name: use `MySqlConnector`. The Oracle driver `Oracle.ManagedDataAccess.Core` and
   `Testcontainers.Oracle` are accepted in the test projects under `csharp/tests` only, never in a package under `csharp/src`.
 

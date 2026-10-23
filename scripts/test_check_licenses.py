@@ -26,6 +26,34 @@ def check(case: str, overrides: str = "none.json", adr: str | None = None, root:
     return subprocess.run(command, capture_output=True, text=True, encoding="utf-8", timeout=30)
 
 
+def pkg(package: str, license_text: str | None, version: str = "1.0.0") -> dict:
+    entry = {"PackageId": package, "PackageVersion": version, "LicenseInformationOrigin": 0}
+    if license_text is not None:
+        entry["License"] = license_text
+    return entry
+
+
+def check_tmp(packages: list[dict], overrides: list[dict] | None = None, adrs: dict[str, str] | None = None,
+              scope: str = "tests") -> subprocess.CompletedProcess:
+    """Run the checker on packages and override entries written to a temp folder (cases that need no fixture folder)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        (base / "json").mkdir()
+        (base / "json" / f"{scope}.json").write_text(json.dumps(packages), encoding="utf-8")
+        (base / "ov.json").write_text(json.dumps({"overrides": overrides or []}), encoding="utf-8")
+        adr = base / "adr"
+        if adrs is not None:
+            adr.mkdir()
+            for name, text in adrs.items():
+                (adr / name).write_text(text, encoding="utf-8")
+        return subprocess.run([sys.executable, str(SCRIPT), "--json-dir", str(base / "json"), "--overrides", str(base / "ov.json"),
+                               "--adr-dir", str(adr)], capture_output=True, text=True, encoding="utf-8", timeout=30)
+
+
+def override(package: str, license_text: str, **extra) -> dict:
+    return {"package": package, "version": "1.0.0", "license": license_text, "reason": "Synthetic reason.", **extra}
+
+
 def failures(result: subprocess.CompletedProcess) -> list[str]:
     return [line for line in result.stdout.splitlines() if not line.startswith("check-licenses:")]
 
@@ -135,6 +163,113 @@ class LicenseCheckTests(unittest.TestCase):
 
     def test_an_override_cannot_launder_a_denied_license(self):
         self.assert_fails(check("gpl", overrides="gpl-laundering.json"), "Example.Bad", "denied")
+
+    # F1: an override must not launder a refused license.
+    def test_an_override_cannot_lift_what_the_tool_read_as_denied_or_needing_an_adr(self):
+        for replacement in ("MIT", "GNU General Public License v3.0", "Business Source License 1.1", "Server Side Public License",
+                            "Apache-2.0 WITH Commons-Clause"):
+            with self.subTest(replacement=replacement):
+                result = check_tmp([pkg("Example.Bad", "GPL-3.0-only")], [override("Example.Bad", replacement)])
+                self.assert_fails(result, "Example.Bad", "GPL-3.0-only", "override cannot lift a denied license")
+        result = check("mpl-no-adr", overrides="mozilla.json")
+        self.assert_fails(result, "Example.Mpl", "MPL-2.0", "override cannot lift a denied license")
+
+    def test_an_override_license_that_is_denied_prose_or_needs_an_adr_is_judged_by_the_policy(self):
+        for text in ("GNU General Public License v3.0", "GNU Affero General Public License", "Business Source License 1.1",
+                     "Server Side Public License", "Elastic License 2.0", "Apache-2.0 WITH Commons-Clause",
+                     "Commons Clause License", "Non Commercial Use Only", "non-commercial terms", "Mozilla Public License 2.0"):
+            with self.subTest(license=text):
+                result = check_tmp([pkg("Example.Odd", "https://example.invalid/license.txt")], [override("Example.Odd", text)], adrs=None)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+
+    def test_an_override_with_a_non_spdx_license_needs_the_vendor_terms_flag(self):
+        packages = [pkg("Example.Odd", "https://example.invalid/license.txt")]
+        self.assert_fails(check_tmp(packages, [override("Example.Odd", "Vendor free-use terms")]), "Example.Odd", "vendor_terms")
+        accepted = check_tmp(packages, [override("Example.Odd", "Vendor free-use terms", vendor_terms=True)])
+        self.assertEqual(0, accepted.returncode, accepted.stdout + accepted.stderr)
+        # the flag is no way round the denied scan
+        self.assert_fails(check_tmp(packages, [override("Example.Odd", "Business Source License 1.1", vendor_terms=True)]), "denied")
+
+    def test_a_with_exception_never_makes_a_denied_license_allowed_and_a_denied_exception_denies(self):
+        for expression in ("GPL-3.0-only WITH Classpath-exception-2.0", "Apache-2.0 WITH Commons-Clause"):
+            with self.subTest(expression=expression):
+                self.assert_fails(check_tmp([pkg("Example.Bad", expression)]), "Example.Bad", "denied")
+        ok = check_tmp([pkg("Example.Fine", "Apache-2.0 WITH LLVM-exception")])
+        self.assertEqual(0, ok.returncode, ok.stdout + ok.stderr)
+
+    # N1: parser edge cases.
+    def test_a_plus_suffix_and_trailing_junk(self):
+        self.assertEqual(0, check_tmp([pkg("Example.Fine", "MIT+")]).returncode)
+        self.assert_fails(check_tmp([pkg("Example.Bad", "GPL-2.0+")]), "denied")
+        self.assert_fails(check_tmp([pkg("Example.Bad", "MIT GPL-3.0")]), "Example.Bad")
+
+    def test_a_non_commercial_marker_and_a_case_folded_override_match(self):
+        self.assert_fails(check_tmp([pkg("Example.Bad", "Free for Non-Commercial use")]), "denied")
+        accepted = check_tmp([pkg("Example.Odd", "https://example.invalid/license.txt")], [override("example.ODD", "Apache-2.0")])
+        self.assertEqual(0, accepted.returncode, accepted.stdout + accepted.stderr)
+
+    # F2: the MPL-2.0 ADR rule.
+    def test_an_mpl_adr_must_be_accepted_name_the_package_as_a_whole_token_and_name_mpl(self):
+        accepted = "# ADR-0010: accept Foo.Bar\n\nStatus: Accepted   Date: 2026-10-23\n\nFoo.Bar is MPL-2.0 and we do not modify it.\n"
+        cases = {
+            "accepted ADR naming Foo.Bar": (accepted, "Foo.Bar", True),
+            "accepted for Foo.Bar is not for Foo": (accepted, "Foo", False),
+            "case-folded status": (accepted.replace("Accepted", "accepted"), "Foo.Bar", True),
+            "table status": (accepted.replace("Status: Accepted", "| Status | Accepted |"), "Foo.Bar", True),
+            "sentence-final package name": (accepted.replace("Foo.Bar is MPL-2.0", "We accept MPL-2.0 for Foo.Bar."), "Foo.Bar", True),
+            "Proposed": (accepted.replace("Accepted", "Proposed"), "Foo.Bar", False),
+            "Superseded": (accepted.replace("Accepted", "Superseded by ADR-0011"), "Foo.Bar", False),
+            "Rejected": (accepted.replace("Accepted", "Rejected"), "Foo.Bar", False),
+            "Deprecated": (accepted.replace("Accepted", "Deprecated"), "Foo.Bar", False),
+            "template status line": (accepted.replace("Status: Accepted", "Status: Proposed | Accepted | Deprecated"), "Foo.Bar", False),
+            "policy ADR that mentions MPL-2.0 only": ("# ADR-0003\n\nStatus: Accepted\n\nMPL-2.0 needs an ADR per package.\n", "Foo.Bar", False),
+            "no MPL token": (accepted.replace("MPL-2.0", "a weak copyleft license"), "Foo.Bar", False),
+            "Microsoft.Data is not Microsoft.Data.SqlClient": (
+                "Status: Accepted\nMicrosoft.Data.SqlClient is MPL-2.0.\n", "Microsoft.Data", False),
+            "xunit is not xunit.abstractions": ("Status: Accepted\nxunit.abstractions is MPL-2.0.\n", "xunit", False),
+            "prefix of a longer word": ("Status: Accepted\nOracleCloud is MPL-2.0.\n", "Oracle", False),
+            "suffix of a longer id": ("Status: Accepted\nMy-Foo.Bar is MPL-2.0.\n", "Foo.Bar", False),
+        }
+        for label, (text, package, expected) in cases.items():
+            with self.subTest(label):
+                result = check_tmp([pkg(package, "MPL-2.0")], adrs={"0010-x.md": text})
+                self.assertEqual(0 if expected else 1, result.returncode, result.stdout + result.stderr)
+
+    # N2 / N3: the tool's exit and empty output.
+    def test_a_tool_that_exits_non_zero_or_prints_an_empty_list_is_an_environment_error(self):
+        for body, label in (("sys.exit(3)", "non-zero exit"), ("pass", "no output file"), ("write('[]')", "empty list"),
+                            ("write('[]'); sys.exit(1)", "output and a failing exit")):
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                for folder in ("src/Example.Lib", "tests", "tools"):
+                    (root / "csharp" / folder).mkdir(parents=True, exist_ok=True)
+                (root / "csharp" / "src" / "Example.Lib" / "Example.Lib.csproj").write_text(
+                    '<Project><ItemGroup><PackageReference Include="Example.Dep" /></ItemGroup></Project>', encoding="utf-8")
+                fake = root / "fake_tool.py"
+                fake.write_text("import sys\nout = sys.argv[sys.argv.index('-fo') + 1]\n"
+                                "def write(text):\n    open(out, 'w').write(text)\n" + body + "\n", encoding="utf-8")
+                result = subprocess.run([sys.executable, str(SCRIPT), "--root", tmp, "--overrides", str(OVERRIDES / "none.json"),
+                                         "--tool", f"{sys.executable} {fake}"], capture_output=True, text=True, timeout=30)
+                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+
+    def test_an_empty_list_is_fine_for_a_scope_whose_projects_name_no_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for folder in ("src/Example.Lib", "tests", "tools/Example.Tool"):
+                (root / "csharp" / folder).mkdir(parents=True, exist_ok=True)
+            (root / "csharp" / "src" / "Example.Lib" / "Example.Lib.csproj").write_text(
+                '<Project><ItemGroup><PackageReference Include="Example.Dep" /></ItemGroup></Project>', encoding="utf-8")
+            (root / "csharp" / "tools" / "Example.Tool" / "Example.Tool.csproj").write_text("<Project />", encoding="utf-8")
+            fake = root / "fake_tool.py"
+            fake.write_text("import sys, json\nout = sys.argv[sys.argv.index('-fo') + 1]\nlist_file = json.load(open(sys.argv[sys.argv.index('-ji') + 1]))\n"
+                            "pkgs = [{'PackageId': 'Example.Dep', 'PackageVersion': '1.0.0', 'License': 'MIT'}] if 'src' in list_file[0] else []\n"
+                            "open(out, 'w').write(json.dumps(pkgs))\n", encoding="utf-8")
+            # the tests scope has no project at all: that is the scope-level error, so give it one without packages
+            (root / "csharp" / "tests" / "Example.T").mkdir()
+            (root / "csharp" / "tests" / "Example.T" / "Example.T.csproj").write_text("<Project />", encoding="utf-8")
+            result = subprocess.run([sys.executable, str(SCRIPT), "--root", tmp, "--overrides", str(OVERRIDES / "none.json"),
+                                     "--tool", f"{sys.executable} {fake}"], capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     # Environment errors exit 2.
     def test_a_malformed_policy_file_is_an_error(self):
