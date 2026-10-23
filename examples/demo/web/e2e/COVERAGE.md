@@ -20,6 +20,7 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 | Sort by clicking a header; shift-click a second and a third column (Id first, Id in the middle) | `enterprise-sorting.spec.ts` | `<p>`; includes the Id-then-Amount and Amount, Id, Country orders |
 | Scroll down a long list: blocks of 100 load, the grid reaches the end, rows past 10,000 load | `enterprise-sorting.spec.ts` | `<p>`; a search engine has no total, so the list grows block by block and the test allows for it |
 | Group by Country then Category, add Amount and Quantity as values, choose sum, avg and count, open a group and then a Category | `enterprise-grouping.spec.ts` | `<p>`; every level equals PostgreSQL's answer to the same request |
+| Group by Country, open the group shown as "(blank)" (no country): its children equal PostgreSQL's answer for the null key | `enterprise-grouping.spec.ts` | `<p>`; the page shows a null group key as "(blank)" and sends a null key back; run on postgres, ef, mongo, sqlite and ef-sqlite; the other providers are skipped when not served |
 | Group, then order the groups by an aggregate: a "Not supported on this provider" banner, the grid stays | `enterprise-grouping.spec.ts` | OpenSearch and Elasticsearch only |
 | The Pages button: numbered pages (200 of 100 rows), the total, page 2 and the last page equal PostgreSQL's, then scrolling again | `enterprise-paging.spec.ts` | `<p>`; a search engine has no total and no last page, and the test says so |
 | A filter and then a sort bring a later page back to page 1 | `enterprise-paging.spec.ts` | |
@@ -50,7 +51,6 @@ values. The accepted differences are in `support/divergences.ts`, each with its 
 | Post an unknown column (or any bad request) straight to `/api/<provider>/rows`: a typed 400 | not a browser scenario: `smoke.sh` (several refusals, every provider) and the demo's API tests |
 | A native In range sent to the API without the page's translation: 400 `unknown-operator` | not a browser scenario (the page never sends it): `smoke.sh` and the API tests |
 | In range with one bound only | AG Grid sends a range only when both bounds are filled, so the page cannot produce it; the translation is covered by the page's unit tests (`src/inRange.test.ts`) and by `smoke.sh` |
-| Open the group whose key is empty (the null group) | the grid sends nothing when that blank group row is clicked (measured on PostgreSQL and OpenSearch), so the click cannot be scripted; the API answer is covered by the API tests and `smoke.sh` on the engines that support it |
 | Read the README sections (the EF Core walkthrough "from the code only", what to expect, the per-engine notes) | reading, not behaviour |
 | Package approvals, licence acceptance for the SQL Server image | a decision of a person, not of the page |
 | Library behaviour (compiled SQL for a sort that repeats a key, fixture conformance, execution equality on live engines) | the library's own test projects and the conformance runner, not the demo page |

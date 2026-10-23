@@ -53,8 +53,7 @@ test.describe('grouping and aggregation', () => {
         await expect(grid.page.getByRole('gridcell', { name: String(keyOf(firstRow)), exact: true }).first()).toBeVisible();
       }
 
-      // Open a group: its children are the next group level, and then the orders themselves. The group with no key is skipped:
-      // AG Grid sends nothing when it is clicked, on every provider, and a search engine lists it first where PostgreSQL lists it last.
+      // Open a group: its children are the next group level, and then the orders themselves.
       const children = await openGroupAt(grid, provider, firstIndex, 1);
       await expectMatchesBaseline(request, 'children of the first Country group', children);
       expect(sent(children.request).groupKeys).toHaveLength(1);
@@ -65,6 +64,26 @@ test.describe('grouping and aggregation', () => {
       await expectMatchesBaseline(request, 'orders of the first Country and Category group', leaves);
       expect(leaves.rows.length).toBeGreaterThan(0);
       expect(leaves.columns).toContain('customer');
+      await expect(grid.errorBanner()).toHaveCount(0);
+    });
+  }
+
+  for (const provider of EVERY_PROVIDER) {
+    test(`${provider}: the group with no Country opens like any other`, async ({ page, request }) => {
+      skipUnlessServed(provider);
+      const grid = new GridPage(page);
+      await startOn(grid, provider);
+
+      const byCountry = await addGroupColumn(grid, provider, 'country', 'Country', 1);
+      // Wherever the provider lists it (a search engine lists it first, PostgreSQL last).
+      const blankIndex = byCountry.rows.findIndex((row) => Object.values(row)[0] === null);
+      expect(blankIndex, `${provider}: a Country group with no key`).toBeGreaterThanOrEqual(0);
+      await expect(grid.rowAt(blankIndex).getByText('(blank)', { exact: true })).toBeVisible();
+
+      const children = await openGroupAt(grid, provider, blankIndex, 1);
+      expect(sent(children.request).groupKeys).toEqual([{ type: 'null' }]);
+      await expectMatchesBaseline(request, 'children of the Country group with no key', children);
+      expect(children.rows.length).toBeGreaterThan(0);
       await expect(grid.errorBanner()).toHaveCount(0);
     });
   }
