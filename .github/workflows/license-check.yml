@@ -1,0 +1,51 @@
+# License policy gate (ADR-0003, spec FR-08, FR-09, NFR-03, SC-04): a pull request that adds a dependency whose license is
+# not on the allowlist fails here, naming the package and the license. The check is scripts/check-licenses.py; it runs the
+# `nuget-license` dotnet tool (pinned in csharp/.config/dotnet-tools.json) over every project of csharp/ and applies the
+# policy of scripts/license-allowlist.json and the reviewed exceptions of scripts/license-overrides.json.
+# One check, named `license-check`, so the branch ruleset on main can require it. The maintainer's own pull requests run the same
+# script in the Azure PR pipeline. No secret, read-only token, every action pinned to a commit SHA
+# (scripts/test_workflows.py checks that). The tool needs nuget.org, as the restore does.
+name: license-check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: license-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    # NFR-03: under 3 minutes in practice; the limit makes a huge dependency tree fail visibly instead of hanging.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # nuget-license reads each project's obj/project.assets.json, so the solution is restored first.
+      - name: Restore packages
+        working-directory: csharp
+        run: dotnet restore Craticula.sln
+
+      - name: Restore the pinned nuget-license tool
+        run: dotnet tool restore --tool-manifest csharp/.config/dotnet-tools.json
+
+      # Exit 0 clean, 1 a license outside the policy or a stale override, 2 an environment error (tool missing, no project).
+      - name: Check dependency licenses
+        run: python3 scripts/check-licenses.py
