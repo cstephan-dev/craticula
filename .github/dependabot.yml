@@ -10,14 +10,18 @@ updates:
         update-types:
           - minor
           - patch
+    # A release must be at least two weeks old before it is proposed, the rule the pinned test packages follow.
+    cooldown:
+      default-days: 14
     ignore:
-      # Security pin (NuGetAudit): lifts the vulnerable transitive version of System.Security.Cryptography.Pkcs
-      # until a SqlClient release and an Oracle driver release both depend on a patched one.
+      # Security pin (NuGetAudit): System.Security.Cryptography.Pkcs lifts a vulnerable transitive version and stays on
+      # the 10.0 line of net10.0. Patch and minor updates are wanted, so security updates still arrive; only a new major is held.
       - dependency-name: System.Security.Cryptography.Pkcs
-      # 7.1.0 and 7.1.1 pull in the vulnerable Pkcs version above, so the pin stays until a patched release exists.
+        update-types: ["version-update:semver-major"]
+      # 7.1.1 still pulls in the vulnerable Pkcs version above. Only that release is skipped: a later one is proposed,
+      # and the maker checks its Pkcs dependency before taking it.
       - dependency-name: Microsoft.Data.SqlClient
-      # Deliberately held at the newest release that was at least two weeks old when it was approved.
-      - dependency-name: Oracle.ManagedDataAccess.Core
+        versions: ["7.1.1"]
       # Held on the 10.0 line, the release line of net10.0 that every project here targets.
       - dependency-name: Microsoft.EntityFrameworkCore.Relational
         update-types: ["version-update:semver-major"]

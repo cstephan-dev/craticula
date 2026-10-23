@@ -234,14 +234,35 @@ class ReleaseWorkflowTests(unittest.TestCase):
         job = yaml.safe_load(self.text)["jobs"]["sbom"]
         install = [s for s in job["steps"] if s.get("name") == "Install the CycloneDX tool"]
         self.assertEqual(1, len(install))
-        self.assertRegex(install[0]["run"], r"dotnet tool install CycloneDX --version \d+\.\d+\.\d+ ")
-        step = [s for s in job["steps"] if s.get("name") == "Generate and attach one SBOM per packed project"][0]
-        self.assertEqual({"GH_TOKEN": "${{ github.token }}", "VERSION": "${{ inputs.version }}"}, step["env"])
-        self.assertNotIn("${{", step["run"], "values reach the script through env only")
-        self.assertIn("csharp/src/*/*.csproj", step["run"])
-        self.assertNotIn("examples/", step["run"])
-        self.assertIn('gh release upload "dotnet-v$VERSION" sbom/*.cdx.json', step["run"])
-        self.assertIn("::warning::", step["run"])
+        self.assertIn("dotnet tool install CycloneDX --version 6.3.1 ", install[0]["run"])
+        generate = [s for s in job["steps"] if s.get("name") == "Generate one SBOM per packed project"]
+        self.assertEqual(1, len(generate))
+        run = generate[0]["run"]
+        self.assertEqual({"VERSION": "${{ inputs.version }}"}, generate[0]["env"], "the tool runs without the token")
+        self.assertNotIn("${{", run, "values reach the script through env only")
+        self.assertIn("csharp/src/*/*.csproj", run)
+        self.assertNotIn("examples/", run)
+
+    def test_sbom_job_fails_when_one_project_has_no_sbom_and_raises_a_warning(self):
+        if yaml is None:
+            self.skipTest("PyYAML is not installed")
+        job = yaml.safe_load(self.text)["jobs"]["sbom"]
+        run = [s for s in job["steps"] if s.get("name") == "Generate one SBOM per packed project"][0]["run"]
+        self.assertNotRegex(run, r"(?m)^\s*(if \(|\() ", "a failing loop inside a condition or subshell would be ignored")
+        self.assertRegex(run, r'-ipr \\\n\s+\|\| \{ echo "::warning::CycloneDX failed for \$name[^}]*exit 1; \}')
+        self.assertRegex(run, r'\[ "\$count" -eq 10 \] \|\| \{ echo "::warning::[^}]*exit 1; \}')
+
+    def test_only_the_upload_step_holds_the_token(self):
+        if yaml is None:
+            self.skipTest("PyYAML is not installed")
+        job = yaml.safe_load(self.text)["jobs"]["sbom"]
+        holders = [s["name"] for s in job["steps"] if "GH_TOKEN" in s.get("env", {})]
+        self.assertEqual(["Attach the SBOMs to the release"], holders)
+        upload = [s for s in job["steps"] if s.get("name") == "Attach the SBOMs to the release"][0]
+        self.assertEqual({"GH_TOKEN": "${{ github.token }}", "VERSION": "${{ inputs.version }}"}, upload["env"])
+        self.assertNotIn("${{", upload["run"])
+        self.assertIn('gh release upload "dotnet-v$VERSION" sbom/*.cdx.json', upload["run"])
+        self.assertIn("::warning::", upload["run"])
 
 
 if __name__ == "__main__":

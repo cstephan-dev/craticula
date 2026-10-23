@@ -222,7 +222,7 @@ jobs:
 
   # One CycloneDX SBOM per packed project, attached to the release (spec FR-05, NFR-04). Same shape as release-notes: after
   # publish, a failure only raises a warning because the packages are already on nuget.org, `contents: write` only, no
-  # environment, no id-token, no stored token. The demo under examples/demo is not packed and gets no SBOM. A file that is
+  # environment, no id-token, no stored token; the token reaches only the upload step, never the third-party tool. The demo under examples/demo is not packed and gets no SBOM. A file that is
   # already attached makes the upload fail instead of being overwritten; the maker adds a missing SBOM by hand with `gh release upload`.
   sbom:
     needs: publish
@@ -243,22 +243,24 @@ jobs:
       - name: Install the CycloneDX tool
         run: dotnet tool install CycloneDX --version 6.3.1 --tool-path "$RUNNER_TEMP/tools"
 
-      - name: Generate and attach one SBOM per packed project
+      - name: Generate one SBOM per packed project
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir sbom
+          for proj in csharp/src/*/*.csproj; do
+            name="$(basename "$proj" .csproj)"
+            "$RUNNER_TEMP/tools/dotnet-CycloneDX" "$proj" -o sbom -fn "$name.cdx.json" -F Json -sn "$name" -sv "$VERSION" -c Release -st Library -ipr \
+              || { echo "::warning::CycloneDX failed for $name; no SBOM is attached to dotnet-v$VERSION. Add them by hand."; exit 1; }
+          done
+          count="$(ls sbom/*.cdx.json | wc -l)"
+          [ "$count" -eq 10 ] || { echo "::warning::Expected 10 SBOMs, made $count; none is attached to dotnet-v$VERSION. Add them by hand."; exit 1; }
+
+      - name: Attach the SBOMs to the release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: |
-          mkdir sbom
-          if (
-              set -e
-              for proj in csharp/src/*/*.csproj; do
-                name="$(basename "$proj" .csproj)"
-                "$RUNNER_TEMP/tools/dotnet-CycloneDX" "$proj" -o sbom -fn "$name.cdx.json" -F Json -sn "$name" -sv "$VERSION" -c Release
-              done
-            ) \
-            && gh release upload "dotnet-v$VERSION" sbom/*.cdx.json --repo "$GITHUB_REPOSITORY"; then
-            echo "SBOMs attached to dotnet-v$VERSION"
-          else
-            echo "::warning::Could not attach the SBOMs to dotnet-v$VERSION; the release itself is published. Add them by hand: gh release upload."
-            exit 1
-          fi
+          gh release upload "dotnet-v$VERSION" sbom/*.cdx.json --repo "$GITHUB_REPOSITORY" \
+            || { echo "::warning::Could not attach the SBOMs to dotnet-v$VERSION; the release itself is published. Add them by hand: gh release upload."; exit 1; }
+          echo "SBOMs attached to dotnet-v$VERSION"

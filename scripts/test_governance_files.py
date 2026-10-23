@@ -304,10 +304,12 @@ class PrivateReferenceRuleTests(unittest.TestCase):
 
 
 class DependabotTests(unittest.TestCase):
-    """The Dependabot configuration: both ecosystems weekly and grouped, and every deliberately held package ignored. A text
-    check always runs; the full parse runs when PyYAML is installed (it is not a dependency of the repository)."""
+    """The Dependabot configuration: both ecosystems weekly and grouped, every deliberately held package held by a scoped ignore
+    (a bare ignore also suppresses security updates), and a two-week cooldown on NuGet. A text check always runs; the full parse
+    runs when PyYAML is installed (it is not a dependency of the repository)."""
     PATH = ROOT / ".github" / "dependabot.yml"
-    HELD = ("System.Security.Cryptography.Pkcs", "Microsoft.Data.SqlClient", "Oracle.ManagedDataAccess.Core")
+    HELD = ("System.Security.Cryptography.Pkcs", "Microsoft.Data.SqlClient", "Microsoft.EntityFrameworkCore.Relational",
+            "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.Data.Sqlite")
 
     def text(self):
         return self.PATH.read_text(encoding="utf-8")
@@ -319,11 +321,14 @@ class DependabotTests(unittest.TestCase):
         self.assertRegex(text, r"package-ecosystem: github-actions\n\s+directory: /\n\s+schedule:\n\s+interval: weekly")
         self.assertEqual(2, text.count("groups:"))
 
-    def test_every_held_package_is_ignored(self):
+    def test_the_cooldown_keeps_the_two_week_rule(self):
+        self.assertRegex(self.text(), r"cooldown:\n\s+default-days: 14")
+
+    def test_every_held_package_is_ignored_with_a_scope(self):
         text = self.text()
         for name in self.HELD:
             with self.subTest(package=name):
-                self.assertIn(f"- dependency-name: {name}\n", text)
+                self.assertRegex(text, rf"- dependency-name: {re.escape(name)}\n\s+(update-types|versions): \[")
 
     def test_the_held_packages_are_still_named_in_the_props_file(self):
         props = (ROOT / "csharp" / "Directory.Packages.props").read_text(encoding="utf-8")
@@ -343,8 +348,12 @@ class DependabotTests(unittest.TestCase):
         for update in ecosystems.values():
             self.assertEqual("weekly", update["schedule"]["interval"])
             self.assertLessEqual(update["open-pull-requests-limit"], 10)
-        ignored = {i["dependency-name"] for i in ecosystems["nuget"]["ignore"]}
-        self.assertTrue(set(self.HELD) <= ignored)
+        ignores = ecosystems["nuget"]["ignore"]
+        self.assertEqual(set(self.HELD), {i["dependency-name"] for i in ignores})
+        for entry in ignores:
+            self.assertTrue(entry.get("versions") or entry.get("update-types"),
+                            f"{entry['dependency-name']}: a bare ignore also blocks security updates")
+        self.assertEqual(14, ecosystems["nuget"]["cooldown"]["default-days"])
 
 
 class GatePathRuleTests(unittest.TestCase):
