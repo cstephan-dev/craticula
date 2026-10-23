@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /csharp
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      nuget:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Security pin (NuGetAudit): lifts the vulnerable transitive version of System.Security.Cryptography.Pkcs
+      # until a SqlClient release and an Oracle driver release both depend on a patched one.
+      - dependency-name: System.Security.Cryptography.Pkcs
+      # 7.1.0 and 7.1.1 pull in the vulnerable Pkcs version above, so the pin stays until a patched release exists.
+      - dependency-name: Microsoft.Data.SqlClient
+      # Deliberately held at the newest release that was at least two weeks old when it was approved.
+      - dependency-name: Oracle.ManagedDataAccess.Core
+      # Held on the 10.0 line, the release line of net10.0 that every project here targets.
+      - dependency-name: Microsoft.EntityFrameworkCore.Relational
+        update-types: ["version-update:semver-major"]
+      - dependency-name: Microsoft.EntityFrameworkCore.Sqlite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: Microsoft.Data.Sqlite
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        update-types:
+          - minor
+          - patch

@@ -44,7 +44,7 @@ from pathlib import Path
 # dead there. test_build_site.py pins this tuple to the real array where that script exists (the private repository).
 PRIVATE_PATHS = ("docs", ".claude", "CLAUDE.md", ".mcp.json", ".githooks", ".azuredevops", ".sonarlint", ".vscode",
                  "scripts/publish-github.sh", "scripts/sync-release-commit.sh", "scripts/apply-public-change.sh",
-                 "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py")
+                 "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py", "Jenkinsfile", "jenkins")
 EXTERNAL = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)")
 ALLOWED_SCHEMES = ("http:", "https:", "mailto:")
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
