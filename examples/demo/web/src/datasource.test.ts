@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IServerSideGetRowsParams } from 'ag-grid-enterprise';
 import type { ApiError, GridRequest, QueryView } from './api';
-import { createDatasource, createProviderGate, toGridRows, toWireRequest } from './datasource';
+import { readFileSync } from 'node:fs';
+import { BLANK_GROUP_KEY, createDatasource, createProviderGate, toGridRows, toWireRequest } from './datasource';
+import { buildExportRequest } from './exportRequest';
 
 const request = {
   startRow: 0,
@@ -139,5 +141,68 @@ describe('wire adaptation', () => {
       { country: 'Spain', amount: 5, quantity: 9 },
     ]);
     expect(toGridRows(request, [{ id: 1 }])).toEqual([{ id: 1 }]);
+  });
+});
+
+describe('the group with no key', () => {
+  const byCountryThenCategory = (groupKeys: (string | null)[]) =>
+    ({
+      ...request,
+      rowGroupCols: [{ id: 'country' }, { id: 'category' }],
+      groupKeys,
+    }) as unknown as GridRequest;
+
+  it('shows a null key of the current level as the placeholder and sends it back as a null key', () => {
+    const level = byCountryThenCategory([]);
+    const shown = toGridRows(level, [{ country: null, amount_sum: 1 }, { country: 'Spain', amount_sum: 2 }]);
+    expect(shown.map((row) => row.country)).toEqual([BLANK_GROUP_KEY, 'Spain']);
+
+    const drill = byCountryThenCategory([BLANK_GROUP_KEY]);
+    expect(toWireRequest(drill).groupKeys).toEqual([{ type: 'null' }]);
+  });
+
+  it('leaves non-null keys and other columns alone', () => {
+    const level = byCountryThenCategory([]);
+    expect(toGridRows(level, [{ country: 'Spain', category: null, id: null }])).toEqual([
+      { country: 'Spain', category: null, id: null },
+    ]);
+    const drill = byCountryThenCategory(['Spain', 'Software']);
+    expect(toWireRequest(drill).groupKeys).toEqual([
+      { type: 'string', value: 'Spain' },
+      { type: 'string', value: 'Software' },
+    ]);
+  });
+
+  it('maps only the column of the level being read', () => {
+    const second = byCountryThenCategory(['Spain']);
+    expect(toGridRows(second, [{ country: null, category: null }])).toEqual([{ country: null, category: BLANK_GROUP_KEY }]);
+  });
+
+  it('leaves leaf rows alone', () => {
+    const leaves = byCountryThenCategory(['Spain', 'Software']);
+    expect(toGridRows(leaves, [{ country: null, category: null }])).toEqual([{ country: null, category: null }]);
+    expect(toGridRows(request, [{ country: null }])).toEqual([{ country: null }]);
+  });
+
+  it('keeps a null key a null key on the wire', () => {
+    expect(toWireRequest(byCountryThenCategory([null])).groupKeys).toEqual([{ type: 'null' }]);
+  });
+
+  it('does not collide with any value the demo seeds into a group column', () => {
+    const generator = readFileSync(new URL('../../Api/Seed/OrderGenerator.cs', import.meta.url), 'utf8');
+    const lists = [...generator.matchAll(/(?:Countries|Categories|Statuses)\s*=\s*\[([^\]]*)\]/g)];
+    // One seed list per groupable column: a fourth `enableRowGroup` column would fail here until its list is read too.
+    const groupableColumns = [...readFileSync(new URL('./columns.ts', import.meta.url), 'utf8').matchAll(/\bgroup\('/g)];
+    expect(lists).toHaveLength(groupableColumns.length);
+    const values = lists.flatMap((match) => [...match[1].matchAll(/"([^"]*)"/g)].map((value) => value[1]));
+    expect(values.length).toBeGreaterThan(10);
+    expect(values).not.toContain(BLANK_GROUP_KEY);
+  });
+
+  it('leaves the CSV export request alone: it never carries a group key or the placeholder', () => {
+    const body = buildExportRequest(null, [], new Set(['id']));
+    expect(body.groupKeys).toEqual([]);
+    expect(body.rowGroupCols).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain(BLANK_GROUP_KEY);
   });
 });

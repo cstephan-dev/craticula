@@ -12,13 +12,19 @@ export interface DatasourceListener {
 }
 
 /**
+ * AG Grid does not request the children of a group row whose key is null, so the page shows a null key as this text and
+ * turns it back into a null key on the way out. It must never equal a value in the data (a unit test checks the seed).
+ */
+export const BLANK_GROUP_KEY = '(blank)';
+
+/**
  * One difference between what the grid sends and what the library parses (found against the running API):
  * `groupKeys` are plain strings in the grid but typed values (`{type, value}`) on the wire. Every groupable column of the
  * schema is a string, so a key is a string value (a null key a null value).
  */
 export function toWireRequest(request: GridRequest): WireRequest {
   const groupKeys = request.groupKeys.map(
-    (key): WireGroupKey => (key == null ? { type: 'null' } : { type: 'string', value: key }),
+    (key): WireGroupKey => (key == null || key === BLANK_GROUP_KEY ? { type: 'null' } : { type: 'string', value: key }),
   );
   // A native in-range filter is not accepted by the library (SEM-4): it goes out as customFilters with exclusive bounds (inRange.ts).
   return withTranslatedRanges({ ...request, groupKeys });
@@ -27,13 +33,18 @@ export function toWireRequest(request: GridRequest): WireRequest {
 /**
  * The API names an aggregate column `<id>_<aggFunc>` (amount_sum); the grid reads it from the column's field (amount).
  * Group rows carry only the group column and the aggregates, so renaming on the keys of `valueCols` is enough.
+ * A null value of the level's group column becomes BLANK_GROUP_KEY.
  */
 export function toGridRows(request: GridRequest, rows: Record<string, unknown>[]): Record<string, unknown>[] {
-  if (request.valueCols.length === 0) {
+  const groupColumn = request.rowGroupCols[request.groupKeys.length]?.id;
+  if (request.valueCols.length === 0 && groupColumn === undefined) {
     return rows;
   }
   return rows.map((row) => {
     const mapped = { ...row };
+    if (groupColumn !== undefined && mapped[groupColumn] == null) {
+      mapped[groupColumn] = BLANK_GROUP_KEY;
+    }
     for (const column of request.valueCols) {
       const wireKey = `${column.id}_${column.aggFunc}`;
       if (wireKey in mapped) {
