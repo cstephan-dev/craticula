@@ -1,0 +1,24 @@
+[
+  {
+    "PackageId": "Oracle.ManagedDataAccess.Core",
+    "PackageVersion": "23.0.0",
+    "PackageProjectUrl": "https://example.invalid/Oracle.ManagedDataAccess.Core",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "LICENSE.txt",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 5
+  },
+  {
+    "PackageId": "Testcontainers.Oracle",
+    "PackageVersion": "4.0.0",
+    "PackageProjectUrl": "https://example.invalid/Testcontainers.Oracle",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 0
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "overrides": [
+    {
+      "package": "Oracle.ManagedDataAccess.Core",
+      "version": "23.0.0",
+      "license": "Vendor free-use terms",
+      "reason": "Synthetic reason: vendor terms, test projects only."
+    }
+  ]
+}

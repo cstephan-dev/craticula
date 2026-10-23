@@ -1,0 +1,10 @@
+{
+  "overrides": [
+    {
+      "package": "MySql.Data",
+      "version": "9.0.0",
+      "license": "MIT",
+      "reason": "Synthetic: must not work, the name is rejected."
+    }
+  ]
+}

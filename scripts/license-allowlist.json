@@ -1,0 +1,22 @@
+{
+  "_comment": "Dependency license policy of ADR-0003 (TRD OS-6), read by scripts/check-licenses.py (spec FR-08, FR-09). Ids are SPDX; a denied family is matched by prefix, case-insensitive. Package names match case-insensitive, with * as a wildcard.",
+  "allowed": [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "0BSD",
+    "Unlicense",
+    "PostgreSQL",
+    "Zlib"
+  ],
+  "case_by_case": ["MPL-2.0"],
+  "denied_prefixes": ["GPL", "LGPL", "AGPL", "SSPL", "BUSL", "Elastic", "Commons-Clause"],
+  "denied_markers": ["non-commercial", "noncommercial", "-NC"],
+  "forbidden_packages": {
+    "MySql.Data": "use MySqlConnector",
+    "MySql.Data.*": "use MySqlConnector"
+  },
+  "test_only_packages": ["Oracle.ManagedDataAccess.Core", "Testcontainers.Oracle"]
+}

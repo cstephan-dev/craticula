@@ -1,0 +1,13 @@
+[
+  {
+    "PackageId": "Example.Mpl",
+    "PackageVersion": "1.0.0",
+    "PackageProjectUrl": "https://example.invalid/Example.Mpl",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "MPL-2.0",
+    "LicenseUrl": "https://licenses.nuget.org/x",
+    "LicenseInformationOrigin": 0
+  }
+]

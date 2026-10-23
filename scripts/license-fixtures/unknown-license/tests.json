@@ -1,0 +1,13 @@
+[
+  {
+    "PackageId": "Example.Unknown",
+    "PackageVersion": "1.0.0",
+    "PackageProjectUrl": "https://example.invalid/Example.Unknown",
+    "Copyright": "Copyright (c) Example",
+    "Authors": "Example",
+    "Description": "Synthetic package for a test",
+    "License": "https://example.invalid/license.txt",
+    "LicenseUrl": "https://example.invalid/license.txt",
+    "LicenseInformationOrigin": 1
+  }
+]
