@@ -3,7 +3,7 @@
 # `nuget-license` dotnet tool (pinned in csharp/.config/dotnet-tools.json) over every project of csharp/ and applies the
 # policy of scripts/license-allowlist.json and the reviewed exceptions of scripts/license-overrides.json.
 # One check, named `license-check`, so the branch ruleset on main can require it. The maintainer's own pull requests run the same
-# script in the Azure PR pipeline. No secret, read-only token, every action pinned to a commit SHA
+# script in the Jenkins build of `main` (`afterBuild` of `Jenkinsfile`). No secret, read-only token, every action pinned to a commit SHA
 # (scripts/test_workflows.py checks that). The tool needs nuget.org, as the restore does.
 name: license-check
 
