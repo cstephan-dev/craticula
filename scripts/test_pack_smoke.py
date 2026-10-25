@@ -127,13 +127,13 @@ class PackSmokeInspection(unittest.TestCase):
     def test_wrong_adapter_range_fails(self):
         good_feed(self.feed)
         write_package(self.feed, "Craticula.MongoDB.Driver",
-                      dependencies={"Craticula.Core": VERSION, "MongoDB.Driver": "3.11.0"})
-        self.assert_defect("Craticula.MongoDB.Driver", "expected exactly [3.11.0,4.0.0)")
+                      dependencies={"Craticula.Core": VERSION, "MongoDB.Driver": "3.13.0"})
+        self.assert_defect("Craticula.MongoDB.Driver", "expected exactly [3.13.0,4.0.0)")
 
     def test_range_spelled_with_spaces_or_short_upper_bound_passes(self):
         good_feed(self.feed)
         write_package(self.feed, "Craticula.OpenSearch.Client",
-                      dependencies={"Craticula.Core": VERSION, "OpenSearch.Client": "[2.1.0, 3.0)"})
+                      dependencies={"Craticula.Core": VERSION, "OpenSearch.Client": "[2.2.0, 3.0)"})
         self.assertEqual([], self.defects())
 
     def test_stray_third_party_dependency_on_a_core_package_fails(self):

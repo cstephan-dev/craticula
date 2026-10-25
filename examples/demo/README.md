@@ -318,7 +318,7 @@ compose profile: SQLite is always on, and `/api/health` always lists `sqlite`. T
 2. **ASCII-only case folding.** SQLite's `NOCASE` and `LIKE` fold ASCII letters only. A "contains" filter for `SÖHNE` finds `Müller, Söhne & Co` on PostgreSQL and
    not on SQLite (`Ö` and `ö` differ); `söhne` finds it on both. The smoke scenarios avoid this case; `Api.Tests` pins the actual behaviour.
 
-**Package.** The demo adds `Microsoft.Data.Sqlite` 10.0.11 (the version the library's tests use; central version in `Directory.Packages.props`). It is a
+**Package.** The demo adds `Microsoft.Data.Sqlite` 10.0.12 (the version the library's tests use; central version in `Directory.Packages.props`). It is a
 new library, not named in the approved stack, and needs the Engineering Lead's approval (compliance rule 4); that approval is still pending at the time of writing.
 
 ## SQL Server (the `sqlserver` provider)
@@ -487,7 +487,7 @@ The page shows an `unsupported-shape` answer as a banner that reads "Not support
    lowercase one on OpenSearch, where PostgreSQL matches it. `sohne` finds nothing on either (accent-sensitive, unlike MySQL).
 6. **Sorting and ranges are exact** thanks to the `normalized` sub-field: the sort equals PostgreSQL's on every column, including the case-insensitive text columns, on the first page and past row 9,900.
 
-**Package.** The demo adds `OpenSearch.Client` 2.1.0 (the library's version; Apache-2.0; central version in `Directory.Packages.props`). The restore shows no advisory. It is named in the approved stack for the integration tests; its use under
+**Package.** The demo adds `OpenSearch.Client` 2.2.0 (the library's version; Apache-2.0; central version in `Directory.Packages.props`). The restore shows no advisory. It is named in the approved stack for the integration tests; its use under
 `examples/demo/Api` is wider than that wording, and the Engineering Lead's approval is still pending at the time of writing.
 
 ## Elasticsearch (the `elasticsearch` provider)

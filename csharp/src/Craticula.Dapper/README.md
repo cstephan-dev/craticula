@@ -9,7 +9,7 @@ parameterized statement on an open `IDbConnection`, with paging, row counts and 
 dotnet add package Craticula.Dapper
 ```
 
-Depends on `Dapper` `[2.1.79, 3.0)` and `Craticula.Sql`.
+Depends on `Dapper` `[2.1.89, 3.0)` and `Craticula.Sql`.
 
 ## Example
 

@@ -18,7 +18,7 @@
     <!-- This package's one runtime dependency. Version centrally managed in
          csharp/Directory.Packages.props — this file names the package and, via VersionOverride, the published range
          (#1658: the nuspec range; restore still resolves its lowest version, the tested one). -->
-    <PackageReference Include="OpenSearch.Client" VersionOverride="[2.1.0,3.0)" />
+    <PackageReference Include="OpenSearch.Client" VersionOverride="[2.2.0,3.0)" />
   </ItemGroup>
 
   <ItemGroup>

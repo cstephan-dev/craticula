@@ -18,7 +18,7 @@
     <!-- This package's one runtime dependency. Version centrally managed in
          csharp/Directory.Packages.props — this file names the package and, via VersionOverride, the published range
          (#1658: the nuspec range; restore still resolves its lowest version, the tested one). -->
-    <PackageReference Include="Dapper" VersionOverride="[2.1.79,3.0)" />
+    <PackageReference Include="Dapper" VersionOverride="[2.1.89,3.0)" />
   </ItemGroup>
 
   <ItemGroup>

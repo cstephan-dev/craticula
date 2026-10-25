@@ -25,10 +25,10 @@
          see EfCoreProviderSemantics' five facts. A provider is the host's choice, declared next to
          its DbContext, and the test project references Sqlite for exactly that reason.
 
-         Version centrally managed in csharp/Directory.Packages.props (10.0.11, the release that
+         Version centrally managed in csharp/Directory.Packages.props (10.0.12, the release that
          targets net10.0, which every project here does) — this file names the package and, via VersionOverride, the published range
          (#1658: the nuspec range; restore still resolves its lowest version, the tested one). -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" VersionOverride="[10.0.11,11.0)" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" VersionOverride="[10.0.12,11.0)" />
   </ItemGroup>
 
   <ItemGroup>
