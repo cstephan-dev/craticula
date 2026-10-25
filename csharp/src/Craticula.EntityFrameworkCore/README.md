@@ -10,7 +10,7 @@ the provider package) and supports paging, row counts and streamed export.
 dotnet add package Craticula.EntityFrameworkCore
 ```
 
-Depends on `Microsoft.EntityFrameworkCore.Relational` `[10.0.11, 11.0)`.
+Depends on `Microsoft.EntityFrameworkCore.Relational` `[10.0.12, 11.0)`.
 
 ## Example
 

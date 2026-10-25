@@ -10,7 +10,7 @@ and streamed export.
 dotnet add package Craticula.OpenSearch.Client
 ```
 
-Depends on `OpenSearch.Client` `[2.1.0, 3.0)` and `Craticula.Search`.
+Depends on `OpenSearch.Client` `[2.2.0, 3.0)` and `Craticula.Search`.
 
 ## Example
 
