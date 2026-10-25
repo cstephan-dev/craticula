@@ -59,10 +59,13 @@
          references it directly to lift the transitive version; drop both lines once a SqlClient release and an Oracle driver
          release both depend on a patched version. 10.0.13 matches this repo's net10.0 release line. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <!-- #3032: the test tooling moved to the newest releases at least two weeks old on 2026-10-25 (nuget.org): coverlet.collector 10.1.0,
+         Microsoft.NET.Test.Sdk 18.10.1 (18.11.0 was 11 days old), xunit.runner.visualstudio 4.0.1. Each was tried alone against the offline suite;
+         scripts/coverage.sh gave the same line coverage per assembly as with coverlet 6.0.4. xunit stays 2.9.3 (the v3 move is out of scope). -->
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
 
 </Project>
