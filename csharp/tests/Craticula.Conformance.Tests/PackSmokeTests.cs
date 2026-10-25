@@ -5,7 +5,7 @@ namespace Craticula.Conformance.Tests;
 /// <c>dotnet test</c>: synthetic nupkgs (a missing README, a missing or wrong adapter range, a third-party dependency
 /// on a compile-only package, a wrong license or version, a DLL without an embedded PDB or SourceLink) that must fail,
 /// and a good set that must pass. The real smoke (<c>scripts/pack-smoke.sh</c>) packs the ten projects and restores
-/// clean consumers, which takes minutes and needs nuget.org, so it runs in the PR gate and the release workflow, not here.
+/// clean consumers, which takes minutes and needs nuget.org, so it runs in the release workflow (the Azure PR gate that also ran it was retired in #2982), not here.
 /// </summary>
 public class PackSmokeTests
 {

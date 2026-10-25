@@ -1,8 +1,8 @@
 # Public CI (story #2467, TRD OS-1 / OS-7, spec FR-13): what an outside pull request and every publish to main must pass.
-# Two checks, named `build` and `test`, so the branch ruleset on main can require them. It mirrors the C# part of the
-# Azure PR gate (.azuredevops/pipeline-pr.yml): the 0-warning build with the NuGet audit, then the offline suite under
-# coverage with the 90% line gate (scripts/coverage.sh). Conformance, the SEC-2 lint and the pack smoke stay in the
-# Azure pipeline. The `test` job is also what the README coverage badge reads: a gate-status badge ("coverage gate
+# Two checks, named `build` and `test`, so the branch ruleset on main can require them. It carries what the retired Azure
+# PR gate checked and the private Jenkins build does not: the 0-warning build with the NuGet audit, then the offline suite under
+# coverage with the 90% line gate (scripts/coverage.sh). Conformance and the SEC-2 lint run in the Jenkins build; the pack smoke
+# runs in the release workflow. The `test` job is also what the README coverage badge reads: a gate-status badge ("coverage gate
 # 90%"), not a percentage; the per-assembly numbers go to the job summary.
 # No secret, read-only token, every action pinned to a commit SHA (scripts/test_workflows.py checks that).
 name: ci
@@ -29,7 +29,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # The newest .NET 10 SDK, as in the Azure pipeline; csharp/global.json (10.0.100, rollForward latestFeature) still applies.
+      # The newest .NET 10 SDK, as the retired Azure pipeline did; csharp/global.json (10.0.100, rollForward latestFeature) still applies.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
