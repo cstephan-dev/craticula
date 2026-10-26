@@ -20,8 +20,8 @@ reported skipped with the reason, never failed.
 | Engine | Image (pinned) | Setup |
 |---|---|---|
 | MongoDB | `mongo:7.0.14` (7.0 is the repo's documented version) | Testcontainers `MongoDbBuilder`; one database per fixture |
-| OpenSearch | `opensearchproject/opensearch:2.19.1` | single node, `DISABLE_SECURITY_PLUGIN=true`, plain HTTP |
-| Elasticsearch | `docker.elastic.co/elasticsearch/elasticsearch:8.17.4` | single node, `xpack.security.enabled=false`, plain HTTP |
+| OpenSearch | `opensearchproject/opensearch:2.19.1` | single node, `DISABLE_SECURITY_PLUGIN=true`, disk watermarks off (`cluster.routing.allocation.disk.threshold_enabled=false`, #3142), plain HTTP |
+| Elasticsearch | `docker.elastic.co/elasticsearch/elasticsearch:8.17.4` | single node, `xpack.security.enabled=false`, disk watermarks off (same setting, #3142), plain HTTP |
 
 Search goes over `HttpClient` (no client package): `PUT <index>`, `_bulk?refresh=true`, `POST <index>/_search` with
 `SearchQuery.ToArtifact()`. `search.artifact.json` is one artifact that runs on both engines (OQ-7), so the same fixture

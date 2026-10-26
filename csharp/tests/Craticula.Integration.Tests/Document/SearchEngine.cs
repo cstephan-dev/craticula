@@ -107,7 +107,7 @@ public sealed class OpenSearchEngineFixture : SearchEngineFixture
         ["DISABLE_SECURITY_PLUGIN"] = "true",
         ["DISABLE_INSTALL_DEMO_CONFIG"] = "true",
         // The disk watermarks look at the whole host disk, not at this throwaway container: on a shared, nearly full machine
-        // they leave the primary shard inactive (about 90%) or block index creation (95%) and fail every test (#3142).
+        // they leave the primary shard inactive (about 90%) or block index creation (95%) and fail the tests (#3142).
         ["cluster.routing.allocation.disk.threshold_enabled"] = "false",
         ["OPENSEARCH_JAVA_OPTS"] = "-Xms512m -Xmx512m"
     };
