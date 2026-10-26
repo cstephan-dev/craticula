@@ -106,6 +106,9 @@ public sealed class OpenSearchEngineFixture : SearchEngineFixture
         ["discovery.type"] = "single-node",
         ["DISABLE_SECURITY_PLUGIN"] = "true",
         ["DISABLE_INSTALL_DEMO_CONFIG"] = "true",
+        // The disk watermarks look at the whole host disk, not at this throwaway container: on a shared, nearly full machine
+        // they leave the primary shard inactive (about 90%) or block index creation (95%) and fail the tests (#3142).
+        ["cluster.routing.allocation.disk.threshold_enabled"] = "false",
         ["OPENSEARCH_JAVA_OPTS"] = "-Xms512m -Xmx512m"
     };
 }
@@ -121,6 +124,8 @@ public sealed class ElasticsearchEngineFixture : SearchEngineFixture
     {
         ["discovery.type"] = "single-node",
         ["xpack.security.enabled"] = "false",
+        // Same reason as for OpenSearch above (#3142).
+        ["cluster.routing.allocation.disk.threshold_enabled"] = "false",
         ["ES_JAVA_OPTS"] = "-Xms512m -Xmx512m"
     };
 }
