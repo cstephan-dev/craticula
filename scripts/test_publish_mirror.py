@@ -103,6 +103,50 @@ def run(cwd, *cmd, env=None, check=True):
 
 
 @NEED_SCRIPTS
+class DropPrivateChangesTests(unittest.TestCase):
+    """#1665, ADR 0004: `docs` stays private except `docs/adr`, which is published only from the commits after a boundary."""
+
+    class Change:
+        def __init__(self, filename):
+            self.filename = filename
+
+    class Commit:
+        def __init__(self, original_id, names):
+            self.original_id = original_id
+            self.file_changes = [DropPrivateChangesTests.Change(n) for n in names]
+
+        def names(self):
+            return [c.filename for c in self.file_changes]
+
+    NAMES = [b"README.md", b"docs/d.md", b"docs/adr/0001-x.md", b"docs/adrx/y.md", b"docs/adr", b"csharp/docs/z.md", b"site/site.json"]
+
+    def frozen_file(self, *ids):
+        path = Path(tempfile.mkdtemp()) / "frozen.txt"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_bytes(b"".join(i + b"\n" for i in ids))
+        return str(path)
+
+    def test_after_the_boundary_only_the_adr_folder_survives_under_docs(self):
+        commit = self.Commit(b"new", self.NAMES)
+        mirror.drop_private_changes(commit, self.frozen_file(b"old"), ["docs"], ["docs/adr"])
+        self.assertEqual([b"README.md", b"docs/adr/0001-x.md", b"csharp/docs/z.md", b"site/site.json"], commit.names())
+
+    def test_at_or_before_the_boundary_nothing_under_docs_survives_as_before(self):
+        commit = self.Commit(b"old", self.NAMES)
+        mirror.drop_private_changes(commit, self.frozen_file(b"old"), ["docs"], ["docs/adr"])
+        self.assertEqual([b"README.md", b"csharp/docs/z.md", b"site/site.json"], commit.names())
+
+    def test_a_sibling_that_only_shares_the_prefix_is_not_the_exception(self):
+        commit = self.Commit(b"new", [b"docs/adrx/y.md", b"docs/adr-old/z.md"])
+        mirror.drop_private_changes(commit, self.frozen_file(), ["docs"], ["docs/adr"])
+        self.assertEqual([], commit.names())
+
+    def test_a_deletion_under_the_exception_is_kept_too(self):
+        commit = self.Commit(b"new", [b"docs/adr/0001-x.md"])
+        mirror.drop_private_changes(commit, self.frozen_file(b"old"), ["docs"], ["docs/adr"])
+        self.assertEqual([b"docs/adr/0001-x.md"], commit.names())
+
+
 class ScriptTests(unittest.TestCase):
     CLOCK = 1_700_000_000
 
@@ -128,6 +172,7 @@ class ScriptTests(unittest.TestCase):
         self.commit("Initial commit")
         self.write("a.txt", "a\n")
         self.boundary = self.commit("TECHNICAL #1 the published boundary")
+        self.adr_after = self.boundary       # docs/adr is published from the commits after this one (ADR 0004)
         self.git("push", "-q", "origin", "main")
 
     def git(self, *args, cwd=None, check=True):
@@ -150,7 +195,7 @@ class ScriptTests(unittest.TestCase):
 
     def publish(self, check=True, dry=False):
         env = {**self.env, "SRC": str(self.priv), "PUBLIC_REMOTE": str(self.pub), "PUBLISH_BOUNDARY": self.boundary,
-               "SECRET_PATTERNS_JS": str(SECRETS), "PUBLISH_DRY_RUN": "1" if dry else "0"}
+               "SECRET_PATTERNS_JS": str(SECRETS), "PUBLISH_DRY_RUN": "1" if dry else "0", "PUBLISH_ADR_AFTER": self.adr_after}
         return run(self.priv, "bash", str(PUBLISH), env=env, check=check)
 
     def sync(self, sha, check=True):
@@ -264,6 +309,39 @@ class ScriptTests(unittest.TestCase):
         self.assertNotIn("scripts/test_jenkinsfile.py", tree)
         self.assertNotIn("csharp/tests/Craticula.Conformance.Tests/JenkinsfileTests.cs", tree)
         self.assertIn("csharp/tests/Craticula.Conformance.Tests/PublicTests.cs", tree)
+
+    def public_tree(self):
+        return self.git("ls-tree", "-r", "--name-only", "main", cwd=self.pub).stdout.split()
+
+    def test_docs_adr_is_published_and_no_other_docs_path_is(self):
+        # #1665 AC5 and AC6, ADR 0004: one commit adds an ADR and another document under docs/.
+        self.write("docs/adr/0001-first.md", "# ADR 1\n")
+        self.write("docs/other.md", "private\n")
+        self.commit("TECHNICAL #6 add an adr and a private doc")
+        self.publish()
+        tree = self.public_tree()
+        self.assertIn("docs/adr/0001-first.md", tree)
+        self.assertEqual([], [path for path in tree if path.startswith("docs/") and not path.startswith("docs/adr/")])
+
+    def test_an_adr_at_or_before_the_adr_boundary_enters_only_when_a_later_commit_touches_it(self):
+        # The ADR exists in a commit that is already public (frozen): it stays out, as the plain filter kept it out, and the push
+        # is still a fast-forward (the bare public remote refuses anything else). A later commit that edits it publishes the file.
+        self.write("docs/adr/0002-old.md", "# ADR 2\n")
+        self.adr_after = self.commit("TECHNICAL #7 an adr that is already public history")
+        self.publish()
+        self.assertNotIn("docs/adr/0002-old.md", self.public_tree())
+        tip = self.public_tip()
+        self.write("docs/adr/0002-old.md", "# ADR 2\n\nPublic now.\n")
+        self.commit("TECHNICAL #8 touch the adr")
+        self.publish()
+        self.assertIn("docs/adr/0002-old.md", self.public_tree())
+        self.assertTrue(mirror._is_ancestor(str(self.pub), tip, "main"))
+
+    def test_the_boundary_commit_must_be_in_the_history(self):
+        self.adr_after = "0" * 40
+        result = self.publish(check=False)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PUBLISH_ADR_AFTER", result.stdout + result.stderr)
 
     def test_merge_subjects_are_mapped_and_open_no_release(self):
         self.publish()

@@ -22,6 +22,8 @@ PRIVATE_PREFIXES = ("docs/", ".claude", "CLAUDE.md", ".mcp.json", ".githooks", "
                     "scripts/publish-github.sh", "scripts/sync-release-commit.sh", "scripts/apply-public-change.sh",
                     "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py", "scripts/test_jenkinsfile.py",
                     "csharp/tests/Craticula.Conformance.Tests/JenkinsfileTests.cs", "Jenkinsfile", "jenkins/")
+# `docs/adr` is the one public folder under a private path (the PUBLIC_EXCEPT array of scripts/publish-github.sh, #1665, ADR 0004).
+PUBLIC_EXCEPTIONS = ("docs/adr",)
 PRIVATE_HOSTS = re.compile(r"dev\.azure\.com|visualstudio\.com", re.IGNORECASE)
 PUBLISH_SCRIPT = ROOT / "scripts" / "publish-github.sh"
 OWNER = re.compile(r"^(?:@[A-Za-z0-9][A-Za-z0-9-]*(?:/[A-Za-z0-9._-]+)?|[^@\s]+@[^@\s]+\.[A-Za-z]+)$")
@@ -143,6 +145,8 @@ def private_references(text: str) -> list[str]:
         hit = bool(PRIVATE_HOSTS.search(line))
         for prefix in PRIVATE_PREFIXES:
             for match in re.finditer(re.escape(prefix), line):
+                if any(re.match(re.escape(exception) + r"(?:/|\b(?![\w.-]))", line[match.start():]) for exception in PUBLIC_EXCEPTIONS):
+                    continue
                 before = line[:match.start()]
                 if not before or before[-1] not in "/.-_" and not before[-1].isalnum():
                     hit = True
@@ -279,6 +283,13 @@ class MoreRuleTests(unittest.TestCase):
             with self.subTest(form=form):
                 self.assertTrue(any("private host" in p for p in security_problems(SecurityRuleTests.GOOD + f"\n{form}\n", ROOT)), form)
 
+    def test_the_public_exceptions_match_the_publish_script_where_it_exists(self):
+        if not PUBLISH_SCRIPT.exists():
+            self.skipTest("the publish script is private (absent from the public mirror)")
+        match = re.search(r"(?m)^PUBLIC_EXCEPT=\((.*)\)\s*$", PUBLISH_SCRIPT.read_text(encoding="utf-8"))
+        self.assertIsNotNone(match, "no PUBLIC_EXCEPT array in the publish script")
+        self.assertEqual(set(match.group(1).split()), set(PUBLIC_EXCEPTIONS), "PUBLIC_EXCEPTIONS differs from the PUBLIC_EXCEPT array of scripts/publish-github.sh")
+
     def test_nfr01_the_prefix_tuple_matches_the_publish_script_where_it_exists(self):
         if not PUBLISH_SCRIPT.exists():
             self.skipTest("the publish script is private (absent from the public mirror)")
@@ -291,7 +302,7 @@ class MoreRuleTests(unittest.TestCase):
 
 class PrivateReferenceRuleTests(unittest.TestCase):
     def test_nfr01_private_names_are_found(self):
-        for line in ("see docs/adr/0001.md", "run .claude/hooks/x.js", "read CLAUDE.md", "the .mcp.json file", "in .githooks/commit-msg",
+        for line in ("see docs/adrx/0001.md", "see docs/architecture.md", "run .claude/hooks/x.js", "read CLAUDE.md", "the .mcp.json file", "in .githooks/commit-msg",
                      "the .azuredevops/pipeline-pr.yml pipeline", "the .sonarlint/x file", "the .vscode/settings.json",
                      "/docs/  @pluries", "/.claude/  @p", "/.githooks/ @p", "/.azuredevops/ @p", "run: bash ./.githooks/x", "see ../docs/x.md",
                      "[1]: ./docs/x.md", "(scripts/apply-public-change.sh)", "/scripts/sync-release-commit.sh @p",
@@ -300,7 +311,7 @@ class PrivateReferenceRuleTests(unittest.TestCase):
                 self.assertEqual([line], private_references(line))
 
     def test_nfr01_public_names_are_not_flagged(self):
-        for line in ("see README.md and spec/semantics.md", "scripts/check-dco.sh", "csharp/src/Core", "the .github/workflows folder",
+        for line in ("see docs/adr/0001.md and docs/adr", "the folder `docs/adr/`", "see README.md and spec/semantics.md", "scripts/check-dco.sh", "csharp/src/Core", "the .github/workflows folder",
                      "mydocs/readme", "subdocs/x", "csharp/docs/x", "src/docs/x", "scripts/check-dco.sh and scripts/test_check_dco.py"):
             with self.subTest(line=line):
                 self.assertEqual([], private_references(line))
@@ -533,6 +544,17 @@ class RealFileTests(unittest.TestCase):
         self.assertIn("git commit -s", pull_request)
         self.assertIn("dco", pull_request)
 
+    def test_fr11_the_adr_folder_has_public_records_and_each_one_names_no_private_path(self):
+        # #1665 AC5, ADR 0004: a record marked `Classification: Public` is written for outsiders. A record without the mark (a draft) is not read here.
+        adr = ROOT / "docs" / "adr"
+        if not adr.is_dir():
+            self.skipTest("no docs/adr folder here")
+        public = [path for path in sorted(adr.glob("*.md")) if re.search(r"Classification: Public\b", path.read_text(encoding="utf-8"))]
+        self.assertGreaterEqual(len(public), 3, "ADR 0001, 0002 and 0004 are public records")
+        for path in public:
+            with self.subTest(record=path.name):
+                self.assertEqual([], private_references(path.read_text(encoding="utf-8")))
+
     def test_fr03_codeowners_exists_and_is_valid(self):
         self.assertTrue(CODEOWNERS.exists(), ".github/CODEOWNERS is missing")
         self.assertEqual([], codeowners_problems(CODEOWNERS.read_text(encoding="utf-8"), ROOT))
@@ -548,8 +570,7 @@ class RealFileTests(unittest.TestCase):
         self.assertTrue(os.access(checker, os.X_OK) or os.name == "nt", "scripts/check-dco.sh is not executable")
 
     def test_nfr01_the_public_governance_files_name_no_private_path(self):
-        # The README is not in this list yet: its layout listing and its license section name `docs/`, which theme B of #1665 rewrites.
-        public = (SECURITY, CODEOWNERS, ROOT / ".github" / "workflows" / "dco.yml", CONTRIBUTING, CONDUCT, PR_TEMPLATE,
+        public = (SECURITY, CODEOWNERS, ROOT / ".github" / "workflows" / "dco.yml", CONTRIBUTING, CONDUCT, PR_TEMPLATE, README,
                   *sorted(ISSUE_TEMPLATES.glob("*.yml")))
         for path in public:
             with self.subTest(file=path.name):
