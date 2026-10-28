@@ -1,0 +1,72 @@
+name: Bug report
+description: A query that is wrong, a request that is rejected, or a result that differs between backends
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. If the problem lets someone read data they should not, do not file it here: use
+        **Report a vulnerability** on the Security tab instead.
+
+        Use synthetic data only. Remove real values, names and credentials from anything you paste.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, and what did you get?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: request
+    attributes:
+      label: The AG Grid request and the grid schema
+      description: The smallest request (`filterModel`, `sortModel`, `rowGroupCols` and so on) and schema that show the problem, as JSON.
+      render: json
+    validations:
+      required: false
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - SQL (PostgreSQL)
+        - SQL (MySQL)
+        - SQL (SQL Server)
+        - SQL (Oracle)
+        - SQL (SQLite)
+        - MongoDB
+        - OpenSearch
+        - Elasticsearch
+        - Not backend specific
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Craticula version or commit
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: .NET version and operating system
+      placeholder: ".NET 10.0, Ubuntu 24.04"
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I removed real data and credentials from everything I pasted.
+          required: true
