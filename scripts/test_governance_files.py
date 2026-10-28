@@ -406,7 +406,8 @@ BADGE_NOT_YET = re.compile(r"sonar|nuget", re.IGNORECASE)
 REQUIRED_BADGES = {"CI": r"github\.com/pluries/craticula/actions/workflows/ci\.yml/badge\.svg",
                    "coverage gate": r"img\.shields\.io/badge/coverage",
                    "license": r"img\.shields\.io/github/license/pluries/craticula",
-                   "spec version": r"img\.shields\.io/badge/spec-"}
+                   "spec version": r"img\.shields\.io/badge/spec-",
+                   "OpenSSF Scorecard": r"api\.scorecard\.dev/projects/github\.com/pluries/craticula/badge"}
 
 
 def readme_top(text: str) -> str:
