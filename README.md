@@ -58,7 +58,7 @@ csharp/       reference implementation (Core, AgGrid adapter, compilers, executi
 typescript/   TypeScript port (after spec freeze)
 python/       Python port (after spec freeze)
 go/           Go port (after spec freeze)
-docs/         requirements, architecture, ADRs
+docs/adr/     architecture decision records (why the design is the way it is)
 examples/     demo app (React + AG Grid + one sample backend)
 ```
 
@@ -81,9 +81,8 @@ Every NuGet package under `csharp/`, transitive ones and test projects included,
   ([`scripts/license-allowlist.json`](scripts/license-allowlist.json)).
 - **Refused:** GPL, LGPL, AGPL, SSPL, BUSL, Elastic, Commons Clause and any non-commercial license. The failure line names the
   package, its version, the license and the project.
-- **MPL-2.0:** only when an accepted ADR (a `Status: Accepted` line) in `docs/adr/` names MPL-2.0 and the package. This
-  public repository has no `docs/adr/`, so an MPL-2.0 package cannot pass the public check until ADRs are published here.
-  It fails closed by design.
+- **MPL-2.0:** only when an accepted ADR (a `Status: Accepted` line) in `docs/adr/` names MPL-2.0 and the package.
+  It fails closed by design: with no such ADR, an MPL-2.0 package is refused.
 - **Overrides:** when the tool cannot read a license (a license file or a bare URL instead of an SPDX id), add an entry to
   [`scripts/license-overrides.json`](scripts/license-overrides.json) with the package, its exact version, the real license and a
   written reason. The license must be an allowed SPDX id (or `"vendor_terms": true` for a vendor's own non-SPDX terms). An override
