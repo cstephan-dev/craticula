@@ -57,12 +57,23 @@ def map_unless_frozen(original_id: bytes, message: bytes, frozen_file: str) -> b
 
 def drop_private_changes(commit, frozen_file: str, parents, exceptions) -> None:
     """The filter's callback body for a private folder that has one public exception (#1665, ADR 0004): every change under a
-    private `parent` is dropped, except under an `exception` folder, and only in a commit AFTER the frozen set. A commit at or
-    before it drops the exception too, exactly as the plain path filter did, so no hash already public changes."""
+    private `parent` (or at the path `parent` itself, as the plain path filter did) is dropped, except under an `exception` folder, and
+    only in a commit AFTER the frozen set. A commit at or before it drops the exception too, so no hash already public changes.
+    Under an exception only regular files (and deletions) are published: a symlink or a submodule pointer would put a private
+    path or a private commit id into the mirror."""
     keep = commit.original_id not in _frozen(frozen_file)
     private = tuple(parent.encode() + b"/" for parent in parents)
+    exact = tuple(parent.encode() for parent in parents)
     public = tuple(exception.encode() + b"/" for exception in exceptions) if keep else ()
-    commit.file_changes = [c for c in commit.file_changes if not (c.filename.startswith(private) and not c.filename.startswith(public))]
+
+    def published(change) -> bool:
+        if change.filename in exact:
+            return False
+        if not change.filename.startswith(private):
+            return True
+        return change.filename.startswith(public) and (change.type == b"D" or change.mode in (b"100644", b"100755"))
+
+    commit.file_changes = [c for c in commit.file_changes if published(c)]
 
 
 _CONVENTIONAL = re.compile(r"^(?P<type>[A-Za-z]+)(\([^)]*\))?(?P<bang>!)?: \S")

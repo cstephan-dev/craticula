@@ -3,13 +3,13 @@
 Status: Proposed   Date: 2026-10-16
 Work items: #1659   Classification: Public
 
-The maintainer accepts this record. State on 2026-10-28: the publish and the public CI have run on GitHub; Release Please has not
+Accepting this record is the maintainer's decision. State on 2026-10-28: the publish and the public CI have run on GitHub; Release Please has not
 opened a release pull request yet (the repository setting that lets Actions open pull requests is still off), so the counting of
 commits after a sync-back is not proved.
 
 ## Context
 
-- The private repository is the source of truth. the publish script (kept in the private repository) filters it (private paths
+- The private repository is the source of truth. The publish script (kept in the private repository) filters it (private paths
   removed) and pushes the result to `pluries/craticula`, never by force (one-way, read-only downstream).
 - Release Please (TRD OS-2) works only on a GitHub repository. Its release pull request is merged on GitHub, so the
   public side gains a commit that private history does not have.

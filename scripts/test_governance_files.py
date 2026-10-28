@@ -145,7 +145,7 @@ def private_references(text: str) -> list[str]:
         hit = bool(PRIVATE_HOSTS.search(line))
         for prefix in PRIVATE_PREFIXES:
             for match in re.finditer(re.escape(prefix), line):
-                if any(re.match(re.escape(exception) + r"(?:/|\b(?![\w.-]))", line[match.start():]) for exception in PUBLIC_EXCEPTIONS):
+                if any(re.match(re.escape(exception) + r"(?:/(?!\.\.)|(?![\w/-]|\.\w))", line[match.start():]) for exception in PUBLIC_EXCEPTIONS):
                     continue
                 before = line[:match.start()]
                 if not before or before[-1] not in "/.-_" and not before[-1].isalnum():
@@ -302,7 +302,7 @@ class MoreRuleTests(unittest.TestCase):
 
 class PrivateReferenceRuleTests(unittest.TestCase):
     def test_nfr01_private_names_are_found(self):
-        for line in ("see docs/adrx/0001.md", "see docs/architecture.md", "run .claude/hooks/x.js", "read CLAUDE.md", "the .mcp.json file", "in .githooks/commit-msg",
+        for line in ("see docs/adr/../feat/x.md", "see docs/adrx/0001.md", "see docs/architecture.md", "run .claude/hooks/x.js", "read CLAUDE.md", "the .mcp.json file", "in .githooks/commit-msg",
                      "the .azuredevops/pipeline-pr.yml pipeline", "the .sonarlint/x file", "the .vscode/settings.json",
                      "/docs/  @pluries", "/.claude/  @p", "/.githooks/ @p", "/.azuredevops/ @p", "run: bash ./.githooks/x", "see ../docs/x.md",
                      "[1]: ./docs/x.md", "(scripts/apply-public-change.sh)", "/scripts/sync-release-commit.sh @p",
@@ -311,7 +311,7 @@ class PrivateReferenceRuleTests(unittest.TestCase):
                 self.assertEqual([line], private_references(line))
 
     def test_nfr01_public_names_are_not_flagged(self):
-        for line in ("see docs/adr/0001.md and docs/adr", "the folder `docs/adr/`", "see README.md and spec/semantics.md", "scripts/check-dco.sh", "csharp/src/Core", "the .github/workflows folder",
+        for line in ("see docs/adr/0001.md and docs/adr", "the folder `docs/adr/`", "kept in docs/adr.", "see README.md and spec/semantics.md", "scripts/check-dco.sh", "csharp/src/Core", "the .github/workflows folder",
                      "mydocs/readme", "subdocs/x", "csharp/docs/x", "src/docs/x", "scripts/check-dco.sh and scripts/test_check_dco.py"):
             with self.subTest(line=line):
                 self.assertEqual([], private_references(line))

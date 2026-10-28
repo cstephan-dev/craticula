@@ -3,7 +3,7 @@
 Status: Proposed   Date: 2026-10-28
 Work items: #1665   Classification: Public
 
-The maintainer accepts this record. It was written for readers outside the project: it names no private path or host.
+Accepting this record is the maintainer's decision. It was written for readers outside the project: it names no private path or host.
 
 ## Context
 
@@ -25,9 +25,11 @@ The maintainer accepts this record. It was written for readers outside the proje
 3. An ADR therefore reaches the public repository the first time a later commit changes it. The existing records were edited once
    for this reason (and to make them read well outside the project).
 4. A record that is published is marked `Classification: Public` and written for outsiders: no private path, host, person or
-   internal process. A test checks every record with that mark.
-5. The publish keeps two guards for the private paths: after filtering, any path under `docs` other than `docs/adr/` in the history
-   stops the publish; and the added lines of every published commit, ADRs included, go through the same secret scan as the rest.
+   internal process. A test checks every record with that mark, and the publish refuses (see point 5) a record without it.
+5. The publish keeps three guards: after filtering, any path under `docs` other than `docs/adr/` in the history stops the publish;
+   every file under `docs/adr/` in every commit it brings in must be a Markdown record marked `Classification: Public` (an earlier
+   unmarked version would stay public in the history), and only regular files are published there (no symlink, no submodule pointer);
+   and the added lines of every published commit, ADRs included, go through the same secret scan as the rest.
 6. A pull request from outside that edits a record is not re-applied by the script that brings public changes back (it refuses any
    `docs` path, which is the safe default). The maintainer applies such a change by hand after reading it.
 
@@ -51,7 +53,7 @@ The maintainer accepts this record. It was written for readers outside the proje
 ## Evidence
 
 On 2026-10-28, in scratch copies (no push): the old and the new filter print the same tip for the unchanged history; one new commit
-that changes two ADRs and another document under `docs` publishes the two records in full and not the other document; the
+that changes two existing records, adds a third and adds another document under `docs` publishes the three records in full and not the other document; the
 public tip stays an ancestor of the new head.
 
 ## Compliance
