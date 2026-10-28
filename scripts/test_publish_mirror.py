@@ -253,6 +253,18 @@ class ScriptTests(unittest.TestCase):
         self.assertNotIn("Jenkinsfile", tree)
         self.assertEqual([], [path for path in tree if path.startswith("jenkins")])
 
+    def test_the_jenkins_drift_guard_and_its_wrapper_stay_out_of_the_public_history(self):
+        # #3229: they pin private hosts, so they go with the Jenkinsfile; a neighbour of the wrapper stays public.
+        self.write("scripts/test_jenkinsfile.py", "DTRACK_API = 'private host'\n")
+        self.write("csharp/tests/Craticula.Conformance.Tests/JenkinsfileTests.cs", "// wrapper\n")
+        self.write("csharp/tests/Craticula.Conformance.Tests/PublicTests.cs", "// stays\n")
+        self.commit("TECHNICAL #6 add the pipeline guard")
+        self.publish()
+        tree = self.git("ls-tree", "-r", "--name-only", "main", cwd=self.pub).stdout.split()
+        self.assertNotIn("scripts/test_jenkinsfile.py", tree)
+        self.assertNotIn("csharp/tests/Craticula.Conformance.Tests/JenkinsfileTests.cs", tree)
+        self.assertIn("csharp/tests/Craticula.Conformance.Tests/PublicTests.cs", tree)
+
     def test_merge_subjects_are_mapped_and_open_no_release(self):
         self.publish()
         self.git("checkout", "-q", "-b", "topic")
