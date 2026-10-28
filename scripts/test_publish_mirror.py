@@ -102,7 +102,6 @@ def run(cwd, *cmd, env=None, check=True):
     return result
 
 
-@NEED_SCRIPTS
 class DropPrivateChangesTests(unittest.TestCase):
     """#1665, ADR 0004: `docs` stays private except `docs/adr`, which is published only from the commits after a boundary."""
 
@@ -161,6 +160,7 @@ class DropPrivateChangesTests(unittest.TestCase):
         self.assertEqual([b"docs/adr/run.md", b"docs/adr/gone.md"], commit.names())
 
 
+@NEED_SCRIPTS
 class ScriptTests(unittest.TestCase):
     CLOCK = 1_700_000_000
 
