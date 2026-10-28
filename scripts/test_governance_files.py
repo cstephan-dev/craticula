@@ -135,6 +135,17 @@ def supported_row(text: str) -> bool:
     return False
 
 
+def _private_match_at(line: str, start: int) -> bool:
+    """True when the private prefix found at `start` is a reference to the private root path (not a public exception such as `docs/adr`,
+    not a nested directory that merely shares the name)."""
+    if any(re.match(re.escape(exception) + r"(?:/(?!\.\.)|(?![\w/-]|\.\w))", line[start:]) for exception in PUBLIC_EXCEPTIONS):
+        return False
+    before = line[:start]
+    if not before or before[-1] not in "/.-_" and not before[-1].isalnum():
+        return True
+    return bool(re.search(r"(?:^|[^\w./-])(?:\.{1,2}/|/)+$", before))
+
+
 def private_references(text: str) -> list[str]:
     """Lines of a public file that name a private path (`docs/`, `.claude`, `CLAUDE.md`, `.mcp.json`, `.githooks`, the private
     scripts, ...), also when written root-anchored (`/docs/`, `./.githooks/x`, `../docs/x`) as CODEOWNERS and shell lines do, or
@@ -142,16 +153,8 @@ def private_references(text: str) -> list[str]:
     that merely shares the name (`csharp/docs/x`) is not the private root path."""
     found = []
     for line in text.splitlines():
-        hit = bool(PRIVATE_HOSTS.search(line))
-        for prefix in PRIVATE_PREFIXES:
-            for match in re.finditer(re.escape(prefix), line):
-                if any(re.match(re.escape(exception) + r"(?:/(?!\.\.)|(?![\w/-]|\.\w))", line[match.start():]) for exception in PUBLIC_EXCEPTIONS):
-                    continue
-                before = line[:match.start()]
-                if not before or before[-1] not in "/.-_" and not before[-1].isalnum():
-                    hit = True
-                elif re.search(r"(?:^|[^\w./-])(?:\.{1,2}/|/)+$", before):
-                    hit = True
+        hit = bool(PRIVATE_HOSTS.search(line)) or any(
+            _private_match_at(line, match.start()) for prefix in PRIVATE_PREFIXES for match in re.finditer(re.escape(prefix), line))
         if hit:
             found.append(line.strip())
     return found
@@ -425,6 +428,25 @@ def unreadable_badge_problems(text: str) -> list[str]:
     return problems
 
 
+def _workflow_badge_problems(label: str, image: str, root: Path) -> list[str]:
+    workflow = re.search(r"github\.com/([\w.-]+/[\w.-]+)/actions/workflows/([\w.-]+)/badge\.svg", image)
+    if not workflow:
+        return []
+    if workflow.group(1) != "pluries/craticula":
+        return [f"{label}: a workflow badge of another repository ({workflow.group(1)})"]
+    if not (root / ".github" / "workflows" / workflow.group(2)).exists():
+        return [f"{label}: workflow {workflow.group(2)} does not exist"]
+    return []
+
+
+def _spec_badge_problems(label: str, image: str, root: Path) -> list[str]:
+    spec = re.search(r"img\.shields\.io/badge/spec-(\d[^-/]*)-", image)
+    if not spec:
+        return []
+    actual = (root / "spec" / "VERSION").read_text(encoding="utf-8").strip()
+    return [] if spec.group(1) == actual else [f"{label}: shows spec {spec.group(1)}, spec/VERSION says {actual}"]
+
+
 def badge_problems(badges: list[tuple[str, str, str]], root: Path) -> list[str]:
     """What is wrong with README badges: an image from an unexpected host, a Sonar or package badge before its source exists, a CI badge
     for a workflow that is not in the repository, a spec-version badge that differs from `spec/VERSION`, a link to a missing file."""
@@ -435,16 +457,7 @@ def badge_problems(badges: list[tuple[str, str, str]], root: Path) -> list[str]:
             problems.append(f"{label}: image host '{host}' is not one of {', '.join(BADGE_HOSTS)}")
         if BADGE_NOT_YET.search(image):
             problems.append(f"{label}: a Sonar or package-version badge before its source exists (FR-10)")
-        workflow = re.search(r"github\.com/([\w.-]+/[\w.-]+)/actions/workflows/([\w.-]+)/badge\.svg", image)
-        if workflow and workflow.group(1) != "pluries/craticula":
-            problems.append(f"{label}: a workflow badge of another repository ({workflow.group(1)})")
-        elif workflow and not (root / ".github" / "workflows" / workflow.group(2)).exists():
-            problems.append(f"{label}: workflow {workflow.group(2)} does not exist")
-        spec = re.search(r"img\.shields\.io/badge/spec-([0-9][^-/]*)-", image)
-        if spec:
-            actual = (root / "spec" / "VERSION").read_text(encoding="utf-8").strip()
-            if spec.group(1) != actual:
-                problems.append(f"{label}: shows spec {spec.group(1)}, spec/VERSION says {actual}")
+        problems += _workflow_badge_problems(label, image, root) + _spec_badge_problems(label, image, root)
         if "://" not in link and not (root / link.split("#")[0]).exists():
             problems.append(f"{label}: link {link} does not exist")
     return problems
