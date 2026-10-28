@@ -18,7 +18,8 @@ SECURITY = ROOT / "SECURITY.md"
 # (`docs/`, not `docs`). A test pins this tuple to the real array where the publish script exists (the private repository).
 PRIVATE_PREFIXES = ("docs/", ".claude", "CLAUDE.md", ".mcp.json", ".githooks", ".azuredevops", ".sonarlint", ".vscode",
                     "scripts/publish-github.sh", "scripts/sync-release-commit.sh", "scripts/apply-public-change.sh",
-                    "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py", "Jenkinsfile", "jenkins/")
+                    "scripts/test_apply_public_change.py", "scripts/test_publish_mirror_real.py", "scripts/test_jenkinsfile.py",
+                    "csharp/tests/Craticula.Conformance.Tests/JenkinsfileTests.cs", "Jenkinsfile", "jenkins/")
 PRIVATE_HOSTS = re.compile(r"dev\.azure\.com|visualstudio\.com", re.IGNORECASE)
 PUBLISH_SCRIPT = ROOT / "scripts" / "publish-github.sh"
 OWNER = re.compile(r"^(?:@[A-Za-z0-9][A-Za-z0-9-]*(?:/[A-Za-z0-9._-]+)?|[^@\s]+@[^@\s]+\.[A-Za-z]+)$")
