@@ -389,12 +389,29 @@ BADGE = re.compile(r"\[!\[([^\]]*)\]\(([^)\s]+)\)\]\(([^)\s]+)\)")
 BADGE_HOSTS = ("github.com", "img.shields.io", "api.scorecard.dev")
 # FR-10: a Sonar or a package-version badge appears once its source exists, never before (SC-05); drop the entry then.
 BADGE_NOT_YET = re.compile(r"sonar|nuget", re.IGNORECASE)
-REQUIRED_BADGES = ("CI", "coverage gate", "license", "spec version")
+REQUIRED_BADGES = {"CI": r"github\.com/pluries/craticula/actions/workflows/ci\.yml/badge\.svg",
+                   "coverage gate": r"img\.shields\.io/badge/coverage",
+                   "license": r"img\.shields\.io/github/license/pluries/craticula",
+                   "spec version": r"img\.shields\.io/badge/spec-"}
+
+
+def readme_top(text: str) -> str:
+    return re.split(r"(?m)^## ", text, maxsplit=1)[0]
 
 
 def readme_badges(text: str) -> list[tuple[str, str, str]]:
     """The badges above the first `##` heading of the README: (label, image url, link)."""
-    return BADGE.findall(re.split(r"(?m)^## ", text, maxsplit=1)[0])
+    return BADGE.findall(readme_top(text))
+
+
+def unreadable_badge_problems(text: str) -> list[str]:
+    """An image above the first heading that the badge pattern does not read (an `<img>`, a reference-style or an unlinked badge)
+    would escape the host and early-badge checks: refuse it."""
+    top = readme_top(text)
+    problems = ["an <img> tag: use the `[![label](image)](link)` form" for _ in re.findall(r"(?i)<img\b", top)]
+    if top.count("![") != len(BADGE.findall(top)):
+        problems.append("an image that is not in the `[![label](image)](link)` form")
+    return problems
 
 
 def badge_problems(badges: list[tuple[str, str, str]], root: Path) -> list[str]:
@@ -407,9 +424,11 @@ def badge_problems(badges: list[tuple[str, str, str]], root: Path) -> list[str]:
             problems.append(f"{label}: image host '{host}' is not one of {', '.join(BADGE_HOSTS)}")
         if BADGE_NOT_YET.search(image):
             problems.append(f"{label}: a Sonar or package-version badge before its source exists (FR-10)")
-        workflow = re.search(r"github\.com/pluries/craticula/actions/workflows/([\w.-]+)/badge\.svg", image)
-        if workflow and not (root / ".github" / "workflows" / workflow.group(1)).exists():
-            problems.append(f"{label}: workflow {workflow.group(1)} does not exist")
+        workflow = re.search(r"github\.com/([\w.-]+/[\w.-]+)/actions/workflows/([\w.-]+)/badge\.svg", image)
+        if workflow and workflow.group(1) != "pluries/craticula":
+            problems.append(f"{label}: a workflow badge of another repository ({workflow.group(1)})")
+        elif workflow and not (root / ".github" / "workflows" / workflow.group(2)).exists():
+            problems.append(f"{label}: workflow {workflow.group(2)} does not exist")
         spec = re.search(r"img\.shields\.io/badge/spec-([0-9][^-/]*)-", image)
         if spec:
             actual = (root / "spec" / "VERSION").read_text(encoding="utf-8").strip()
@@ -438,9 +457,19 @@ class ContributorFileRuleTests(unittest.TestCase):
             ("license", "https://img.shields.io/github/license/pluries/craticula", "LICENSE")]
 
     def test_a_good_set_of_badges_has_no_problem(self):
-        root = self.make_root()
-        (root / "spec" / "VERSION").write_text("0.1.0\n", encoding="utf-8")
-        self.assertEqual([], badge_problems([b for b in self.GOOD if b[0] != "spec version"] + [("spec version", self.GOOD[1][1], "LICENSE")], root))
+        self.assertEqual([], badge_problems(self.GOOD, self.make_root()))
+
+    def test_a_workflow_badge_of_another_repository_is_a_problem(self):
+        bad = [("CI", "https://github.com/someone/else/actions/workflows/ci.yml/badge.svg", "LICENSE")]
+        self.assertTrue(any("another repository" in p for p in badge_problems(bad, self.make_root())))
+
+    def test_an_image_the_badge_pattern_cannot_read_is_a_problem(self):
+        for text in ('# T\n\n<img src="https://img.shields.io/nuget/v/x">\n\n## H\n',
+                     "# T\n\n![sonar][s]\n\n[s]: https://sonarcloud.io/x\n\n## H\n",
+                     "# T\n\n![unlinked](https://img.shields.io/badge/a-b-blue)\n\n## H\n"):
+            with self.subTest(text=text):
+                self.assertTrue(unreadable_badge_problems(text))
+        self.assertEqual([], unreadable_badge_problems("# T\n\n[![a](https://img.shields.io/b)](LICENSE)\n\n## H\n![later](x)\n"))
 
     def test_a_badge_for_a_workflow_that_does_not_exist_is_a_problem(self):
         bad = [("CI", "https://github.com/pluries/craticula/actions/workflows/nope.yml/badge.svg", "LICENSE")]
@@ -468,8 +497,13 @@ class ContributorFileRuleTests(unittest.TestCase):
 
 class RealFileTests(unittest.TestCase):
     def test_fr10_the_readme_badges_exist_resolve_to_real_things_and_none_is_early(self):
-        badges = readme_badges(README.read_text(encoding="utf-8"))
-        self.assertEqual([], [label for label in REQUIRED_BADGES if label not in [b[0] for b in badges]], "a required badge is missing")
+        text = README.read_text(encoding="utf-8")
+        badges = readme_badges(text)
+        for label, pattern in REQUIRED_BADGES.items():
+            with self.subTest(badge=label):
+                self.assertTrue(any(name == label and re.search(pattern, image) for name, image, _ in badges),
+                                f"the README has no '{label}' badge pointing at {pattern}")
+        self.assertEqual([], unreadable_badge_problems(text))
         self.assertEqual([], badge_problems(badges, ROOT))
 
     def test_fr11_contributing_explains_the_dco_the_subject_format_and_the_commands(self):
@@ -492,7 +526,7 @@ class RealFileTests(unittest.TestCase):
         self.assertIn("security/advisories/new", config)
         for name in ("bug_report.yml", "feature_request.yml"):
             with self.subTest(template=name):
-                text = (ISSUE_TEMPLATES / name).read_text(encoding="utf-8")
+                text = "\n".join(l for l in (ISSUE_TEMPLATES / name).read_text(encoding="utf-8").splitlines() if not l.lstrip().startswith("#"))
                 for key in ("name:", "description:", "body:", "- type: textarea", "required: true"):
                     self.assertIn(key, text)
         pull_request = PR_TEMPLATE.read_text(encoding="utf-8")

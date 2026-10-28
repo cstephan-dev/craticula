@@ -26,9 +26,10 @@ git commit -s -m "fix: handle an empty in list"
 ```
 
 - **Forgot it on the last commit:** `git commit --amend -s`, then `git push --force-with-lease` on your own branch.
-- **Forgot it on several commits:** `git rebase --signoff origin/main`, then push the same way.
-- The e-mail in the line must be the e-mail of the commit's own author. The `dco` check on your pull request fails if a commit
-  has no line, and it names that commit and how to fix it.
+- **Forgot it on several commits:** `git rebase --signoff <base>`, where `<base>` is the branch your pull request targets (in a fork, usually
+  `upstream/main`), then push the same way.
+- Use the e-mail of the commit's author in that line. The `dco` check on your pull request fails if a commit has no line, and it
+  names that commit and how to fix it.
 
 ## Commit subjects and pull request titles
 
@@ -64,4 +65,5 @@ what the code happens to do.
 ## What happens to your pull request
 
 A maintainer reviews it, and the checks `build`, `test`, `license-check` and `dco` must pass. When it is merged, the
-maintainers copy the change into their own repository and keep you as its author with your sign-off. Nothing else is asked of you.
+maintainers bring the change into their own repository too, and that process is built to keep you as its author with your
+sign-off. Nothing else is asked of you.
