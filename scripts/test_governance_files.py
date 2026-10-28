@@ -8,6 +8,8 @@ gate-list tests then skip. Run: python3 scripts/test_governance_files.py
 """
 import os
 import re
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -378,7 +380,159 @@ class GatePathRuleTests(unittest.TestCase):
         self.assertIn("scripts/pack*", gate_paths(wrapped))
 
 
+README = ROOT / "README.md"
+CONTRIBUTING = ROOT / "CONTRIBUTING.md"
+CONDUCT = ROOT / "CODE_OF_CONDUCT.md"
+ISSUE_TEMPLATES = ROOT / ".github" / "ISSUE_TEMPLATE"
+PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
+BADGE = re.compile(r"\[!\[([^\]]*)\]\(([^)\s]+)\)\]\(([^)\s]+)\)")
+BADGE_HOSTS = ("github.com", "img.shields.io", "api.scorecard.dev")
+# FR-10: a Sonar or a package-version badge appears once its source exists, never before (SC-05); drop the entry then.
+BADGE_NOT_YET = re.compile(r"sonar|nuget", re.IGNORECASE)
+REQUIRED_BADGES = {"CI": r"github\.com/pluries/craticula/actions/workflows/ci\.yml/badge\.svg",
+                   "coverage gate": r"img\.shields\.io/badge/coverage",
+                   "license": r"img\.shields\.io/github/license/pluries/craticula",
+                   "spec version": r"img\.shields\.io/badge/spec-"}
+
+
+def readme_top(text: str) -> str:
+    return re.split(r"(?m)^## ", text, maxsplit=1)[0]
+
+
+def readme_badges(text: str) -> list[tuple[str, str, str]]:
+    """The badges above the first `##` heading of the README: (label, image url, link)."""
+    return BADGE.findall(readme_top(text))
+
+
+def unreadable_badge_problems(text: str) -> list[str]:
+    """An image above the first heading that the badge pattern does not read (an `<img>`, a reference-style or an unlinked badge)
+    would escape the host and early-badge checks: refuse it."""
+    top = readme_top(text)
+    problems = ["an <img> tag: use the `[![label](image)](link)` form" for _ in re.findall(r"(?i)<img\b", top)]
+    if top.count("![") != len(BADGE.findall(top)):
+        problems.append("an image that is not in the `[![label](image)](link)` form")
+    return problems
+
+
+def badge_problems(badges: list[tuple[str, str, str]], root: Path) -> list[str]:
+    """What is wrong with README badges: an image from an unexpected host, a Sonar or package badge before its source exists, a CI badge
+    for a workflow that is not in the repository, a spec-version badge that differs from `spec/VERSION`, a link to a missing file."""
+    problems = []
+    for label, image, link in badges:
+        host = image.split("/")[2] if "://" in image else ""
+        if host not in BADGE_HOSTS:
+            problems.append(f"{label}: image host '{host}' is not one of {', '.join(BADGE_HOSTS)}")
+        if BADGE_NOT_YET.search(image):
+            problems.append(f"{label}: a Sonar or package-version badge before its source exists (FR-10)")
+        workflow = re.search(r"github\.com/([\w.-]+/[\w.-]+)/actions/workflows/([\w.-]+)/badge\.svg", image)
+        if workflow and workflow.group(1) != "pluries/craticula":
+            problems.append(f"{label}: a workflow badge of another repository ({workflow.group(1)})")
+        elif workflow and not (root / ".github" / "workflows" / workflow.group(2)).exists():
+            problems.append(f"{label}: workflow {workflow.group(2)} does not exist")
+        spec = re.search(r"img\.shields\.io/badge/spec-([0-9][^-/]*)-", image)
+        if spec:
+            actual = (root / "spec" / "VERSION").read_text(encoding="utf-8").strip()
+            if spec.group(1) != actual:
+                problems.append(f"{label}: shows spec {spec.group(1)}, spec/VERSION says {actual}")
+        if "://" not in link and not (root / link.split("#")[0]).exists():
+            problems.append(f"{label}: link {link} does not exist")
+    return problems
+
+
+class ContributorFileRuleTests(unittest.TestCase):
+    """The rules of the badge check, on synthetic input (the real files are in RealFileTests)."""
+
+    def make_root(self, version="0.1.0"):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        (root / ".github" / "workflows").mkdir(parents=True)
+        (root / ".github" / "workflows" / "ci.yml").write_text("name: ci\n", encoding="utf-8")
+        (root / "spec").mkdir()
+        (root / "spec" / "VERSION").write_text(version + "\n", encoding="utf-8")
+        (root / "LICENSE").write_text("Apache\n", encoding="utf-8")
+        return root
+
+    GOOD = [("CI", "https://github.com/pluries/craticula/actions/workflows/ci.yml/badge.svg?branch=main", "https://github.com/x"),
+            ("spec version", "https://img.shields.io/badge/spec-0.1.0-blue", "spec/VERSION"),
+            ("license", "https://img.shields.io/github/license/pluries/craticula", "LICENSE")]
+
+    def test_a_good_set_of_badges_has_no_problem(self):
+        self.assertEqual([], badge_problems(self.GOOD, self.make_root()))
+
+    def test_a_workflow_badge_of_another_repository_is_a_problem(self):
+        bad = [("CI", "https://github.com/someone/else/actions/workflows/ci.yml/badge.svg", "LICENSE")]
+        self.assertTrue(any("another repository" in p for p in badge_problems(bad, self.make_root())))
+
+    def test_an_image_the_badge_pattern_cannot_read_is_a_problem(self):
+        for text in ('# T\n\n<img src="https://img.shields.io/nuget/v/x">\n\n## H\n',
+                     "# T\n\n![sonar][s]\n\n[s]: https://sonarcloud.io/x\n\n## H\n",
+                     "# T\n\n![unlinked](https://img.shields.io/badge/a-b-blue)\n\n## H\n"):
+            with self.subTest(text=text):
+                self.assertTrue(unreadable_badge_problems(text))
+        self.assertEqual([], unreadable_badge_problems("# T\n\n[![a](https://img.shields.io/b)](LICENSE)\n\n## H\n![later](x)\n"))
+
+    def test_a_badge_for_a_workflow_that_does_not_exist_is_a_problem(self):
+        bad = [("CI", "https://github.com/pluries/craticula/actions/workflows/nope.yml/badge.svg", "LICENSE")]
+        self.assertTrue(any("nope.yml does not exist" in p for p in badge_problems(bad, self.make_root())))
+
+    def test_a_sonar_or_package_badge_before_its_source_exists_is_a_problem(self):
+        for image in ("https://sonarcloud.io/api/project_badges/measure?project=x", "https://img.shields.io/nuget/v/Craticula.Core"):
+            with self.subTest(image=image):
+                self.assertTrue(badge_problems([("x", image, "LICENSE")], self.make_root()))
+
+    def test_a_spec_version_badge_that_differs_from_the_file_is_a_problem(self):
+        bad = [("spec version", "https://img.shields.io/badge/spec-0.2.0-blue", "LICENSE")]
+        self.assertTrue(any("spec/VERSION says 0.1.0" in p for p in badge_problems(bad, self.make_root("0.1.0"))))
+
+    def test_an_image_from_an_unexpected_host_is_a_problem(self):
+        self.assertTrue(any("image host" in p for p in badge_problems([("x", "https://tracker.example/pixel.svg", "LICENSE")], self.make_root())))
+
+    def test_a_link_to_a_missing_file_is_a_problem(self):
+        self.assertTrue(any("does not exist" in p for p in badge_problems([("x", self.GOOD[2][1], "NOPE.md")], self.make_root())))
+
+    def test_only_the_badges_above_the_first_heading_count(self):
+        text = "# T\n\n[![a](https://img.shields.io/b)](LICENSE)\n\n## H\n\n[![b](https://img.shields.io/c)](LICENSE)\n"
+        self.assertEqual([("a", "https://img.shields.io/b", "LICENSE")], readme_badges(text))
+
+
 class RealFileTests(unittest.TestCase):
+    def test_fr10_the_readme_badges_exist_resolve_to_real_things_and_none_is_early(self):
+        text = README.read_text(encoding="utf-8")
+        badges = readme_badges(text)
+        for label, pattern in REQUIRED_BADGES.items():
+            with self.subTest(badge=label):
+                self.assertTrue(any(name == label and re.search(pattern, image) for name, image, _ in badges),
+                                f"the README has no '{label}' badge pointing at {pattern}")
+        self.assertEqual([], unreadable_badge_problems(text))
+        self.assertEqual([], badge_problems(badges, ROOT))
+
+    def test_fr11_contributing_explains_the_dco_the_subject_format_and_the_commands(self):
+        text = CONTRIBUTING.read_text(encoding="utf-8")
+        for needle in ("git commit -s", "Signed-off-by", "feat:", "fix:", "dotnet build", "dotnet test", "SECURITY.md", "CODE_OF_CONDUCT.md"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        for link in ("SECURITY.md", "CODE_OF_CONDUCT.md"):
+            self.assertTrue((ROOT / link).exists(), f"{link} is linked from CONTRIBUTING.md but missing")
+
+    def test_fr11_the_code_of_conduct_says_where_to_report(self):
+        text = CONDUCT.read_text(encoding="utf-8")
+        self.assertIn("Report a vulnerability", text)
+        self.assertIn("Conduct:", text)
+        self.assertIn("Contributor Covenant", text)
+
+    def test_fr11_the_issue_templates_and_the_pull_request_template_exist_and_have_their_parts(self):
+        config = (ISSUE_TEMPLATES / "config.yml").read_text(encoding="utf-8")
+        self.assertIn("blank_issues_enabled: false", config)
+        self.assertIn("security/advisories/new", config)
+        for name in ("bug_report.yml", "feature_request.yml"):
+            with self.subTest(template=name):
+                text = "\n".join(l for l in (ISSUE_TEMPLATES / name).read_text(encoding="utf-8").splitlines() if not l.lstrip().startswith("#"))
+                for key in ("name:", "description:", "body:", "- type: textarea", "required: true"):
+                    self.assertIn(key, text)
+        pull_request = PR_TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn("git commit -s", pull_request)
+        self.assertIn("dco", pull_request)
+
     def test_fr03_codeowners_exists_and_is_valid(self):
         self.assertTrue(CODEOWNERS.exists(), ".github/CODEOWNERS is missing")
         self.assertEqual([], codeowners_problems(CODEOWNERS.read_text(encoding="utf-8"), ROOT))
@@ -394,7 +548,10 @@ class RealFileTests(unittest.TestCase):
         self.assertTrue(os.access(checker, os.X_OK) or os.name == "nt", "scripts/check-dco.sh is not executable")
 
     def test_nfr01_the_public_governance_files_name_no_private_path(self):
-        for path in (SECURITY, CODEOWNERS, ROOT / ".github" / "workflows" / "dco.yml"):
+        # The README is not in this list yet: its layout listing and its license section name `docs/`, which theme B of #1665 rewrites.
+        public = (SECURITY, CODEOWNERS, ROOT / ".github" / "workflows" / "dco.yml", CONTRIBUTING, CONDUCT, PR_TEMPLATE,
+                  *sorted(ISSUE_TEMPLATES.glob("*.yml")))
+        for path in public:
             with self.subTest(file=path.name):
                 self.assertEqual([], private_references(path.read_text(encoding="utf-8")))
 

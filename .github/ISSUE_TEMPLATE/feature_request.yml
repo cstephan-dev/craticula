@@ -1,0 +1,51 @@
+name: Feature request
+description: A filter, an operator, a backend or a behavior you would like Craticula to support
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Craticula's behavior is defined by its spec before its code, so a request that comes with an example of the
+        request and the result you expect is easier to agree on.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can you not do today, and why does it matter to you?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: An example AG Grid request and the query or result you expect from it is the most useful form.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other ways you considered
+    validations:
+      required: false
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - SQL
+        - MongoDB
+        - OpenSearch or Elasticsearch
+        - All backends
+        - A new backend
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I am willing to help test it or to send a pull request.
+          required: false
